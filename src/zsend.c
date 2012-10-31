@@ -68,7 +68,6 @@ int wazoo;
    show_debug_name ("send_Zmodem");
 #endif
 
-   _BRK_DISABLE ();
    IN_XON_ENABLE ();
 
    z_size = 0;

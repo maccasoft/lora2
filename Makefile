@@ -1,6 +1,5 @@
 .AUTODEPEND
 
-# .PATH.obj = C:\TC\NETBBS\OBJ
 OBJ = OBJ
 SRC = SRC
 UTI = $(SRC)\UTIL
@@ -26,24 +25,21 @@ TLINK = tlink /P-/x
 
 #		*List Macros*
 
-all: usered lora loracomp lorakey tym2lora loranews ra2idx pip2idx
+all: lora loracomp lorakey tym2lora usered lmsg ltop luser
 
-usered:    usered.exe
 lora:      lora.exe
 loracomp:  loracomp.exe
 lorakey:   lorakey.exe
 tym2lora:  tym2lora.exe
-loranews:  loranews.exe
-ra2idx:    ra2idx.exe
-pip2idx:   pip2idx.exe
-
-
-EXE_USER_dependencies = \
-  $(OBJ)\usered.obj
+usered:    usered.exe
+lmsg:      lmsg.exe
+ltop:      ltop.exe
+luser:     luser.exe
 
 
 EXE_dependencies =  \
-  $(CXLIB)\cxltcl.lib \
+  $(CXLIB)\cxltcm.lib \
+  squish-m.lib \
   $(OBJ)\bink_asm.obj \
   $(OBJ)\checkpath.obj \
   $(OBJ)\com_asm.obj \
@@ -81,6 +77,7 @@ EXE_dependencies =  \
   $(OBJ)\qwkspt.obj \
   $(OBJ)\readmail.obj \
   $(OBJ)\sched.obj \
+  $(OBJ)\squish.obj \
   $(OBJ)\status.obj \
   $(OBJ)\tcfuncs.obj \
   $(OBJ)\timer.obj \
@@ -107,33 +104,24 @@ EXE_TYM_dependencies = \
   $(OBJ)\tym2lora.obj
 
 
-EXE_NEWS_dependencies = \
-  $(OBJ)\loranews.obj
+EXE_USER_dependencies = \
+  $(OBJ)\usered.obj
 
 
-EXE_RAIDX_dependencies = \
-  $(OBJ)\ra2idx.obj
+EXE_LMSG_dependencies = \
+  squish-l.lib \
+  $(OBJ)\lmsg.obj
 
 
-EXE_PIPIDX_dependencies = \
-  $(OBJ)\pip2idx.obj
+EXE_LTOP_dependencies = \
+  $(OBJ)\ltop.obj
+
+
+EXE_LUSER_dependencies = \
+  $(OBJ)\luser.obj
 
 
 #               *Explicit Rules*
-
-usered.exe: turboc.cfg $(EXE_USER_dependencies)
-  $(TLINK) @&&|
-$(TCLIB)\c0s.obj+
-$(OBJ)\usered.obj
-usered,
-$(CXLIB)\cxltcs.lib+
-$(TCLIB)\emu.lib+
-$(TCLIB)\maths.lib+
-$(TCLIB)\cs.lib+
-
-|
-
-
 
 lora.exe: turboc.cfg $(EXE_dependencies)
   $(TLINK) /o @&&|
@@ -178,6 +166,7 @@ lora.exe: turboc.cfg $(EXE_dependencies)
     $(OBJ)\quickmsg.obj+
     $(OBJ)\qwkspt.obj+
     $(OBJ)\readmail.obj+
+    $(OBJ)\squish.obj+
     $(OBJ)\video.obj+
     $(OBJ)\wazoo.obj+
     $(OBJ)\yoohoo.obj+
@@ -189,9 +178,9 @@ $(TCLIB)\overlay.lib+
 $(TCLIB)\emu.lib+
 $(TCLIB)\mathm.lib+
 $(TCLIB)\cm.lib+
-$(CXLIB)\cxltcm.lib
+$(CXLIB)\cxltcm.lib+
+squish-m.lib
 |
-  copy lora.exe \lora /b
 
 
 loracomp.exe: turboc.cfg $(EXE_COMP_dependencies)
@@ -237,11 +226,12 @@ $(TCLIB)\cs.lib+
 
 
 
-loranews.exe: turboc.cfg $(EXE_NEWS_dependencies)
+usered.exe: turboc.cfg $(EXE_USER_dependencies)
   $(TLINK) @&&|
 $(TCLIB)\c0s.obj+
-$(OBJ)\loranews.obj
-loranews,
+$(OBJ)\usered.obj
+usered,
+$(CXLIB)\cxltcs.lib+
 $(TCLIB)\emu.lib+
 $(TCLIB)\maths.lib+
 $(TCLIB)\cs.lib+
@@ -250,11 +240,25 @@ $(TCLIB)\cs.lib+
 
 
 
-ra2idx.exe: turboc.cfg $(EXE_RAIDX_dependencies)
+lmsg.exe: turboc.cfg $(EXE_LMSG_dependencies)
+  $(TLINK) @&&|
+$(TCLIB)\c0l.obj+
+$(OBJ)\lmsg.obj
+lmsg,
+$(TCLIB)\emu.lib+
+$(TCLIB)\mathl.lib+
+$(TCLIB)\cl.lib+
+squish-l.lib
+
+|
+
+
+
+ltop.exe: turboc.cfg $(EXE_LTOP_dependencies)
   $(TLINK) @&&|
 $(TCLIB)\c0s.obj+
-$(OBJ)\ra2idx.obj
-ra2idx,
+$(OBJ)\ltop.obj
+ltop,
 $(TCLIB)\emu.lib+
 $(TCLIB)\maths.lib+
 $(TCLIB)\cs.lib+
@@ -263,11 +267,11 @@ $(TCLIB)\cs.lib+
 
 
 
-pip2idx.exe: turboc.cfg $(EXE_PIPIDX_dependencies)
+luser.exe: turboc.cfg $(EXE_LUSER_dependencies)
   $(TLINK) @&&|
 $(TCLIB)\c0s.obj+
-$(OBJ)\pip2idx.obj
-pip2idx,
+$(OBJ)\luser.obj
+luser,
 $(TCLIB)\emu.lib+
 $(TCLIB)\maths.lib+
 $(TCLIB)\cs.lib+
@@ -277,11 +281,6 @@ $(TCLIB)\cs.lib+
 
 
 #               *Individual File Dependencies*
-$(OBJ)\usered.obj: usered.c
-        $(CC) -n$(OBJ) -c -ms usered.c
-
-
-
 
 $(OBJ)\bink_asm.obj: $(SRC)\bink_asm.asm
         $(TASM) $(SRC)\bink_asm.asm, $(OBJ)\bink_asm
@@ -394,6 +393,9 @@ $(OBJ)\readmail.obj: $(SRC)\readmail.c
 $(OBJ)\sched.obj: $(SRC)\sched.c
         $(CC) -n$(OBJ) -mm -c $(SRC)\sched.c
 
+$(OBJ)\squish.obj: $(SRC)\squish.c
+        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\squish.c
+
 $(OBJ)\status.obj: $(SRC)\status.c
         $(CC) -n$(OBJ) -mm -c $(SRC)\status.c
 
@@ -425,44 +427,53 @@ $(OBJ)\zreceive.obj: $(SRC)\zreceive.c
 
 
 
-$(OBJ)\loracomp.obj: $(UTI)\loracomp.c
-        $(CC) -n$(OBJ) -mm -c $(UTI)\loracomp.c
+$(OBJ)\loracomp.obj: $(SRC)\loracomp.c
+        $(CC) -n$(OBJ) -mm -c $(SRC)\loracomp.c
 
-$(OBJ)\loralng.obj: $(UTI)\loralng.c
-        $(CC) -n$(OBJ) -mm -c $(UTI)\loralng.c
+$(OBJ)\loralng.obj: $(SRC)\loralng.c
+        $(CC) -n$(OBJ) -mm -c $(SRC)\loralng.c
 
-$(OBJ)\put_lang.obj: $(UTI)\put_lang.c
-        $(CC) -n$(OBJ) -mm -c $(UTI)\put_lang.c
+$(OBJ)\put_lang.obj: $(SRC)\put_lang.c
+        $(CC) -n$(OBJ) -mm -c $(SRC)\put_lang.c
 
-$(OBJ)\get_lang.obj: $(UTI)\get_lang.c
-        $(CC) -n$(OBJ) -mm -c $(UTI)\get_lang.c
-
-
-
-
-$(OBJ)\lorakey.obj: $(UTI)\lorakey.c
-        $(CC) -n$(OBJ) -c -ms $(UTI)\lorakey.c
+$(OBJ)\get_lang.obj: $(SRC)\get_lang.c
+        $(CC) -n$(OBJ) -mm -c $(SRC)\get_lang.c
 
 
 
 
-$(OBJ)\tym2lora.obj: $(UTI)\tym2lora.c
-        $(CC) -n$(OBJ) -c -ms $(UTI)\tym2lora.c
+$(OBJ)\lorakey.obj: $(SRC)\lorakey.c
+        $(CC) -n$(OBJ) -c -ms $(SRC)\lorakey.c
 
 
 
-$(OBJ)\loranews.obj: $(UTI)\loranews.c
-        $(CC) -n$(OBJ) -c -ms $(UTI)\loranews.c
+
+$(OBJ)\tym2lora.obj: $(SRC)\tym2lora.c
+        $(CC) -n$(OBJ) -c -ms $(SRC)\tym2lora.c
 
 
 
-$(OBJ)\ra2idx.obj: $(UTI)\ra2idx.c
-        $(CC) -n$(OBJ) -c -ms $(UTI)\ra2idx.c
+$(OBJ)\usered.obj: $(SRC)\usered.c
+        $(CC) -n$(OBJ) -c -ms $(SRC)\usered.c
 
 
 
-$(OBJ)\pip2idx.obj: $(UTI)\pip2idx.c
-        $(CC) -n$(OBJ) -c -ms $(UTI)\pip2idx.c
+
+$(OBJ)\lmsg.obj: $(SRC)\lmsg.c
+        $(CC) -n$(OBJ) -c -ml $(SRC)\lmsg.c
+
+
+
+
+$(OBJ)\ltop.obj: $(SRC)\ltop.c
+        $(CC) -n$(OBJ) -c -ms $(SRC)\ltop.c
+
+
+
+
+$(OBJ)\luser.obj: $(SRC)\luser.c
+        $(CC) -n$(OBJ) -c -ms $(SRC)\luser.c
+
 
 
 

@@ -18,8 +18,8 @@ char *argv[];
 {
    int i, days, level, pack, sort;
 
-   printf("\nLUSER; LoraBBS User maintenance utility, Version 2.00\n");
-   printf("       Copyright (C) 1991 by Marco Maccaferri, All Rights Reserved\n\n");
+   printf("\nLUSER; LoraBBS User maintenance utility, Version 2.10\n");
+   printf("       Copyright (c) 1991-92 by Marco Maccaferri, All Rights Reserved\n\n");
 
    pack = sort = days = level = 0;
 

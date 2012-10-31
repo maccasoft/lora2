@@ -1,19 +1,24 @@
 
 #include "sched.h"
+#include "msgapi.h"
+
+extern byte logon_priv, vote_priv, up_priv, down_priv;
 
 extern int max_requests, line_offset, aftermail_exit, aftercaller_exit;
-extern int logon_priv, speed_graphics, registered, assumed;
-extern int next_call, max_call, local_kbd, max_readpriv;
-extern int no_logins, status, mainview, locked;
-extern int isOriginator, CurrentReqLim, have_dv;
-extern int made_request, function_active, com_port;
+extern int speed_graphics, registered, assumed, target_up, target_down;
+extern int next_call, max_call, local_kbd, max_readpriv, max_kbytes;
+extern int no_logins, status, mainview, locked, norm_max_kbytes;
+extern int isOriginator, CurrentReqLim, have_dv, prot_max_kbytes;
+extern int made_request, function_active, com_port, know_max_kbytes;
 extern int norm_max_requests, prot_max_requests, know_max_requests;
 extern int remote_zone, remote_net, remote_node, remote_point;
 extern int called_zone, called_net, called_node;
 
+extern char far *prodcode[];
+
 extern char *VERSION, *NOREG, *log_name, *user_file, *sys_path, *mtext[];
 extern char *mesi[], *menu_bbs, *sysop, *system_name, hex[], *hold_area;
-extern char *filepath, *availist, *about, *request_list, *prodcode[];
+extern char *filepath, *availist, *about, *request_list;
 extern char *net_info, *banner, *enterbbs, *mail_only, *text_path;
 extern char *sched_name, *dateformat, *timeformat, *password;
 extern char *ext_flags, *ipc_path, *fido_msgpath, cmd_string[];
@@ -25,20 +30,22 @@ extern char *know_request_list, *know_availist, *know_about, *mdm_flags;
 extern char *lang_name[MAX_LANG], *lang_descr[MAX_LANG], area_change_key[3];
 extern char *ext_mail_cmd, *ext_editor, *pip_msgpath, lang_keys[MAX_LANG];
 extern char *lang_txtpath[MAX_LANG], *QWKDir, *BBSid, frontdoor;
+extern char *galileo, *location, *phone, *flags;
 
-extern long logon_flags, cps;
+extern long logon_flags, cps, keycode;
 
 extern char *msgtxt[];
 
 extern char *ONLINE_MSGNAME;
 extern char *USERON_NAME;
 extern char *CBSIM_NAME;
+extern char *SYSMSG_PATH;
 
 extern char use_tasker, local_mode, user_status;
 extern char have_ml, have_tv, have_ddos;
 
 extern char far exit300, exit1200, exit2400, exit9600, exit14400;
-extern char far exit19200, exit38400;
+extern char far exit16800, exit19200, exit38400;
 
 extern struct _alias alias[MAX_ALIAS];
 extern struct class_rec class[MAXCLASS];
@@ -48,6 +55,9 @@ extern struct _call_list far call_list[MAX_OUT];
 extern struct _lastcall lastcall;
 extern struct _lorainfo lorainfo;
 extern struct _noask noask;
+extern struct _alias resync[MAX_RESYNC];
+
+extern MSG *sq_ptr;
 
 extern struct parse_list menu_code[];
 extern struct parse_list levels[];

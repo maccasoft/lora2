@@ -7,6 +7,7 @@
 #include <ctype.h>
 #include <io.h>
 #include <fcntl.h>
+#include <sys\stat.h>
 
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
@@ -157,6 +158,7 @@ char *txt;
         m_print(bbstxt[B_SAVE_MESSAGE]);
         scan_message_base(sys.msg_num);
         dest = last_msg + 1;
+        activation_key ();
         m_print(" #%d ...",dest);
 
         sprintf(filename,"%s%d.MSG",sys.msg_path,dest);
@@ -192,7 +194,7 @@ char *txt;
                 int fptxt, m;
                 char buffer[2050];
 
-                fptxt = open(txt, O_RDONLY|O_BINARY);
+                fptxt = shopen(txt, O_RDONLY|O_BINARY);
                 if (fptxt == -1) {
                         fclose(fp);
                         unlink(filename);
@@ -236,7 +238,7 @@ char *txt;
         }
 
         m_print(bbstxt[B_ONE_CR]);
-        status_line(":Write message #%d",dest);
+        status_line(msgtxt[M_INSUFFICIENT_DATA],dest);
         last_msg = dest;
 }
 
@@ -522,14 +524,15 @@ char *s;
                         fgets (stringa,78,xferinfo);
                         stringa[strlen(stringa) - 1] = '\0';
 
-                        if (CARRIER)
-                        {
+                        if (CARRIER) {
                                 cls ();
 
                                 if (sys.quick_board)
                                         quick_save_message(stringa);
-                                if (sys.pip_board)
+                                else if (sys.pip_board)
                                         pip_save_message(stringa);
+                                else if (sys.squish)
+                                        squish_save_message(stringa);
                                 else
                                         save_message(stringa);
 

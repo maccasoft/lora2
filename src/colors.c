@@ -152,7 +152,7 @@ void del_line()
 void cpos(y, x)
 int y, x;
 {
-        if (usr.ansi)
+        if (usr.ansi && !local_mode)
                 m_print("\x1B[%d;%df",y,x);
         if (usr.avatar && !local_mode) {
                 BUFFER_BYTE (CTRLV);

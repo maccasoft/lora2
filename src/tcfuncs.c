@@ -58,29 +58,32 @@
 #include <fcntl.h>
 #include <time.h>
 #include <stdarg.h>
+#include <sys\stat.h>
+
 #include "tc_utime.h"
+#include "defines.h"
 
 /* always uses modification time */
 int cdecl utime(char *name, struct utimbuf *times)
 {
-	int handle;
-	struct date d;
-	struct time t;
-	struct ftime ft;
+   int handle;
+   struct date d;
+   struct time t;
+   struct ftime ft;
 
-	unixtodos(times->modtime, &d, &t);
-	ft.ft_tsec = t.ti_sec / 2;
-	ft.ft_min = t.ti_min;
-	ft.ft_hour = t.ti_hour;
-	ft.ft_day = d.da_day;
-	ft.ft_month = d.da_mon;
+   unixtodos(times->modtime, &d, &t);
+   ft.ft_tsec = t.ti_sec / 2;
+   ft.ft_min = t.ti_min;
+   ft.ft_hour = t.ti_hour;
+   ft.ft_day = d.da_day;
+   ft.ft_month = d.da_mon;
    ft.ft_year = d.da_year - 1980;
-	if((handle = open(name, O_RDONLY)) == -1)
-		return -1;
+   if ((handle = shopen(name, O_RDONLY)) == -1)
+      return -1;
 
-	setftime(handle, &ft);
-	close(handle);
-	return 0;
+   setftime(handle, &ft);
+   close(handle);
+   return 0;
 }
  
 int _dos_read(int fd, void far *buf, int nbytes, int *bytes_read)

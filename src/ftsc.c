@@ -17,7 +17,7 @@
 #include "zmodem.h"
 
 char *n_frproc(char *, int *, int);
-int n_getpassword(int, int);
+int n_getpassword(int, int, int);
 
 static int recvmdm7(char *);
 int xfermdm7(char *);
@@ -38,8 +38,8 @@ static int gen_req_name(char *,char *,int *);
 
 #define PRODUCT_CODE 0x4E
 #define isLORA       0x4E
-#define MAJVERSION   1
-#define MINVERSION   11
+#define MAJVERSION   2
+#define MINVERSION   10
 #define no_zapzed    0
 #define NUM_FLAGS    4
 
@@ -353,7 +353,7 @@ static int FTSC_sendmail ()
                 tmppkt->orig_net = alias[assumed].net;
 		tmppkt->dest_net = called_net;
 		tmppkt->product = isLORA;
-		if (n_getpassword(called_net,called_node)) {
+                if (n_getpassword(0, called_net,called_node)) {
 			if (remote_password != NULL) {
                                 strncpy (tmppkt->password, remote_password, 6);
                                 strupr (tmppkt->password);
@@ -365,7 +365,7 @@ static int FTSC_sendmail ()
 		fclose (fp);
 	}
 	else {
-		if (n_getpassword(called_net,called_node)) {
+                if (n_getpassword(0, called_net,called_node)) {
 			if (remote_password != NULL) {
 				fp = fopen (fname, "rb+");
 				if (fp == NULL)
@@ -406,7 +406,7 @@ static int FTSC_sendmail ()
 		if (c < NUM_FLAGS)
                         sprintf( fname, "%s%04x%04x.%cLO",HoldName,called_net,called_node,ext_flags[c]);
 		else
-                    sprintf( fname, "%s%04x%04x.REQ",filepath,alias[assumed].net, alias[assumed].node);
+                        sprintf( fname, "%s%04x%04x.REQ",filepath,alias[assumed].net, alias[assumed].node);
 
 		if (!stat(fname,&buf)) {
 
@@ -464,14 +464,14 @@ static int FTSC_sendmail ()
 						continue;
 
                                         j = xfermdm7 (sptr);
-                                        status_line (">DEBUG: MDM7: %d", j);
-                                        p = 'F';
-					if (j == 0) {
-						net_problems = 1;
-						return FALSE;
-					}
+
+                                        p = 'B';
+                                        if (j == 0) {
+                                                net_problems = 1;
+                                                return FALSE;
+                                        }
                                         else if (j == 2)
-                                                p = 'B';
+                                                p = 'F';
 
                                         if (!send (sptr, p)) {
 						fclose(fp);
@@ -486,7 +486,7 @@ static int FTSC_sendmail ()
 					fseek( fp, current, SEEK_SET );
 
 					if (i == TRUNC_AFTER) {
-						i = open(sptr,O_TRUNC,S_IWRITE);
+                                                i = cshopen(sptr,O_TRUNC,S_IWRITE);
 						close(i);
 					}
 
@@ -542,33 +542,40 @@ static int FTSC_recvmail ()
         if (receive (filepath, fname1, 'B') != 0)
                 got_arcmail = 1;
 
-	if (n_getpassword(remote_net,remote_node)) {
-                if (remote_password != NULL)
-                {
-                        sprintf (fname, "%s%s",filepath,fname1);
-			fp = fopen (fname, "r");
-			if (fp == NULL) {
-				status_line ("!Password Error assumed");
-				return (1);
-			}
-			fread (&tmppkt, 1, sizeof (struct _pkthdr), fp);
-			fclose (fp);
-			remote_password[7] = '\0';
-                        tmppkt.password[7] = '\0';
-                        if (stricmp (remote_password, tmppkt.password)) {
-                                status_line ("!Password Error: expected '%s' got '%s'",remote_password, tmppkt.password);
-				strcpy (fname1, fname);
-				j = strlen (fname) - 3;
-				strcpy (&(fname[j]), "Bad");
-				if (rename (fname1, fname))
-                                        status_line (msgtxt[M_CANT_RENAME_MAIL], fname1);
-				else
-                                    status_line (msgtxt[M_MAIL_PACKET_RENAMED], fname);
-				return (1);
-			}
-		}
-                got_arcmail = 1;
-	}
+        if (!remote_capabilities) {
+                sprintf (fname, "%s%s",filepath,fname1);
+                fp = fopen (fname, "r");
+                if (fp == NULL) {
+                        status_line ("!Password Error assumed (%s)", fname1);
+                        return (1);
+                }
+                fread (&tmppkt, 1, sizeof (struct _pkthdr), fp);
+                fclose (fp);
+                remote_password[7] = '\0';
+                tmppkt.password[7] = '\0';
+                remote_node = called_node = tmppkt.orig_node;
+                remote_net = called_net = tmppkt.orig_net;
+                remote_zone = called_zone = tmppkt.orig_zone;
+                if (get_bbs_record(remote_zone,remote_net,remote_node))
+                        status_line("%s: %s (%u:%u/%u)",msgtxt[M_REMOTE_SYSTEM],nodelist.name,remote_zone,remote_net,remote_node);
+                else
+                        status_line("%s: %s (%u:%u/%u)",msgtxt[M_REMOTE_SYSTEM],msgtxt[M_UNKNOWN_MAILER],remote_zone,remote_net,remote_node);
+                if (tmppkt.rate == 2) {
+                        /* This is a special type 2.2 packet! */
+                        remote_point = (unsigned) tmppkt.year;
+                }
+                if (remote_password[0] && stricmp (remote_password, tmppkt.password)) {
+                        status_line ("!Password Error: expected '%s' got '%s'",remote_password, tmppkt.password);
+                        strcpy (fname1, fname);
+                        j = strlen (fname) - 3;
+                        strcpy (&(fname[j]), "Bad");
+                        if (rename (fname1, fname))
+                                status_line (msgtxt[M_CANT_RENAME_MAIL], fname1);
+                        else
+                                status_line (msgtxt[M_MAIL_PACKET_RENAMED], fname);
+                        return (1);
+                }
+        }
 
 	called_net = remote_net;
 	called_node = remote_node;
@@ -596,8 +603,7 @@ static int FTSC_recvmail ()
 			else
 			    done = 1;
 		}
-	} 
-        while (!done && CARRIER);
+        } while (!done && CARRIER);
 
 	status_line (" End of inbound file attaches");
 	CLEAR_INBOUND();
@@ -958,82 +964,85 @@ int *recno;
 int xfermdm7(fn)
 char *fn;
 {
-	unsigned char checksum;
-	int i, j;
-	unsigned char mdm7_head[13];
-	unsigned char num_tries = '\0';
-	char *fname;
-	struct ffblk dta;
+   unsigned char checksum;
+   int i, j;
+   unsigned char mdm7_head[13];
+   char num_tries = 0;
+   char *fname;
+   struct ffblk dta;
 
-	XON_DISABLE();
-        _BRK_DISABLE();
+   XON_DISABLE();
+   _BRK_DISABLE();
 
-	findfirst(fn,&dta,0);
-	fname = dta.ff_name;
+   findfirst (fn, &dta, 0);
+   fname = dta.ff_name;
 
-	memset(mdm7_head,' ',12);
-	for(i=j=0;((fname[i]) && (i<12) && (j<12));i++) {
-		if(fname[i] == '.')
-			j = 8;
-		else
-			mdm7_head[j++]= (char )toupper(fname[i]);
-	}
+   memset (mdm7_head, ' ', 12);
+   for (i = j = 0; ((fname[i]) && (i < 12) && (j < 12));i ++) {
+      if (fname[i] == '.')
+         j = 8;
+      else
+         mdm7_head[j++] = (char )toupper (fname[i]);
+   }
 
-        checksum = SUB;
-	for(i=0;i<11;i++)
-		checksum += mdm7_head[i];
+   checksum = SUB;
+   for (i = 0; i < 11; i++)
+      checksum += mdm7_head[i];
 
 top:
-        if(!CARRIER)
-		return 0;
-	else {
-		if(num_tries++ > 10) {
-			send_can();
-			return(0);
-		}
-		else
-		    if(num_tries)
-			SENDBYTE('u');
-	}
+   if (!CARRIER)
+      return 0;
+   else {
+      if (num_tries++ > 10) {
+         send_can ();
+         return (0);
+      }
+      else
+         if (num_tries)
+            SENDBYTE ('u');
+   }
 
-	for(i=0;i<15;i++) {
-                if (!CARRIER)
-			return(0);
-		j = TIMED_READ(4);
-		switch(j) {
-		case 'C' :
-			SENDBYTE(SOH);
-			return 2;
-		case NAK :
-			i=16;
-			break;
-		case CAN :
-			return 0;
-		}
-	}
+   for (i = 0; i < 15; i++) {
+      if (!CARRIER)
+         return (0);
 
-	SENDBYTE(ACK);
-        for(i=0;i<11;i++)
-		SENDBYTE(mdm7_head[i]);
+      j = TIMED_READ (10);
 
-        switch(j = TIMED_READ(10) )
-        {
-        case ACK :
-                break;
-        case CAN :
-                SENDBYTE(ACK);
-                return(0);
-        default  :
-                goto top;
-        }
+      switch (j) {
+         case 'C' :
+            SENDBYTE (SOH);
+            return 2;
+         case NAK :
+            i=16;
+            break;
+         case CAN :
+            return (0);
+      }
+   }
+
+   SENDBYTE (ACK);
+
+   for (i = 0; i < 11; i++) {
+      SENDBYTE(mdm7_head[i]);
+
+      switch (j = TIMED_READ(10)) {
+         case ACK :
+            break;
+         case CAN :
+            SENDBYTE (ACK);
+            return (0);
+         default  :
+            goto top;
+      }
+   }
 
 try_sub:
-	SENDBYTE(SUB);
-	if((i=TIMED_READ(10)) != checksum)
-		goto top;
+   SENDBYTE (SUB);
+   if ((i = TIMED_READ (10)) != checksum)
+      goto top;
 
-	SENDBYTE(ACK);
-	return(1);
+   SENDBYTE (ACK);
+   return (1);
 }
 
 static int recvmdm7(fname)

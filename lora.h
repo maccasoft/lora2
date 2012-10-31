@@ -3,16 +3,40 @@ typedef unsigned int word;
 typedef unsigned char byte;
 typedef long dword;
 
+
+#ifndef __DOS_H
+struct time {
+    unsigned char ti_min;     /* Minutes */
+    unsigned char ti_hour;    /* Hours */
+    unsigned char ti_hund;    /* Hundredths of seconds */
+    unsigned char ti_sec;     /* Seconds */
+};
+
+struct date {
+    int  da_year;    /* Year - 1980 */
+    char da_day;     /* Day of the month */
+    char da_mon;     /* Month (1 = Jan) */
+};
+#endif
+
+
 struct _stamp {
    unsigned int date;
    unsigned int time;
 };
 
 struct _noask {
-   bit ansilogon: 1;
-   bit birthdate: 1;
-   bit voicephone: 1;
-   bit dataphone: 1;
+   bit ansilogon :1;
+   bit birthdate :1;
+   bit voicephone:1;
+   bit dataphone :1;
+   bit emsi      :1;
+   bit checkfile :1;
+};
+
+struct _votes {
+   int  minvote;
+   byte priv;
 };
 
 struct _call_list {
@@ -62,7 +86,8 @@ struct _lastread {
    int msg_num;
 };
 
-#define MAXLREAD   40
+#define MAXLREAD   30
+#define MAXDLREAD  10
 #define MAXFLAGS   4
 #define MAXCOUNTER 10
 
@@ -76,6 +101,7 @@ struct _usr {
    char  city[26];
 
    struct _lastread lastread[MAXLREAD];
+   struct _lastread dynlastread[MAXDLREAD];
 
    char  pwd[16];
    dword times;
@@ -107,7 +133,7 @@ struct _usr {
    int   time;
    dword upld;
    dword dnld;
-   word  dnldl;
+   int   dnldl;
    word  n_upld;
    word  n_dnld;
    word  files;
@@ -136,6 +162,7 @@ struct _usr {
    bit   nerd      :1;
    bit   donotdisturb:1;
    bit   robbed    :1;
+   bit   novote    :1;
 
    char  protocol;
    char  archiver;
@@ -152,8 +179,10 @@ struct _usr {
 
    int   sig;
    word  account;
+   word  f_account;
+   int   votes;
 
-   char  extradata[32];
+   char  extradata[28];
 };
 
 #define SIZEOF_MSGAREA    224
@@ -178,6 +207,7 @@ struct _sys {
    bit  private   :1;
    bit  anon_ok   :1;
    bit  no_matrix :1;
+   bit  squish    :1;
    word msg_sig;
    char echotag[32];
    word pip_board;
@@ -369,6 +399,7 @@ struct _alias {
    int  zone;
    int  net;
    int  node;
+   int  point;
    word fakenet;
    char *domain;
 };
@@ -450,7 +481,8 @@ struct   _Hello {
    char my_password[8];
    byte reserved2[8];
    word capabilities;
-   byte reserved3[12];
+   long tranx;             /* Used only by LoraBBS >= 2.10 */
+   byte reserved3[8];
 };
 
 struct _ndi {

@@ -167,6 +167,8 @@ void show_account ()
 {
    m_print (bbstxt[B_MINUTES_LEFT], time_remain ());
    m_print (bbstxt[B_IN_BANK], usr.account);
+   m_print (bbstxt[B_KBYTES_LEFT], class[usr_class].max_dl - usr.dnldl);
+   m_print (bbstxt[B_K_IN_BANK], usr.f_account);
 
    press_enter ();
 }
@@ -198,6 +200,31 @@ void deposit_time ()
    }
 }
 
+void deposit_kbytes ()
+{
+   int col;
+   char stringa[6];
+
+   m_print (bbstxt[B_KBYTES_LEFT], class[usr_class].max_dl - usr.dnldl);
+   m_print (bbstxt[B_K_IN_BANK], usr.f_account);
+   m_print (bbstxt[B_K_CAN_DEPOSIT], class[usr_class].max_dl - usr.dnldl);
+
+   do {
+      m_print(bbstxt[B_HOW_MUCH_DEPOSIT]);
+      input (stringa, 4);
+      if (!CARRIER)
+         return;
+      col = atoi(stringa);
+   } while ((col < 0 || col > (class[usr_class].max_dl - usr.dnldl)) && CARRIER);
+
+   if (col > 0) {
+      usr.f_account += col;
+      usr.dnldl += col;
+
+      show_account ();
+   }
+}
+
 void withdraw_time ()
 {
    int col;
@@ -220,12 +247,35 @@ void withdraw_time ()
      }
    } while ((col < 0 || col > usr.account) && CARRIER);
 
-   if (col > 0)
-   {
+   if (col > 0) {
       usr.account -= col;
       allowed += col;
       if (usr.time >= col)
          usr.time -= col;
+
+      show_account ();
+   }
+}
+
+void withdraw_kbytes ()
+{
+   int col;
+   char stringa[6];
+
+   m_print (bbstxt[B_KBYTES_LEFT], class[usr_class].max_dl - usr.dnldl);
+   m_print (bbstxt[B_K_IN_BANK], usr.f_account);
+
+   do {
+      m_print(bbstxt[B_HOW_MUCH_WITHDRAW]);
+      input (stringa, 4);
+      if (!CARRIER)
+         return;
+      col = atoi(stringa);
+   } while ((col < 0 || col > usr.f_account) && CARRIER);
+
+   if (col > 0) {
+      usr.f_account -= col;
+      usr.dnldl -= col;
 
       show_account ();
    }
@@ -313,7 +363,7 @@ void bbs_add_list ()
       return;
 
    sprintf (filename, "%sBBSLIST.BBS", sys_path);
-   fd = open (filename, O_APPEND|O_WRONLY|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+   fd = cshopen (filename, O_APPEND|O_WRONLY|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
    write (fd, (char *)&bbs, sizeof (struct _bbslist));
    close (fd);
 }
@@ -325,7 +375,7 @@ void bbs_short_list ()
    struct _bbslist bbs;
 
    sprintf (filename, "%sBBSLIST.BBS", sys_path);
-   fd = open (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+   fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
    cls ();
    m_print (bbstxt[B_BBS_SHORTH]);
@@ -359,7 +409,7 @@ void bbs_long_list ()
       return;
 
    sprintf (filename, "%sBBSLIST.BBS", sys_path);
-   fd = open (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+   fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
    cls ();
    line = 1;
@@ -395,7 +445,7 @@ void bbs_change ()
       return;
 
    sprintf (filename, "%sBBSLIST.BBS", sys_path);
-   fd = open (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+   fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
    cls ();
    found = 0;
@@ -463,7 +513,7 @@ void bbs_remove ()
       return;
 
    sprintf (filename, "%sBBSLIST.BBS", sys_path);
-   fd = open (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+   fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
    m_print (bbstxt[B_ONE_CR]);
    wpos = pos = tell (fd);
@@ -489,5 +539,63 @@ void bbs_remove ()
 
    chsize (fd, wpos);
    close (fd);
+}
+
+void vote_user (n)
+int n;
+{
+   int fd;
+   char stringa[40], linea[80];
+   long prev;
+   struct _usr tempusr;
+
+   if (!get_command_word (stringa, 35)) {
+      m_print(bbstxt[B_VOTE_NAME]);
+      chars_input(stringa, 35, INPUT_FANCY|INPUT_FIELD);
+      if (!CARRIER || !stringa[0])
+         return;
+   }
+
+   sprintf(linea, "%s.BBS", user_file);
+   fd=shopen(linea,O_RDWR|O_BINARY);
+   prev = tell(fd);
+
+   while(read(fd,(char *)&tempusr,sizeof(struct _usr)) == sizeof (struct _usr)) {
+      if (tempusr.usrhidden || tempusr.deleted || !tempusr.name[0])
+         continue;
+
+      if (tempusr.priv != vote_priv || tempusr.novote)
+         continue;
+
+      if (stristr(tempusr.name, stringa)) {
+         fancy_str (tempusr.name);
+         m_print(bbstxt[B_VOTE_OK], n > 0 ? bbstxt[B_VOTE_FOR] : bbstxt[B_VOTE_AGAINST], tempusr.name);
+         if (yesno_question (DEF_YES) == DEF_YES) {
+            tempusr.votes += n;
+            lseek(fd,prev,SEEK_SET);
+            write(fd,(char *)&tempusr,sizeof(struct _usr));
+            m_print (bbstxt[B_VOTE_COLLECTED]);
+         }
+      }
+
+      prev = tell(fd);
+   }
+}
+
+void ballot_votes ()
+{
+   if (usr.priv != vote_priv || usr.novote)
+      return;
+
+   if (usr.votes >= target_up && target_up && up_priv) {
+      usr.priv = up_priv;
+      read_system_file ("VOTEUP");
+      usr.votes = 0;
+   }
+   else if (usr.votes <= target_down && target_down && down_priv) {
+      usr.priv = down_priv;
+      read_system_file ("VOTEDOWN");
+      usr.votes = 0;
+   }
 }
 

@@ -41,7 +41,7 @@ int flag, sig;                       /* flag == 2, Normale una colonna */
    struct _sys_idx sysidx[MSG_AREAS];
 
    sprintf(filename,"%sSYSMSG.IDX", sys_path);
-   fd = open(filename, O_RDONLY|O_BINARY);
+   fd = shopen(filename, O_RDONLY|O_BINARY);
    if (fd == -1)
       return;
    nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * MSG_AREAS);
@@ -65,8 +65,8 @@ int flag, sig;                       /* flag == 2, Normale una colonna */
 
       if (stringa[0] == '?')
       {
-         sprintf(filename,"%sSYSMSG.DAT", sys_path);
-         fd = open(filename, O_RDONLY|O_BINARY);
+         sprintf(filename, SYSMSG_PATH, sys_path);
+         fd = shopen(filename, O_RDONLY|O_BINARY);
          if (fd == -1)
             return;
 
@@ -236,10 +236,11 @@ void pack_tagged_areas ()
 
    sprintf (file, "%sTASK%02X", QWKDir, line_offset);
    mkdir (file);
-   chdir (file);
 
-   if (!findfirst ("*.*", &fbuf, 0))
-   {
+   if (chdir (file) == -1)
+      return;
+
+   if (!findfirst ("*.*", &fbuf, 0)) {
       unlink (fbuf.ff_name);
       while (!findnext (&fbuf))
          unlink (fbuf.ff_name);
@@ -252,8 +253,7 @@ void pack_tagged_areas ()
    dlg = 1;
    memcpy ((char *)&tsys, (char *)&sys, sizeof (struct _sys));
 
-   for (i=0; i<MAXLREAD && CARRIER; i++)
-   {
+   for (i=0; i<MAXLREAD && CARRIER; i++) {
       last[i] = usr.lastread[i].msg_num;
 
       if (!usr.lastread[i].area)
@@ -268,21 +268,21 @@ void pack_tagged_areas ()
          quick_scan_message_base (sys.quick_board, usr.lastread[i].area);
       else if (sys.pip_board)
          pip_scan_message_base (usr.lastread[i].area);
+      else if (sys.squish)
+         squish_scan_message_base (usr.lastread[i].area, sys.msg_path);
       else
          scan_message_base(usr.lastread[i].area);
 
       start = usr.lastread[i].msg_num;
       start++;
 
-      if (start <= last_msg)
-      {
+      if (start <= last_msg) {
          sprintf (file, "%sTASK%02X\\%03d.TXT", QWKDir, line_offset, usr.lastread[i].area);
          fpq = fopen(file, "wt");
          if (fpq == NULL)
             break;
 
-         while (start <= last_msg && !RECVD_BREAK() && CARRIER)
-         {
+         while (start <= last_msg && !RECVD_BREAK() && CARRIER) {
             if (local_mode && local_kbd == 0x03)
                break;
             fprintf (fpq, " * %s\n", sys.msg_name);
@@ -290,6 +290,8 @@ void pack_tagged_areas ()
                quick_write_message_text (start, INCLUDE_HEADER|APPEND_TEXT, file, fpq);
             else if (sys.pip_board)
                pip_write_message_text (start, INCLUDE_HEADER|APPEND_TEXT, file, fpq);
+            else if (sys.squish)
+               squish_write_message_text (start, INCLUDE_HEADER|APPEND_TEXT, file, fpq);
             else
                write_message_text (start, INCLUDE_HEADER|APPEND_TEXT, file, fpq);
 
@@ -329,15 +331,13 @@ void pack_tagged_areas ()
    do {
       m_print (bbstxt[B_ASK_COMPRESSOR]);
 
-      if (!cmd_string[0])
-      {
+      if (!cmd_string[0]) {
          input (stringa, 1);
          if (!CARRIER)
             return;
          c = toupper(stringa[0]);
       }
-      else
-      {
+      else {
          c = toupper(cmd_string[0]);
          strcpy (&cmd_string[0], &cmd_string[1]);
          strtrim (cmd_string);
@@ -346,8 +346,7 @@ void pack_tagged_areas ()
 
    m_print (bbstxt[B_PLEASE_WAIT]);
 
-   switch (c)
-   {
+   switch (c) {
       case 'A':
          sprintf (file, "%sTASK%02X\\%s.ARJ", QWKDir, line_offset, BBSid);
          unlink (file);
@@ -391,8 +390,7 @@ void resume_transmission ()
          if ((p=strchr (fbuf.ff_name, '.')) == NULL)
             continue;
          if (!stricmp (p, ".QWK") || !stricmp (p, ".ZIP") ||
-             !stricmp (p, ".ARJ") || !stricmp (p, ".LZH"))
-         {
+          !stricmp (p, ".ARJ") || !stricmp (p, ".LZH")) {
             sprintf (file, "%sTASK%02X\\%s", QWKDir, line_offset, fbuf.ff_name);
             cps = 0;
             download_file (file, 0);
@@ -419,10 +417,11 @@ void qwk_pack_tagged_areas ()
 
    sprintf (file, "%sTASK%02X", QWKDir, line_offset);
    mkdir (file);
-   chdir (file);
 
-   if (!findfirst ("*.*", &fbuf, 0))
-   {
+   if (chdir (file) == -1)
+      return;
+
+   if (!findfirst ("*.*", &fbuf, 0)) {
       unlink (fbuf.ff_name);
       while (!findnext (&fbuf))
          unlink (fbuf.ff_name);
@@ -462,8 +461,8 @@ void qwk_pack_tagged_areas ()
    fputs(" \n",fpq);             /* Line #8 */
    fputs("0\n",fpq);
    fputs("0\n",fpq);             /* Line #10 */
-   sprintf (stringa, "%sSYSMSG.DAT", sys_path);
-   fd = open (stringa, O_RDONLY|O_BINARY);
+   sprintf (stringa, SYSMSG_PATH, sys_path);
+   fd = shopen (stringa, O_RDONLY|O_BINARY);
    totals = 0;
    for (i=0; i < 1000; i++)
    {
@@ -478,8 +477,7 @@ void qwk_pack_tagged_areas ()
    sprintf (stringa, "%d\n", totals-1);
    fputs (stringa, fpq);
    lseek (fd, 0L, SEEK_SET);
-   for (i=0; i < 1000; i++)
-   {
+   for (i=0; i < 1000; i++) {
       if ((read (fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA)) != SIZEOF_MSGAREA)
          break;
       if (usr.priv < tsys.msg_priv)
@@ -541,8 +539,7 @@ void qwk_pack_tagged_areas ()
 
    totals = 1;
 
-   for (i=0; i<MAXLREAD && CARRIER; i++)
-   {
+   for (i=0; i<MAXLREAD && CARRIER; i++) {
       last[i] = usr.lastread[i].msg_num;
 
       if (!usr.lastread[i].area)
@@ -557,6 +554,8 @@ void qwk_pack_tagged_areas ()
          quick_scan_message_base (sys.quick_board, usr.lastread[i].area);
       else if (sys.pip_board)
          pip_scan_message_base (usr.lastread[i].area);
+      else if (sys.squish)
+         squish_scan_message_base (usr.lastread[i].area, sys.msg_path);
       else
          scan_message_base(usr.lastread[i].area);
 
@@ -564,10 +563,8 @@ void qwk_pack_tagged_areas ()
       start++;
       fd = -1;
 
-      if (start <= last_msg)
-      {
-         while (start <= last_msg && !RECVD_BREAK() && CARRIER)
-         {
+      if (start <= last_msg) {
+         while (start <= last_msg && !RECVD_BREAK() && CARRIER) {
             if (local_mode && local_kbd == 0x03)
                break;
 
@@ -575,18 +572,18 @@ void qwk_pack_tagged_areas ()
                x = quick_write_message_text (start, QWK_TEXTFILE|APPEND_TEXT, file, fpq);
             else if (sys.pip_board)
                x = pip_write_message_text (start, QWK_TEXTFILE|APPEND_TEXT, file, fpq);
+            else if (sys.squish)
+               x = squish_write_message_text (start, QWK_TEXTFILE|APPEND_TEXT, file, fpq);
             else
                x = write_message_text (start, QWK_TEXTFILE|APPEND_TEXT, file, fpq);
 
-            if (x)
-            {
+            if (x) {
                msgcount++;
                totals++;
 
-               if (fd == -1)
-               {
+               if (fd == -1) {
                   sprintf (file, "%sTASK%02X\\%03d.NDX", QWKDir, line_offset, usr.lastread[i].area - 1);
-                  fd = open(file,O_CREAT | O_TRUNC | O_BINARY | O_RDWR,S_IWRITE);
+                  fd = cshopen(file,O_CREAT | O_TRUNC | O_BINARY | O_RDWR,S_IWRITE);
                }
 
                sprintf(stringa,"%u",totals);   /* Stringized version of current position */
@@ -635,15 +632,13 @@ void qwk_pack_tagged_areas ()
    do {
       m_print (bbstxt[B_ASK_COMPRESSOR]);
 
-      if (!cmd_string[0])
-      {
+      if (!cmd_string[0]) {
          input (stringa, 1);
          if (!CARRIER)
             return;
          c = toupper(stringa[0]);
       }
-      else
-      {
+      else {
          c = toupper(cmd_string[0]);
          strcpy (&cmd_string[0], &cmd_string[1]);
          strtrim (cmd_string);
@@ -654,8 +649,7 @@ void qwk_pack_tagged_areas ()
    sprintf (file, "%sTASK%02X\\%s.QWK", QWKDir, line_offset, BBSid);
    unlink (file);
 
-   switch (c)
-   {
+   switch (c) {
       case 'A':
          sprintf (stringa, "ARJ m -e %sTASK%02X\\%s.QWK %sTASK%02X\\*.* *M",
                   QWKDir, line_offset, BBSid, QWKDir, line_offset);
@@ -710,16 +704,16 @@ void getrep(void)
    struct QWKmsghd *MsgHead;
    struct ffblk fbuf;
 
-   if (!local_mode)
-   {
+   if (!local_mode) {
       getcwd (temp, 79);
 
       sprintf (temp1, "%sTASK%02X", QWKDir, line_offset);
       mkdir (temp1);
-      chdir (temp1);
 
-      if (!findfirst ("*.*", &fbuf, 0))
-      {
+      if (chdir (temp1) == -1)
+         return;
+
+      if (!findfirst ("*.*", &fbuf, 0)) {
          unlink (fbuf.ff_name);
          while (!findnext (&fbuf))
             unlink (fbuf.ff_name);
@@ -781,7 +775,7 @@ void getrep(void)
    }
 
    sprintf (temp, "%sTASK%02X\\%s.REP", QWKDir, line_offset, BBSid);
-   repfile = open (temp, O_RDONLY|O_BINARY);
+   repfile = shopen (temp, O_RDONLY|O_BINARY);
    if (repfile == -1)
       return;
    read (repfile, temp1, 10);
@@ -804,7 +798,7 @@ void getrep(void)
    prev_area = 0;
 
    sprintf (temp, "%sTASK%02X\\%s.MSG", QWKDir, line_offset, BBSid);
-   repfile = open (temp, O_BINARY|O_RDONLY);
+   repfile = shopen (temp, O_BINARY|O_RDONLY);
    if (repfile >= 0) {
       MsgHead = (struct QWKmsghd *) malloc(sizeof(struct QWKmsghd));
       if (MsgHead == NULL)
@@ -821,14 +815,16 @@ void getrep(void)
          while (x == 128) {               /* This is the BBS.MSG import loop */
          /* Build the Fidonet message head */
             x = atoi(MsgHead->Msgnum) + 1;            /* Area number */
-            if (prev_area != x)
-            {
+            if (prev_area != x) {
                read_system (x, 1);
+               usr.msg = x;
 
                if (sys.quick_board)
                   quick_scan_message_base (sys.quick_board, usr.msg);
                else if (sys.pip_board)
                   pip_scan_message_base (usr.msg);
+               else if (sys.squish)
+                  squish_scan_message_base (usr.msg, sys.msg_path);
                else
                   scan_message_base(usr.msg);
                prev_area = x;
@@ -874,7 +870,7 @@ void getrep(void)
             strcpy(msg.subj,namefixup(MsgHead->Msgsubj));
 
             sprintf(temp1,"%s%d.TXT", QWKDir, line_offset);
-            msgfile = open (temp1, O_TRUNC|O_CREAT|O_BINARY|O_RDWR, S_IREAD|S_IWRITE);
+            msgfile = cshopen (temp1, O_TRUNC|O_CREAT|O_BINARY|O_RDWR, S_IREAD|S_IWRITE);
 
             /* Now prepare to read in the REP msg and convert to fidonet */
             for (x=0; x < msgrecs; x++) {
@@ -927,6 +923,8 @@ void getrep(void)
                quick_save_message(temp1);
             else if (sys.pip_board)
                pip_save_message(temp1);
+            else if (sys.squish)
+               squish_save_message (temp1);
             else
                save_message(temp1);
 
@@ -937,8 +935,7 @@ void getrep(void)
       }
    }
 
-   if (upmsgs)
-   {
+   if (upmsgs) {
       read_system (usr.msg, 1);
       m_print (bbstxt[B_TOTAL_IMPORTED], upmsgs);
    }

@@ -218,10 +218,12 @@ int def;
 
         m_print(" [%s", (def & DEF_YES) ? bigyes : bigno);
         m_print("%s", (def & EQUAL) ? "/=" : "");
+        m_print("%s", (def & TAG_FILES) ? "/d" : "");
         m_print("%s", (def & QUESTION) ? "/?" : "");
-        m_print("]? ");
+        m_print("]?  ");
 
         do {
+                m_print ("\b \b");
                 if (!cmd_string[0])
                 {
                         if (usr.hotkey)
@@ -241,6 +243,8 @@ int def;
                         break;
                 if (c == '=' && (def & EQUAL))
                         break;
+                if (c == 'D' && (def & TAG_FILES))
+                        break;
                 if (time_remain() <= 0 || !CARRIER)
                         return (DEF_NO);
         } while (c != bigyes[0] && c != bigno[2] && c != '\0');
@@ -253,6 +257,9 @@ int def;
 
         if (c == '=' && (def & EQUAL))
                 return (EQUAL);
+
+        if (c == 'D' && (def & TAG_FILES))
+                return (TAG_FILES);
 
         if (def & DEF_YES) {
                 if (c == bigno[2])

@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <conio.h>
 #include <time.h>
+#include <dir.h>
+#include <time.h>
 
 #include <alloc.h>
 
@@ -18,7 +20,7 @@
 #include "externs.h"
 #include "prototyp.h"
 
-extern unsigned int _stklen = 10240;
+extern unsigned int _stklen = 32768U;
 
 static int posit = 0, old_event, outinfo = 0;
 static char interpoint = ':', is_carrier = 0;
@@ -46,16 +48,15 @@ void main (argc, argv)
 int argc;
 char **argv;
 {
-   if (_OvrInitExt(0L, 81920L))
-      _OvrInitEms(0, 0, 5);
-
-   signal(SIGINT, SIG_IGN);
-   signal(SIGABRT, SIG_IGN);
-   signal(SIGTERM, SIG_IGN);
+   signal (SIGINT, SIG_IGN);
+   signal (SIGABRT, SIG_IGN);
+   signal (SIGTERM, SIG_IGN);
    ctrlbrk (ctrlchand);
    setcbrk (0);
    directvideo = 1;
+   tzset ();
 
+   _OvrInitEms (0, 0, 16);
    init_system();
 
    DTR_ON();
@@ -69,6 +70,7 @@ char **argv;
 
    old_event = -1;
    logf = fopen(log_name, "at");
+   setbuf(logf, NULL);
 
    activation_key();
    if (!registered)
@@ -87,7 +89,12 @@ char **argv;
    clocks = 0L;
    nocdto = 0L;
 
-   remote_task();
+   if (caller && remote_net && remote_node)
+      poll(1, 1, remote_zone, remote_net, remote_node);
+   else
+      remote_task();
+
+   exit (0);
 }
 
 void remote_task ()
@@ -100,15 +107,14 @@ void remote_task ()
    if (frontdoor) {
       time (&to);
       tim = localtime (&to);
-      fprintf (logf, "\n----------  %s %02d %s %02d, %s\n", wtext[tim->tm_wday], tim->tm_mday, mtext[tim->tm_mon], tim->tm_year % 100, VERSION);
+      fprintf (logf, "\n----------  %s %02d %s %02d, %s (%u)\n", wtext[tim->tm_wday], tim->tm_mday, mtext[tim->tm_mon], tim->tm_year % 100, VERSION, coreleft());
    }
    else
-      status_line(":Begin, %s, (task %d)", &VERSION[9], line_offset);
+      status_line(":Begin, %s, (task %d) (%u)", &VERSION[9], line_offset, coreleft());
 
    system_crash();
 
-   if (ext_mail_cmd && registered)
-   {
+   if (ext_mail_cmd && registered) {
       speed = 0;
 
       i = external_mailer (ext_mail_cmd);
@@ -123,6 +129,8 @@ void remote_task ()
          speed = 9600;
       else if (i == exit14400)
          speed = 14400;
+      else if (i == exit16800)
+         speed = 16800;
       else if (i == exit19200)
          speed = 19200;
       else if (i == exit38400)
@@ -137,8 +145,7 @@ void remote_task ()
    rate = speed;
    com_baud (speed);
 
-   if (!local_mode && !caller)
-   {
+   if (!local_mode && !caller) {
       status_window();
       f4_status();
 
@@ -149,6 +156,9 @@ void remote_task ()
       caller = 0;
       to = timerset (30000);
 
+      for (i = 0; i < num_events; i++)
+         e_ptrs[i]->behavior &= ~MAT_SKIP;
+
       do {
          if ((i = wait_for_connect(1)) == 1)
             break;
@@ -158,10 +168,8 @@ void remote_task ()
          if (!execute_events())
             local_status(msgtxt[M_SETTING_BAUD]);
 
-         if (timeup(to))
-         {
-            if (!answer_flag)
-            {
+         if (timeup(to)) {
+            if (!answer_flag) {
                local_status ("");
                initialize_modem();
                local_status(msgtxt[M_SETTING_BAUD]);
@@ -169,8 +177,7 @@ void remote_task ()
             to = timerset (30000);
          }
 
-         if (dexists ("RESCAN.NOW"))
-         {
+         if (dexists ("RESCAN.NOW")) {
             get_call_list();
             outinfo = 0;
             display_outbound_info (outinfo);
@@ -178,8 +185,7 @@ void remote_task ()
          }
       } while (!local_mode);
 
-      if (local_mode)
-      {
+      if (local_mode) {
          rate = speed;
          local_status(msgtxt[M_EXT_MAIL]);
       }
@@ -190,23 +196,19 @@ void remote_task ()
       wactiv(mainview);
    }
 
-   if (local_mode)
-   {
+   if (local_mode) {
       status_line("#Connect Local");
       wputs("* Operating in local mode.\n\n");
       i = 0;
    }
-   else
-   {
+   else {
       is_carrier = 1;
 
-      if (mdm_flags == NULL)
-      {
+      if (mdm_flags == NULL) {
          status_line(msgtxt[M_READY_CONNECT],rate, "", "");
          sprintf(buffer, "* Incoming call at %u%s%s baud.\n", rate, "", "");
       }
-      else
-      {
+      else {
          status_line(msgtxt[M_READY_CONNECT],rate, "/", mdm_flags);
          sprintf(buffer, "* Incoming call at %u%s%s baud.\n", rate, "/", mdm_flags);
       }
@@ -219,25 +221,28 @@ void remote_task ()
 
    caller = 1;
 
-   if (!i)
-   {
+   if (!i) {
       showcur();
 
       read_sysinfo();
       load_language (0);
       text_path = lang_txtpath[0];
 
-      if (login_user())
-      {
+      if (login_user()) {
          sprintf (buffer, "SEC%d", usr.priv);
          read_system_file (buffer);
 
          if (usr.scanmail)
-            if (scan_mailbox())
-            {
+            if (scan_mailbox()) {
                mail_read_forward (0);
                menu_dispatcher("READMAIL");
             }
+
+         if (!noask.checkfile) {
+            m_print (bbstxt[B_CHECK_NEW_FILES]);
+            if (yesno_question (DEF_NO))
+               new_file_list (2);
+         }
 
          read_system (usr.msg, 1);
          read_system (usr.files, 2);
@@ -265,26 +270,21 @@ void time_release (void)
 {
    int sc, i, *varr;
    unsigned int ch;
-   char *cmd, cmdname[128];
+   char *cmd, cmdname[128], cpath[80];
    struct time timep;
 
-   if (kbhit())
-   {
+   if (kbhit()) {
       ch = getch ();
 
-      if (ch == 0)
-      {
+      if (ch == 0) {
          ch = getch () * 0x100;
          if (locked && registered && password != NULL && ch != 0x2500)
             ch = -1;
       }
-      else if (locked && registered && password != NULL && !local_mode)
-      {
-         if (ch == password[posit])
-         {
+      else if (locked && registered && password != NULL && !local_mode) {
+         if (ch == password[posit]) {
             locked = (password[++posit] == '\0') ? 0 : 1;
-            if (!locked && function_active == 4)
-            {
+            if (!locked && function_active == 4) {
                i = whandle();
                wactiv(status);
                wprints(1,44,BLACK|_LGREY,"      ");
@@ -296,17 +296,23 @@ void time_release (void)
       }
 
       switch (ch) {
+      case 0x1300:
+         poll_galileo (1);
+         status_window ();
+         initialize_modem ();
+         local_status(msgtxt[M_SETTING_BAUD]);
+         display_outbound_info (outinfo);
+         break;
+
       case 0x2500:
-         if (!local_mode)
-         {
+         if (!local_mode) {
             local_mode = 1;
             local_kbd = -1;
          }
          break;
 
       case 0x2D00:
-         if (!caller && !local_mode)
-         {
+         if (!caller && !local_mode) {
             local_status("Taking modem off-hook");
 
             status_line(msgtxt[M_EXIT_REQUEST]);
@@ -330,13 +336,17 @@ void time_release (void)
             read_system_file ("SHELLBYE");
          showcur();
          cclrscrn(LGREY|_BLACK);
+         getcwd (cpath, 79);
          cmd = getenv ("COMSPEC");
          strcpy (cmdname, (cmd == NULL) ? "command.com" : cmd);
          status_line(msgtxt[M_SHELLING]);
          printf(msgtxt[M_TYPE_EXIT]);
          fclose (logf);
          spawnl (P_WAIT, cmdname, cmdname, NULL);
+         setdisk (cpath[0] - 'A');
+         chdir (cpath);
          logf = fopen(log_name, "at");
+         setbuf(logf, NULL);
          status_line(msgtxt[M_BINKLEY_BACK]);
          srestore (varr);
 
@@ -378,17 +388,18 @@ void time_release (void)
          break;
 
       case 0x1000:
-         if (!answer_flag && !CARRIER)
-         {
+         if (!answer_flag && !CARRIER) {
             local_status ("");
             initialize_modem ();
             local_status(msgtxt[M_SETTING_BAUD]);
+            get_call_list();
+            outinfo = 0;
+            display_outbound_info (outinfo);
          }
          break;
 
       case 0x1900:
-         if (!caller && !local_mode)
-         {
+         if (!caller && !local_mode) {
             keyboard_password ();
             if (password != NULL)
                posit = 0;
@@ -429,16 +440,13 @@ void time_release (void)
          break;
 
       case 0x4800:
-         if (caller)
-         {
+         if (caller) {
             allowed += 1;
             if (function_active == 1)
                f1_status ();
          }
-         else
-         {
-            if (outinfo > 0)
-            {
+         else {
+            if (outinfo > 0) {
                outinfo--;
                display_outbound_info (outinfo);
             }
@@ -446,16 +454,13 @@ void time_release (void)
          break;
 
       case 0x5000:
-         if (caller)
-         {
+         if (caller) {
             allowed -= 1;
             if (function_active == 1)
                f1_status ();
          }
-         else
-         {
-            if ( (outinfo + 4) < max_call)
-            {
+         else {
+            if ( (outinfo + 3) < max_call) {
                outinfo++;
                display_outbound_info (outinfo);
             }
@@ -472,8 +477,7 @@ void time_release (void)
       case 0x6F00:
       case 0x7000:
       case 0x7100:
-         if (!caller && !local_mode && !CARRIER)
-         {
+         if (!caller && !local_mode && !CARRIER) {
             i = (int) (((unsigned) ch) >> 8);
             status_line (msgtxt[M_FUNCTION_KEY], (i - 0x67) * 10);
 
@@ -490,8 +494,7 @@ void time_release (void)
       return;
    }
 
-   if (timeup(clocks))
-   {
+   if (timeup(clocks)) {
       clocks = timerset(100);
       gettime((struct time *)&timep);
 
@@ -503,19 +506,15 @@ void time_release (void)
       wprints(0,73,BLACK|_LGREY,cmdname);
       interpoint = (interpoint == ':') ? ' ' : ':';
 
-      if (caller && function_active == 1)
-      {
+      if (caller && function_active == 1) {
          sc = time_remain ();
          sprintf(cmdname, "%d mins ", sc);
          wprints(1,26,BLACK|_LGREY,cmdname);
       }
 
-      if (is_carrier && !CARRIER)
-      {
-         if (nocdto != 0L)
-         {
-            if (timeup (nocdto))
-            {
+      if (is_carrier && !CARRIER) {
+         if (nocdto != 0L) {
+            if (timeup (nocdto)) {
                nocdto = 0L;
                if (caller)
                   update_user ();
@@ -526,17 +525,14 @@ void time_release (void)
             nocdto = timerset (800);
       }
 
-      if ( (!CARRIER || caller) && function_active == 4 )
-      {
+      if ( (!CARRIER || caller) && function_active == 4 ) {
          sc = time_to_next (0);
-         if (old_event != cur_event)
-         {
+         if (old_event != cur_event) {
             wgotoxy(1,1);
             wdupc(' ', 40);
             old_event = cur_event;
          }
-         if (next_event >= 0)
-         {
+         if (next_event >= 0) {
             sprintf(cmdname, msgtxt[M_NEXT_EVENT], next_event + 1, sc / 60, sc % 60);
             wprints(1,1,BLACK|_LGREY,cmdname);
          }
@@ -567,8 +563,7 @@ static int execute_events()
 
    i = 1;
 
-   if (events == 0L)
-   {
+   if (events == 0L) {
       find_event ();
 
       if (cur_event >= 0 && !(e_ptrs[cur_event]->behavior & MAT_NOOUT))
@@ -577,15 +572,13 @@ static int execute_events()
          events = timerset (500);
    }
 
-   if (timeup(events) && events > 0L)
-   {
+   if (timeup(events) && events > 0L) {
       events = 0L;
 
       if (next_call >= max_call)
               next_call = 0;
 
-      for (;next_call < max_call; next_call++)
-      {
+      for (;next_call < max_call; next_call++) {
          if (answer_flag)
             continue;
          if ((call_list[next_call].type & MAIL_CRASH) && (e_ptrs[cur_event]->behavior & MAT_NOCM))
@@ -607,8 +600,7 @@ static int execute_events()
 
          if (bad_call(call_list[next_call].net,call_list[next_call].node,0))
             continue;
-         else
-         {
+         else {
             i = poll(1, 1, call_list[next_call].zone,
                            call_list[next_call].net,
                            call_list[next_call].node);
@@ -616,13 +608,11 @@ static int execute_events()
          }
       }
 
-      if (next_call >= max_call && i)
-      {
+      if (next_call >= max_call && i) {
          get_call_list();
          next_call = 0;
 
-         for (;next_call < max_call; next_call++)
-         {
+         for (;next_call < max_call; next_call++) {
             if (answer_flag)
                continue;
             if ((call_list[next_call].type & MAIL_CRASH) && !(e_ptrs[cur_event]->behavior & MAT_NOCM))
@@ -644,8 +634,7 @@ static int execute_events()
 
             if (bad_call(call_list[next_call].net,call_list[next_call].node,0))
                continue;
-            else
-            {
+            else {
                i = poll(1, 1, call_list[next_call].zone,
                               call_list[next_call].net,
                               call_list[next_call].node);
@@ -674,10 +663,8 @@ void initialize_modem ()
    answer_flag = 0;
    mdm_sendcmd(init);
 
-   while (modem_response() != 0)
-   {
-      if (timeup(to))
-      {
+   while (modem_response() != 0) {
+      if (timeup(to)) {
          local_status ("Initialize failure #%d", ++fail);
          if (fail > 3)
             get_down (-1, 255);

@@ -8,6 +8,11 @@
 #include <stdlib.h>
 #include <sys\stat.h>
 
+#include <share.h>
+
+#define shopen(path,access)       open(path,(access)|SH_DENYNONE)
+#define cshopen(path,access,mode) open(path,(access)|SH_DENYNONE,mode)
+
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
 #include <cxl\cxlstr.h>
@@ -65,6 +70,12 @@ void main (void)
    long pos, oldpos;
    struct _usr tusr, backup;
 
+   fd = shopen ("USERS.BBS", O_RDWR|O_BINARY);
+   if (fd == -1) {
+      printf ("\nUSERS.BBS: File NOT found!\n");
+      exit (1);
+   }
+
    visible = 0;
 
    videoinit ();
@@ -76,11 +87,8 @@ void main (void)
 
    DrawUserScreen ();
 
-   nu = cu = 0;
-
-   fd = open ("USERS.BBS", O_RDWR|O_BINARY);
+   cu = 0;
    pos = SaveReadUser (fd, -1L, 0L, &tusr);
-
    nu = (int)(filelength(fd) / sizeof (struct _usr)) - 1;
 
    memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
@@ -176,7 +184,7 @@ void main (void)
          case '|':
             close (fd);
             PurgeUsers ();
-            fd = open ("USERS.BBS", O_RDWR|O_BINARY);
+            fd = shopen ("USERS.BBS", O_RDWR|O_BINARY);
             pos = SaveReadUser (fd, -1L, 0L, &tusr);
 
             nu = (int)(filelength(fd) / sizeof (struct _usr)) - 1;
@@ -552,7 +560,7 @@ void main (void)
 
 void DrawUserScreen (void)
 {
-   wcenters (0, WHITE|BLACK, "Lora CBCS v2.00 User Editor");
+   wcenters (0, WHITE|BLACK, "LoraBBS v2.10 User Editor");
    prints (1,  0, LRED|BLACK, "컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴");
 
    prints (3,  0, LCYAN|BLACK,"  user number");
@@ -595,7 +603,7 @@ void DrawUserScreen (void)
    printc (13, 58, YELLOW|BLACK,'_');
    printc (14,  8, YELLOW|BLACK,'R');
    printc (14, 63, YELLOW|BLACK,':');
-   printc (15,  5, YELLOW|BLACK,'H');
+   printc (15,  6, YELLOW|BLACK,'H');
    printc (15, 42, YELLOW|BLACK,'B');
    printc (15, 65, YELLOW|BLACK,'&');
    printc (16, 38, YELLOW|BLACK,'O');
@@ -665,28 +673,23 @@ int nu, cu;
       sprintf(buffer, "%-20s", sysusr->dataphone);
       prints (8, 45, LGREEN|_BLACK, buffer);
    }
-   if (which == USR_ALL || which == USR_HANDLE)
-   {
+   if (which == USR_ALL || which == USR_HANDLE) {
       sprintf(buffer, "%-35s", sysusr->handle);
       prints (7, 45, LGREEN|_BLACK, buffer);
    }
-   if (which == USR_ALL || which == USR_PRIV)
-   {
+   if (which == USR_ALL || which == USR_PRIV) {
       sprintf (buffer, "%-11s", GetPrivText(sysusr->priv));
       prints (9, 14, LGREEN|_BLACK, buffer);
    }
-   if (which == USR_ALL || which == USR_ONLINE)
-   {
+   if (which == USR_ALL || which == USR_ONLINE) {
       sprintf(buffer, "%-5d", sysusr->time);
       prints (9, 45, LGREEN|_BLACK, buffer);
    }
-   if (which == USR_ALL || which == USR_TIMES)
-   {
+   if (which == USR_ALL || which == USR_TIMES) {
       sprintf(buffer, "%-5ld", sysusr->times);
       prints (9, 72, LGREEN|_BLACK, buffer);
    }
-   if (which == USR_ALL || which == USR_UPLOADS)
-   {
+   if (which == USR_ALL || which == USR_UPLOADS) {
       sprintf(buffer, "%5ld", sysusr->upld);
       prints (10, 14, LGREEN|_BLACK, buffer);
    }
@@ -695,23 +698,19 @@ int nu, cu;
       sprintf(buffer, "%5ld", sysusr->dnld);
       prints (10, 45, LGREEN|_BLACK, buffer);
    }
-   if (which == USR_ALL || which == USR_DOWNTODAY)
-   {
+   if (which == USR_ALL || which == USR_DOWNTODAY) {
       sprintf(buffer, "%5u", sysusr->dnldl);
       prints (10, 72, LGREEN|_BLACK, buffer);
    }
-   if (which == USR_ALL || which == USR_FLAGS)
-   {
+   if (which == USR_ALL || which == USR_FLAGS) {
       SetFlags (buffer, sysusr->flags);
       prints (11, 45, LGREEN|_BLACK, buffer);
    }
-   if (which == USR_ALL || which == USR_MSG)
-   {
+   if (which == USR_ALL || which == USR_MSG) {
       sprintf(buffer, "%-5d", sysusr->msg);
       prints (12, 45, LGREEN|_BLACK, buffer);
    }
-   if (which == USR_ALL || which == USR_FILES)
-   {
+   if (which == USR_ALL || which == USR_FILES) {
       sprintf(buffer, "%-5d", sysusr->files);
       prints (12, 72, LGREEN|_BLACK, buffer);
    }
@@ -728,10 +727,9 @@ int nu, cu;
       prints (15, 14, LGREEN|_BLACK, sysusr->color ? "YES" : "NO ");
    if (which == USR_ALL || which == USR_TABS)
       prints (15, 45, LGREEN|_BLACK, sysusr->tabs ? "YES" : "NO ");
-   if (which == USR_ALL || which == USR_IBMSET)
-      prints (16, 14, LGREEN|_BLACK, sysusr->ibmset ? "YES" : "NO ");
-   if (which == USR_ALL || which == USR_VIDEO)
-   {
+//   if (which == USR_ALL || which == USR_IBMSET)
+//      prints (16, 14, LGREEN|_BLACK, sysusr->ibmset ? "YES" : "NO ");
+   if (which == USR_ALL || which == USR_VIDEO) {
       if (sysusr->ansi)
          prints (16, 45, LGREEN|_BLACK, "Ansi  ");
       else if (sysusr->avatar)
@@ -747,13 +745,11 @@ int nu, cu;
       prints (17, 45, LGREEN|_BLACK, sysusr->full_read ? "YES" : "NO ");
    if (which == USR_ALL || which == USR_CLEAR)
       prints (17, 72, LGREEN|_BLACK, sysusr->formfeed ? "YES" : "NO ");
-   if (which == USR_ALL || which == USR_WIDTH)
-   {
+   if (which == USR_ALL || which == USR_WIDTH) {
       sprintf(buffer, "%-3d", sysusr->width);
       prints (18, 14, LGREEN|_BLACK, buffer);
    }
-   if (which == USR_ALL || which == USR_LENGTH)
-   {
+   if (which == USR_ALL || which == USR_LENGTH) {
       sprintf(buffer, "%-3d", sysusr->len);
       prints (18, 45, LGREEN|_BLACK, buffer);
    }
@@ -807,6 +803,19 @@ struct _usr *usrp;
    {
       lseek (fd, pread, SEEK_SET);
       read (fd, (char *)usrp, sizeof (struct _usr));
+      usrp->name[35] = 0;
+      usrp->handle[35] = 0;
+      usrp->city[25] = 0;
+      usrp->pwd[15] = 0;
+      usrp->ldate[19] = 0;
+      usrp->signature[57] = 0;
+      usrp->voicephone[19] = 0;
+      usrp->dataphone[19] = 0;
+      usrp->birthdate[9] = 0;
+      usrp->subscrdate[9] = 0;
+      usrp->firstdate[19] = 0;
+      usrp->lastpwdchange[9] = 0;
+      usrp->comment[79] = 0;
    }
 
    return (pread);
@@ -1004,9 +1013,9 @@ void PurgeUsers ()
    unlink ("USERS.BAK");
    rename ("USERS.BBS", "USERS.BAK");
 
-   fdo = open ("USERS.BAK", O_RDONLY|O_BINARY);
-   fdn = open ("USERS.BBS", O_WRONLY|O_BINARY|O_CREAT|O_TRUNC,S_IREAD|S_IWRITE);
-   fdi = open ("USERS.IDX", O_WRONLY|O_BINARY|O_CREAT|O_TRUNC,S_IREAD|S_IWRITE);
+   fdo = shopen ("USERS.BAK", O_RDONLY|O_BINARY);
+   fdn = cshopen ("USERS.BBS", O_WRONLY|O_BINARY|O_CREAT|O_TRUNC,S_IREAD|S_IWRITE);
+   fdi = cshopen ("USERS.IDX", O_WRONLY|O_BINARY|O_CREAT|O_TRUNC,S_IREAD|S_IWRITE);
 
    while (read (fdo, (char *)&usr, sizeof (struct _usr)) == sizeof (struct _usr))
    {

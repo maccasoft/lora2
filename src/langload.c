@@ -44,7 +44,7 @@ int which;
     error = stat (LANGpath, &stbuf);
     if (error != 0)
         {
-        fprintf (stderr, "Cannot get information on file %s\n",LANGpath);
+        status_line ("!Cannot get information on file %s\n",LANGpath);
         exit (250);
         }
 
@@ -59,7 +59,7 @@ int which;
     malloc_target = malloc (memory_size);
     if (malloc_target == NULL)
         {
-        fprintf (stderr, "Unable to allocate string memory\n");
+        status_line ("!Unable to allocate string memory\n");
         exit (250);
         }
 
@@ -127,6 +127,19 @@ int which;
         {
         bbstxt[i] = memory + (bbstxt[i] - bbstxt[0]);
         }
+
+    mesi[0] = bbstxt[B_JAN];
+    mesi[1] = bbstxt[B_FEB];
+    mesi[2] = bbstxt[B_MAR];
+    mesi[3] = bbstxt[B_APR];
+    mesi[4] = bbstxt[B_MAY];
+    mesi[5] = bbstxt[B_JUN];
+    mesi[6] = bbstxt[B_JUL];
+    mesi[7] = bbstxt[B_AGO];
+    mesi[8] = bbstxt[B_SEP];
+    mesi[9] = bbstxt[B_OCT];
+    mesi[10] = bbstxt[B_NOV];
+    mesi[11] = bbstxt[B_DEC];
 
     bbstxt[0] = memory;
     return (1);

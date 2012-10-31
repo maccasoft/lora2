@@ -64,6 +64,5 @@
 
 #define stpcpy(d,s)     (strcpy (d, s), d + strlen (s))
 
-#define MK_FP(seg,ofs)  ((void far *)(((unsigned long)(seg) << 16) | (unsigned short)(ofs)))
 #endif
 

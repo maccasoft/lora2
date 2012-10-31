@@ -20,6 +20,9 @@
 
 void f1_special_status(char *, char *, char *);
 
+static int is_trashpwd (char *);
+static int is_trashcan (char *);
+
 int login_user()
 {
    int fd, fflag, posit, m, original_time, i, xmq;
@@ -53,7 +56,7 @@ int login_user()
 new_login:
    stringa[0] = 0;
 
-   m_print("\n%s%s\n", VERSION, registered ? "" : NOREG);
+   m_print("\n%s%s login.\n", VERSION, registered ? "" : NOREG);
 
    do {
       m_print(bbstxt[B_FULLNAME]);
@@ -63,12 +66,18 @@ new_login:
    } while (strlen(stringa) < 5);
 
    fancy_str(stringa);
-   status_line(msgtxt[M_USER_CALLING], stringa);
 
+   if (is_trashcan (stringa)) {
+      status_line ("!Trashcan user `%s'", stringa);
+      read_system_file ("TRASHCAN");
+      return (0);
+   }
+
+   status_line(msgtxt[M_USER_CALLING], stringa);
    crc = crc_name (stringa);
 
    sprintf (filename, "%s.IDX", user_file);
-   fd = open (filename, O_RDWR|O_BINARY);
+   fd = shopen (filename, O_RDWR|O_BINARY);
 
    fflag = 0;
    posit = 0;
@@ -78,8 +87,7 @@ new_login:
       m = i / sizeof (struct _usridx);
 
       for (i=0; i < m; i++)
-         if (usridx[i].id == crc)
-         {
+         if (usridx[i].id == crc) {
             m = 0;
             posit += i;
             fflag = 1;
@@ -94,19 +102,17 @@ new_login:
 
    sprintf (filename, "%s.BBS", user_file);
 
-   fd = open (filename, O_RDWR|O_BINARY);
+   fd = shopen (filename, O_RDWR|O_BINARY);
    lseek (fd, (long)posit * sizeof (struct _usr), SEEK_SET);
    read(fd, (char *)&tusr, sizeof(struct _usr));
    close (fd);
 
-   if (!fflag)
-   {
+   if (!fflag) {
       status_line(msgtxt[M_NOT_IN_LIST],stringa);
 
       m_print(bbstxt[B_TWO_CR]);
 
-      if (check_multilogon(stringa))
-      {
+      if (check_multilogon(stringa)) {
          read_system_file("1ATATIME");
          return (0);
       }
@@ -126,8 +132,7 @@ new_login:
       if (c == DEF_NO)
          goto new_login;
 
-      if (logon_priv == HIDDEN || (!registered && posit >= 50))
-      {
+      if (logon_priv == HIDDEN || (!registered && posit >= 50)) {
          read_system_file ("PREREG");
          return (0);
       }
@@ -139,14 +144,12 @@ new_login:
 
       sysinfo.new_users++;
    }
-   else
-   {
+   else {
       m = 1;
       m_print(bbstxt[B_ONE_CR]);
 
       free (bbstxt);
-      if (!load_language (tusr.language))
-      {
+      if (!load_language (tusr.language)) {
          tusr.language = 0;
          load_language (tusr.language);
       }
@@ -158,8 +161,7 @@ new_login:
       usr.avatar = tusr.avatar;
       usr.color = tusr.color;
 
-      for(;;)
-      {
+      for(;;) {
          m_print(bbstxt[B_PASSWORD]);
          chars_input(stringa,15,INPUT_PWD|INPUT_FIELD);
          if (!CARRIER)
@@ -171,14 +173,12 @@ new_login:
          m_print(bbstxt[B_BAD_PASSWORD]);
          status_line(msgtxt[M_BAD_PASSWORD],strcode(stringa,tusr.name));
 
-         if(++m > 4)
-         {
+         if(++m > 4) {
             if (!read_system_file("BADPWD"))
                m_print (bbstxt[B_DENIED]);
             status_line(msgtxt[M_INVALID_PASSWORD]);
 
-            if (registered)
-            {
+            if (registered) {
                tusr.badpwd = 1;
                memcpy((char *)&usr,(char *)&tusr,sizeof(struct _usr));
             }
@@ -189,8 +189,7 @@ new_login:
          }
       }
 
-      if (check_multilogon(tusr.name))
-      {
+      if (check_multilogon(tusr.name)) {
          read_system_file("1ATATIME");
          return (0);
       }
@@ -325,7 +324,7 @@ new_login:
 
    sprintf (filename, "%s.BBS", user_file);
 
-   fd = open (filename, O_RDWR|O_BINARY);
+   fd = shopen (filename, O_RDWR|O_BINARY);
    lseek (fd, (long)posit * sizeof (struct _usr), SEEK_SET);
    write(fd,(char *)&usr,sizeof(struct _usr));
    close(fd);
@@ -362,8 +361,11 @@ new_login:
    else
       read_system_file("NEWUSER2");
 
+   ballot_votes ();
+
    if (!CARRIER)
       return (0);
+
    return (1);
 }
 
@@ -566,7 +568,7 @@ char *buff;
         tusr.flags = logon_flags;
         tusr.width = 80;
         tusr.tabs = 1;
-        tusr.hotkey = 1;
+        tusr.hotkey = 0;
         tusr.ptrquestion = -1L;
 
         memcpy((char *)&usr, (char *)&tusr, sizeof(struct _usr));
@@ -582,6 +584,12 @@ char *buff;
                         if (!CARRIER)
                                 return (1);
                 } while(strlen(stringa) < 4);
+
+                if (is_trashpwd (stringa)) {
+                   status_line ("!Trashcan password `%s'", stringa);
+                   read_system_file ("TRASHPWD");
+                   continue;
+                }
 
                 strcpy(tusr.pwd,stringa);
 
@@ -606,7 +614,7 @@ char *buff;
         memcpy((char *)&usr, (char *)&tusr, sizeof(struct _usr));
 
         sprintf (filename, "%s.IDX", user_file);
-        fd = open (filename, O_RDWR|O_BINARY);
+        fd = shopen (filename, O_RDWR|O_BINARY);
         lseek (fd, 0L, SEEK_END);
         write (fd, (char *)&usridx, sizeof (struct _usridx));
         close (fd);
@@ -625,5 +633,45 @@ char *name;
            crc = Z_32UpdateCRC (((unsigned short) name[i]), crc);
 
    return (crc);
+}
+
+static int is_trashpwd (s)
+char *s;
+{
+   FILE *fp;
+   char buffer[40];
+
+   fp = fopen ("PWDTRASH.DAT", "rt");
+   if (fp != NULL) {
+      while (fgets (buffer, 38, fp) != NULL) {
+         buffer[strlen (buffer) - 1] = '\0';
+         if (!stricmp (buffer, s))
+            return (1);
+      }
+
+      fclose (fp);
+   }
+
+   return (0);
+}
+
+static int is_trashcan (s)
+char *s;
+{
+   FILE *fp;
+   char buffer[40];
+
+   fp = fopen ("TRASHCAN.DAT", "rt");
+   if (fp != NULL) {
+      while (fgets (buffer, 38, fp) != NULL) {
+         buffer[strlen(buffer) - 1] = '\0';
+         if (!stricmp (buffer, s))
+            return (1);
+      }
+
+      fclose (fp);
+   }
+
+   return (0);
 }
 

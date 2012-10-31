@@ -25,7 +25,7 @@
 #define MAT_NOOUTREQ    0x0400
 #define MAT_NOCM        0x0800
 #define MAT_RESERV      0x1000
-#define MAT_RESERVED1   0x2000
+#define MAT_RESYNC      0x2000
 #define MAT_RESERVED2   0x4000
 #define MAT_RESERVED3   0x8000
 

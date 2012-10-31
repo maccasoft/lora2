@@ -20,8 +20,10 @@
 
 
 static FILE *Infile;
+static int fsize2 = 0;
 
 static int prot_read_file (char *);
+static int file_more_question (int, int);
 
 void file_list (path, list)
 char *path, *list;
@@ -31,8 +33,7 @@ char *path, *list;
    char buffer[150], filename[80], name[14], comment[60];
    struct ffblk blk;
 
-   if (list == NULL || !(*list))
-   {
+   if (list == NULL || !(*list)) {
       i = strlen(path) - 1;
       while (path[i] == ' ')
          path[i--] = '\0';
@@ -42,8 +43,7 @@ char *path, *list;
       sprintf(filename,"%sFILES.BBS",path);
       fp = fopen(filename,"rt");
    }
-   else
-   {
+   else {
       status_line(msgtxt[M_READ_FILE_LIST],list);
       fp = fopen(list,"rt");
    }
@@ -59,12 +59,10 @@ char *path, *list;
 
    line = 3;
 
-   while(fgets(buffer,138,fp) != NULL && CARRIER && !RECVD_BREAK())
-   {
+   while(fgets(buffer,138,fp) != NULL && CARRIER && !RECVD_BREAK()) {
       buffer[strlen(buffer)-1] = 0;
 
-      if (buffer[0] == '-')
-      {
+      if (buffer[0] == '-') {
          change_attr (WHITE|_BLACK);
          m_print ("%s\n", buffer);
          continue;
@@ -79,8 +77,7 @@ char *path, *list;
       while(buffer[m] == ' ')
          m++;
 
-      if (!sys.no_filedate || path != NULL)
-      {
+      if (!sys.no_filedate || path != NULL) {
          sprintf(filename,"%s%s",path,name);
          if(findfirst(filename,&blk,0))
             continue;
@@ -89,8 +86,7 @@ char *path, *list;
          mo = ((blk.ff_fdate >> 5) & 0x0F);
          dy = blk.ff_fdate & 0x1F;
       }
-      else
-      {
+      else {
          i = 0;
          while(buffer[m] != '\0' && i < 48)
             filename[i++] = buffer[m++];
@@ -120,13 +116,13 @@ char *path, *list;
 
       m_print(bbstxt[B_FILES_FORMAT],strupr(name),blk.ff_fsize,dy,mo,(yr+80)%100,comment);
 
-      if ((line=more_question(line)) == 0 || !CARRIER)
+      if ((line=file_more_question(line, 1)) == 0 || !CARRIER)
          break;
    }
 
    fclose(fp);
 
-   m_print("\n");
+   m_print (bbstxt[B_ONE_CR]);
    if (line && CARRIER)
       press_enter();
 }
@@ -135,8 +131,7 @@ void file_display()
 {
    char filename[80], stringa[20];
 
-   if (!get_command_word (stringa, 14))
-   {
+   if (!get_command_word (stringa, 14)) {
       m_print(bbstxt[B_WHICH_FILE]);
       input(stringa,14);
       if(!strlen(stringa))
@@ -158,7 +153,7 @@ void override_path()
 
    if (!get_command_word (stringa, 78))
    {
-      m_print("\n\nEnter FULL override path: ");
+      m_print(bbstxt[B_FULL_OVERRIDE]);
       input(stringa, 78);
       if(!strlen(stringa))
          return;
@@ -175,77 +170,71 @@ void override_path()
 static int prot_read_file(name)
 char *name;
 {
-        FILE *fp;
-        char linea[130], *p;
-        int line;
+   FILE *fp;
+   char linea[130], *p;
+   int line;
 
-        XON_ENABLE();
-        _BRK_ENABLE();
+   XON_ENABLE();
+   _BRK_ENABLE();
 
-        if(!name || !(*name))
-                return(0);
+   if(!name || !(*name))
+      return(0);
 
-        fp = fopen(name,"rb");
-        if (fp == NULL)
-                return(0);
+   fp = fopen(name,"rb");
+   if (fp == NULL)
+      return(0);
 
-        line = 1;
-        nopause = 0;
+   line = 1;
+   nopause = 0;
 
 loop:
-        change_attr(LGREY|_BLACK);
+   change_attr(LGREY|_BLACK);
 
-        while (fgets(linea,128,fp) != NULL)
-        {
-                linea[strlen(linea) - 2] = '\0';
+   while (fgets(linea,128,fp) != NULL) {
+      linea[strlen(linea) - 2] = '\0';
 
-                for (p=linea;(*p) && (*p != 0x1B);p++)
-                {
-                        if (!CARRIER || RECVD_BREAK())
-                        {
-                                CLEAR_OUTBOUND();
-                                fclose(fp);
-                                return (0);
-                        }
+      for (p=linea;(*p) && (*p != 0x1B);p++) {
+         if (!CARRIER || RECVD_BREAK()) {
+            CLEAR_OUTBOUND();
+            fclose(fp);
+            return (0);
+         }
 
-                        if (!local_mode)
-                                BUFFER_BYTE(*p);
-                        if (snooping)
-                                wputc(*p);
-                }
+         if (!local_mode)
+            BUFFER_BYTE(*p);
+         if (snooping)
+            wputc(*p);
+      }
 
-                if (!local_mode)
-                {
-                        BUFFER_BYTE('\r');
-                        BUFFER_BYTE('\n');
-                }
-                if (snooping)
-                        wputs("\n");
+      if (!local_mode) {
+         BUFFER_BYTE('\r');
+         BUFFER_BYTE('\n');
+      }
+      if (snooping)
+         wputs("\n");
 
-                if(!(line++ < (usr.len-1)) && usr.len != 0) {
-                        line = 1;
-                        if(!continua())
-                        {
-                                fclose(fp);
-                                break;
-                        }
-                }
+      if(!(line++ < (usr.len-1)) && usr.len != 0) {
+         line = 1;
+         if(!continua()) {
+            fclose(fp);
+            break;
+         }
+      }
 
-                if (*p == CTRLZ)
-                {
-                        fclose(fp);
-                        UNBUFFER_BYTES ();
-                        FLUSH_OUTPUT ();
-                        break;
-                }
-        }
+      if (*p == CTRLZ) {
+         fclose(fp);
+         UNBUFFER_BYTES ();
+         FLUSH_OUTPUT ();
+         break;
+      }
+   }
 
-        fclose(fp);
+   fclose(fp);
 
-        UNBUFFER_BYTES ();
-        FLUSH_OUTPUT();
+   UNBUFFER_BYTES ();
+   FLUSH_OUTPUT();
 
-        return(line);
+   return(line);
 }
 
 void raw_dir()
@@ -257,8 +246,7 @@ void raw_dir()
 
    nopause = 0;
 
-   if (!get_command_word (stringa, 14))
-   {
+   if (!get_command_word (stringa, 14)) {
       m_print(bbstxt[B_DIRMASK]);
       input(stringa,14);
       if(!CARRIER)
@@ -275,36 +263,33 @@ void raw_dir()
    nfiles = 0;
    fsize = 0L;
 
-   if (!findfirst(filename,&blk,0))
-   {
+   if (!findfirst(filename,&blk,0)) {
       cls ();
-      m_print ("File Name      Size        Date\n");
-      m_print ("-------------- ----------- ---------\n");
+      m_print (bbstxt[B_RAW_HEADER]);
+
       do {
          yr = (blk.ff_fdate >> 9) & 0x7F;
          mo = (blk.ff_fdate >> 5) & 0x0F;
          dy = blk.ff_fdate & 0x1F;
 
-         m_print("%-13s  Š%-10ld  ‰%2d-%3s-%02d\n", blk.ff_name, blk.ff_fsize, dy, mesi[mo-1], (yr+80)%100);
+         m_print(bbstxt[B_RAW_FORMAT], blk.ff_name, blk.ff_fsize, dy, mesi[mo-1], (yr+80)%100);
 
          nfiles++;
          fsize += blk.ff_fsize;
 
-         if (!(line=more_question(line)) || !CARRIER)
+         if (!(line=file_more_question(line, 1)) || !CARRIER)
             break;
       } while(!findnext(&blk) && CARRIER && !RECVD_BREAK());
    }
 
-   if (CARRIER && line)
-   {
-      m_print ("-------------- ----------- ---------\n");
+   if (CARRIER && line) {
       sprintf (stringa, "%d files", nfiles);
-      m_print ("%-14s %ld bytes\n\n", stringa, fsize);
+      m_print (bbstxt[B_RAW_FOOTER], stringa, fsize);
       press_enter();
    }
 }
 
-void new_file_list(only_one)
+void new_file_list (only_one)
 int only_one;
 {
    FILE *fp;
@@ -320,12 +305,11 @@ int only_one;
    tmp_date[9] = '\0';
    totfile = totsize = 0L;
 
-   m_print(bbstxt[B_NEW_SINCE_LAST]);
+   if (only_one != 2)
+      m_print(bbstxt[B_NEW_SINCE_LAST]);
 
-   if(yesno_question(DEF_YES) == DEF_NO)
-   {
-      if (!get_command_word (stringa, 8))
-      {
+   if (only_one != 2 && yesno_question(DEF_YES) == DEF_NO) {
+      if (!get_command_word (stringa, 8)) {
          m_print(bbstxt[B_NEW_DATE]);
          input(stringa,8);
          if(stringa[0] == '\0' || !CARRIER)
@@ -335,8 +319,7 @@ int only_one;
       sscanf(stringa, "%2d-%2d-%2d", &day, &mont, &year);
       mont--;
    }
-   else
-   {
+   else {
       sscanf(usr.ldate, "%2d %3s %2d", &day, month, &year);
       month[3] = '\0';
       for (mont = 0; mont < 12; mont++) {
@@ -344,6 +327,9 @@ int only_one;
             break;
       }
    }
+
+   if (only_one == 2)
+      only_one = 0;
 
    if ((mont == 12) || (day>31) || (day<1) || (year>99) || (year<80) || !CARRIER)
       return;
@@ -357,27 +343,24 @@ int only_one;
    line = 4;
 
    sprintf(filename,"%sSYSFILE.DAT", sys_path);
-   fd = open(filename, O_RDONLY|O_BINARY);
-   if (fd == -1)
-   {
+   fd = shopen(filename, O_RDONLY|O_BINARY);
+   if (fd == -1) {
       status_line(msgtxt[M_NO_SYSTEM_FILE]);
       return;
    }
 
-   while (read(fd, (char *)&tsys.file_name,SIZEOF_FILEAREA) == SIZEOF_FILEAREA && line)
-   {
+   while (read(fd, (char *)&tsys.file_name,SIZEOF_FILEAREA) == SIZEOF_FILEAREA && line) {
       if (only_one)
          memcpy ((char *)&sys.file_name, (char *)&tsys.file_name, SIZEOF_FILEAREA);
-      else
-      {
+      else {
          if (usr.priv < tsys.file_priv || tsys.no_global_search)
             continue;
          if((usr.flags & tsys.file_flags) != tsys.file_flags)
             continue;
       }
 
-      m_print("%-3d ... %s\n",tsys.file_num,tsys.file_name);
-      if ((line=more_question(line)) == 0)
+      m_print(bbstxt[B_AREALIST_HEADER],tsys.file_num,tsys.file_name);
+      if ((line=file_more_question(line,only_one)) == 0)
               break;
 
       sprintf(filename,"%sFILES.BBS",tsys.filepath);
@@ -385,12 +368,10 @@ int only_one;
       if(fp == NULL)
          continue;
 
-      while(fgets(stringa,110,fp) != NULL && line)
-      {
+      while(fgets(stringa,110,fp) != NULL && line) {
          stringa[strlen(stringa)-1] = 0;
 
-         if (!CARRIER || RECVD_BREAK())
-         {
+         if (!CARRIER || RECVD_BREAK()) {
             line = 0;
             break;
          }
@@ -408,8 +389,7 @@ int only_one;
          if(findfirst(filename,&blk,0))
             continue;
 
-         if(blk.ff_fdate >= search)
-         {
+         if (blk.ff_fdate >= search) {
             size=blk.ff_fsize;
             date=blk.ff_fdate;
             z=0;
@@ -424,7 +404,7 @@ int only_one;
 
             m_print(bbstxt[B_FILES_FORMAT],strupr(name),size,(date & 0x1F), ((date >> 5) & 0x0F),((((date >> 9) & 0x7F)+80)%100), desc);
 
-            if (!(line=more_question(line)) || !CARRIER)
+            if (!(line=file_more_question(line,only_one)) || !CARRIER)
                break;
          }
       }
@@ -447,157 +427,296 @@ void download_file(st, global)
 char *st;
 int global;
 {
-        int i, m, protocol;
-        char filename[80], path[80], dir[80], name[20], ext[5];
-        long rp;
-        struct ffblk blk;
+   int fd, i, m, protocol;
+   char filename[80], path[80], dir[80], name[80], ext[5];
+   long rp;
+   struct ffblk blk;
+   struct _sys tsys;
 
-        fnsplit(st,path,dir,name,ext);
-        if(!sys.freearea && !usr.xfer_prior &&
-            class[usr_class].ratio && !name[0] &&
-            usr.n_dnld >= class[usr_class].start_ratio)
-        {
-                rp = usr.upld ? (usr.dnld/usr.upld) : usr.dnld;
-                if (rp > (long)class[usr_class].ratio)
-                {
-                        cmd_string[0] = '\0';
-                        status_line (":Dnld req. would exceed ratio");
-                        read_system_file ("RATIO");
-                        return;
-                }
-        }
+   fnsplit(st,path,dir,name,ext);
+   if(!sys.freearea && !usr.xfer_prior && class[usr_class].ratio && !name[0] && usr.n_dnld >= class[usr_class].start_ratio) {
+      rp = usr.upld ? (usr.dnld/usr.upld) : usr.dnld;
+      if (rp > (long)class[usr_class].ratio) {
+         cmd_string[0] = '\0';
+         status_line (":Dnld req. would exceed ratio");
+         read_system_file ("RATIO");
+         return;
+      }
+   }
 
-        read_system_file ("PREDNLD");
+   read_system_file ("PREDNLD");
 
-        if (st == NULL)
-           cls();
-        if ((protocol=selprot()) == 0)
-                return;
+   if (st == NULL)
+      cls();
+   if ((protocol = selprot()) == 0)
+      return;
 
-        fnsplit(st,path,dir,name,ext);
-        strcat(path,dir);
-        strcat(name,ext);
+   fnsplit (st, path, dir, name, ext);
+   strcat (path, dir);
+   strcat (name, ext);
 
-        if (!dir[0] && st != NULL)
-                strcpy(path,sys.filepath);
+   if (!dir[0] && st != NULL)
+      strcpy (path, sys.filepath);
 
-        if (!name[0])
-        {
-                if (!get_command_word (name, 14))
-                {
-                        ask_for_filename(name);
-                        if (!name[0] || !CARRIER)
-                                return;
-                }
-        }
+   if (!name[0]) {
+      if (!cmd_string[0]) {
+         ask_for_filename (name);
+         if (!name[0] || !CARRIER)
+            return;
+      }
+      else {
+         strcpy (name, cmd_string);
+         cmd_string[0] = '\0';
+      }
+   }
 
-        if (!display_transfer(protocol, path, name, global))
-                return;
+   if (!display_transfer (protocol, path, name, global))
+      return;
 
-        m_print(bbstxt[B_READY_TO_SEND]);
-        m_print(bbstxt[B_CTRLX_ABORT]);
+   m_print(bbstxt[B_READY_TO_SEND]);
+   m_print(bbstxt[B_CTRLX_ABORT]);
 
-        if (local_mode)
-        {
-                sysop_error();
-                m = 0;
-                goto abort_xfer;
-        }
+   if (local_mode) {
+      sysop_error();
+      m = 0;
+      goto abort_xfer;
+   }
 
-        sprintf(filename,"%s%s",path,name);
+   timer (10);
+   m = i = 0;
 
-        if(findfirst(filename,&blk,0))
-        {
-                press_enter();
-                return;
-        }
+   while (get_string (name, dir) != NULL) {
+      sprintf (filename, "%s%s", path, dir);
 
-        timer(50);
-        i=0;
+      if (findfirst(filename,&blk,0)) {
+         sprintf (filename, "%sSYSFILE.DAT", sys_path);
+         fd = shopen (filename, O_RDONLY|O_BINARY);
 
-        do {
-                sprintf(filename,"%s%s",path,blk.ff_name);
-                switch (protocol) {
-                case 1:
-                        m = send(filename, 'X');
-                        break;
-                case 2:
-                        m = send(filename, 'Y');
-                        break;
-                case 3:
-                        m = send_Zmodem(filename,blk.ff_name,i,0);
-                        break;
-                case 6:
-                        m = send(filename, 'S');
-                        break;
-                }
+         if (global) {
+            while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
+               if (usr.priv < tsys.file_priv || tsys.no_global_search)
+                  continue;
+               if((usr.flags & tsys.file_flags) != tsys.file_flags)
+                  continue;
+               if (usr.priv < tsys.download_priv)
+                  continue;
+               if((usr.flags & tsys.download_flags) != tsys.download_flags)
+                  continue;
 
-                if (!m)
-                        break;
+               sprintf (filename, "%s%s", tsys.filepath, dir);
 
-                i++;
+               if (!findfirst (filename, &blk, 0))
+                  break;
+            }
+         }
 
-                if (!sys.freearea || st == NULL)
-                {
-                        usr.dnld+=(int)(blk.ff_fsize/1024L)+1;
-                        usr.dnldl+=(int)(blk.ff_fsize/1024L)+1;
-                        usr.n_dnld++;
-                        if (function_active == 3)
-                                f3_status ();
-                }
-        } while(!findnext(&blk));
+         close (fd);
+      }
 
-        if (protocol == 3)
-                send_Zmodem(NULL,NULL,((i)?END_BATCH:NOTHING_TO_DO),0);
+      switch (protocol) {
+         case 1:
+            m = send (filename, 'X');
+            break;
+         case 2:
+            m = send (filename, 'Y');
+            break;
+         case 3:
+            m = send_Zmodem (filename, dir, i, 0);
+            break;
+         case 6:
+            m = send (filename, 'S');
+            break;
+      }
+
+      if (!m)
+         break;
+
+      i++;
+
+      if (!sys.freearea || st == NULL) {
+         usr.dnld += (int)(blk.ff_fsize / 1024L) + 1;
+         usr.dnldl += (int)(blk.ff_fsize / 1024L) + 1;
+         usr.n_dnld++;
+
+         if (function_active == 3)
+            f3_status ();
+      }
+   }
+
+   if (protocol == 3)
+      send_Zmodem (NULL, NULL, ((i) ? END_BATCH : NOTHING_TO_DO), 0);
+   else if (protocol == 6)
+      send (NULL, 'S');
 
 abort_xfer:
-        wactiv (mainview);
+   wactiv (mainview);
 
-        if (m) m_print(bbstxt[B_TRANSFER_OK]);
-        else   m_print(bbstxt[B_TRANSFER_ABORT]);
+   if (m)
+      m_print(bbstxt[B_TRANSFER_OK]);
+   else {
+      m_print(bbstxt[B_TRANSFER_ABORT]);
+      sysinfo.lost_download++;
+   }
 
-        press_enter();
+   press_enter();
+}
+
+int display_transfer(protocol, path, name, flag)
+int protocol;
+char *path, *name;
+int flag;
+{
+   int fd, i, byte_sec, min, sec, nfiles, errfl;
+   char filename[80], root[14], back[80];
+   long fl;
+   struct ffblk blk;
+   struct _sys tsys;
+
+   back[0] = '\0';
+   fl = 0L;
+   nfiles = 0;
+   errfl = 0;
+
+   while (get_string (name, root) != NULL) {
+      sprintf (filename, "%s%s", path, root);
+
+      if (findfirst (filename, &blk, 0)) {
+         sprintf (filename, "%sSYSFILE.DAT", sys_path);
+         fd = shopen (filename, O_RDONLY|O_BINARY);
+
+         if (flag) {
+            i = 0;
+
+            while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
+               if (usr.priv < tsys.file_priv || tsys.no_global_search)
+                  continue;
+               if((usr.flags & tsys.file_flags) != tsys.file_flags)
+                  continue;
+               if (usr.priv < tsys.download_priv)
+                  continue;
+               if((usr.flags & tsys.download_flags) != tsys.download_flags)
+                  continue;
+
+               sprintf (filename, "%s%s", tsys.filepath, root);
+
+               if (findfirst(filename, &blk, 0))
+                  continue;
+
+               do {
+                  if ((((fl + blk.ff_fsize) / 1024) + usr.dnldl) > class[usr_class].max_dl && !sys.freearea && !usr.xfer_prior) {
+                     status_line (":Dnld req. would exceed limit");
+                     errfl = 1;
+                     break;
+                  }
+
+                  if (strlen (back) + strlen (blk.ff_name) + 1 < 79) {
+                     if (nfiles)
+                        strcat (back, " ");
+                     strcat (back, blk.ff_name);
+                     fl += blk.ff_fsize;
+                     nfiles++;
+                     i = 1;
+                  }
+               } while (!findnext (&blk));
+            }
+
+            if (!i)
+               m_print (bbstxt[B_FILE_NOT_FOUND], strupr (root));
+         }
+         else
+            m_print (bbstxt[B_FILE_NOT_FOUND], strupr (root));
+
+         close (fd);
+      }
+      else
+         do {
+            if ((((fl + blk.ff_fsize) / 1024) + usr.dnldl) > class[usr_class].max_dl && !sys.freearea && !usr.xfer_prior) {
+               status_line (":Dnld req. would exceed limit");
+               errfl = 1;
+               continue;
+            }
+
+            if (strlen (back) + strlen (blk.ff_name) + 1 < 79) {
+               if (nfiles)
+                  strcat (back, " ");
+               strcat (back, blk.ff_name);
+               fl += blk.ff_fsize;
+               nfiles++;
+            }
+         } while (!findnext (&blk));
+   }
+
+   if (!back[0])
+      return (0);
+
+   cls();
+
+   m_print (bbstxt[B_FILE_MASK], strupr (back));
+   m_print (bbstxt[B_LEN_MASK], fl);
+
+   byte_sec = rate / 11;
+   i = (int)((fl + (fl / 1024)) / byte_sec);
+   min = i / 60;
+   sec = i - min * 60;
+
+   m_print (bbstxt[B_TOTAL_TIME], min, sec);
+   m_print (bbstxt[B_PROTOCOL], protocols[protocol - 1]);
+
+   if(((fl/1024) + usr.dnldl) > class[usr_class].max_dl && !sys.freearea && !usr.xfer_prior) {
+      status_line (":Dnld req. would exceed limit");
+      read_system_file ("TODAYK");
+      return(0);
+   }
+   else if (errfl && nfiles == 1) {
+      read_system_file ("TODAYK");
+      return(0);
+   }
+
+   if (min > time_remain() && !sys.freearea && !usr.xfer_prior) {
+      status_line (":Dnld req. would exceed limit");
+      read_system_file ("NOTIME");
+      return (0);
+   }
+
+   strcpy (name, back);
+   return (1);
 }
 
 void ask_for_filename(name)
 char *name;
 {
-        char stringa[16];
+   char stringa[80];
 
-        for (;;) {
-                if (!get_command_word (stringa, 12))
-                {
-                        m_print(bbstxt[B_DOWNLOAD_NAME]);
-                        input(stringa,12);
-                        if(!stringa[0] || !CARRIER)
-                                return;
-                }
+   for (;;) {
+      m_print (bbstxt[B_DOWNLOAD_NAME]);
+      input (stringa, 79);
+      if (!stringa[0] || !CARRIER)
+         return;
 
-                if (invalid_filename(stringa) && usr.priv < SYSOP)
-                {
-                        m_print(bbstxt[B_INVALID_FILENAME]);
-                        status_line(msgtxt[M_DL_PATH],stringa);
-                }
-                else
-                        break;
-        }
+      if (invalid_filename(stringa) && usr.priv < SYSOP) {
+         m_print (bbstxt[B_INVALID_FILENAME]);
+         status_line (msgtxt[M_DL_PATH], stringa);
+      }
+      else
+         break;
+   }
 
-        strcpy(name,stringa);
+   strcpy (name, stringa);
 }
 
 int invalid_filename(f)
 char *f;
 {
-        if (strchr(f,'\\') != NULL)
-                return(1);
-        if (strchr(f,':') != NULL)
-                return(1);
+   if (strchr(f,'\\') != NULL)
+      return(1);
+   if (strchr(f,':') != NULL)
+      return(1);
 
-        return(0);
+   return(0);
 }
 
-void upload_file(st)
-char *st;
+void upload_file(st,pr)
+char *st, pr;
 {
         FILE *xferinfo, *fp;
         int i, protocol;
@@ -605,12 +724,15 @@ char *st;
         long fpos, start_upload;
         struct ffblk blk;
 
+        if (pr == 0) {
+                cls ();
+                read_system_file ("PREUPLD");
 
-        read_system_file ("PREUPLD");
-
-        cls ();
-        if ((protocol=selprot()) == 0)
-                return;
+                if ((protocol=selprot()) == 0)
+                        return;
+        }
+        else
+                protocol = pr;
 
         if (!st[0] || st == NULL)
                 strcpy(path,sys.uppath);
@@ -634,20 +756,21 @@ char *st;
                         m_print(bbstxt[B_ALREADY_HERE]);
                 }
 
-        m_print(bbstxt[B_READY_TO_RECEIVE],protocols[protocol-1]);
-        m_print(bbstxt[B_CTRLX_ABORT]);
+        if (pr == 0) {
+                m_print(bbstxt[B_READY_TO_RECEIVE],protocols[protocol-1]);
+                m_print(bbstxt[B_CTRLX_ABORT]);
+        }
 
         start_upload = time(0);
 
-        if (local_mode)
-        {
+        if (local_mode) {
                 sysop_error();
                 i = 0;
                 file = NULL;
                 goto abort_xfer;
         }
 
-        timer(50);
+        timer (50);
 
         sprintf (filename, "XFER%d", line_offset);
         xferinfo = fopen(filename,"w+t");
@@ -760,129 +883,41 @@ abort_xfer:
         press_enter();
 }
 
-int display_transfer(protocol, path, name, flag)
-int protocol;
-char *path, *name;
-int flag;
-{
-        int fd, i, byte_sec, min, sec;
-        char filename[80];
-        long fl;
-        struct ffblk blk;
-        struct _sys tsys;
-
-        sprintf(filename,"%s%s",path,name);
-
-        if(findfirst(filename,&blk,0))
-        {
-                sprintf(filename,"%sSYSFILE.DAT", sys_path);
-                fd = open(filename, O_RDONLY|O_BINARY);
-
-                i = 0;
-                while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA
-                       && flag)
-                {
-                        if (usr.priv < tsys.file_priv || tsys.no_global_search)
-                                continue;
-                        if((usr.flags & tsys.file_flags) != tsys.file_flags)
-                                continue;
-                        if (usr.priv < tsys.download_priv)
-                                continue;
-                        if((usr.flags & tsys.download_flags) != tsys.download_flags)
-                                continue;
-
-                        sprintf (filename,"%s%s", tsys.filepath, name);
-                        if (!findfirst(filename, &blk, 0))
-                        {
-                                i = 1;
-                                strcpy (path, tsys.filepath);
-                                break;
-                        }
-                }
-
-                close (fd);
-
-                if (!i)
-                {
-                        change_attr(LRED|_BLACK);
-                        m_print(bbstxt[B_FILE_NOT_FOUND],strupr(name));
-                        press_enter();
-                        return (0);
-                }
-        }
-
-        fl = 0L;
-
-        do {
-                fl += blk.ff_fsize;
-        } while(!findnext(&blk));
-
-        cls();
-
-        m_print(bbstxt[B_FILE_MASK],strupr(name));
-        m_print(bbstxt[B_LEN_MASK], fl);
-
-        byte_sec=rate/11;
-        i=(int)((fl+(fl/1024))/byte_sec);
-        min=i/60;
-        sec=i-min*60;
-
-        m_print(bbstxt[B_TOTAL_TIME],min,sec);
-        m_print(bbstxt[B_PROTOCOL], protocols[protocol-1]);
-
-        if(((fl/1024) + usr.dnldl) > class[usr_class].max_dl && !sys.freearea && !usr.xfer_prior)
-        {
-                status_line (":Dnld req. would exceed limit");
-                read_system_file ("TODAYK");
-                return(0);
-        }
-
-        if(min > time_remain() && !sys.freearea && !usr.xfer_prior)
-        {
-                status_line (":Dnld req. would exceed limit");
-                read_system_file ("NOTIME");
-                return(0);
-        }
-
-        return(1);
-}
-
 int selprot()
 {
-        char c, stringa[4], *batch = "[*]";
+   char c, stringa[4], *batch = "[*]";
 
-        if ((c=get_command_letter ()) == '\0')
-        {
-                m_print(bbstxt[B_PROTOCOL_FORMAT],protocols[0][0],protocols[0]);
-                m_print(bbstxt[B_PROTOCOL_FORMAT],protocols[1][0],protocols[1]);
-                m_print(bbstxt[B_PROTOCOL_FORMAT],protocols[2][0],protocols[2]);
-                m_print(batch);
-                m_print(bbstxt[B_PROTOCOL_FORMAT],protocols[5][0],protocols[5]);
-                m_print(batch);
-                m_print(bbstxt[B_TWO_CR]);
+   if ((c=get_command_letter ()) == '\0') {
+      m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[0][0], protocols[0]);
+      m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[1][0], protocols[1]);
+      m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[2][0], protocols[2]);
+      m_print (batch);
+      m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[5][0], protocols[5]);
+      m_print (batch);
+      m_print (bbstxt[B_TWO_CR]);
 
-                m_print(bbstxt[B_BATCH_PROTOCOL]);
+      m_print (bbstxt[B_BATCH_PROTOCOL]);
 
-                m_print(bbstxt[B_SELECT_PROT]);
+      m_print (bbstxt[B_SELECT_PROT]);
 
-                input(stringa,1);
-                c = stringa[0];
-                if(c == '\0' || c == '\r' || !CARRIER)
-                        return(0);
-        }
+      input (stringa, 1);
+      c = stringa[0];
+      if (c == '\0' || c == '\r' || !CARRIER)
+         return(0);
+   }
 
-        switch(toupper(c)) {
-        case 'X':
-                return (1);
-        case '1':
-                return (2);
-        case 'Z':
-                return (3);
-        case 'S':
-                return (6);
-        default:
-                return('\0');
-        }
+   switch(toupper(c)) {
+      case 'X':
+         return (1);
+      case '1':
+         return (2);
+      case 'Z':
+         return (3);
+      case 'S':
+         return (6);
+      default:
+         return('\0');
+   }
 }
 
 void SendACK()
@@ -1026,63 +1061,26 @@ void getblock()
                 if(block_number) {
                         if(block_number < fsize1)
                                 fwrite(rbuffer,block_size,1,Infile);
-                        else if(block_number == fsize1)
+                        else if (block_number == fsize1)
                                 fwrite(rbuffer,fsize2,1,Infile);
-                        if (block_number == 1 && netmail)
+                }
+                else if (first_block && !may_be_seadog)
+                {
+                        sptr = &(testa->name[0]);
+                        if(sptr[0])
                         {
-                                struct _pkthdr *bundle;
-
-                                bundle = (struct _pkthdr *)rbuffer;
-
-                                if(!remote_capabilities)
-                                {
-                                        remote_zone = bundle->orig_zone;
-                                        remote_net = bundle->orig_net;
-                                        remote_node = bundle->orig_node;
-
-                                        if (bundle->rate == 2)
-                                        {
-                                                /* This is a special type 2.2 packet! */
-                                                remote_point = (unsigned) bundle->year;
-
-                                                bundle->B_fill3 = 0L;
-                                                bundle->B_fill2[8] = '\0';
-//                                                remote_addr.Domain = find_domain (bundle->B_fill2);
-
-                                                if ((alias[0].fakenet >= 0) &&
-                                                   ((remote_zone == alias[0].zone) || (remote_zone == 0)) &&
-                                                    (remote_net == alias[0].net) && (remote_node == alias[0].node) &&
-                                                    (remote_point > 0))
-                                                {
-                                                        remote_net = alias[0].fakenet;
-                                                        remote_node = remote_point;
-                                                        remote_point = 0;
-                                                }
-                                                else if (remote_point > 0)
-                                                {
-                                                        remote_point = 0;
-                                                        remote_net += 10000;
-                                                }
-                                        }
-                                        else
-                                        {
-                                                remote_point = 0;
-//                                                remote_addr.Domain = NULL;
-                                        }
-                                }
-
-                                if(who_is_he)
-                                {
-                                        if(get_bbs_record(remote_zone,remote_net,remote_node))
-                                                status_line("%s: %s (%u:%u/%u)",msgtxt[M_REMOTE_SYSTEM],nodelist.name,remote_zone,remote_net,remote_node);
-                                        else
-                                                status_line("%s: %s (%u:%u/%u)",msgtxt[M_REMOTE_SYSTEM],msgtxt[M_UNKNOWN_MAILER],remote_zone,remote_net,remote_node);
-                                        who_is_he = 0;
-                                }
+                                sprintf(final_name,"%s%s",_fpath,sptr);
+                                sptr = final_name;
+                                fancy_str(sptr);
+                                i = strlen(sptr)-1;
+                                if((isdigit(sptr[i])) && (sptr[i-1]=='o') && (sptr[i-2]=='m') && (sptr[i-3]=='.'))
+                                        got_arcmail=1;
+                                wgotoxy (0, 13);
+                                wclreol ();
+                                wputs (final_name);
                         }
                 }
-                else if (first_block)
-                {
+                else if (!first_block) {
                         sptr = &(testa->name[0]);
                         if (netmail)
                                 invent_pkt_name(sptr);
@@ -1099,6 +1097,9 @@ void getblock()
                                 i = strlen(sptr)-1;
                                 if((isdigit(sptr[i])) && (sptr[i-1]=='o') && (sptr[i-2]=='m') && (sptr[i-3]=='.'))
                                         got_arcmail=1;
+                                wgotoxy (0, 13);
+                                wclreol ();
+                                wputs (final_name);
                         }
                         else
                                 status_line(msgtxt[M_GRUNGED_HEADER]);
@@ -1106,10 +1107,10 @@ void getblock()
                         if(testa->size)
                         {
                                 fsize1 = (int)(testa->size / 128L);
-                                if(fsize1 == (testa->size % 128))
+                                if((testa->size % 128) != 0) {
+                                        fsize2 = (int)(testa->size % 128);
                                         ++fsize1;
-                                else
-                                        fsize2 = 128;
+                                }
                         }
 
                         if((rate >= 9600) && testa->noacks && !no_overdrive)
@@ -1179,6 +1180,7 @@ char *fpath, *fname, protocol;
         do_chksum=0;
         errs=0;
         block_size=128;
+        fsize2 = 128;
 
         switch(protocol) {
         case 'X' :
@@ -1188,7 +1190,7 @@ char *fpath, *fname, protocol;
         case 'Y' :
                 base_block=1;
                 sliding=0;
-                block_size=1024;
+                fsize2=block_size=1024;
                 break;
         case 'S' :
                 break;
@@ -1355,6 +1357,13 @@ done:
                         throughput(1,dta.ff_fsize);
                         status_line("+UL-%c %s",protocol,strupr(final_name));
 
+                        if (wh != -1) {
+                                wactiv(wh);
+                                wclose();
+                                wunlink(wh);
+                                wh = -1;
+                        }
+
                         strcpy(final_name,dta.ff_name);
                         return(final_name);
                 }
@@ -1390,7 +1399,7 @@ char *fname, protocol;
         }
         else if(protocol == 'B') {
                 protocol = 'S';
-                may_be_seadog = 0;
+                may_be_seadog = 1;
         }
         else
                 may_be_seadog = 0;
@@ -1851,7 +1860,7 @@ done:
                         if (sliding && ((in_char = TIMED_READ(1)) >= 0))
                                 in_char1 = TIMED_READ(1);
                         ackerr = 1;
-                        SENDBYTE(EOT);
+//                        SENDBYTE(EOT);
                         goto gohome;
                 }
         }
@@ -1866,8 +1875,7 @@ gohome:
                 status_line("+Corrected %d errors in %ld blocks", real_errs, last_block);
         status_line("+DL-%c %s",protocol,strupr(fname));
 
-        if (wh != -1)
-        {
+        if (wh != -1) {
                 wactiv(wh);
                 wclose();
                 wunlink(wh);
@@ -1888,8 +1896,7 @@ int only_one;
    struct ffblk blk;
    struct _sys tsys;
 
-   if (!get_command_word (parola, 29))
-   {
+   if (!get_command_word (parola, 29)) {
       m_print(bbstxt[B_KEY_SEARCH]);
       input(parola, 29);
       if(parola[0] == '\0' || !CARRIER)
@@ -1906,31 +1913,27 @@ int only_one;
    m_print(bbstxt[B_CONTROLS2]);
 
    sprintf(filename,"%sSYSFILE.DAT", sys_path);
-   fd = open(filename, O_RDONLY|O_BINARY);
-   if (fd == -1)
-   {
+   fd = shopen(filename, O_RDONLY|O_BINARY);
+   if (fd == -1) {
       status_line(msgtxt[M_NO_SYSTEM_FILE]);
       return;
    }
 
-   while (read(fd, (char *)&tsys.file_name,SIZEOF_FILEAREA) == SIZEOF_FILEAREA && line)
-   {
+   while (read(fd, (char *)&tsys.file_name,SIZEOF_FILEAREA) == SIZEOF_FILEAREA && line) {
       if (only_one)
          memcpy ((char *)&sys.file_name, (char *)&tsys.file_name, SIZEOF_FILEAREA);
-      else
-      {
+      else {
          if (usr.priv < tsys.file_priv || tsys.no_global_search)
             continue;
          if((usr.flags & tsys.file_flags) != tsys.file_flags)
             continue;
       }
 
-      m_print("%-3d ... %s\n",tsys.file_num,tsys.file_name);
-      if ((line=more_question(line)) == 0)
+      m_print(bbstxt[B_AREALIST_HEADER],tsys.file_num,tsys.file_name);
+      if ((line=file_more_question(line,only_one)) == 0)
          break;
 
-      if (!tsys.filelist[0])
-      {
+      if (!tsys.filelist[0]) {
          sprintf(filename,"%sFILES.BBS",tsys.filepath);
          fp = fopen(filename,"rt");
       }
@@ -1940,12 +1943,10 @@ int only_one;
       if (fp == NULL)
          continue;
 
-      while(fgets(stringa,110,fp) != NULL && line)
-      {
+      while(fgets(stringa,110,fp) != NULL && line) {
          stringa[strlen(stringa)-1] = 0;
 
-         if (!CARRIER || RECVD_BREAK())
-         {
+         if (!CARRIER || RECVD_BREAK()) {
             line = 0;
             break;
          }
@@ -1963,8 +1964,7 @@ int only_one;
          if(findfirst(filename,&blk,0))
             continue;
 
-         if(stristr (stringa, parola))
-         {
+         if(stristr (stringa, parola)) {
             size=blk.ff_fsize;
             date=blk.ff_fdate;
             z=0;
@@ -1979,7 +1979,7 @@ int only_one;
 
             m_print(bbstxt[B_FILES_FORMAT],strupr(name),size,(date & 0x1F), ((date >> 5) & 0x0F),((((date >> 9) & 0x7F)+80)%100), desc);
 
-            if (!(line=more_question(line)) || !CARRIER)
+            if (!(line=file_more_question(line,only_one)) || !CARRIER)
                break;
          }
       }
@@ -2007,44 +2007,30 @@ void hurl ()
    char file[16], hurled[128], *b, filename[128];
    struct ftime ftimep;
 
-   b = (char *)malloc(MAX_HURL);
-   if (b == NULL)
-      return;
-
-   if (!get_command_word (file, 12))
-   {
+   if (!get_command_word (file, 12)) {
       m_print (bbstxt[B_HURL_WHAT]);
       input (file, 12);
       if (!file[0])
-      {
-         free (b);
          return;
-      }
    }
 
    sprintf (filename, "%s%s", sys.filepath, file);
-   fds = open (filename, O_RDWR|O_BINARY);
+   fds = shopen (filename, O_RDWR|O_BINARY);
    if(fds == -1)
       return;
 
-   if (!get_command_word (hurled, 79))
-   {
+   if (!get_command_word (hurled, 79)) {
       m_print (bbstxt[B_HURL_AREA]);
       input (hurled, 80);
-      if (!hurled[0])
-      {
+      if (!hurled[0]) {
          close (fds);
-         free (b);
          return;
       }
    }
 
-   if ((m = atoi(hurled)) != 0)
-   {
-      if (!read_system2 (2, m, &tempsys))
-      {
+   if ((m = atoi(hurled)) != 0) {
+      if (!read_system2 (2, m, &tempsys)) {
          close (fds);
-         free (b);
          return;
       }
    }
@@ -2054,13 +2040,15 @@ void hurl ()
    m_print (bbstxt[B_HURLING], sys.filepath, file, tempsys.filepath, file);
 
    sprintf (filename, "%s%s", tempsys.filepath, file);
-   fdd = open (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
-   if (fdd == -1)
-   {
+   fdd = cshopen (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+   if (fdd == -1) {
       close (fds);
-      free (b);
       return;
    }
+
+   b = (char *)malloc(MAX_HURL);
+   if (b == NULL)
+      return;
 
    do {
       m = read (fds, b, MAX_HURL);
@@ -2089,10 +2077,8 @@ void hurl ()
    strupr (file);
    strcat (file," ");
 
-   while (fgets (filename, 128, fps) != NULL)
-   {
-      if (!strncmp (filename, file, strlen (file)))
-      {
+   while (fgets (filename, 128, fps) != NULL) {
+      if (!strncmp (filename, file, strlen (file))) {
          strcpy (hurled, filename);
          continue;
       }
@@ -2108,4 +2094,47 @@ void hurl ()
    fclose (fpd);
 }
 
+static int file_more_question (line, only_one)
+int line, only_one;
+{
+   int i;
+
+   if (nopause)
+      return (1);
+
+   if (!(line++ < (usr.len-1)) && usr.more) {
+      line = 1;
+      m_print(bbstxt[B_MORE]);
+      if ( (usr.priv < sys.download_priv || sys.download_priv == HIDDEN) ||
+           ((usr.flags & sys.download_flags) != sys.download_flags) )
+         i = yesno_question(DEF_YES|EQUAL|NO_LF);
+      else
+         i = yesno_question(DEF_YES|EQUAL|NO_LF|TAG_FILES);
+
+      m_print("\r");
+      space (strlen (bbstxt[B_MORE]) + 15);
+      m_print("\r");
+
+      if (i == DEF_NO) {
+         nopause = 0;
+         return (0);
+      }
+
+      line = 1;
+
+      if (i == EQUAL)
+         nopause = 1;
+
+      if (i == TAG_FILES) {
+         nopause = 0;
+         if (usr.priv < sys.download_priv || sys.download_priv == HIDDEN)
+            return (line);
+         if((usr.flags & sys.download_flags) != sys.download_flags)
+            return (line);
+         download_file (sys.filepath, only_one ? 0 : 1);
+      }
+   }
+
+   return (line);
+}
 

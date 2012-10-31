@@ -4,8 +4,9 @@
 #include "defines.h"
 #include "lora.h"
 #include "sched.h"
+#include "msgapi.h"
 
-char *VERSION = "Lora BBS v2.00", *NOREG = " (Eval.)";
+char *VERSION = "LoraBBS v2.10 *beta*", *NOREG = " (Eval.)";
 char *log_name, *user_file, *availist, *about, *text_path, *password;
 char *sys_path, *rookie, *welcome, *newuser2, *sysop, *menu_bbs;
 char *system_name, *hold_area, *filepath, *net_info, *request_list;
@@ -18,17 +19,20 @@ char *norm_request_list, *prot_request_list, *prot_availist, *prot_about;
 char *know_request_list, *know_availist, *know_about, *ext_editor;
 char *lang_name[MAX_LANG], *lang_descr[MAX_LANG], area_change_key[3];
 char *pip_msgpath, lang_keys[MAX_LANG], *lang_txtpath[MAX_LANG];
-char *QWKDir, *BBSid;
+char *QWKDir, *BBSid, *galileo, *location, *phone, *flags;
 
 char *ONLINE_MSGNAME = "%sLINE%d.BBS";
 char *USERON_NAME    = "%sUSERON.BBS";
 char *CBSIM_NAME     = "%sCB%d.BBS";
+char *SYSMSG_PATH    = "%sSYSMSG.DAT";
 
 char use_tasker, local_mode, user_status, frontdoor;
 
-int local_kbd, assumed, have_dv;
-int write_screen, logon_priv, speed_graphics, com_port;
-int registered, max_requests, next_call, max_call;
+byte logon_priv, vote_priv, up_priv, down_priv;
+
+int local_kbd, assumed, have_dv, target_up, target_down, max_kbytes;
+int write_screen, speed_graphics, com_port, know_max_kbytes, prot_max_kbytes;
+int registered, max_requests, next_call, max_call, norm_max_kbytes;
 int no_logins, status, mainview, line_offset, aftermail_exit;
 int isOriginator, CurrentReqLim, locked = 1;
 int made_request, function_active, aftercaller_exit;
@@ -36,11 +40,12 @@ int norm_max_requests, prot_max_requests, know_max_requests;
 int remote_zone, remote_net, remote_node, remote_point;
 int called_zone, called_net, called_node, max_readpriv;
 
-char far exit300, exit1200, exit2400, exit9600, exit14400, exit19200, exit38400;
+char far exit300, exit1200, exit2400, exit9600, exit14400, exit19200;
+char far exit16800, exit38400;
 
 char have_ml, have_tv, have_ddos;
 
-long logon_flags, cps = 0L;
+long logon_flags, cps = 0L, keycode = 0L;
 
 struct _alias alias[MAX_ALIAS];
 struct class_rec class[MAXCLASS];
@@ -50,6 +55,9 @@ struct _call_list far call_list[MAX_OUT];
 struct _lastcall lastcall;
 struct _lorainfo lorainfo;
 struct _noask noask;
+struct _alias resync[MAX_RESYNC];
+
+MSG *sq_ptr;
 
 unsigned int comm_bits = BITS_8;
 unsigned int parity = NO_PARITY;
@@ -259,7 +267,7 @@ int max_noconnects = 10000;
 int matrix_mask = 0;
 int no_requests = 0;
 
-char *prodcode[] = {
+char far *prodcode[] = {
         "Fido",
         "Rover",
         "SEAdog",
@@ -338,11 +346,139 @@ char *prodcode[] = {
         "IMAIL",
         "FTNGate",
         "RealMail",
-        "Lora BBS",
+        "LoraBBS",
         "TDCS",
         "InterMail",
         "RFD",
-        "Yuppie!"
+        "Yuppie!",
+        "EMMA",
+        "QBoxMail",
+        "Number 4",
+        "Number 5",
+        "GSBBS",
+        "Merlin",
+        "TPCS",
+        "Raid",
+        "Outpost",
+        "Nizze",
+        "Armadillo",
+        "rfmail",
+        "Msgtoss",
+        "InfoTex",
+        "GEcho",
+        "CDEhost",
+        "Pktize",
+        "PC-RAIN",
+        "Truffle",
+        "Foozle",
+        "White Pointer",
+        "GateWorks",
+        "Portal of Power",
+        "MacWoof",
+        "Mosaic",
+        "TPBEcho",
+        "HandyMail",
+        "EchoSmith",
+        "FileHost",
+        "SFScan",
+        "Benjamin",
+        "RiBBS",
+        "MP",
+        "Ping",
+        "Door2Europe",
+        "SWIFT",
+        "WMAIL",
+        "RATS",
+        "Harry the Dirty Dog",
+        "Maximus-CBCS",
+        "SwifEcho",
+        "GCChost",
+        "RPX-Mail",
+        "Tosser",
+        "TCL",
+        "MsgTrack",
+        "FMail",
+        "Scantoss",
+        "Point Manager",
+        "Dropped",
+        "Simplex",
+        "UMTP",
+        "Indaba",
+        "Echomail Engine",
+        "DragonMail",
+        "Prox",
+        "Tick",
+        "RA-Echo",
+        "TrapToss",
+        "Babel",
+        "UMS",
+        "RWMail",
+        "WildMail",
+        "AlMAIL",
+        "XCS",
+        "Fone-Link",
+        "Dogfight",
+        "Ascan",
+        "FastMail",
+        "DoorMan",
+        "PhaedoZap",
+        "SCREAM",
+        "MoonMail",
+        "Backdoor",
+        "MailLink",
+        "Mail Manager",
+        "Black Star",
+        "Bermuda",
+        "PT",
+        "UltiMail",
+        "GMD",
+        "FreeMail",
+        "Meliora",
+        "Foodo",
+        "MSBBS",
+        "Boston BBS",
+        "XenoMail",
+        "XenoLink",
+        "ObjectMatrix",
+        "Milquetoast",
+        "PipBase",
+        "EzyMail",
+        "FastEcho",
+        "IOS",
+        "Communique",
+        "PointMail",
+        "Harvey's Robot",
+        "2daPoint",
+        "CommLink",
+        "fronttoss",
+        "SysopPoint",
+        "PTMAIL",
+        "AECHO",
+        "DLGMail",
+        "GatePrep",
+        "Spoint",
+        "TurboMail",
+        "FXMAIL",
+        "NextBBS",
+        "EchoToss",
+        "SilverBox",
+        "MBMail",
+        "SkyFreq",
+        "ProMailer",
+        "Mega Mail",
+        "YaBom",
+        "TachEcho",
+        "XAP",
+        "EZMAIL",
+        "Arc-Binkley",
+        "Roser",
+        "UU2",
+        "NMS",
+        "BBCSCAN",
+        "XBBS",
+        "LoTek Vzrul",
+        "Private Point Project",
+        "NoSnail"
 };
 
 char *msgtxt[] = {
@@ -423,7 +559,7 @@ char *msgtxt[] = {
 /*M_NONE_EVENTS            */        "Scheduler empty",
 /*-_READY_CONNECT          */        "+Connect %u%s%s",
 /*-_DIALING_NUMBER         */        ":Dialing %s",
-/*M_INSUFFICIENT_DATA      */        "",
+/*-_INSUFFICIENT_DATA      */        ":Write message #%d",
 /*M_END_OF_ATTEMPT         */        "+End of connection attempt",
 /*M_EXIT_COMPRESSED        */        ":Exit after compressed mail with errorlevel %d",
 /*-_EXIT_AFTER_MAIL        */        ":Exit after receiving mail with errorlevel %d",

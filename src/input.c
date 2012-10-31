@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <conio.h>
 #include <ctype.h>
+#include <string.h>
 
 #include <cxl\cxlwin.h>
 
@@ -54,7 +55,7 @@ void chars_input(s,width,flag)
 char *s;
 int width, flag;
 {
-	char c;
+        char c, autozm[10];
         int i, upper;
 
         upper = 1;
@@ -64,11 +65,9 @@ int width, flag;
         if (!local_mode)
            UNBUFFER_BYTES ();
 
-        if ((flag & INPUT_FIELD) && usr.color)
-        {
+        if ((flag & INPUT_FIELD) && usr.color) {
            space (width);
-           for (i=0;i<width;i++)
-           {
+           for (i=0;i<width;i++) {
                if (!local_mode)
                   SENDBYTE('\b');
                if (snooping)
@@ -76,8 +75,7 @@ int width, flag;
            }
         }
 
-        if (flag & INPUT_UPDATE)
-        {
+        if (flag & INPUT_UPDATE) {
            m_print (s);
            i = strlen (s);
         }
@@ -98,8 +96,7 @@ int width, flag;
                                         return;
                                 }
 
-                                if (read_online_message())
-                                {
+                                if (read_online_message()) {
                                         s[0] = '\0';
                                         return;
                                 }
@@ -128,8 +125,7 @@ int width, flag;
                                         return;
                                 }
 
-                                if (read_online_message())
-                                {
+                                if (read_online_message()) {
                                         s[0] = '\0';
                                         return;
                                 }
@@ -151,8 +147,7 @@ int width, flag;
                         else
                                 upper = 0;
                         s[i]='\0';
-                        if (!local_mode)
-                        {
+                        if (!local_mode) {
                                 SENDBYTE('\b');
                                 SENDBYTE(' ');
                                 SENDBYTE('\b');
@@ -168,8 +163,7 @@ int width, flag;
                 if (c < 0x20 || ((flag & INPUT_FANCY) && c == ' ' && upper) )
 			continue;
 
-                if (upper && (flag & INPUT_FANCY) && isalpha(c))
-                {
+                if (upper && (flag & INPUT_FANCY) && isalpha(c)) {
                         c = toupper(c);
                         upper = 0;
                 }
@@ -203,9 +197,19 @@ int width, flag;
         if ((flag & INPUT_FIELD) && usr.color)
                 change_attr (LGREY|_BLACK);
 
+        if (!stricmp (s, "rz")) {
+           get_emsi_id (autozm, 8);
+           if (!strncmp (autozm, "**B0000", 8)) {
+              if (!sys.filepath[0])
+                 send_can ();
+              else
+                 upload_file (NULL, 3);
+           }
+           s[0] = '\0';
+        }
+
         if(!(flag & INPUT_HOT) && !(flag & INPUT_NOLF)) {
-                if (!local_mode)
-                {
+                if (!local_mode) {
                         SENDBYTE('\r');
                         SENDBYTE('\n');
                 }
@@ -229,8 +233,7 @@ static int read_online_message()
         }
 
         sprintf(filename, ONLINE_MSGNAME, ipc_path, line_offset);
-        if (dexists(filename) && user_status == BROWSING)
-        {
+        if (dexists(filename) && user_status == BROWSING) {
                 old_status = user_status;
                 user_status = 0;
 

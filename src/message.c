@@ -5,6 +5,7 @@
 #include <dir.h>
 #include <io.h>
 #include <fcntl.h>
+#include <sys\stat.h>
 
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
@@ -26,13 +27,12 @@ int start,pause;
 {
    int i;
 
-   if (start <= 0)
-      start = 1;
+   if (start < 0)
+      start = 0;
 
    if (start < last_msg)
       start++;
-   else
-   {
+   else {
       m_print(bbstxt[B_NO_MORE_MESSAGE]);
       return;
    }
@@ -51,6 +51,13 @@ int start,pause;
          else
             break;
       }
+   else if (sys.squish)
+      while (!squish_read_message (start, pause)) {
+         if (start < last_msg)
+            start++;
+         else
+            break;
+      }
    else
       while (!read_message(start,pause)) {
          if (start < last_msg)
@@ -64,9 +71,15 @@ int start,pause;
    for (i=0;i<MAXLREAD;i++)
       if (usr.lastread[i].area == usr.msg)
          break;
-
    if (i != MAXLREAD)
       usr.lastread[i].msg_num = start;
+   else {
+      for (i=0;i<MAXDLREAD;i++)
+         if (usr.dynlastread[i].area == usr.msg)
+            break;
+      if (i != MAXDLREAD)
+         usr.dynlastread[i].msg_num = start;
+   }
 }
 
 void read_nonstop()
@@ -92,8 +105,7 @@ int start;
 
    if (start > first_msg)
       start--;
-   else
-   {
+   else {
       m_print(bbstxt[B_NO_MORE_MESSAGE]);
       return;
    }
@@ -107,6 +119,13 @@ int start;
       }
    else if (sys.pip_board)
       while (!pip_msg_read(sys.pip_board, start, 0, 0)) {
+         if (start < last_msg)
+            start++;
+         else
+            break;
+      }
+   else if (sys.squish)
+      while (!squish_read_message (start, 0)) {
          if (start < last_msg)
             start++;
          else
@@ -126,9 +145,15 @@ int start;
    for (i=0;i<MAXLREAD;i++)
       if (usr.lastread[i].area == usr.msg)
          break;
-
    if (i != MAXLREAD)
       usr.lastread[i].msg_num = start;
+   else {
+      for (i=0;i<MAXDLREAD;i++)
+         if (usr.dynlastread[i].area == usr.msg)
+            break;
+      if (i != MAXDLREAD)
+         usr.dynlastread[i].msg_num = start;
+   }
 }
 
 void read_parent()
@@ -172,32 +197,111 @@ int area;
    for (i=0;i<MAXLREAD;i++)
       if (usr.lastread[i].area == area)
          break;
-
-   if (i != MAXLREAD)
-   {
-      if (usr.lastread[i].msg_num > last)
-      {
-         i = usr.lastread[i].msg_num - last;
-         usr.lastread[i].msg_num -= i;
-         if (usr.lastread[i].msg_num < 0)
-            usr.lastread[i].msg_num = 0;
-      }
-
+   if (i != MAXLREAD) {
+      if (usr.lastread[i].msg_num > last_msg)
+         usr.lastread[i].msg_num = last_msg;
       lastread = usr.lastread[i].msg_num;
    }
-   else
-      lastread = 0;
+   else {
+      for (i=0;i<MAXDLREAD;i++)
+         if (usr.dynlastread[i].area == area)
+            break;
+      if (i != MAXDLREAD) {
+         if (usr.dynlastread[i].msg_num > last_msg)
+            usr.dynlastread[i].msg_num = last_msg;
+         lastread = usr.dynlastread[i].msg_num;
+      }
+      else {
+         lastread = 0;
+         for (i=1;i<MAXDLREAD;i++) {
+            usr.dynlastread[i-1].area = usr.dynlastread[i].area;
+            usr.dynlastread[i-1].msg_num = usr.dynlastread[i].msg_num;
+         }
+
+         usr.dynlastread[i-1].area = area;
+         usr.dynlastread[i-1].msg_num = 0;
+      }
+   }
 }
 
 void msg_kill()
 {
+   int i, m;
+   char stringa[10];
+
+   if (!num_msg) {
+      if (sys.quick_board)
+         quick_scan_message_base (sys.quick_board, usr.msg);
+      else if (sys.pip_board)
+         pip_scan_message_base (usr.msg);
+      else if (sys.squish)
+         squish_scan_message_base (usr.msg, sys.msg_path);
+      else
+         scan_message_base(usr.msg);
+   }
+
+   for (;;) {
+      if (!get_command_word (stringa, 4)) {
+         m_print ("\nEnter message to delete : ");
+         chars_input(stringa, 4, INPUT_FIELD);
+      }
+
+      if (!stringa[0])
+         break;
+
+      i = atoi (stringa);
+
+      if (i >= first_msg && i <= last_msg) {
+         if (sys.quick_board)
+            m = quick_kill_message (i);
+         else if (sys.pip_board)
+            m = pip_kill_message (i);
+         else if (sys.squish)
+            m = squish_kill_message (i);
+         else
+            m = kill_message (i);
+
+         if (!m)
+            m_print (bbstxt[B_CANT_KILL]);
+         else {
+            m_print (bbstxt[B_MSG_REMOVED], i);
+            if (i == last_msg)
+               last_msg--;
+         }
+      }
+   }
+
+   if (sys.quick_board)
+      quick_scan_message_base (sys.quick_board, usr.msg);
+   else if (sys.pip_board)
+      pip_scan_message_base (usr.msg);
+   else if (sys.squish)
+      squish_scan_message_base (usr.msg, sys.msg_path);
+   else
+      scan_message_base(usr.msg);
 }
 
 int kill_message(msg_num)
 int msg_num;
 {
-   if (msg_num);
-   return(1);
+   int fd;
+   char buff[80];
+   struct _msg msgt;
+
+   sprintf (buff, "%s%d.MSG", sys.msg_path, msg_num);
+   fd = open (buff, O_RDONLY|O_BINARY);
+   if (fd == -1)
+      return (0);
+
+   read (fd, (char *)&msgt, sizeof(struct _msg));
+   close (fd);
+
+   if (!stricmp (msgt.from, usr.name) || !stricmp (msgt.to, usr.name) || usr.priv == SYSOP) {
+      unlink (buff);
+      return (1);
+   }
+
+   return (0);
 }
 
 
@@ -317,12 +421,12 @@ int msg_num, flag;
 					}
 				}
 
-                                if (!strncmp(buff,"--- ",4) || !strncmp(buff," * Origin: ",11))
+                                if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff," * Origin: ",11))
                                         m_print("%s\n",buff);
                                 else
                                         m_print("%s\n",buff);
 
-                                if (!strncmp(buff," * Origin: ",11))
+                                if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                                         gather_origin_netnode (buff);
                         }
 
@@ -378,12 +482,12 @@ int msg_num, flag;
 				}
 			}
 
-                        if (!strncmp(buff,"--- ",4) || !strncmp(buff," * Origin: ",11))
+                        if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                                 m_print("%s\n",buff);
 			else
                                 m_print("%s\n",buff);
 
-                        if (!strncmp(buff," * Origin: ",11))
+                        if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                                 gather_origin_netnode (buff);
 
 			if(flag == 1)
@@ -536,12 +640,12 @@ int msg_num;
                                         }
                                 }
 
-                                if (!strncmp(buff,"--- ",4) || !strncmp(buff," * Origin: ",11))
+                                if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                                         m_print("%s\n",buff);
                                 else
                                         m_print("%s\n",buff);
 
-                                if (!strncmp(buff," * Origin: ",11))
+                                if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                                         gather_origin_netnode (buff);
                         }
 
@@ -603,12 +707,12 @@ int msg_num;
                                 }
                         }
 
-                        if (!strncmp(buff,"--- ",4) || !strncmp(buff," * Origin: ",11))
+                        if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                                 m_print("%s\n",buff);
                         else
                                 m_print("%s\n",buff);
 
-                        if (!strncmp(buff," * Origin: ",11))
+                        if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                                 gather_origin_netnode (buff);
 
                         if(!(++line < (usr.len-1)) && usr.more)
@@ -890,8 +994,7 @@ void list_headers (verbose)
         if (!num_msg)
                 scan_message_base(usr.msg);
 
-        if (stringa[0] != '=')
-        {
+        if (stringa[0] != '=') {
                 m = atoi(stringa);
                 if(m < 1 || m > last_msg)
                         return;
@@ -902,28 +1005,29 @@ void list_headers (verbose)
         cls();
         m_print("Area %3d ... %s\n",usr.msg,sys.msg_name);
 
-        if (!verbose)
-        {
+        if (!verbose) {
                 m_print("\nMsg# From                 To                   Subject\n");
                 m_print("---- -------------------- -------------------- --------------------------------\n");
                 line += 3;
         }
 
-        if (sys.quick_board)
-        {
+        if (sys.quick_board) {
                 quick_list_headers (m, sys.quick_board, verbose);
                 return;
         }
-        else if (sys.pip_board)
-        {
+        else if (sys.pip_board) {
                 pip_list_headers (m, sys.pip_board, verbose);
+                return;
+        }
+        else if (sys.squish) {
+                squish_list_headers (m, verbose);
                 return;
         }
 
         for(i = m; i <= last_msg; i++) {
                 sprintf(filename,"%s%d.MSG",sys.msg_path,i);
 
-		fd=open(filename,O_RDONLY|O_BINARY);
+                fd=shopen(filename,O_RDONLY|O_BINARY);
 		if(fd == -1)
 			continue;
 		read(fd,(char *)&msgt,sizeof(struct _msg));
@@ -939,8 +1043,7 @@ void list_headers (verbose)
                 msg_fpoint = mz.orig_point;
                 msg_tpoint = mz.dest_point;
 
-                if (verbose)
-                {
+                if (verbose) {
                         if ((line = msg_attrib(&msgt,i,line,0)) == 0)
                                 break;
 
@@ -967,82 +1070,94 @@ void list_headers (verbose)
 
 void message_inquire()
 {
-        int fd, i, line=4;
-        char stringa[30], filename[80], *p;
-        struct _msg msgt, backup;
+   int fd, i, line=4;
+   char stringa[30], filename[80], *p;
+   struct _msg msgt, backup;
 
-        if (!get_command_word (stringa, 4))
-        {
-                m_print("\nText to search for: ");
+   if (!get_command_word (stringa, 4)) {
+      m_print("\nText to search for: ");
 
-                input(stringa,29);
-                if(!strlen(stringa))
-                        return;
-        }
+      input(stringa,29);
+      if(!strlen(stringa))
+         return;
+   }
 
-        if (!num_msg)
-                scan_message_base(usr.msg);
+   if (!num_msg) {
+      if (sys.quick_board)
+         quick_scan_message_base (sys.quick_board, usr.msg);
+      else if (sys.pip_board)
+         pip_scan_message_base (usr.msg);
+      else if (sys.squish)
+         squish_scan_message_base (usr.msg, sys.msg_path);
+      else
+         scan_message_base(usr.msg);
+   }
 
-        cls();
-        m_print("Area %3d ... %s\n",usr.msg,sys.msg_name);
-        m_print("Searching for `%s'.\n\n",strupr(stringa));
+   cls ();
+   m_print (bbstxt[B_AREALIST_HEADER], usr.msg, sys.msg_name);
+   m_print ("Searching for `%s'.\n\n",strupr(stringa));
 
-        if (sys.quick_board)
-        {
-                quick_message_inquire (stringa, sys.quick_board);
-                return;
-        }
+   if (sys.quick_board) {
+      quick_message_inquire (stringa, sys.quick_board);
+      return;
+   }
+   else if (sys.pip_board) {
+      return;
+   }
+   else if (sys.squish) {
+      squish_message_inquire (stringa);
+      return;
+   }
 
-        for(i = first_msg; i <= last_msg; i++) {
-                sprintf(filename,"%s%d.MSG",sys.msg_path,i);
+   for(i = first_msg; i <= last_msg; i++) {
+      sprintf(filename,"%s%d.MSG",sys.msg_path,i);
 
-		fd=open(filename,O_RDONLY|O_BINARY);
-		if(fd == -1)
-			continue;
-		read(fd,(char *)&msgt,sizeof(struct _msg));
+      fd=shopen(filename,O_RDONLY|O_BINARY);
+      if(fd == -1)
+              continue;
+      read(fd,(char *)&msgt,sizeof(struct _msg));
 
-                if((msgt.attr & MSGPRIVATE) && stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && usr.priv < SYSOP)
-                {
-                        close(fd);
-                        continue;
-                }
+      if (msgt.attr & MSGPRIVATE)
+         if (stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && usr.priv < SYSOP) {
+            close(fd);
+            continue;
+         }
 
-                p = (char *)malloc((unsigned int)filelength(fd)-sizeof(struct _msg)+1);
-		if (p != NULL) {
-			read(fd,p,(unsigned int)filelength(fd)-sizeof(struct _msg));
-			p[(unsigned int)filelength(fd)-sizeof(struct _msg)] = '\0';
-		}
-		else
-			p = NULL;
+      p = (char *)malloc((unsigned int)filelength(fd)-sizeof(struct _msg)+1);
+      if (p != NULL) {
+         read(fd,p,(unsigned int)filelength(fd)-sizeof(struct _msg));
+         p[(unsigned int)filelength(fd)-sizeof(struct _msg)] = '\0';
+      }
+      else
+         p = NULL;
 
-                close(fd);
+      close(fd);
 
-                memcpy ((char *)&backup, (char *)&msgt, sizeof (struct _msg));
-                strupr(msgt.to);
-                strupr(msgt.from);
-                strupr(msgt.subj);
-		strupr(p);
+      memcpy ((char *)&backup, (char *)&msgt, sizeof (struct _msg));
+      strupr(msgt.to);
+      strupr(msgt.from);
+      strupr(msgt.subj);
+      strupr(p);
 
-                if ((strstr(msgt.to,stringa) != NULL) || (strstr(msgt.from,stringa) != NULL) ||
-                    (strstr(msgt.subj,stringa) != NULL) || (strstr(p,stringa) != NULL))
-                {
-                        memcpy ((char *)&msgt, (char *)&backup, sizeof (struct _msg));
-                        if ((line = msg_attrib(&msgt,i,line,0)) == 0)
-                                break;
+      if ((strstr(msgt.to,stringa) != NULL) || (strstr(msgt.from,stringa) != NULL) ||
+          (strstr(msgt.subj,stringa) != NULL) || (strstr(p,stringa) != NULL)) {
+         memcpy ((char *)&msgt, (char *)&backup, sizeof (struct _msg));
+         if ((line = msg_attrib(&msgt,i,line,0)) == 0)
+            break;
 
-                        m_print(bbstxt[B_ONE_CR]);
+         m_print(bbstxt[B_ONE_CR]);
 
-                        if (!(line=more_question(line)) || !CARRIER && !RECVD_BREAK())
-                                break;
+         if (!(line=more_question(line)) || !CARRIER && !RECVD_BREAK())
+            break;
 
-                        time_release();
-                }
+         time_release();
+      }
 
-		if (p != NULL)
-                        free(p);
-        }
+      if (p != NULL)
+         free(p);
+   }
 
-        if (line && CARRIER)
-                press_enter();
+   if (line && CARRIER)
+      press_enter();
 }
 

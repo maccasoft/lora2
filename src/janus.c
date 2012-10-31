@@ -548,11 +548,7 @@ freemem:
       free(Txfname);
    if (Rxfname)
       free(Rxfname);
-   flag_file (CLEAR_FLAG,
-              called_zone,
-              called_net,
-              called_node,
-              1);
+   flag_file (CLEAR_FLAG, called_zone, called_net, called_node, 1);
 }
 
 
@@ -566,7 +562,7 @@ freemem:
 /* modified until FNACKPKT is received.                                      */
 /*****************************************************************************/
 static void getfname(word xfer_flag) {
-   static byte floflag, bad_xfers, outboundname[PATHLEN];
+   static byte point4d, floflag, bad_xfers, outboundname[PATHLEN];
    static long floname_pos;
    static FILE *flofile;
    static int have_lock;
@@ -581,7 +577,7 @@ static void getfname(word xfer_flag) {
    /* Initialize static variables on first call of the batch                 */
    /*------------------------------------------------------------------------*/
    if (xfer_flag == INITIAL_XFER) {
-      floflag = outboundname[0] = '\0';
+      point4d = floflag = outboundname[0] = '\0';
       flofile = NULL;
       have_lock = flag_file (TEST_AND_SET, called_zone, called_net, called_node, 1);
 
@@ -609,7 +605,7 @@ static void getfname(word xfer_flag) {
                break;
             case TRUNC_AFTER:
                j_status(msgtxt[M_TRUNC_MSG],Txfname);
-               Txfile = open(Txfname,O_TRUNC|O_RDWR,S_IREAD|S_IWRITE);
+               Txfile = cshopen(Txfname,O_TRUNC|O_RDWR,S_IREAD|S_IWRITE);
                if (Txfile != -1)
                   errno = 0;
                j_error(msgtxt[M_TRUNC_MSG],Txfname);
@@ -667,11 +663,26 @@ nxtout:
             if (isOriginator && *p == 'H')
                goto nxtout;
 #endif
+         } else if (!point4d && remote_point) {
+            if (floflag) {
+               sprintf (outboundname, "%s%04x%04x.PNT\\%08x.FLO", holdname, remote_net, remote_node, remote_point);
+               *ext_flags = 'F';
+            }
+            else {
+               sprintf (outboundname, "%s%04x%04x.PNT\\%08x.OUT", holdname, remote_net, remote_node, remote_point);
+               *ext_flags = 'O';
+            }
+            ++point4d;
          } else {
             /*---------------------------------------------------------------*/
             /* Finished ?,D,C,H sequence; wrap .OUT->.FLO, or .FLO->done     */
             /*---------------------------------------------------------------*/
             if (!floflag) {
+               if (point4d) {
+                  sprintf(outboundname,"%s%04x%04x.OUT",holdname,called_net,called_node);
+                  p = strchr(outboundname,'\0') - 3;
+                  --point4d;
+               }
                *p++ = *ext_flags = 'F';
                *p++ = 'L';
                *p = 'O';
@@ -776,7 +787,7 @@ rdflo:
          goto abort;
       j_status(msgtxt[M_SENDING],Txfname);
       errno = 0;
-      Txfile = open(Txfname,O_RDONLY|O_BINARY);
+      Txfile = shopen(Txfname,O_RDONLY|O_BINARY);
       if (Txfile != -1)
          errno = 0;
       if (j_error(msgtxt[M_OPEN_MSG],Txfname))
@@ -983,7 +994,7 @@ static long procfname(void) {
    errno = 0;
    if (Resume_WaZOO) {
       strcpy(p,badfname);
-      Rxfile = open(Rxfname,O_CREAT|O_RDWR|O_BINARY,S_IREAD|S_IWRITE);
+      Rxfile = cshopen(Rxfname,O_CREAT|O_RDWR|O_BINARY,S_IREAD|S_IWRITE);
    } else {
       strcpy(p,Rxbuf);
       /*---------------------------------------------------------------------*/
@@ -1007,7 +1018,7 @@ static long procfname(void) {
             j_error(msgtxt[M_UNLINK_MSG],Rxfname);
          }
       }
-      Rxfile = open(Rxfname,O_CREAT|O_EXCL|O_RDWR|O_BINARY,S_IREAD|S_IWRITE);
+      Rxfile = cshopen(Rxfname,O_CREAT|O_EXCL|O_RDWR|O_BINARY,S_IREAD|S_IWRITE);
    }
    if (Rxfile != -1)
       errno = 0;
@@ -1528,11 +1539,7 @@ static int get_filereq(byte req_started) {
    int gotone = FALSE;
    FILE *reqfile;
 
-   if (flag_file (TEST_AND_SET,
-                  called_zone,
-                  called_net,
-                  called_node,
-                  1))
+   if (flag_file (TEST_AND_SET, called_zone, called_net, called_node, 1))
       return FALSE;
 
    strcpy(reqname,Abortlog_name);
@@ -1633,7 +1640,7 @@ static byte get_reqname(byte first_req) {
             if (Txfname[0] != ';') {
                j_status(msgtxt[M_SENDING],Txfname);
                errno = 0;
-               Txfile = open(Txfname,O_RDONLY|O_BINARY);
+               Txfile = shopen(Txfname,O_RDONLY|O_BINARY);
                if (Txfile != -1)
                   errno = 0;
                if (j_error(msgtxt[M_OPEN_MSG],Txfname))

@@ -1,18 +1,25 @@
-#define PATHLEN 128
-#define MAX_ALIAS 10
-#define MAXCLASS  11
-#define MAX_OUT 64
-#define MAX_MSGLINE 80
-#define MAX_PRIV_MAIL     200
-#define MSG_AREAS   200
-#define MAX_LANG  20
-#define MAX_CMDLEN  70
+#include <share.h>
 
-#define DEF_NO   0x0000
-#define DEF_YES  0x0001
-#define QUESTION 0x0002
-#define EQUAL    0x0004
-#define NO_LF    0x0008
+#define shopen(path,access)       open(path,access|SH_COMPAT|SH_DENYNONE,S_IREAD|S_IWRITE)
+#define cshopen(path,access,mode) open(path,access|SH_COMPAT|SH_DENYNONE,mode)
+
+#define PATHLEN           128
+#define MAX_ALIAS         10
+#define MAXCLASS          11
+#define MAX_OUT           64
+#define MAX_MSGLINE       80
+#define MAX_PRIV_MAIL     200
+#define MSG_AREAS         200
+#define MAX_LANG          20
+#define MAX_CMDLEN        70
+#define MAX_RESYNC        10
+
+#define DEF_NO     0x0000
+#define DEF_YES    0x0001
+#define QUESTION   0x0002
+#define EQUAL      0x0004
+#define NO_LF      0x0008
+#define TAG_FILES  0x0010
 
 #include "com_dos.h"
 
@@ -162,6 +169,10 @@
 #define _BBSLIST_CHANGE 110
 #define _BBSLIST_REMOVE 111
 #define _QWK_DOWNLOAD 112
+#define _QWK_UPLOAD 113
+#define _BANK_KDEPOSIT 114
+#define _BANK_KWITHDRAW 115
+#define _VOTE_USER 116
 
 #define MAX_LINE 100
 
@@ -245,6 +256,7 @@
 #define BAUD_9600       0x0E0
 #define BAUD_12000      0x000
 #define BAUD_14400      0x000
+#define BAUD_16800      0x000
 #define BAUD_19200      0x000
 #define BAUD_38400      0x020
 
@@ -694,5 +706,33 @@
 #define B_PERCX2                 239
 #define B_IMPORTING_MESSAGE      240
 #define B_TOTAL_IMPORTED         241
+#define B_FULL_OVERRIDE          242
+#define B_RAW_HEADER             243
+#define B_RAW_FORMAT             244
+#define B_RAW_FOOTER             245
+#define B_AREALIST_HEADER        246
+#define B_KBYTES_LEFT            247
+#define B_K_IN_BANK              248
+#define B_K_CAN_DEPOSIT          249
+#define B_CHECK_NEW_FILES        250
+#define B_CANT_KILL              251
+#define B_MSG_REMOVED            252
+#define B_JAN                    253
+#define B_FEB                    254
+#define B_MAR                    255
+#define B_APR                    256
+#define B_MAY                    257
+#define B_JUN                    258
+#define B_JUL                    259
+#define B_AGO                    260
+#define B_SEP                    261
+#define B_OCT                    262
+#define B_NOV                    263
+#define B_DEC                    264
+#define B_VOTE_NAME              265
+#define B_VOTE_OK                266
+#define B_VOTE_FOR               267
+#define B_VOTE_AGAINST           268
+#define B_VOTE_COLLECTED         269
 
-#define X_TOTAL_MSGS             241
+#define X_TOTAL_MSGS             269

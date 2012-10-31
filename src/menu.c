@@ -75,11 +75,11 @@ char *start;
             cls();
 
          sprintf(filename,"%s%s.MNU",menu_bbs,lang_name[usr.language]);
-         fd=open(filename,O_RDONLY|O_BINARY);
+         fd=shopen(filename,O_RDONLY|O_BINARY);
          if (fd == -1 || filelength (fd) < sizeof (struct _menu_header))
          {
             sprintf(filename,"%s%s.MNU",menu_bbs,lang_name[0]);
-            fd=open(filename,O_RDONLY|O_BINARY);
+            fd=shopen(filename,O_RDONLY|O_BINARY);
             if (fd == -1)
             {
                status_line("!Can't open `%s'",filename);
@@ -157,15 +157,14 @@ char *start;
          }
 
          if((cmd[m].flag_type == _MSG_EDIT_NEW) || (cmd[m].flag_type == _MSG_EDIT_REPLY))
-         {
-            if (usr.priv < sys.write_priv || sys.write_priv == HIDDEN)
-               continue;
-            if((usr.flags & sys.write_flags) != sys.write_flags)
-               continue;
-         }
+            if (strstr (cmd[m].argument, "/A=") == NULL) {
+               if (usr.priv < sys.write_priv || sys.write_priv == HIDDEN)
+                  continue;
+               if((usr.flags & sys.write_flags) != sys.write_flags)
+                  continue;
+            }
 
-         if (cmd[m].automatic && cmd[m].flag_type)
-         {
+         if (cmd[m].automatic && cmd[m].flag_type) {
             if (cmd_string[0] && (cmd[m].flag_type == _SHOW ||
                                   cmd[m].flag_type == _SHOW_TEXT ||
                                   cmd[m].flag_type == _CONFIG))
@@ -175,8 +174,7 @@ char *start;
                continue;
 
             get_buffer_keystrokes (cmd[m].argument);
-            if (process_menu_option(cmd[m].flag_type, cmd[m].argument))
-            {
+            if (process_menu_option(cmd[m].flag_type, cmd[m].argument)) {
                if (cmd != NULL)
                   free (cmd);
                return;
@@ -255,12 +253,12 @@ char *start;
                continue;
          }
          if((cmd[i].flag_type == _MSG_EDIT_NEW) || (cmd[i].flag_type == _MSG_EDIT_REPLY))
-         {
-            if (usr.priv < sys.write_priv || sys.write_priv == HIDDEN)
-               continue;
-            if((usr.flags & sys.write_flags) != sys.write_flags)
-               continue;
-         }
+            if (strstr (cmd[i].argument, "/A=") == NULL) {
+               if (usr.priv < sys.write_priv || sys.write_priv == HIDDEN)
+                  continue;
+               if((usr.flags & sys.write_flags) != sys.write_flags)
+                  continue;
+            }
 
          if ((cmd[i].hotkey == toupper(cmd_string[0]) && !processed) ||
              (cmd[i].hotkey == '|' && !cmd_string[0] && !processed) ||
@@ -323,6 +321,8 @@ char *argument;
          quick_scan_message_base (sys.quick_board, usr.msg);
       else if (sys.pip_board)
          pip_scan_message_base (usr.msg);
+      else if (sys.squish)
+         squish_scan_message_base (usr.msg, sys.msg_path);
       else
          scan_message_base(usr.msg);
       allow_reply = 0;
@@ -421,6 +421,8 @@ char *argument;
             quick_scan_message_base (sys.quick_board, usr.msg);
          else if (sys.pip_board)
             pip_scan_message_base (usr.msg);
+         else if (sys.squish)
+            squish_scan_message_base (usr.msg, sys.msg_path);
          else
             scan_message_base(usr.msg);
          allow_reply = 0;
@@ -445,6 +447,8 @@ char *argument;
             quick_scan_message_base (sys.quick_board, usr.msg);
          else if (sys.pip_board)
             pip_scan_message_base (usr.msg);
+         else if (sys.squish)
+            squish_scan_message_base (usr.msg, sys.msg_path);
          else
             scan_message_base(usr.msg);
          allow_reply = 0;
@@ -550,10 +554,8 @@ char *argument;
       if (strstr (argument, "/L"))
          lo = 1;
       set_useron_record(READWRITE, 0, 0);
-      if ((gg=get_message_data(0, argument)) == 1)
-      {
-         if (usr.use_lore)
-         {
+      if ((gg=get_message_data(0, argument)) == 1) {
+         if (usr.use_lore) {
             line_editor(0);
             gosub_menu(argument);
          }
@@ -568,8 +570,7 @@ char *argument;
             active = s;
          }
       }
-      else
-      {
+      else {
          if (gg == 0)
             m_print(bbstxt[B_LORE_MSG3]);
 
@@ -584,21 +585,17 @@ char *argument;
       active = 1;
       set_useron_record(READWRITE, 0, 0);
 
-      if ((gg=get_message_data(lastread, argument)) == 1)
-      {
-         if (usr.use_lore)
-         {
+      if ((gg=get_message_data(lastread, argument)) == 1) {
+         if (usr.use_lore) {
             line_editor(0);
             gosub_menu (argument);
          }
-         else
-         {
+         else {
             external_editor (1);
             active = s;
          }
       }
-      else
-      {
+      else {
          if (gg == 0)
             m_print(bbstxt[B_LORE_MSG3]);
 
@@ -610,20 +607,20 @@ char *argument;
          quick_save_message(NULL);
       else if (sys.pip_board)
          pip_save_message(NULL);
+      else if (sys.squish)
+         squish_save_message(NULL);
       else
          save_message(NULL);
 
       usr.msgposted++;
 
-      if (lo)
-      {
+      if (lo) {
          free_message_array();
          logoff_procedure ();
          return (1);
       }
 
-      if (strstr(argument, "/RET"))
-      {
+      if (strstr(argument, "/RET")) {
          active = s;
          free_message_array();
          return_menu();
@@ -684,6 +681,8 @@ char *argument;
             quick_scan_message_base (sys.quick_board, usr.msg);
          else if (sys.pip_board)
             pip_scan_message_base (usr.msg);
+         else if (sys.squish)
+            squish_scan_message_base (usr.msg, sys.msg_path);
          else
             scan_message_base(usr.msg);
          allow_reply = 0;
@@ -742,6 +741,8 @@ char *argument;
             quick_scan_message_base (sys.quick_board, usr.msg);
          else if (sys.pip_board)
             pip_scan_message_base (usr.msg);
+         else if (sys.squish)
+            squish_scan_message_base (usr.msg, sys.msg_path);
          else
             scan_message_base(usr.msg);
          allow_reply = 0;
@@ -790,6 +791,8 @@ char *argument;
                quick_scan_message_base (sys.quick_board, usr.msg);
             else if (sys.pip_board)
                pip_scan_message_base (usr.msg);
+            else if (sys.squish)
+               squish_scan_message_base (usr.msg, sys.msg_path);
             else
                scan_message_base(usr.msg);
             allow_reply = 0;
@@ -808,9 +811,9 @@ char *argument;
    case _F_UPLD:
       set_useron_record(UPLDNLD, 0, 0);
       if (strlen(argument))
-         upload_file(argument);
+         upload_file(argument,0);
       else
-         upload_file(sys.uppath);
+         upload_file(sys.uppath,0);
       break;
    case _SET_SIGN:
       signature_change();
@@ -874,6 +877,8 @@ char *argument;
             quick_scan_message_base (sys.quick_board, usr.msg);
          else if (sys.pip_board)
             pip_scan_message_base (usr.msg);
+         else if (sys.squish)
+            squish_scan_message_base (usr.msg, sys.msg_path);
          else
             scan_message_base(usr.msg);
          allow_reply = 0;
@@ -976,6 +981,12 @@ char *argument;
    case _BANK_WITHDRAW:
       withdraw_time ();
       break;
+   case _BANK_KDEPOSIT:
+      deposit_kbytes ();
+      break;
+   case _BANK_KWITHDRAW:
+      withdraw_kbytes ();
+      break;
    case _SET_HOTKEY:
       hotkey_change ();
       break;
@@ -997,8 +1008,15 @@ char *argument;
    case _QWK_DOWNLOAD:
       qwk_pack_tagged_areas ();
       break;
-   case 113:
+   case _QWK_UPLOAD:
       getrep ();
+      break;
+   case _VOTE_USER:
+      if ((p=strstr(argument, "/V=")) != NULL) {
+         xp = atoi(p + 3);
+         if (xp != 0)
+            vote_user (xp);
+      }
       break;
    }
 
@@ -1652,14 +1670,13 @@ static int get_sig (argument)
 char *argument;
 {
    char *p;
-   int xp;
+   int xp = 0;
 
-   if ((p=strstr(argument, "/G")) != NULL)
-   {
+   if ((p=strstr(argument, "/G")) != NULL) {
       if ( *(p +2) == '=')
          xp = atoi(p + 3);
       else
-        xp = usr.sig;
+         xp = usr.sig;
    }
 
    if ((p=strstr(argument, "/F")) != NULL)

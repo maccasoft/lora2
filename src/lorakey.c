@@ -49,122 +49,58 @@ unsigned long cr3tab[] = {                /* CRC polynomial 0xedb88320 */
 void main()
 {
 	FILE *fp;
-	int fd, i, n;
-	char strings[5][36], *p, xorkey[20], filename[20];
-	char *dummy = "/HGD45)!œgfKJ(/$UIWDrtheUQœ$(/Qœ$(/YWDJbsdDIsS(/&Q!($œ/&/œ$&œIUD(764235riusfdh8127345";
-        char *release_key = "7FE40199";
+        int i, n, maxlines;
+        char strings[5][36], sysop[36];
         dword crc;
-	struct _reg_key key;
 
-	crc = 0xFFFFFFFFL;
-
-        printf("\nLora-CBIS Ver. 2.00 - Registration Key Generator\n");
-	printf("CopyRight (c) 1991 by Marco Maccaferri. All Rights Reserved\n\n");
-
-	memcpy((char *)&key, dummy, sizeof(struct _reg_key));
-        key.version = 200;
+        printf("\nLoraBBS 2.10 - Registration Key Generator\n");
+        printf("CopyRight (c) 1991-92 by Marco Maccaferri. All Rights Reserved\n\n");
 
 	printf("SysOp Name: ");
 	gets(strings[0]);
 	i = sscanf(strings[0], "%s %s %s %s",strings[1], strings[2], strings[3], strings[4]);
-	strcpy(key.sysop, strings[1]);
+        strcpy(sysop, strings[1]);
 	n = 2;
 	while (--i > 0) {
-		strcat(key.sysop," ");
-		strcat(key.sysop, strings[n++]);
+                strcat(sysop," ");
+                strcat(sysop, strings[n++]);
 	}
 
-        printf("FidoNet Number (zone:net/node): ");
-        scanf("%d:%d/%d", &key.zone, &key.net, &key.node);
 	printf("Maximum Number of Lines: ");
-	scanf("%d", &key.maxlines);
+        scanf("%d", &maxlines);
 
 	printf("Are you sure (Y/N)? ");
 	scanf("%s", strings[0]);
 	if (toupper(strings[0][0]) == 'N')
 		exit (1);
 
-        strcpy(key.release_key, release_key);
+        if (maxlines <= 2)
+                crc = 0x7FE50189L;
+        else if (maxlines <= 3)
+                crc = 0x74E40291L;
+        else if (maxlines <= 10)
+                crc = 0x7FA45109L;
+        else
+                crc = 0x7FE40199L;
 
-	p = (char *)&key;
-	for (i=0; i<sizeof(struct _reg_key) - sizeof(dword);i++)
-		crc = UpdateCRC (*p, crc);
+        for (i=0; i<strlen(sysop);i++)
+                crc = UpdateCRC (sysop[i], crc);
 
-	key.crc = crc;
-
-	n = 0;
-	p = (char *)&key;
-	sprintf(xorkey, "%d%d%d0", key.zone, key.net, key.node);
-
-//        sprintf(filename,"%d%03X%04X.TXT", key.zone, key.net, key.node);
-
-//        fp = fopen(filename,"wt");
-//        fprintf(fp, "   This is your registration key for Lora-CBIS Version 2.00.1.\n\n");
-//        fprintf(fp, ">LORA.KEY<\n");
-
-//        p = (char *)&key;
-//        for (i=0, n=0; i < sizeof(struct _reg_key); i++, n++, p++)
-//        {
-//                if (n == 15)
-//                {
-//                        fprintf (fp, "\n");
-//                        n = 0;
-//                }
-
-//                fprintf (fp, "%02X ", (unsigned char)*p);
-//        }
-
-//        fprintf(fp, "\n\n   Please, check out the following data prior to install the key in your\n");
-//        fprintf(fp, "system directory:\n");
-
-//        fprintf(fp, "\n       Sysop: %s\n", key.sysop);
-//        fprintf(fp, "       Node:  %d:%d/%d\n", key.zone, key.net, key.node);
-//        fprintf(fp, "       Lines: %d\n\n", key.maxlines);
-
-//        fprintf(fp, "   To install the key, simply run the program MAKEKEY with the number of this\n");
-//        fprintf(fp, "message (Fido-base) as argument in your Lora-CBIS system directory (i.e. the\n");
-//        fprintf(fp, "   To install the key, simply rename it to LORA.KEY Y with the number of this\n");
-//        fprintf(fp, "message (Fido-base) as argument in your Lora-CBIS system directory (i.e. the\n");
-//        fprintf(fp, "directory that keep the LORA.EXE file).\n");
-//        fprintf(fp, "   Feel free to contact me for any inconvenient or suggestions for\n");
-//        fprintf(fp, "future release.\n\n");
-//        fprintf(fp, "   Thanks for the support.\n\n");
-//        fprintf(fp, "                                                Marco Maccaferri\n\n");
-//        fclose(fp);
-
-        sprintf(filename,"%d%03X%04X.TXT", key.zone, key.net, key.node);
-        fp = fopen(filename,"wt");
-        fprintf(fp, "   This is your registration key for Lora-CBIS Version 2.00.\n");
+        fp = fopen("LORAKEY.TXT","wt");
+        fprintf(fp, "   This is your registration key for LoraBBS Version 2.10:\n\n");
+        fprintf(fp, "                        %lu\n\n", crc);
         fprintf(fp, "   Please, check out the following data prior to install the key in your\n");
-        fprintf(fp, "system directory:\n");
+        fprintf(fp, "system configuration file:\n");
 
-        fprintf(fp, "\n       Sysop: %s\n", key.sysop);
-        fprintf(fp, "       Node:  %d:%d/%d\n", key.zone, key.net, key.node);
-        fprintf(fp, "       Lines: %d\n\n", key.maxlines);
+        fprintf(fp, "\n         Sysop: %s\n", sysop);
+        fprintf(fp, "         Lines: %d\n\n", maxlines);
 
-        fprintf(fp, "   To install the key, simply rename it to LORA.KEY and place it in the\n");
-        fprintf(fp, "Lora-CBIS system directory (i.e. the directory that keep the LORA.EXE file).\n");
+        fprintf(fp, "   To install the key, simply add the following line to your system\n");
+        fprintf(fp, "configuration file (normally LORA.CFG):\n\n");
+        fprintf(fp, "               REGISTRATION_KEY  %lu\n\n", crc);
         fprintf(fp, "   Feel free to contact me for any inconvenient or suggestions for\n");
         fprintf(fp, "future release.\n\n");
         fprintf(fp, "   Thanks for the support.\n\n");
         fprintf(fp, "                                                Marco Maccaferri\n\n");
         fclose(fp);
-
-        sprintf(filename,"%d%03X%04X.KEY", key.zone, key.net, key.node);
-
-        for (i=0; i<sizeof(struct _reg_key);i++) {
-		p[i] = p[i] ^ xorkey[n++];
-		if (xorkey[n] == '\0')
-			n = 0;
-	}
-
-	fd = open(filename, O_WRONLY|O_BINARY|O_TRUNC|O_CREAT, S_IREAD|S_IWRITE);
-        if (fd == -1)
-        {
-                printf ("SYSTEM ERROR: Cannot create binary key file.\n");
-                exit (1);
-        }
-
-        write (fd, (char *)&key, sizeof(struct _reg_key));
-	close (fd);
 }

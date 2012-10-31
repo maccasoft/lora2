@@ -27,8 +27,7 @@ int to;
    brate = 0;
 
    do {
-      if (!to && local_kbd == ' ')
-      {
+      if (!to && local_kbd == ' ') {
          local_kbd = -1;
          return (0);
       }
@@ -36,14 +35,12 @@ int to;
       if (!to && local_kbd == 0x1B)
          return (0);
 
-      if ((i=modem_response()) <= 0)
-      {
+      if ((i=modem_response()) <= 0) {
          time_release();
          if (to)
             return (-1);
       }
-      else
-      {
+      else {
          switch(i) {
          case 1:
             brate=300;
@@ -57,8 +54,20 @@ int to;
          case 18:
             brate=4800;
             break;
+         case 16:
+            brate = 7200;
+            break;
          case 12:
             brate=9600;
+            break;
+         case 17:
+            brate = 12000;
+            break;
+         case 15:
+            brate = 14400;
+            break;
+         case 19:
+            brate = 16800;
             break;
          case 13:
             brate = 19200;
@@ -66,19 +75,9 @@ int to;
          case 14:
             brate = 38400U;
             break;
-         case 15:
-            brate = 14400;
-            break;
-         case 16:
-            brate = 7200;
-            break;
-         case 17:
-            brate = 12000;
-            break;
          }
 
-         if (brate)
-         {
+         if (brate) {
             rate = brate;
             if (!lock_baud)
                com_baud(brate);
@@ -129,8 +128,7 @@ int modem_response()
       if(c < 0x20)
          continue;
 
-      if (c == '/' && mdm_flags == NULL)
-      {
+      if (c == '/' && mdm_flags == NULL) {
          c = '\0';
          mdm_flags = (char *)&stringa[i+1];
       }
@@ -154,63 +152,62 @@ int modem_response()
    wprints (6, 2, LCYAN|_BLUE, strupr (stringa));
    stringa[12] = c;
 
-   if(!stricmp(stringa,"CONNECT"))
-      return(1);
-   else if(!stricmp(stringa,"CONNECT 300"))
-      return(1);
-   else if(!stricmp(stringa,"CONNECT 1200"))
-      return(5);
-   else if(!stricmp(stringa,"CONNECT 1275"))
-      return(10);
-   else if(!stricmp(stringa,"CONNECT 2400"))
-      return(11);
-   else if(!stricmp(stringa,"CONNECT 9600"))
-      return(12);
-   else if(!stricmp(stringa,"CONNECT FAST"))
-      return(12);
-   else if(!stricmp(stringa,"CONNECT 7200"))
-      return(16);
-   else if(!stricmp(stringa,"CONNECT 4800"))
-      return(18);
-   else if(!stricmp(stringa,"CONNECT 12000"))
-      return(17);
-   else if(!stricmp(stringa,"CONNECT 14400"))
-      return(15);
-   else if(!stricmp(stringa,"CONNECT 19200"))
-      return(13);
-   else if(!stricmp(stringa,"CONNECT 38400"))
-      return(14);
+   if(!stricmp(stringa,"CONNECT")) {
+      if(!stricmp(&stringa[7]," 300"))
+         return(1);
+      else if(!stricmp(&stringa[7]," 1200"))
+         return(5);
+      else if(!stricmp(&stringa[7]," 1275"))
+         return(10);
+      else if(!stricmp(&stringa[7]," 2400"))
+         return(11);
+      else if(!stricmp(&stringa[7]," 9600"))
+         return(12);
+      else if(!stricmp(&stringa[7]," FAST"))
+         return(12);
+      else if(!stricmp(&stringa[7]," 7200"))
+         return(16);
+      else if(!stricmp(&stringa[7]," 4800"))
+         return(18);
+      else if(!stricmp(&stringa[7]," 12000"))
+         return(17);
+      else if(!stricmp(&stringa[7]," 14400"))
+         return(15);
+      else if(!stricmp(&stringa[7]," 16800"))
+         return(19);
+      else if(!stricmp(&stringa[7]," 19200"))
+         return(13);
+      else if(!stricmp(&stringa[7]," 38400"))
+         return(14);
+      else
+         return (1);
+   }
    else if(!stricmp(stringa,"OK"))
       return(0);
-   else if(!stricmp(stringa,"NO CARRIER"))
-   {
-      status_line(":No Carrier");
+   else if(!stricmp(stringa,"NO CARRIER")) {
+      status_line(":%s", fancy_str(stringa));
       answer_flag=0;
       return(3);
    }
    else if(!stricmp(stringa,"NO DIALTONE"))
       return(6);
-   else if(!stricmp(stringa,"BUSY"))
-   {
-      status_line(":Busy");
+   else if(!stricmp(stringa,"BUSY")) {
+      status_line(":%s", fancy_str(stringa));
       return(7);
    }
-   else if(!stricmp(stringa,"NO ANSWER"))
-   {
-      status_line(":No Answer");
+   else if(!stricmp(stringa,"NO ANSWER")) {
+      status_line(":%s", fancy_str(stringa));
       answer_flag=0;
       return(8);
    }
-   else if(!stricmp(stringa,"VOICE"))
-   {
-      status_line(":Voice");
+   else if(!stricmp(stringa,"VOICE")) {
+      status_line(":%s", fancy_str(stringa));
       answer_flag=0;
       return(9);
    }
    else if(!strnicmp(stringa,"RING",4)) {
-      if (!answer_flag)
-      {
-         status_line(":Ring");
+      if (!answer_flag) {
+         status_line(":%s", fancy_str(stringa));
 
          local_status("Answering the phone");
 
@@ -268,6 +265,8 @@ int terminal_response()
       return (17);
    case 14400:
       return (15);
+   case 16800:
+      return (19);
    case 19200:
       return (13);
    case 38400U:
@@ -379,6 +378,9 @@ int b;
                 break;
         case 14400:
                 i=BAUD_14400;
+                break;
+        case 16800:
+                i=BAUD_16800;
                 break;
         case 19200:
                 i=BAUD_19200;

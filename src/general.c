@@ -8,6 +8,7 @@
 #include <time.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <sys\stat.h>
 
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
@@ -18,6 +19,7 @@
 #include "externs.h"
 #include "prototyp.h"
 #include "zmodem.h"
+#include "msgapi.h"
 
 static void display_cpu (void);
 static void is_4dos (void);
@@ -34,12 +36,18 @@ void software_version()
 
    change_attr(LMAGENTA|_BLACK);
    m_print("%s - The Computer-Based Information System\n", VERSION);
-   m_print("CopyRight (c) 1989-92 by Marco Maccaferri. All Rights Res.\n");
+   m_print("CopyRight (c) 1989-92 by Marco Maccaferri. All Rights Reserved.\n");
 
    change_attr(LCYAN|_BLACK);
    m_print("\nJanus revision 0.31 - (C) Copyright 1987-90, Bit Bucket Software Co.\n");
+   m_print("MsgAPI - Copyright 1990, 1991 by Scott J. Dudley.  All rights reserved.\n");
+//   m_print("\"Squish\" and \"SquishMail\" are trademarks of Scott J. Dudley.\n");
 
    compilation_data();
+
+   activation_key ();
+   if (registered)
+      m_print ("Registered to: %s\n               %s\n\n", sysop, system_name);
 
    c = peekb(0xFFFF,0x000E);
 
@@ -156,223 +164,270 @@ fine:
 void display_area_list(type, flag, sig)   /* flag == 1, Normale due colonne */
 int type, flag;                           /* flag == 2, Normale una colonna */
 {                                         /* flag == 3, Anche nomi, una colonna */
-   int fd, i, pari, area, linea, nsys;
+   int fd, fdi, i, pari, area, linea, nsys, nm;
    char stringa[13], filename[50], dir[80], first;
    struct _sys tsys;
-   struct _sys_idx sysidx[MSG_AREAS];
+   struct _sys_idx sysidx[10];
 
    if (!type)
        return;
 
    first = 1;
 
-   if (type == 1)
-   {
+   if (type == 1) {
       sprintf(filename,"%sSYSMSG.IDX", sys_path);
-      fd = open(filename, O_RDONLY|O_BINARY);
-      if (fd == -1)
-         return;
-      nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * MSG_AREAS);
-      nsys /= sizeof (struct _sys_idx);
-      close(fd);
       area = usr.msg;
    }
-   else if (type == 2)
-   {
+   else if (type == 2) {
       sprintf(filename,"%sSYSFILE.IDX", sys_path);
-      fd = open(filename, O_RDONLY|O_BINARY);
-      if (fd == -1)
-         return;
-      nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * MSG_AREAS);
-      nsys /= sizeof (struct _sys_idx);
-      close(fd);
       area = usr.files;
    }
+   else
+      return;
+
+   fdi = shopen(filename, O_RDONLY|O_BINARY);
+   if (fdi == -1)
+      return;
 
    do {
-      if (!get_command_word (stringa, 12))
-      {
+      if (!get_command_word (stringa, 12)) {
          if (type == 1)
             m_print(bbstxt[B_SELECT_AREAS],bbstxt[B_MESSAGE]);
          else if (type == 2)
             m_print(bbstxt[B_SELECT_AREAS],bbstxt[B_FILE]);
          input(stringa, 12);
-         if (!CARRIER || time_remain() <= 0)
+         if (!CARRIER || time_remain() <= 0) {
+            close (fdi);
             return;
+         }
       }
 
-      if (!stringa[0] && first)
-      {
+      if (!stringa[0] && first) {
          first = 0;
          stringa[0] = area_change_key[2];
       }
 
-      if (stringa[0] == area_change_key[2] || (!stringa[0] && !area))
-      {
+      if (stringa[0] == area_change_key[2] || (!stringa[0] && !area)) {
          first = 0;
          if (type == 1)
-            sprintf(filename,"%sSYSMSG.DAT", sys_path);
+            sprintf(filename,SYSMSG_PATH, sys_path);
          else if (type == 2)
             sprintf(filename,"%sSYSFILE.DAT", sys_path);
-         fd = open(filename, O_RDONLY|O_BINARY);
-         if (fd == -1)
+         fd = shopen(filename, O_RDONLY|O_BINARY);
+         if (fd == -1) {
+            close (fdi);
             return;
+         }
 
          cls();
          m_print(bbstxt[B_AREAS_TITLE], (type == 1) ? bbstxt[B_MESSAGE] : bbstxt[B_FILE]);
 
          pari = 0;
          linea = 4;
+         nm = 0;
+         lseek(fdi, 0L, SEEK_SET);
 
-         for (i=0; i < nsys; i++) {
-            if (usr.priv < sysidx[i].priv ||
-                (usr.flags & sysidx[i].flags) != sysidx[i].flags)
-               continue;
+         do {
+            nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+            nsys /= sizeof (struct _sys_idx);
 
-            if (type == 1)
-            {
-               if (read_system_file ("MSGAREA"))
-                  break;
+            for (i=0; i < nsys; i++, nm++) {
+               if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+                  continue;
 
-               lseek(fd, (long)i * SIZEOF_MSGAREA, SEEK_SET);
-               read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA);
+               if (type == 1) {
+                  if (read_system_file ("MSGAREA"))
+                     break;
 
-//               if (sig && tsys.msg_sig != sig)
-//                  continue;
+                  lseek(fd, (long)nm * SIZEOF_MSGAREA, SEEK_SET);
+                  read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA);
 
-               if (flag == 1)
-               {
-                  strcpy(dir, tsys.msg_name);
-                  dir[31] = '\0';
-                  m_print("%3d ... ",sysidx[i].area);
-                  if (pari)
-                  {
-                     m_print("%s\n",dir);
-                     pari = 0;
+                  if (sig && tsys.msg_sig != sig)
+                     continue;
+
+                  if (flag == 1) {
+                     strcpy(dir, tsys.msg_name);
+                     dir[31] = '\0';
+                     m_print("%3d ... ",sysidx[i].area);
+                     if (pari) {
+                        m_print("%s\n",dir);
+                        pari = 0;
+                        if (!(linea = more_question(linea)))
+                           break;
+                     }
+                     else {
+                        m_print("%-31s ",dir);
+                        pari = 1;
+                     }
+                  }
+                  else if (flag == 2 || flag == 3) {
+                     m_print("%3d ... ",sysidx[i].area);
+                     if (flag == 3)
+                        m_print("%-12s ",sysidx[i].key);
+                     m_print(" %s\n",tsys.msg_name);
+
                      if (!(linea = more_question(linea)))
                         break;
                   }
-                  else
-                  {
-                     m_print("%-31s ",dir);
-                     pari = 1;
-                  }
                }
-               else if (flag == 2 || flag == 3)
-               {
-                  m_print("%3d ... ",sysidx[i].area);
-                  if (flag == 3)
-                     m_print("%-12s ",sysidx[i].key);
-                  m_print(" %s\n",tsys.msg_name);
-
-                  if (!(linea = more_question(linea)))
+               else if (type == 2) {
+                  if (read_system_file ("FILEAREA"))
                      break;
-               }
-            }
-            else if (type == 2)
-            {
-               if (read_system_file ("FILEAREA"))
-                  break;
 
-               lseek(fd, (long)i * SIZEOF_FILEAREA, SEEK_SET);
-               read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA);
+                  lseek(fd, (long)nm * SIZEOF_FILEAREA, SEEK_SET);
+                  read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA);
 
-//               if (sig && tsys.file_sig != sig)
-//                  continue;
+                  if (sig && tsys.file_sig != sig)
+                     continue;
 
-               if (flag == 1)
-               {
-                  strcpy(dir, tsys.file_name);
-                  dir[31] = '\0';
-                  m_print("%3d ... ",sysidx[i].area);
-                  if (pari)
-                  {
-                     m_print("%s\n",dir);
-                     pari = 0;
+                  if (flag == 1) {
+                     strcpy(dir, tsys.file_name);
+                     dir[31] = '\0';
+                     m_print("%3d ... ",sysidx[i].area);
+                     if (pari) {
+                        m_print("%s\n",dir);
+                        pari = 0;
+                        if (!(linea = more_question(linea)))
+                           break;
+                     }
+                     else {
+                        m_print("%-31s ",dir);
+                        pari = 1;
+                     }
+                  }
+                  else if (flag == 2 || flag == 3) {
+                     m_print("%3d ... ",sysidx[i].area);
+                     if (flag == 3)
+                        m_print("%-12s ",sysidx[i].key);
+                     m_print(" %s\n",tsys.file_name);
+
                      if (!(linea = more_question(linea)))
                         break;
                   }
-                  else
-                  {
-                     m_print("%-31s ",dir);
-                     pari = 1;
-                  }
-               }
-               else if (flag == 2 || flag == 3)
-               {
-                  m_print("%3d ... ",sysidx[i].area);
-                  if (flag == 3)
-                     m_print("%-12s ",sysidx[i].key);
-                  m_print(" %s\n",tsys.file_name);
-
-                  if (!(linea = more_question(linea)))
-                     break;
                }
             }
-         }
+         } while (linea && nsys == 10);
 
          close(fd);
 
          if (pari)
-            m_print("\n");
+            m_print(bbstxt[B_ONE_CR]);
          area = -1;
       }
-      else if (stringa[0] == area_change_key[1])
-      {
-         for (i=0; i < nsys; i++)
-            if (sysidx[i].area == area)
-               break;
+      else if (stringa[0] == area_change_key[1]) {
+         lseek(fdi, 0L, SEEK_SET);
+
+         do {
+            nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+            nsys /= sizeof (struct _sys_idx);
+
+            for (i=0; i < nsys; i++)
+               if (sysidx[i].area == area)
+                  break;
+         } while (i == nsys && nsys == 10);
+
          if (i == nsys)
             continue;
+
          do {
             i++;
-            if (i >= nsys)
+            if (i >= nsys) {
                i = 0;
+               nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+               if (nsys == 0) {
+                  lseek(fdi, 0L, SEEK_SET);
+                  nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+               }
+               nsys /= sizeof (struct _sys_idx);
+            }
             if (sysidx[i].area == area)
                break;
-         } while (usr.priv < sysidx[i].priv);
+         } while (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags);
+
          area = sysidx[i].area;
       }
-      else if (stringa[0] == area_change_key[0])
-      {
-         for (i=0; i < nsys; i++)
-            if (sysidx[i].area == area)
-               break;
+      else if (stringa[0] == area_change_key[0]) {
+         lseek(fdi, 0L, SEEK_SET);
+
+         do {
+            nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+            nsys /= sizeof (struct _sys_idx);
+
+            for (i=0; i < nsys; i++)
+               if (sysidx[i].area == area)
+                  break;
+         } while (i == nsys && nsys == 10);
+
          if (i == nsys)
             continue;
+
          do {
             i--;
-            if (i < 0)
+            if (i < 0) {
+               if (lseek(fdi, tell(fdi) - (10L + (long)nsys) * sizeof (struct _sys_idx), SEEK_SET) == -1L)
+                  lseek(fdi, (long)nsys * sizeof (struct _sys_idx), SEEK_END);
+
+               nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+               nsys /= sizeof (struct _sys_idx);
                i = nsys - 1;
+               if (i < 0)
+                  break;
+            }
             if (sysidx[i].area == area)
                break;
-         } while (usr.priv < sysidx[i].priv);
+         } while (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags);
+
          area = sysidx[i].area;
       }
-      else if (strlen(stringa) < 1)
+      else if (strlen(stringa) < 1 && read_system (usr.msg, type)) {
+         close (fdi);
          return;
+      }
       else {
+         lseek(fdi, 0L, SEEK_SET);
          area = atoi(stringa);
-         if (area < 1 || area > MSG_AREAS)
-         {
+         if (area < 1 || area > MSG_AREAS) {
             area = -1;
-            for(i=0;i<nsys;i++)
-               if (!stricmp(stringa,sysidx[i].key))
-               {
-                  area = sysidx[i].area;
-                  break;
+            do {
+               nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+               nsys /= sizeof (struct _sys_idx);
+
+               for(i=0;i<nsys;i++) {
+                  if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+                     continue;
+                  if (!stricmp(stringa,sysidx[i].key)) {
+                     area = sysidx[i].area;
+                     break;
+                  }
                }
+            } while (i == nsys && nsys == 10);
+         }
+         else {
+            do {
+               nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+               nsys /= sizeof (struct _sys_idx);
+
+               for(i=0;i<nsys;i++) {
+                  if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+                     continue;
+                  if (sysidx[i].area == area)
+                     break;
+               }
+            } while (i == nsys && nsys == 10);
+
+            if (i == nsys)
+               area = -1;
          }
       }
    } while (area == -1 || !read_system(area, type));
 
-   if (type == 1)
-   {
+   close (fdi);
+
+   if (type == 1) {
       status_line(msgtxt[M_BBS_EXIT], area, sys.msg_name);
       usr.msg = area;
    }
-   else if (type == 2)
-   {
+   else if (type == 2) {
       status_line(msgtxt[M_BBS_SPAWN], area, sys.file_name);
       usr.files = area;
    }
@@ -381,55 +436,54 @@ int type, flag;                           /* flag == 2, Normale una colonna */
 int read_system(s, type)
 int s, type;
 {
-   int fd, nsys, i;
+   int fd, nsys, i, mn=0;
    char filename[50];
-   struct _sys_idx sysidx[MSG_AREAS];
+   struct _sys_idx sysidx[10];
+   MSG *ptr;
 
    if (type != 1 && type != 2)
       return (0);
 
+   if (sq_ptr != NULL) {
+      MsgCloseArea (sq_ptr);
+      sq_ptr = NULL;
+   }
+
    if (type == 1)
-   {
       sprintf(filename,"%sSYSMSG.IDX", sys_path);
-      fd = open(filename, O_RDONLY|O_BINARY);
-      if (fd == -1)
-         return (0);
-      nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * MSG_AREAS);
-      nsys /= sizeof (struct _sys_idx);
-      close(fd);
-   }
    else if (type == 2)
-   {
       sprintf(filename,"%sSYSFILE.IDX", sys_path);
-      fd = open(filename, O_RDONLY|O_BINARY);
-      if (fd == -1)
-         return (0);
-      nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * MSG_AREAS);
-      nsys /= sizeof (struct _sys_idx);
-      close(fd);
-   }
 
-   for (i=0; i < nsys; i++)
-   {
-      if (sysidx[i].area == s)
-         break;
-   }
-
-   if (i == nsys || sysidx[i].priv > usr.priv)
+   fd = shopen(filename, O_RDONLY|O_BINARY);
+   if (fd == -1)
       return (0);
 
-   if (type == 1)
-   {
-      sprintf(filename,"%sSYSMSG.DAT", sys_path);
-      fd = open(filename, O_RDONLY|O_BINARY);
+   do {
+      nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+      nsys /= sizeof (struct _sys_idx);
+      for (i=0; i < nsys; i++, mn++) {
+         if (sysidx[i].area == s)
+            break;
+      }
+   } while (i == nsys && nsys == 10);
+
+   close (fd);
+
+   if (i == nsys || sysidx[i].priv > usr.priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+      return (0);
+
+   i = mn;
+
+   if (type == 1) {
+      sprintf(filename,SYSMSG_PATH, sys_path);
+      fd = shopen(filename, O_RDONLY|O_BINARY);
       if (fd == -1)
          return (0);
       lseek (fd, (long)i * SIZEOF_MSGAREA, SEEK_SET);
       read(fd, (char *)&sys.msg_name, SIZEOF_MSGAREA);
       close(fd);
 
-      if (sys.pip_board)
-      {
+      if (sys.pip_board) {
          sprintf (filename, "%sMPTR%04x.PIP", pip_msgpath, s);
          if (!dexists (filename))
             return (0);
@@ -437,24 +491,27 @@ int s, type;
          if (!dexists (filename))
             return (0);
       }
-      else if (sys.quick_board)
-      {
+      else if (sys.quick_board) {
          sprintf (filename, "%sMSG*.BBS", fido_msgpath);
          if (!dexists (filename))
             return (0);
       }
-      else
-      {
+      else if (sys.squish) {
+         ptr = MsgOpenArea (sys.msg_path, MSGAREA_CRIFNEC, MSGTYPE_SQUISH);
+         if (ptr == NULL)
+            return (0);
+         MsgCloseArea (ptr);
+      }
+      else {
          sys.msg_path[strlen (sys.msg_path) - 1] = '\0';
          if (!dexists (sys.msg_path))
             return (0);
          sys.msg_path[strlen (sys.msg_path)] = '\\';
       }
    }
-   else if (type == 2)
-   {
+   else if (type == 2) {
       sprintf(filename,"%sSYSFILE.DAT", sys_path);
-      fd = open(filename, O_RDONLY|O_BINARY);
+      fd = shopen(filename, O_RDONLY|O_BINARY);
       if (fd == -1)
          return (0);
       lseek (fd, (long)i * SIZEOF_FILEAREA, SEEK_SET);
@@ -462,8 +519,10 @@ int s, type;
       close(fd);
 
       sys.filepath[strlen (sys.filepath) - 1] = '\0';
-      if (!dexists (sys.filepath))
+      if (!dexists (sys.filepath)) {
+         sys.filepath[0] = '\0';
          return (0);
+      }
       sys.filepath[strlen (sys.filepath)] = '\\';
    }
 
@@ -474,57 +533,55 @@ int read_system2 (s, type, tsys)
 int s, type;
 struct _sys *tsys;
 {
-   int fd, nsys, i;
+   int fd, nsys, i, mn=0;
    char filename[50];
-   struct _sys_idx sysidx[MSG_AREAS];
+   struct _sys_idx sysidx[10];
 
    if (type != 1 && type != 2)
       return (0);
 
+   if (sq_ptr != NULL) {
+      MsgCloseArea (sq_ptr);
+      sq_ptr = NULL;
+   }
+
    if (type == 1)
-   {
       sprintf(filename,"%sSYSMSG.IDX", sys_path);
-      fd = open(filename, O_RDONLY|O_BINARY);
-      if (fd == -1)
-         return (0);
-      nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * MSG_AREAS);
-      nsys /= sizeof (struct _sys_idx);
-      close(fd);
-   }
    else if (type == 2)
-   {
       sprintf(filename,"%sSYSFILE.IDX", sys_path);
-      fd = open(filename, O_RDONLY|O_BINARY);
-      if (fd == -1)
-         return (0);
-      nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * MSG_AREAS);
-      nsys /= sizeof (struct _sys_idx);
-      close(fd);
-   }
 
-   for (i=0; i < nsys; i++)
-   {
-      if (sysidx[i].area == s)
-         break;
-   }
-
-   if (i == nsys || sysidx[i].priv > usr.priv)
+   fd = shopen(filename, O_RDONLY|O_BINARY);
+   if (fd == -1)
       return (0);
 
-   if (type == 1)
-   {
-      sprintf(filename,"%sSYSMSG.DAT", sys_path);
-      fd = open(filename, O_RDONLY|O_BINARY);
+   do {
+      nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+      nsys /= sizeof (struct _sys_idx);
+      for (i=0; i < nsys; i++, mn++) {
+         if (sysidx[i].area == s)
+            break;
+      }
+   } while (i == nsys && nsys == 10);
+
+   close (fd);
+
+   if (i == nsys || sysidx[i].priv > usr.priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+      return (0);
+
+   i = mn;
+
+   if (type == 1) {
+      sprintf(filename,SYSMSG_PATH, sys_path);
+      fd = shopen(filename, O_RDONLY|O_BINARY);
       if (fd == -1)
          return (0);
       lseek (fd, (long)i * SIZEOF_MSGAREA, SEEK_SET);
       read(fd, (char *)&tsys->msg_name, SIZEOF_MSGAREA);
       close(fd);
    }
-   else if (type == 2)
-   {
+   else if (type == 2) {
       sprintf(filename,"%sSYSFILE.DAT", sys_path);
-      fd = open(filename, O_RDONLY|O_BINARY);
+      fd = shopen(filename, O_RDONLY|O_BINARY);
       if (fd == -1)
          return (0);
       lseek (fd, (long)i * SIZEOF_FILEAREA, SEEK_SET);
@@ -538,7 +595,7 @@ struct _sys *tsys;
 void user_list(args)
 char *args;
 {
-   char stringa[40], linea[80], *p, handle, swap;
+   char stringa[40], linea[80], *p, handle, swap, vote;
    int fd, line, act, nn, day, mont, year;
    int mdays[] = {31,28,31,30,31,30,31,31,30,31,30,31};
    long days, now;
@@ -555,17 +612,16 @@ char *args;
    change_attr(YELLOW|_BLACK);
    if ((p=strstr (args,"/H")) != NULL)
       handle = 1;
+   if ((p=strstr (args,"/V")) != NULL)
+      vote = 1;
    if ((p=strstr (args,"/S")) != NULL)
       swap = 1;
-   if ((p=strstr (args,"/L")) != NULL)
-   {
+   if ((p=strstr (args,"/L")) != NULL) {
       act = 1;
       if (p[2] == '=')
          nn = atoi(&p[3]);
-      else
-      {
-         if (!get_command_word (stringa, 5))
-         {
+      else {
+         if (!get_command_word (stringa, 5)) {
             m_print(bbstxt[B_MIN_DAYS_LIST]);
             input(stringa,5);
          }
@@ -585,15 +641,12 @@ char *args;
          now += mdays[line];
       now += day;
    }
-   else if ((p=strstr (args,"/T")) != NULL)
-   {
+   else if ((p=strstr (args,"/T")) != NULL) {
       act = 2;
       if (p[2] == '=')
          nn = atoi(&p[3]);
-      else
-      {
-         if (!get_command_word (stringa, 5))
-         {
+      else {
+         if (!get_command_word (stringa, 5)) {
             m_print(bbstxt[B_MIN_CALLS_LIST]);
             input(stringa,5);
          }
@@ -602,10 +655,8 @@ char *args;
          nn = atoi(stringa);
       }
    }
-   else
-   {
-      if (!get_command_word (stringa, 35))
-      {
+   else {
+      if (!get_command_word (stringa, 35)) {
          m_print(bbstxt[B_ENTER_USERNAME]);
          input(stringa,35);
       }
@@ -620,18 +671,19 @@ char *args;
    m_print(bbstxt[B_USERLIST_UNDERLINE]);
 
    sprintf(linea, "%s.BBS", user_file);
-   fd=open(linea,O_RDONLY|O_BINARY);
+   fd=shopen(linea,O_RDONLY|O_BINARY);
 
-   while(read(fd,(char *)&tempusr,sizeof(struct _usr)) == sizeof (struct _usr))
-   {
+   while(read(fd,(char *)&tempusr,sizeof(struct _usr)) == sizeof (struct _usr)) {
       if (tempusr.usrhidden || tempusr.deleted || !tempusr.name[0])
+         continue;
+
+      if (vote && tempusr.priv != vote_priv)
          continue;
 
       if (handle)
          strcpy (tempusr.name, tempusr.handle);
 
-      if (act == 0)
-      {
+      if (act == 0) {
          strupr(tempusr.name);
 
          if (strstr(tempusr.name,stringa) == NULL)
@@ -639,8 +691,7 @@ char *args;
 
          fancy_str(tempusr.name);
       }
-      else if (act == 1)
-      {
+      else if (act == 1) {
          sscanf(tempusr.ldate, "%2d %3s %2d", &day, linea, &year);
          linea[3] = '\0';
          for (mont = 0; mont < 12; mont++) {
@@ -654,14 +705,12 @@ char *args;
          if ((int)(now-days) > nn)
             continue;
       }
-      else if (act == 2)
-      {
+      else if (act == 2) {
          if (tempusr.times < (long)nn)
             continue;
       }
 
-      if (swap)
-      {
+      if (swap) {
          strcpy (linea, tempusr.name);
          p = strchr (linea, '\0');
          while (*p != ' ' && p != linea)
@@ -706,10 +755,9 @@ void update_user()
    if (!local_mode)
       FLUSH_OUTPUT();
 
-   if(usr.name[0] && usr.city[0] && usr.pwd[0])
-   {
-      sprintf(filename, USERON_NAME, sys_path);
-      fd = open(filename, O_RDWR|O_BINARY);
+   if (usr.name[0] && usr.city[0] && usr.pwd[0]) {
+      sprintf (filename, USERON_NAME, sys_path);
+      fd = shopen (filename, O_RDWR|O_BINARY);
 
       while (fd != -1) {
          prev = tell(fd);
@@ -717,8 +765,7 @@ void update_user()
          if (read(fd, (char *)&useron, sizeof(struct _useron)) != sizeof(struct _useron))
             break;
 
-         if (!strcmp(useron.name,usr.name) && useron.line == line_offset)
-         {
+         if (!strcmp (useron.name,usr.name) && useron.line == line_offset) {
             lseek(fd,prev,SEEK_SET);
             memset((char *)&useron, 0, sizeof(struct _useron));
             write (fd, (char *)&useron, sizeof(struct _useron));
@@ -734,7 +781,7 @@ void update_user()
       crc = crc_name (usr.name);
 
       sprintf (filename, "%s.IDX", user_file);
-      fd = open (filename, O_RDWR|O_BINARY);
+      fd = shopen (filename, O_RDWR|O_BINARY);
 
       do {
          i = read(fd,(char *)&usridx,sizeof(struct _usridx) * MAX_INDEX);
@@ -757,7 +804,7 @@ void update_user()
 
       sprintf (filename, "%s.BBS", user_file);
 
-      fd = open (filename, O_RDWR|O_BINARY);
+      fd = shopen (filename, O_RDWR|O_BINARY);
       lseek (fd, (long)posit * sizeof (struct _usr), SEEK_SET);
 
       if (!fflag)
@@ -816,7 +863,7 @@ char *args;
    struct _lastcall lc;
 
    sprintf(filename, "%sLASTCALL.BBS", sys_path);
-   fd = open(filename, O_RDONLY|O_BINARY);
+   fd = shopen(filename, O_RDONLY|O_BINARY);
 
    memset((char *)&lc, 0, sizeof(struct _lastcall));
 
@@ -863,7 +910,7 @@ char *args;
    }
 
    close(fd);
-   m_print("\n");
+   m_print (bbstxt[B_ONE_CR]);
 
    if (line)
       press_enter();
@@ -881,10 +928,8 @@ char *args;
 
    max_input = 8 - strlen(p);
 
-   for (;;)
-   {
-      if (!get_command_word (stringa, max_input))
-      {
+   for (;;) {
+      if (!get_command_word (stringa, max_input)) {
          read_file (args);
          input (stringa, max_input);
          if (!stringa[0] || !CARRIER || time_remain() <= 0)
@@ -909,16 +954,14 @@ void message_to_next_caller ()
    line_editor (0);
 
    m_print(bbstxt[B_DATABASE]);
-   if (yesno_question (DEF_YES) == DEF_NO)
-   {
+   if (yesno_question (DEF_YES) == DEF_NO) {
       free_message_array ();
       return;
    }
 
    sprintf(filename,"%sNEXT%d.BBS",sys_path,line_offset);
    fp = fopen(filename,"wb");
-   if (fp == NULL)
-   {
+   if (fp == NULL) {
       free_message_array ();
       return;
    }
@@ -945,8 +988,7 @@ void message_to_next_caller ()
    fwrite((char *)&msg,sizeof(struct _msg),1,fp);
 
    i = 0;
-   while (messaggio[i] != NULL)
-   {
+   while (messaggio[i] != NULL) {
       if (messaggio[i][strlen(messaggio[i])-1] == '\r')
          fprintf(fp,"%s\n", messaggio[i++]);
       else
@@ -1083,11 +1125,9 @@ void display_usage ()
    cls ();
    m_print (bbstxt[B_PERCENTAGE], linestat.startdate, tim->tm_mon+1, tim->tm_mday, tim->tm_year % 100, line_offset);
 
-   for (i = 14; i >= 0; i--)
-   {
+   for (i = 14; i >= 0; i--) {
       m_print (bbstxt[B_PERCY], y_axis[i]);
-      for (z = 0; z < 24; z++)
-      {
+      for (z = 0; z < 24; z++) {
          if (total > 0)
             m = (int)((linestat.busyperhour[z] * 100L) / total);
          else

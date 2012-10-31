@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <ctype.h>
+#include <dos.h>
 #include <sys/stat.h>
 
 #include <cxl\cxlvid.h>
@@ -15,12 +16,19 @@
 #include "prototyp.h"
 #include "zmodem.h"
 
+static void galileo_input (char *, int);
+void emsi_handshake (int);
+void get_emsi_id (char *, int);
+
 int poll(max_tries, bad, zone, net, node)
 int max_tries, bad, zone, net, node;
 {
 	int tries, i, j;
         char buffer[70];
         long t1, t2, tu;
+
+        if (CARRIER)
+           goto online_out;
 
         if (!get_bbs_record(zone, net,node))
                 return (0);
@@ -37,8 +45,7 @@ int max_tries, bad, zone, net, node;
                 assumed = i;
 
         for(tries=0;tries < max_tries;tries++) {
-                if (tries)
-                {
+                if (tries) {
                         modem_hangup ();
                         local_status("Pausing ...");
 
@@ -75,16 +82,14 @@ int max_tries, bad, zone, net, node;
                 if ((i = wait_for_connect(0)) != 0)
                         break;
 
-                if (local_kbd == 0x1B)
-                {
+                if (local_kbd == 0x1B) {
                         local_kbd = -1;
                         modem_hangup ();
                         break;
                 }
         }
 
-        if (!i)
-        {
+        if (!i) {
                 status_line(msgtxt[M_CONNECT_ABORTED]);
                 local_status(&msgtxt[M_CONNECT_ABORTED][1]);
 
@@ -101,13 +106,12 @@ int max_tries, bad, zone, net, node;
         wunlink(i);
         wactiv(mainview);
 
-        if (mdm_flags == NULL)
-        {
+online_out:
+        if (mdm_flags == NULL) {
            status_line(msgtxt[M_READY_CONNECT], rate, "", "");
            sprintf(buffer, "* Outgoing call at %u%s%s baud.\n", rate, "", "");
         }
-        else
-        {
+        else {
            status_line(msgtxt[M_READY_CONNECT], rate, "/", mdm_flags);
            sprintf(buffer, "* Outgoing call at %u%s%s baud.\n", rate, "/", mdm_flags);
         }
@@ -116,17 +120,22 @@ int max_tries, bad, zone, net, node;
         if (!lock_baud)
                 com_baud(rate);
 
+        remote_zone = called_zone = zone;
         remote_node = called_node = node;
         remote_net = called_net = net;
+        remote_point = 0;
         remote_capabilities = 0;
+        local_mode = snooping = 0;
 
         timer(10);
 
 	t1 = timerset(3000);
 	j = 'j';
 	while(!timeup(t1) && CARRIER) {
-                SENDBYTE(YOOHOO);
-                SENDBYTE(TSYNC);
+                SENDBYTE (32);
+                SENDBYTE (13);
+                SENDBYTE (32);
+                SENDBYTE (13);
 
                 while (CARRIER && !OUT_EMPTY())
                         time_release();
@@ -139,7 +148,14 @@ int max_tries, bad, zone, net, node;
 				continue;
 
 			switch(i) {
-			case ENQ:
+                        case '*':
+                                if (noask.emsi)
+                                   break;
+                                get_emsi_id (buffer, 30);
+                                if (!strnicmp (buffer, "*EMSI_REQA77E", 13))
+                                        emsi_handshake (1);
+                                break;
+                        case ENQ:
                                 if(send_YOOHOO(1)) {
                                         WaZOO(1);
                                         get_call_list();
@@ -184,11 +200,12 @@ int max_tries, bad, zone, net, node;
 				j = i;
 		}
 
-                SENDBYTE(32);
-                SENDBYTE(13);
-                SENDBYTE(32);
-                SENDBYTE(13);
-	}
+                if (!noask.emsi)
+                   m_print ("**EMSI_INQC816\r**EMSI_INQC816\r");
+
+                SENDBYTE (YOOHOO);
+                SENDBYTE (TSYNC);
+        }
 
 bad_mail:
         status_line(msgtxt[M_NOBODY_HOME]);
@@ -218,8 +235,7 @@ int bnet, bnode, rwd;
 	j = strlen (fname) - 1;
 	res = -1;
 
-        if (cur_event > -1)
-        {
+        if (cur_event > -1) {
                 mc = e_ptrs[cur_event]->with_connect ? e_ptrs[cur_event]->with_connect : max_connects;
                 mnc = e_ptrs[cur_event]->no_connect ? e_ptrs[cur_event]->no_connect : max_noconnects;
         }
@@ -245,22 +261,22 @@ int bnet, bnode, rwd;
 
 		if (res == -1) {
 			if (rwd == 2)
-				res = open (fname, O_CREAT + O_WRONLY + O_BINARY, S_IWRITE);
+                                res = cshopen (fname, O_CREAT + O_WRONLY + O_BINARY, S_IWRITE);
 			else
-				res = open (fname1, O_CREAT + O_WRONLY + O_BINARY, S_IWRITE);
+                                res = cshopen (fname1, O_CREAT + O_WRONLY + O_BINARY, S_IWRITE);
 			i = rwd - 1;
 			write (res, (char *) &i, sizeof (int));
 			close (res);
 		}
 		else {
 			if (rwd == 2) {
-				i = open (fname, O_RDONLY + O_BINARY);
+                                i = shopen (fname, O_RDONLY + O_BINARY);
 				read (i, (char *) &res, sizeof (int));
 				close (i);
 
 				++res;
 
-				i = open (fname, O_CREAT + O_WRONLY + O_BINARY, S_IWRITE);
+                                i = cshopen (fname, O_CREAT + O_WRONLY + O_BINARY, S_IWRITE);
 				write (i, (char *) &res, sizeof (int));
 				close (i);
 			}
@@ -275,7 +291,7 @@ int bnet, bnode, rwd;
                 if (res >= mc)
 			return (1);
 		res = 0;
-		i = open (fname, O_RDONLY + O_BINARY);
+                i = shopen (fname, O_RDONLY + O_BINARY);
 		read (i, (char *) &res, sizeof (int));
 		close (i);
                 return (res >= mnc);
@@ -313,6 +329,8 @@ int mail_session()
 {
    int i, flag, oldsnoop;
    long t1, t2;
+   char *emsi_req = "**EMSI_REQA77E\r";
+//   char *emsi_req = "";
 
    if (cur_event >= 0 && (e_ptrs[cur_event]->behavior & MAT_NOMAIL24))
       return (0);
@@ -331,27 +349,25 @@ int mail_session()
    remote_capabilities = 0;
 
    t1 = timerset(3000);
-   t2 = timerset(1000);
+   t2 = timerset(500);
 
 
-   while(!timeup(t1) && CARRIER)
-   {
-      if (timeup(t2) && !flag)
-      {
+   while(!timeup(t1) && CARRIER) {
+      if (timeup(t2) && !flag) {
+         if (!noask.emsi)
+            m_print (emsi_req);
          m_print(msgtxt[M_ADDRESS],alias[0].zone,alias[0].net,alias[0].node,VERSION);
          if (banner[0] == '@')
             read_file (&banner[1]);
          else
             m_print("%s\n",banner);
-         if (cur_event >= 0 && !(e_ptrs[cur_event]->behavior & MAT_BBS))
-         {
+         if (cur_event >= 0 && !(e_ptrs[cur_event]->behavior & MAT_BBS)) {
             if (mail_only[0] == '@')
                read_file (&mail_only[1]);
             else
                m_print("%s\r",mail_only);
          }
-         else
-         {
+         else {
             if (enterbbs[0] == '@')
                read_file (&enterbbs[1]);
             else
@@ -366,19 +382,23 @@ int mail_session()
       switch(i) {
       case -1:
          break;
+      case '*':
+         if (noask.emsi)
+            break;
+         if ((i = TIMED_READ(10)) == '*')
+            emsi_handshake (0);
+         break;
       case ' ':
       case 0x0D:
-         if (!timeup(t2))
+         if (!flag)
             break;
-         if (cur_event >= 0 && !(e_ptrs[cur_event]->behavior & MAT_BBS))
-         {
+         if (cur_event >= 0 && !(e_ptrs[cur_event]->behavior & MAT_BBS)) {
             if (mail_only[0] == '@')
                read_file (&mail_only[1]);
             else
                m_print("%s\r",mail_only);
          }
-         else
-         {
+         else {
             if (enterbbs[0] == '@')
                read_file (&enterbbs[1]);
             else
@@ -389,10 +409,8 @@ int mail_session()
          if (!timeup(t2))
             break;
          remote_capabilities = 0;
-         if (get_YOOHOO(1))
-         {
-            if (cur_event >= 0 && (e_ptrs[cur_event]->behavior & MAT_RESERV))
-            {
+         if (get_YOOHOO(1)) {
+            if (cur_event >= 0 && (e_ptrs[cur_event]->behavior & MAT_RESERV)) {
                if (remote_net != e_ptrs[cur_event]->res_net &&
                    remote_node != e_ptrs[cur_event]->res_node &&
                    remote_zone != e_ptrs[cur_event]->res_zone)
@@ -411,22 +429,21 @@ int mail_session()
          FTSC_receiver(1);
          return(1);
       case 0x1B:
-         if (!flag)
-         {
+         if (!flag) {
+            if (!noask.emsi)
+               m_print (emsi_req);
             m_print(msgtxt[M_ADDRESS],alias[0].zone,alias[0].net,alias[0].node,VERSION);
             if (banner[0] == '@')
                read_file (&banner[1]);
             else
                m_print("%s\n",banner);
-            if (cur_event >= 0 && !(e_ptrs[cur_event]->behavior & MAT_BBS))
-            {
+            if (cur_event >= 0 && !(e_ptrs[cur_event]->behavior & MAT_BBS)) {
                if (mail_only[0] == '@')
                   read_file (&mail_only[1]);
                else
                   m_print("%s\r",mail_only);
             }
-            else
-            {
+            else {
                if (enterbbs[0] == '@')
                   read_file (&enterbbs[1]);
                else
@@ -456,6 +473,154 @@ int mail_session()
 
    snooping = oldsnoop;
    timer (10);
+
+   return (0);
+}
+
+static void galileo_input (s, width)
+char *s;
+int width;
+{
+   char c;
+   int i = 0;
+   long t;
+
+   t = timerset (300);
+   UNBUFFER_BYTES ();
+
+   while (CARRIER && !timeup (t)) {
+      while (PEEKBYTE() == -1) {
+         if (!CARRIER || timeup (t))
+            return;
+         time_release ();
+      }
+
+      c = (char)TIMED_READ(1);
+      t = timerset (300);
+
+      if (c == 0x0D)
+         break;
+
+      if (i >= width)
+         continue;
+
+      if (c < 0x20)
+         continue;
+
+      s[i++]=c;
+   }
+
+   s[i]='\0';
+}
+
+int poll_galileo (max_tries)
+int max_tries;
+{
+   int tries, i, yy, mm, dy, ss, hh, mi;
+   char buffer[90], stringa[90];
+   long t1, tu;
+   struct time dt;
+   struct date dd;
+
+   for (tries = 0; tries < max_tries; tries++) {
+      if (tries) {
+         modem_hangup ();
+         local_status ("Pausing ...");
+
+         tu = timerset (300);
+         while (!timeup (tu)) {
+            if (local_kbd == 0x1B) {
+               local_kbd = -1;
+               i = 0;
+               modem_hangup ();
+               break;
+            }
+
+            time_release ();
+         }
+      }
+
+      status_line (msgtxt[M_DIALING_NUMBER], galileo);
+      local_status (&msgtxt[M_DIALING_NUMBER][1], galileo);
+
+      CLEAR_INBOUND();
+      CLEAR_OUTBOUND();
+
+      answer_flag = 1;
+      dial_number (0, galileo);
+
+      if ((i = wait_for_connect(0)) != 0)
+         break;
+
+      if (local_kbd == 0x1B) {
+         local_kbd = -1;
+         modem_hangup ();
+         break;
+      }
+   }
+
+   if (!i) {
+      status_line(msgtxt[M_CONNECT_ABORTED]);
+      local_status(&msgtxt[M_CONNECT_ABORTED][1]);
+
+      answer_flag = 0;
+      timer (10);
+      return(0);
+   }
+
+   i = whandle ();
+   wclose ();
+   wunlink (i);
+   wactiv (mainview);
+
+   if (mdm_flags == NULL) {
+      status_line(msgtxt[M_READY_CONNECT], rate, "", "");
+      sprintf(buffer, "* Outgoing call at %u%s%s baud.\n", rate, "", "");
+   }
+   else {
+      status_line(msgtxt[M_READY_CONNECT], rate, "/", mdm_flags);
+      sprintf(buffer, "* Outgoing call at %u%s%s baud.\n", rate, "/", mdm_flags);
+   }
+   wputs(buffer);
+
+   if (!lock_baud)
+      com_baud(rate);
+
+   t1 = timerset(1500);
+
+   while (!timeup(t1) && CARRIER) {
+      galileo_input (buffer, 80);
+      if (!CARRIER)
+         break;
+      galileo_input (stringa, 80);
+      if (!CARRIER)
+         break;
+
+      if (!strncmp (buffer, stringa, 16)) {
+         sscanf (stringa, "%d-%d-%d %d:%d:%d", &yy, &mm, &dy, &hh, &mi, &ss);
+
+         dt.ti_hour = hh;
+         dt.ti_min = mi;
+         dt.ti_sec = ss;
+         dt.ti_hund = 0;
+
+         dd.da_year = yy;
+         dd.da_mon = mm;
+         dd.da_day = dy;
+
+         status_line ("+Remote clock: %02d-%02d-%02d %02d:%02d", dd.da_day, dd.da_mon, dd.da_year % 100, dt.ti_hour, dt.ti_min);
+
+         setdate (&dd);
+         settime (&dt);
+
+         timer (20);
+         modem_hangup ();
+
+         return (1);
+      }
+   }
+
+   modem_hangup ();
 
    return (0);
 }

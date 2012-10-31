@@ -21,7 +21,7 @@
 #include "quickmsg.h"
 
 static void create_quickbase_file (void);
-
+static int no_dups(int, int, int);
 void display_outbound_info (int);
 
 void get_call_list()
@@ -31,8 +31,7 @@ void get_call_list()
    char c, filename[100], outbase[100], *p;
    struct ffblk blk, blk2, blko;
 
-   for(i=0;i<MAX_OUT;i++)
-   {
+   for(i=0;i<MAX_OUT;i++) {
       call_list[i].zone = 0;
       call_list[i].net  = 0;
       call_list[i].node = 0;
@@ -59,16 +58,16 @@ void get_call_list()
                m = strlen (blk.ff_name);
                if ((blk.ff_name[m-1] == 'T' && blk.ff_name[m-2] == 'U') ||
                    (blk.ff_name[m-1] == 'O' && blk.ff_name[m-2] == 'L') ||
-                   (blk.ff_name[m-1] == 'Q' && blk.ff_name[m-2] == 'E' && blk.ff_name[m-3] == 'R'))
-               {
+                   (blk.ff_name[m-1] == 'Q' && blk.ff_name[m-2] == 'E' && blk.ff_name[m-3] == 'R')) {
                   sscanf(blk.ff_name,"%4x%4x.%c",&net,&node,&c);
 
-                  i = no_dups(net,node);
-
-                  if (p == NULL)
+                  if (p == NULL) {
+                     i = no_dups (alias[0].zone, net, node);
                      call_list[i].zone = alias[0].zone;
+                  }
                   else {
                      sscanf (&p[1], "%3x", &z);
+                     i = no_dups (z, net, node);
                      call_list[i].zone = z;
                   }
 
@@ -78,12 +77,10 @@ void get_call_list()
                   if (blk.ff_name[m-1] == 'T' && blk.ff_name[m-2] == 'U')
                      call_list[i].size += blk.ff_fsize;
 
-                  if (blk.ff_name[m-1] == 'O' && blk.ff_name[m-2] == 'L')
-                  {
+                  if (blk.ff_name[m-1] == 'O' && blk.ff_name[m-2] == 'L') {
                      sprintf(filename,"%s%s",hold_area,blk.ff_name);
                      fp = fopen(filename,"rt");
-                     while (fgets(filename, 99, fp) != NULL)
-                     {
+                     while (fgets(filename, 99, fp) != NULL) {
                         if (filename[strlen(filename)-1] == '\n')
                            filename[strlen(filename)-1] = '\0';
                         if (!findfirst (filename, &blk2, 0))
@@ -110,8 +107,7 @@ void get_call_list()
                      call_list[i].type |= MAIL_HOLD;
                   else if (blk.ff_name[m-3] == 'O' && blk.ff_name[m-2] == 'U')
                      call_list[i].type |= MAIL_NORMAL;
-                  else if (blk.ff_name[m-1] == 'Q' && blk.ff_name[m-2] == 'E' && blk.ff_name[m-3] == 'R')
-                  {
+                  else if (blk.ff_name[m-1] == 'Q' && blk.ff_name[m-2] == 'E' && blk.ff_name[m-3] == 'R') {
                      call_list[i].type |= MAIL_REQUEST;
                      call_list[i].size += blk.ff_fsize;
                   }
@@ -134,8 +130,7 @@ int start;
    row = 4;
    wfill (4, 16, 6, 46, ' ', LCYAN|_BLUE);
 
-   for (i=start;i<max_call;i++)
-   {
+   for (i=start;i<max_call && row<7;i++,row++) {
       sprintf (j, "%d:%d/%d", call_list[i].zone, call_list[i].net, call_list[i].node);
       wprints (row, 18, LCYAN|_BLUE, j);
       if (call_list[i].size < 1024L)
@@ -156,18 +151,16 @@ int start;
          j[v++] = 'R';
       j[v] = '\0';
       wrjusts (row, 45, LCYAN|_BLUE, j);
-      row++;
    }
 }
 
-int no_dups(net, node)
-int net, node;
+static int no_dups (zone, net, node)
+int zone, net, node;
 {
    int i;
 
-   for(i = 0; call_list[i].net; i++)
-   {
-      if (call_list[i].net == net && call_list[i].node == node)
+   for(i = 0; call_list[i].net; i++) {
+      if (call_list[i].zone == zone && call_list[i].net == net && call_list[i].node == node)
          break;
    }
 
@@ -441,7 +434,7 @@ void system_crash()
    struct _usridx usridx;
 
    sprintf(filename, USERON_NAME, sys_path);
-   fd = open(filename, O_RDWR|O_BINARY);
+   fd = shopen(filename, O_RDWR|O_BINARY);
 
    prev = 0L;
 
@@ -467,15 +460,15 @@ void system_crash()
    close(fd);
 
    sprintf (filename, "%s.BBS", user_file);
-   fd = open(filename, O_RDWR|O_BINARY);
+   fd = shopen(filename, O_RDWR|O_BINARY);
    if (fd == -1)
-      fd = open (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+      fd = cshopen (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
    fstat (fd, &statbuf);
 
    sprintf (filename, "%s.IDX", user_file);
-   fdidx = open(filename, O_RDWR|O_BINARY);
+   fdidx = shopen(filename, O_RDWR|O_BINARY);
    if (fdidx == -1)
-      fdidx = open (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+      fdidx = cshopen (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
    fstat (fdidx, &statidx);
 
 
@@ -513,10 +506,10 @@ void system_crash()
 
          nusers++;
       }
-
-      close (fd);
-      close (fdidx);
    }
+
+   close (fd);
+   close (fdidx);
 
    create_quickbase_file ();
 }
@@ -530,7 +523,7 @@ void get_last_caller()
    memcpy ((char *)&lastcall, 0, sizeof (struct _lastcall));
 
    sprintf(filename, "%sLASTCALL.BBS", sys_path);
-   fd = open(filename, O_RDONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
+   fd = cshopen(filename, O_RDONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
 
    while (read(fd, (char *)&lc, sizeof(struct _lastcall)) == sizeof(struct _lastcall))
    {
@@ -551,7 +544,7 @@ void set_last_caller()
    struct _lastcall lc;
 
    sprintf(filename, "%sLASTCALL.BBS", sys_path);
-   fd = open(filename, O_APPEND|O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
+   fd = cshopen(filename, O_APPEND|O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
 
    memset((char *)&lc, 0, sizeof(struct _lastcall));
 
@@ -645,11 +638,12 @@ void manual_poll ()
 
 static void create_quickbase_file ()
 {
-   int fd, creating, fdidx, fdto;
+   int fd, creating;
+//   int fdidx, fdto;
    word nhdr, nidx, nto;
    char filename[80];
-   struct _msghdr msghdr;
-   struct _msgidx msgidx;
+//   struct _msghdr msghdr;
+//   struct _msgidx msgidx;
    struct _msginfo msginfo;
 
    if (fido_msgpath == NULL)
@@ -658,10 +652,10 @@ static void create_quickbase_file ()
    creating = 0;
 
    sprintf(filename,"%sMSGINFO.BBS",fido_msgpath);
-   fd = open(filename,O_RDONLY|O_BINARY);
+   fd = shopen(filename,O_RDONLY|O_BINARY);
    if (fd == -1)
    {
-      fd = open(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
+      fd = cshopen(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
       if (fd == -1)
          return;
       memset((char *)&msginfo, 0, sizeof(struct _msginfo));
@@ -673,10 +667,10 @@ static void create_quickbase_file ()
    close (fd);
 
    sprintf(filename,"%sMSGIDX.BBS",fido_msgpath);
-   fd = open(filename,O_RDONLY|O_BINARY);
+   fd = shopen(filename,O_RDONLY|O_BINARY);
    if (fd == -1)
    {
-      fd = open(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
+      fd = cshopen(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
       if (fd == -1)
          return;
       creating = 1;
@@ -685,10 +679,10 @@ static void create_quickbase_file ()
    close (fd);
 
    sprintf(filename,"%sMSGHDR.BBS",fido_msgpath);
-   fd = open(filename,O_RDONLY|O_BINARY);
+   fd = shopen(filename,O_RDONLY|O_BINARY);
    if (fd == -1)
    {
-      fd = open(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
+      fd = cshopen(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
       if (fd == -1)
          return;
       creating = 1;
@@ -697,10 +691,10 @@ static void create_quickbase_file ()
    close (fd);
 
    sprintf(filename,"%sMSGTOIDX.BBS",fido_msgpath);
-   fd = open(filename,O_RDONLY|O_BINARY);
+   fd = shopen(filename,O_RDONLY|O_BINARY);
    if (fd == -1)
    {
-      fd = open(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
+      fd = cshopen(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
       if (fd == -1)
          return;
       creating = 1;
@@ -709,10 +703,10 @@ static void create_quickbase_file ()
    close (fd);
 
    sprintf(filename,"%sMSGTXT.BBS",fido_msgpath);
-   fd = open(filename,O_RDONLY|O_BINARY);
+   fd = shopen(filename,O_RDONLY|O_BINARY);
    if (fd == -1)
    {
-      fd = open(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
+      fd = cshopen(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
       if (fd == -1)
          return;
       creating = 1;
@@ -735,10 +729,10 @@ static void create_quickbase_file ()
    status_line ("!Rebuilding QuickBBS message base files");
 
    sprintf(filename,"%sMSGHDR.BBS",fido_msgpath);
-   fd = open(filename,O_RDONLY|O_BINARY);
+   fd = shopen(filename,O_RDONLY|O_BINARY);
    if (fd == -1)
    {
-      fd = open(filename,O_RDONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
+      fd = cshopen(filename,O_RDONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
       if (fd == -1)
          return;
       creating = 1;
@@ -748,10 +742,10 @@ static void create_quickbase_file ()
    msginfo.lowmsg = 65535U;
 
    sprintf(filename,"%sMSGIDX.BBS",fido_msgpath);
-   fdidx = open(filename,O_WRONLY|O_BINARY|O_TRUNC);
+   fdidx = shopen(filename,O_WRONLY|O_BINARY|O_TRUNC);
 
    sprintf(filename,"%sMSGTOIDX.BBS",fido_msgpath);
-   fdto = open(filename,O_WRONLY|O_BINARY|O_TRUNC);
+   fdto = shopen(filename,O_WRONLY|O_BINARY|O_TRUNC);
 
    while (read(fd, (char *)&msghdr, sizeof (struct _msghdr)) == sizeof (struct _msghdr))
    {
@@ -780,7 +774,7 @@ static void create_quickbase_file ()
    close (fd);
 
    sprintf(filename,"%sMSGINFO.BBS",fido_msgpath);
-   fd = open(filename,O_WRONLY|O_BINARY);
+   fd = shopen(filename,O_WRONLY|O_BINARY);
    write(fd, (char *)&msginfo, sizeof(struct _msginfo));
    close (fd);
 */

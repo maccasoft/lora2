@@ -39,6 +39,7 @@ struct _fossil_info
 
 static int fossil_inf(struct _fossil_info far *);
 static void virtual_screen (void);
+void after_door (void);
 
 void setup_screen()
 {
@@ -52,8 +53,13 @@ void setup_screen()
    _winfo.active->wbuf = NULL;
 
    status = wopen(23,0,24,79,5,BLACK|_LGREY,BLACK|_LGREY);
+   after_door();
+}
+
+void after_door ()
+{
    wactiv(status);
-   wprints(0,66,BLACK|_LGREY,"[Time:      ]");
+   wprints(0,65,BLACK|_LGREY," [Time:      ]");
    wprints(1,79 - strlen(reg_prompt),BLACK|_LGREY,reg_prompt);
 
    wactiv(mainview);
@@ -61,50 +67,41 @@ void setup_screen()
 
 void activation_key()
 {
-   int fd, i, n;
-   char *p, xorkey[20], *release_key = "7FE40199";
-   struct _reg_key key;
-   dword crc;
+   int i;
+   dword crc2, crc3, crc10, crc;
 
-   crc = 0xFFFFFFFFL;
+   crc2 = 0x7FE50189L;
+   for (i=0; i<strlen(sysop);i++)
+      crc2 = UpdateCRC ((byte)sysop[i], crc2);
+
+   crc3 = 0x74E40291L;
+   for (i=0; i<strlen(sysop);i++)
+      crc3 = UpdateCRC ((byte)sysop[i], crc3);
+
+   crc10 = 0x7FA45109L;
+   for (i=0; i<strlen(sysop);i++)
+      crc10 = UpdateCRC ((byte)sysop[i], crc10);
+
+   crc = 0x7FE40199L;
+   for (i=0; i<strlen(sysop);i++)
+      crc = UpdateCRC ((byte)sysop[i], crc);
 
    registered = 0;
 
-   fd = open("LORA.KEY", O_RDONLY|O_BINARY);
-   if (fd == -1)
-      return;
-   read (fd, (char *)&key, sizeof(struct _reg_key));
-   close (fd);
-
-   n = 0;
-   p = (char *)&key;
-   sprintf(xorkey, "%d%d%d0",alias[0].zone, alias[0].net, alias[0].node);
-
-   for (i=0; i<sizeof(struct _reg_key);i++)
-   {
-      p[i] = p[i] ^ xorkey[n++];
-      if (xorkey[n] == '\0')
-         n = 0;
-   }
-
-   p = (char *)&key;
-   for (i=0; i<sizeof(struct _reg_key) - sizeof(dword);i++)
-      crc = UpdateCRC ((byte)*p, crc);
-
-   if (crc != key.crc || strcmp(key.release_key, release_key))
+   if (keycode == crc2 && line_offset > 2)
       return;
 
-   if (alias[0].zone != key.zone && alias[0].net != key.net && alias[0].node != key.node)
+   if (keycode == crc3 && line_offset > 3)
       return;
 
-   if (key.maxlines < line_offset)
+   if (keycode == crc10 && line_offset > 10)
       return;
 
-   if (!strcmp(key.sysop, sysop) && key.version >= 200)
-   {
-      reg_prompt = "[Registered]";
-      registered = 1;
-   }
+   if (keycode != crc2 && keycode != crc3 && keycode != crc10 && keycode != crc)
+      return;
+
+   reg_prompt = "[Registered]";
+   registered = 1;
 }
 
 void mtask_find ()
@@ -149,7 +146,7 @@ void write_sysinfo()
    strcode (sysinfo.pwd, "YG&%FYTF%$RTD");
 
    sprintf (filename, "%sSYSINFO.DAT", sys_path);
-   fd = open(filename, O_BINARY|O_RDWR);
+   fd = shopen(filename, O_BINARY|O_RDWR);
    write(fd, (char *)&sysinfo, sizeof(struct _sysinfo));
 
    pos = tell (fd);
@@ -179,10 +176,10 @@ void read_sysinfo()
    struct tm *tim;
 
    sprintf (filename, "%sSYSINFO.DAT", sys_path);
-   fd = open(filename, O_BINARY|O_RDWR);
+   fd = shopen(filename, O_BINARY|O_RDWR);
    if (fd == -1)
    {
-      fd = open(filename, O_BINARY|O_RDWR|O_CREAT,S_IREAD|S_IWRITE);
+      fd = cshopen(filename, O_BINARY|O_RDWR|O_CREAT,S_IREAD|S_IWRITE);
       memset((char *)&sysinfo, 0, sizeof(struct _sysinfo));
       status_line ("!Creating SYSINFO.DAT file");
       write (fd, (char *)&sysinfo, sizeof(struct _sysinfo));
@@ -228,7 +225,7 @@ void firing_up()
                    VERSION, tim->tm_hour, tim->tm_min,
                    tim->tm_mday, mtext[tim->tm_mon], tim->tm_year % 100);
    wputs(buffer);
-   wputs("* Copyright (c) 1989-91 by Marco Maccaferri. All rights reserved.\n");
+   wputs("* Copyright (c) 1989-92 by Marco Maccaferri. All rights reserved.\n");
 }
 
 void get_down(errlev, flag)
@@ -257,7 +254,7 @@ int errlev, flag;
    else if (flag == 3)
       printf("* Exit with errorlevel %d\n", errlev);
 
-   printf("* Lora-CBIS down at %d:%02d %d-%s-%02d\n",
+   printf("* LoraBBS down at %d:%02d %d-%s-%02d\n",
                tim->tm_hour, tim->tm_min,
                tim->tm_mday, mtext[tim->tm_mon], tim->tm_year % 100);
 
@@ -267,8 +264,7 @@ int errlev, flag;
    gotoxy_(20,0);
    printf(msgtxt[M_THANKS], VERSION);
 
-   if (!local_mode)
-   {
+   if (!local_mode) {
       DTR_OFF();
       MDM_DISABLE();
    }
@@ -337,6 +333,10 @@ void terminating_call()
    wactiv(wh);
 
    wcenters(1,LCYAN|_BLUE,"Terminating call");
+
+   if (sq_ptr != NULL)
+      MsgCloseArea (sq_ptr);
+
    modem_hangup();
    update_user();
 }

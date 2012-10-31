@@ -437,8 +437,7 @@ loop:
                big_string (bignum, "%d",usr.account);
                break;
             case '[':
-               p++;
-               change_attr (*p);
+               big_string (bignum, "%d", class[usr_class].max_dl - usr.dnldl);
                break;
             case '\\':
                del_line ();
@@ -1147,8 +1146,7 @@ static void big_string (int big, char *format, ...)
 
    string=(char *)malloc(256);
 
-   if (string==NULL || strlen(format) > 256)
-   {
+   if (string==NULL || strlen(format) > 256) {
       if (string)
          free(string);
       return;
@@ -1158,11 +1156,11 @@ static void big_string (int big, char *format, ...)
    vsprintf(string,format,var_args);
    va_end(var_args);
 
-   if (big)
+   if (!big || (!usr.ansi && !usr.avatar))
+      m_print (string);
+   else
       for (s = string; *s; s++)
          big_char (*s);
-   else
-      m_print (string);
 
    free(string);
 }

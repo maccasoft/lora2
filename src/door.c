@@ -21,17 +21,20 @@
 #include "exec.h"
 
 static void update_status_line (void);
+void after_door (void);
 
 void open_outside_door(s)
 char *s;
 {
         int i, m, oldtime, noreread, retval, oldcume;
         char ext[200], buffer[50], swapping, *args, freeze, tmp[36];
+        char noinfo;
         long t, freeze_time;
         struct _usr tmpusr;
 
         status_line(":External %s", s);
 
+        noinfo = 0;
         freeze = 0;
         swapping = 0;
         m = 0;
@@ -145,6 +148,9 @@ char *s;
                 case 'W':
                         FOSSIL_WATCHDOG (1);
                         break;
+                case 'X':
+                        noinfo = 1;
+                        break;
                 default:
                         ext[m++] = '*';
                         ext[m++] = s[i];
@@ -182,10 +188,12 @@ char *s;
         }
         lorainfo.total_calls = sysinfo.total_calls;
  
-        i = open (buffer, O_WRONLY|O_BINARY|O_TRUNC|O_CREAT, S_IREAD|S_IWRITE);
-        write (i, (char *)&tmpusr, sizeof(struct _usr));
-        write (i, (char *)&lorainfo, sizeof(struct _lorainfo));
-        close (i);
+        if (!noinfo) {
+                i = cshopen (buffer, O_WRONLY|O_BINARY|O_TRUNC|O_CREAT, S_IREAD|S_IWRITE);
+                write (i, (char *)&tmpusr, sizeof(struct _usr));
+                write (i, (char *)&lorainfo, sizeof(struct _lorainfo));
+                close (i);
+        }
 
         read_system_file ("LEAVING");
 
@@ -193,14 +201,19 @@ char *s;
         showcur();
         fclose (logf);
 
+        getcwd (buffer, 49);
+
         if (!swapping)
                 retval = system (ext);
         else
         {
                 if ((args = strchr (ext, ' ')) != NULL)
                    *args++ = '\0';
-                retval = do_exec (ext, args, USE_ALL, 0xFFFF, NULL);
+                retval = do_exec (ext, args, USE_ALL|HIDE_FILE, 0xFFFF, NULL);
         }
+
+        setdisk (buffer[0] - 'A');
+        chdir (buffer);
 
         if (!local_mode)
         {
@@ -212,9 +225,9 @@ char *s;
         if (freeze)
                 allowed += (int)((time(NULL)-freeze_time)/60);
 
-        if (!noreread)
+        if (!noreread && !noinfo)
         {
-                i = open (buffer, O_RDONLY|O_BINARY);
+                i = shopen (buffer, O_RDONLY|O_BINARY);
                 read (i, (char *)&tmpusr, sizeof(struct _usr));
                 read (i, (char *)&lorainfo, sizeof(struct _lorainfo));
                 close (i);
@@ -245,6 +258,7 @@ char *s;
         }
 
         logf = fopen(log_name, "at");
+        setbuf(logf, NULL);
         status_line(":Returned from door (%d)", retval);
 
         unlink(buffer);
@@ -252,7 +266,7 @@ char *s;
         if (local_mode || snooping)
                 showcur();
 
-        setup_screen ();
+        after_door();
         update_status_line ();
 
         read_system_file ("RETURN");
@@ -261,156 +275,7 @@ char *s;
 void outside_door(s)
 char *s;
 {
-        int i, m, retval;
-        char ext[200], buffer[50], swapping, *args, freeze, tmp[36];
-        long freeze_time;
-
-        status_line(":External %s", s);
-
-        freeze = 0;
-        swapping = 0;
-        m = 0;
-        set_useron_record(DOOR, 0, 0);
-        ext[0] = '\0';
-
-        freeze_time = time(NULL);
-
-        for (i=0;i<strlen(s);i++)
-        {
-                if (s[i] != '*')
-                {
-                        if (s[i] == '_')
-                                ext[m++] = ' ';
-                        else if (s[i] == '\\' && s[i+1] == '_')
-                                ext[m++] = s[++i];
-                        else
-                                ext[m++] = s[i];
-
-                        ext[m] = '\0';
-                        continue;
-                }
-
-                switch (s[++i]) {
-                case '#':
-                        lorainfo.wants_chat = 0;
-                        if (function_active == 1)
-                                f1_status();
-                        break;
-                case '!':
-                        freeze = 1;
-                        break;
-                case '0':
-                        strcat(ext, sys.filepath);
-                        m += strlen(sys.filepath);
-                        break;
-                case '1':
-                        strcat(ext, sys.msg_path);
-                        m += strlen(sys.msg_path);
-                        break;
-                case 'B':
-                        sprintf(buffer,"%d", local_mode ? 0 : rate);
-                        strcat(ext, buffer);
-                        m += strlen(buffer);
-                        break;
-                case 'C':
-                        if (getenv("COMSPEC") != NULL)
-                           strcpy(buffer,getenv("COMSPEC"));
-                        strcat(ext, buffer);
-                        m += strlen(buffer);
-                        break;
-                case 'F':
-                        strcpy(tmp, usr.name);
-                        get_fancy_string(tmp, buffer);
-                        strcat(ext, buffer);
-                        m += strlen(buffer);
-                        break;
-                case 'G':
-                        if (usr.ansi)
-                                sprintf(buffer,"%d", 1);
-                        else if (usr.avatar)
-                                sprintf(buffer,"%d", 2);
-                        else
-                                sprintf(buffer,"%d", 0);
-                        strcat(ext, buffer);
-                        m += strlen(buffer);
-                        break;
-                case 'H':
-                        MDM_DISABLE();
-                        break;
-                case 'L':
-                        strcpy(tmp, usr.name);
-                        get_fancy_string(tmp, buffer);
-                        get_fancy_string(tmp, buffer);
-                        strcat(ext, buffer);
-                        m += strlen(buffer);
-                        break;
-                case 'M':
-                        swapping = registered ? 1 : 0;
-                        break;
-                case 'N':
-                        sprintf(buffer,"%d", line_offset);
-                        strcat(ext, buffer);
-                        m += strlen(buffer);
-                        break;
-                case 'P':
-                        sprintf(buffer,"%d", com_port+1);
-                        strcat(ext, buffer);
-                        m += strlen(buffer);
-                        break;
-                case 'R':
-                        sprintf(buffer,"%d", lorainfo.posuser);
-                        strcat(ext, buffer);
-                        m += strlen(buffer);
-                        break;
-                case 'T':
-                        sprintf(buffer,"%d", time_remain());
-                        strcat(ext, buffer);
-                        m += strlen(buffer);
-                        break;
-                case 'W':
-                        FOSSIL_WATCHDOG (1);
-                        break;
-                default:
-                        ext[m++] = '*';
-                        ext[m++] = s[i];
-                        ext[m] = '\0';
-                        break;
-                }
-        }
-
-        translate_filenames (ext, ' ', NULL);
-
-        cclrscrn(LGREY|_BLACK);
-        showcur();
-        fclose (logf);
-
-        if (!swapping)
-                retval = system (ext);
-        else
-        {
-                if ((args = strchr (ext, ' ')) != NULL)
-                   *args++ = '\0';
-                retval = do_exec (ext, args, USE_ALL, 0xFFFF, NULL);
-        }
-
-        if (!local_mode)
-        {
-                com_install (com_port);
-                com_baud (rate);
-                FOSSIL_WATCHDOG (0);
-        }
-
-        if (freeze)
-                allowed += (int)((time(NULL)-freeze_time)/60);
-
-        logf = fopen(log_name, "at");
-        status_line(":Returned from door (%d)", retval);
-
-        if (local_mode || snooping)
-                showcur();
-
-        setup_screen ();
-        update_status_line ();
+   open_outside_door (s);
 }
 
 void translate_filenames(s, mecca_resp, readln)
@@ -831,27 +696,6 @@ int function, zone, net, node, do_stat;
 
       case CLEAR_FLAG:
 
-   /*
-    * Make sure we need to clear something.
-    * Zone should be something other than -1 if that's the case.
-    *
-    */
-      if (last_set_zone == -1)
-         return (TRUE);
-
-   /*
-    * Next compare what we want to clear with what we think we have.
-    *
-    */
-
-      if (last_set_zone != zone ||
-          last_set_net != net ||
-          last_set_node != node)
-         {
-         if (do_stat)
-            status_line (msgtxt[M_BAD_CLEAR_FLAGFILE], zone, net, node);
-         return (TRUE);
-         }             
    /*
     * We match. Unlink the flag file. If we're successful, jam a -1
     * into our saved Zone.

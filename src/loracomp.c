@@ -65,6 +65,7 @@ long get_flags (char *);
 char *replace_blank(char *);
 void process_language (char *, char *);
 void append_backslash (char *);
+void strip_backslash (char *);
 void system_section (void);
 
 struct _sys_idx sysidx;
@@ -78,7 +79,7 @@ void ctrlchand(int sig)
 }
 
         FILE *fp, *fpt;
-        char linea[128], opt[3][60], filename[100];
+        char linea[128], opt[3][60], filename[100], *cfgname = "LORA.CFG";
         int fd, line, def_menu, def_system, def_sched, v;
         int def_first, def_color, t1, t2, fs;
         int fdmd, fdmi, fdfd, fdfi;
@@ -105,11 +106,11 @@ char *argv[];
         fd = -1;
         fdmd = fdmi = fdfd = fdfi = -1;
 
-        printf("\nLORACOMP; Lora-CBIS System File Compiler Version 2.00\n");
-        printf("          CopyRight (c) 1991 by Marco Maccaferri. All Rights Reserved.\n\n");
+        printf("\nLORACOMP; LoraBBS System File Compiler Version 2.10\n");
+        printf("          CopyRight (c) 1991-92 by Marco Maccaferri. All Rights Reserved.\n\n");
 
         if (argc < 2) {
-                printf("Usage: LoraComp [Event] [System] [Menu]\n\n");
+                printf("Usage: LORACOMP [CfgFile] [Event] [System] [Menu]\n\n");
                 printf("Where:\n");
                 printf("       Event  - Compile the Event Schedule Definitions\n");
                 printf("       System - Compile the Message/File Areas Definitions\n");
@@ -120,19 +121,19 @@ char *argv[];
 
         for (v = 1; v < argc; v++) {
                 argv[v][0] = tolower(argv[v][0]);
-                if (argv[v][0] != 'e' && argv[v][0] != 's' && argv[v][0] != 'm')
+                if (argv[v][0] != 'e' && argv[v][0] != 's' && argv[v][0] != 'm') {
+                        cfgname = argv[v];
                         continue;
+                }
 
                 if (argv[v][0] == 'e')
                         printf("Compile the Event Schedule Definitions\n");
                 if (argv[v][0] == 's')
                         printf("Compile the Message/File Areas Definitions\n");
-                if (argv[v][0] == 'm')
-                        printf("Compile the Menu/Language Structure Definitions\n");
 
-                fp = fopen("LORA.CFG","rt");
+                fp = fopen(cfgname,"rt");
                 if (fp == NULL) {
-                        printf ("Couldn't read LORA.CFG file\n");
+                        printf ("Couldn't read %s file\n", strupr(cfgname));
                         exit (1);
                 }
 
@@ -141,15 +142,8 @@ char *argv[];
                 def_system = 0;
                 def_sched = 0;
 
-                if (argv[v][0] == 'e') {
+                if (argv[v][0] == 'e')
                         memset((char *)&sched,0,sizeof(EVENT));
-                        if (fd != -1)
-                                close(fd);
-                        fd = open("SCHED.DAT",O_WRONLY|O_BINARY|O_CREAT|O_TRUNC,S_IREAD|S_IWRITE);
-                        write(fd, BinkSched, 16);
-                        close(fd);
-                        fd = -1;
-                }
 
 continue_scan:
                 while (fgets(linea, 255, fp) != NULL) {
@@ -180,6 +174,15 @@ continue_scan:
                         {
                                 schedpath = (char *)malloc(strlen(opt[1])+1);
                                 strcpy(schedpath, opt[1]);
+                                if (fd != -1)
+                                        close(fd);
+                                if (argv[v][0] == 'e') {
+                                        memset((char *)&sched,0,sizeof(EVENT));
+                                        fd = open("SCHED.DAT",O_WRONLY|O_BINARY|O_CREAT|O_TRUNC,S_IREAD|S_IWRITE);
+                                        write(fd, BinkSched, 16);
+                                        close(fd);
+                                        fd = -1;
+                                }
                         }
 
                         else if (!stricmp(opt[0],"SYSTEM_PATH"))
@@ -306,6 +309,8 @@ continue_scan:
                                         sched.wait_time = atoi(opt[1]);
                                 else if (!stricmp(opt[0],"CRASHMAIL_ONLY"))
                                         sched.behavior |= MAT_CM;
+                                else if (!stricmp(opt[0],"RESYNC_CLOCK"))
+                                        sched.behavior |= MAT_RESYNC;
                                 else if (!stricmp(opt[0],"DYNAMIC"))
                                         sched.behavior |= MAT_DYNAM;
                                 else if (!stricmp(opt[0],"BBS_ALLOWED"))
@@ -399,7 +404,10 @@ continue_scan:
                                         strcpy(idxmkey, replace_blank(opt[1]));
                                 else if (!stricmp(opt[0],"MESSAGE_PATH"))
                                 {
-                                        append_backslash (opt[1]);
+                                        if (!sys.squish)
+                                                append_backslash (opt[1]);
+                                        else
+                                                strip_backslash (opt[1]);
                                         strcpy(sys.msg_path, opt[1]);
                                 }
                                 else if (!stricmp(opt[0],"ORIGIN_LINE"))
@@ -459,6 +467,10 @@ void system_section ()
                                         strcpy(sys.echotag, opt[1]);
                                 else if (!stricmp(opt[0],"QUICK_BOARD"))
                                         sys.quick_board = atoi(opt[1]);
+                                else if (!stricmp(opt[0],"SQUISH_MESSAGE")) {
+                                        sys.squish = 1;
+                                        strip_backslash (sys.msg_path);
+                                }
                                 else if (!stricmp(opt[0],"PIP_BOARD"))
                                         sys.pip_board = atoi(opt[1]);
                                 else if (!stricmp(opt[0],"MESSAGE_PRIV"))
@@ -611,17 +623,17 @@ void system_section ()
 int get_priv(txt)
 char *txt;
 {
-	int i, priv;
+   int i, priv;
 
-	priv = HIDDEN;
+   priv = HIDDEN;
 
-	for (i=0;i<12;i++)
-		if (!stricmp(levels[i].p_string, txt)) {
-			priv = levels[i].p_length;
-			break;
-		}
+   for (i = 0; i < 12; i++)
+      if (toupper(levels[i].p_string[0]) == toupper(txt[0])) {
+         priv = levels[i].p_length;
+         break;
+      }
 
-	return (priv);
+   return (priv);
 }
 
 int get_day(txt)
@@ -660,6 +672,16 @@ char *s;
         i = strlen(s) - 1;
         if (s[i] != '\\')
                 strcat (s, "\\");
+}
+
+void strip_backslash (s)
+char *s;
+{
+        int i;
+
+        i = strlen(s) - 1;
+        if (s[i] == '\\')
+                s[i] = '\0';
 }
 
 long get_flags (char *p)

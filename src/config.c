@@ -19,7 +19,7 @@ int far parse_config()
 {
    FILE *fp;
    char linea[256], opt[13][50], *p;
-   int line, cur_alias, i, cur_lang, nscan;
+   int line, cur_alias, i, cur_lang, nscan, cur_sync;
    unsigned long crc;
    MDM_TRNS *tmm, *mm;
 
@@ -27,8 +27,7 @@ int far parse_config()
    _vinfo.dvcheck = 0;
    videoinit();
 
-   if ((p=getenv ("LORA")) != NULL)
-   {
+   if ((p=getenv ("LORA")) != NULL) {
       strcpy (linea, p);
       append_backslash (linea);
       strcat (linea, config_file);
@@ -36,8 +35,7 @@ int far parse_config()
    }
 
    fp = fopen(config_file,"rt");
-   if (fp == NULL)
-   {
+   if (fp == NULL) {
       printf (msgtxt[M_NO_CTL_FILE], config_file);
       exit (250);
    }
@@ -47,9 +45,9 @@ int far parse_config()
    line = 0;
    cur_alias = 0;
    cur_lang = 0;
+   cur_sync = 0;
 
-   while (fgets(linea, 255, fp) != NULL)
-   {
+   while (fgets(linea, 255, fp) != NULL) {
       ++line;
 
       linea[strlen(linea)-1] = '\0';
@@ -68,16 +66,48 @@ int far parse_config()
 
       switch (crc)
       {
-      case 0x52675BBC:   /* NO_ANSILOGON */
+      case 0x08F6F13CL:   /* MAX_KBYTES */
+         norm_max_kbytes = atoi(opt[1]);
+         break;
+      case 0x3A957DA0L:   /* PROT_MAX_KBYTES */
+         prot_max_kbytes = atoi(opt[1]);
+         break;
+      case 0x9BDA3BA0L:   /* KNOW_MAX_KBYTES */
+         know_max_kbytes = atoi(opt[1]);
+         break;
+      case 0x250D8180L:   /* REGISTRATION_KEY */
+         keycode = atol (opt[1]);
+         break;
+      case 0xA2564291L:   /* NETMAIL */
+         break;
+      case 0x299701B6L:   /* SYSTEM_LOCATION */
+         location = (char *)malloc(strlen(opt[1])+1);
+         strcpy(location, replace_blank (opt[1]));
+         break;
+      case 0x7DE1BF9EL:   /* SYSTEM_PHONE */
+         phone = (char *)malloc(strlen(opt[1])+1);
+         strcpy(phone, opt[1]);
+         break;
+      case 0x32AB69F9L:   /* SYSTEM_FLAGS */
+         flags = (char *)malloc(strlen(opt[1])+1);
+         strcpy(flags, opt[1]);
+         break;
+      case 0x78F48F39L:   /* NO_EMSI */
+         noask.emsi = 1;
+         break;
+      case 0xF1D22F81L:   /* NO_LOGON_CHECKFILES */
+         noask.checkfile = 1;
+         break;
+      case 0x52675BBCL:   /* NO_ANSILOGON */
          noask.ansilogon = 1;
          break;
-      case 0x60F83BF0:   /* NO_BIRTHDATE */
+      case 0x60F83BF0L:   /* NO_BIRTHDATE */
          noask.birthdate = 1;
          break;
-      case 0xC2ED9051:   /* NO_VOICEPHONE */
+      case 0xC2ED9051L:   /* NO_VOICEPHONE */
          noask.voicephone = 1;
          break;
-      case 0x50394BF7:   /* NO_DATAPHONE */
+      case 0x50394BF7L:   /* NO_DATAPHONE */
          noask.dataphone = 1;
          break;
       case 0xBD5F1FACL:   /* ABOUT */
@@ -143,6 +173,9 @@ int far parse_config()
       case 0x8809A390L:   /* EXIT_14400 */
          exit14400 = atoi (opt[1]);
          break;
+      case 0x2B1A927FL:   /* EXIT_16800 */
+         exit16800 = atoi (opt[1]);
+         break;
       case 0x7EEE07FFL:   /* EXIT_19200 */
          exit19200 = atoi (opt[1]);
          break;
@@ -194,8 +227,7 @@ int far parse_config()
          strcpy(know_request_list, opt[1]);
          break;
       case 0xED171206L:   /* LANGUAGE */
-         if (cur_lang < MAX_LANG)
-         {
+         if (cur_lang < MAX_LANG) {
             lang_name[cur_lang] = (char *)malloc(strlen(opt[1])+1);
             strcpy(lang_name[cur_lang], opt[1]);
             lang_keys[cur_lang] = toupper(opt[2][0]);
@@ -257,8 +289,10 @@ int far parse_config()
          strcpy(dial, opt[1]);
          break;
       case 0x15DED6F2L:   /* MODEM_INIT */
-         init = (char *)malloc(strlen(opt[1])+1);
-         strcpy(init, opt[1]);
+         if (init == NULL) {
+            init = (char *)malloc(strlen(opt[1])+1);
+            strcpy(init, opt[1]);
+         }
          break;
       case 0x903B6F4AL:   /* MODEM_PORT */
          if (!speed)
@@ -329,6 +363,16 @@ int far parse_config()
          QWKDir = (char *)malloc(strlen(opt[1])+1);
          strcpy(QWKDir, opt[1]);
          break;
+      case 0x44860CEEL:   /* RESYNC_CLOCK */
+         if (cur_sync < MAX_RESYNC) {
+            sscanf(opt[1],"%d:%d/%d",&resync[cur_sync].zone,&resync[cur_sync].net,&resync[cur_sync].node);
+            cur_sync++;
+         }
+         break;
+      case 0x1701576AL:   /* RESYNC_DIAL */
+         galileo = (char *)malloc(strlen(opt[1])+1);
+         strcpy(galileo, opt[1]);
+         break;
       case 0x227A4A48L:   /* SCHED_NAME */
          translate_filenames (opt[1], 0, NULL);
          sched_name = (char *)malloc(strlen(opt[1])+1);
@@ -383,10 +427,10 @@ int far parse_config()
          strcpy(answer, opt[1]);
          break;
       case 0x02510977L:   /* MONOCHROME_ATTRIBUTE */
-         _vinfo.mapattr = 1;
+         setvparam (VP_MONO);
          break;
       case 0xE6DE8C50L:   /* NO_DIRECTVIDEO */
-         _vinfo.usebios = 1;
+         setvparam (VP_BIOS);
          break;
       case 0x8A651D2DL:   /* NO_SNOOP */
          snooping = 0;
@@ -413,7 +457,18 @@ int far parse_config()
          strcpy(prot_request_list, opt[1]);
          break;
       case 0x0B26E00EL:   /* SNOW_CHECKING */
-         _vinfo.cgasnow = 1;
+         setvparam (VP_CGA);
+         break;
+      case 0x3DDCD0B2L:   /* VOTE_START */
+         vote_priv = get_priv(opt[1]);
+         break;
+      case 0xC8A88571L:   /* VOTE_TARGET_UP */
+         target_up = atoi(opt[1]);
+         up_priv = get_priv(opt[2]);
+         break;
+      case 0x30B78403L:   /* VOTE_TARGET_DOWN */
+         target_down = atoi(opt[1]);
+         down_priv = get_priv(opt[2]);
          break;
       default:
          printf("Configuration error. Line %d. (%s, Code %08lX)\n\a", line, opt[0], crc);
@@ -438,14 +493,20 @@ void init_system()
    prot_filepath = know_filepath = answer = ext_mail_cmd = NULL;
    ext_editor = norm_filepath = norm_about = norm_availist = NULL;
    norm_request_list = prot_request_list = prot_availist = prot_about = NULL;
-   know_request_list = know_availist = know_about = NULL;
+   galileo = know_request_list = know_availist = know_about = NULL;
+   location = phone = flags = NULL;
    mm_head = NULL;
 
+   vote_priv = up_priv = down_priv = 0;
    logon_priv = TWIT;
+
+   norm_max_kbytes = prot_max_kbytes = know_max_kbytes = max_kbytes = 0;
    CurrentReqLim = max_call = speed_graphics = max_requests = 0;
    registered = line_offset = no_logins = next_call = 0;
    norm_max_requests = prot_max_requests = know_max_requests = 0;
    allowed = assumed = rate = speed = remote_capabilities = 0;
+   target_up = target_down = 0;
+   remote_zone = remote_net = remote_node = remote_point = 0;
    com_port = -1;
 
    answer_flag = lock_baud = terminal = use_tasker = 0;
@@ -460,6 +521,9 @@ void init_system()
    memset((char *)&alias[0], 0, sizeof(struct _alias)*MAX_ALIAS);
    memset((char *)&class[0], 0, sizeof(struct class_rec)*MAXCLASS);
    memset((char *)&noask, 0, sizeof(struct _noask));
+   memset((char *)&resync[0], 0, sizeof(struct _alias)*MAX_RESYNC);
+
+   sq_ptr = NULL;
 
    strcpy (area_change_key, "[]?");
 
@@ -567,6 +631,10 @@ char **argv;
          mdm_flags = &argv[i][2];
          break;
 
+      case 'I':
+         init = &argv[i][2];
+         break;
+
       case 'L':
          local_mode = 1;
          break;
@@ -579,6 +647,10 @@ char **argv;
 
       case 'N':
          line_offset = atoi(&argv[i][2]);
+         break;
+
+      case 'O':
+         parse_netnode (&argv[i][2], &remote_zone, &remote_net, &remote_node, &remote_point);
          break;
 
       case 'T':

@@ -7,6 +7,7 @@
 #include <io.h>
 #include <fcntl.h>
 #include <alloc.h>
+#include <sys\stat.h>
 
 #include <cxl\cxlstr.h>
 
@@ -270,7 +271,7 @@ int zone, net, node;
    struct _vers7 fnode;
 
    sprintf(stringa,"%sNODEX.DAT",net_info);
-   fdi = open(stringa, O_RDONLY|O_BINARY);
+   fdi = shopen(stringa, O_RDONLY|O_BINARY);
    if(fdi == -1)
    {
       status_line(msgtxt[M_UNABLE_TO_OPEN],stringa);
@@ -363,7 +364,7 @@ int zone, net, node;
    last_zone = zone;
 
    sprintf(stringa,"%sNODELIST.DAT",net_info);
-   fd = open(stringa,O_RDONLY|O_BINARY);
+   fd = shopen(stringa,O_RDONLY|O_BINARY);
    if(fd == -1)
    {
       status_line(msgtxt[M_UNABLE_TO_OPEN],stringa);
@@ -371,7 +372,7 @@ int zone, net, node;
    }
 
    sprintf(stringa,"%sNODELIST.IDX",net_info);
-   fdi=open(stringa,O_RDONLY|O_BINARY);
+   fdi=shopen(stringa,O_RDONLY|O_BINARY);
    if(fdi == -1)
    {
       status_line(msgtxt[M_UNABLE_TO_OPEN],stringa);
@@ -482,7 +483,7 @@ int zone, net, node;
    struct QuickNodeListRecord Rec;
 
    sprintf(stringa,"%sQNL_DAT.BBS",net_info);
-   fd = open(stringa,O_RDONLY|O_BINARY);
+   fd = shopen(stringa,O_RDONLY|O_BINARY);
    if(fd == -1)
    {
       status_line(msgtxt[M_UNABLE_TO_OPEN],stringa);
@@ -490,7 +491,7 @@ int zone, net, node;
    }
 
    sprintf(stringa,"%sQNL_IDX.BBS",net_info);
-   fdi=open(stringa,O_RDONLY|O_BINARY);
+   fdi=shopen(stringa,O_RDONLY|O_BINARY);
    if(fdi == -1)
    {
       status_line(msgtxt[M_UNABLE_TO_OPEN],stringa);

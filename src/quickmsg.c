@@ -38,7 +38,7 @@ int board, area;
    struct _msgidx idx[MAXREADIDX];
 
    sprintf(filename,"%sMSGINFO.BBS",fido_msgpath);
-   fd = open(filename,O_RDONLY|O_BINARY);
+   fd = shopen(filename,O_RDONLY|O_BINARY);
    read(fd, (char *)&msginfo, sizeof(struct _msginfo));
    close (fd);
 
@@ -48,16 +48,14 @@ int board, area;
    i = 1;
 
    sprintf(filename, "%sMSGIDX.BBS",fido_msgpath);
-   fd = open(filename,O_RDONLY|O_BINARY);
+   fd = shopen(filename,O_RDONLY|O_BINARY);
 
    do {
       m = read (fd, (char *)&idx, sizeof(struct _msgidx) * MAXREADIDX);
       m /= sizeof (struct _msgidx);
 
-      for (x = 0; x < m; x++)
-      {
-         if (idx[x].board == board)
-         {
+      for (x = 0; x < m; x++) {
+         if (idx[x].board == board && idx[x].msgnum) {
             msgidx[i++] = tnum_msg;
             msginfo.totalonboard[board-1]++;
          }
@@ -72,14 +70,12 @@ int board, area;
    close(fd);
 
    tnum_msg = msginfo.totalonboard[board-1];
-   if (tnum_msg)
-   {
+   if (tnum_msg) {
       first_msg = 1;
       last_msg = tnum_msg;
       num_msg = tnum_msg;
    }
-   else
-   {
+   else {
       first_msg = 0;
       last_msg = 0;
       num_msg = 0;
@@ -88,19 +84,31 @@ int board, area;
    for (i=0;i<MAXLREAD;i++)
       if (usr.lastread[i].area == area)
          break;
-
    if (i != MAXLREAD) {
-      if (usr.lastread[i].msg_num > last_msg) {
-         i = usr.lastread[i].msg_num - last_msg;
-         usr.lastread[i].msg_num -= i;
-         if (usr.lastread[i].msg_num < 0)
-            usr.lastread[i].msg_num = 0;
-      }
-
+      if (usr.lastread[i].msg_num > last_msg)
+         usr.lastread[i].msg_num = last_msg;
       lastread = usr.lastread[i].msg_num;
    }
-   else
-      lastread = 0;
+   else {
+      for (i=0;i<MAXDLREAD;i++)
+         if (usr.dynlastread[i].area == area)
+            break;
+      if (i != MAXDLREAD) {
+         if (usr.dynlastread[i].msg_num > last_msg)
+            usr.dynlastread[i].msg_num = last_msg;
+         lastread = usr.dynlastread[i].msg_num;
+      }
+      else {
+         lastread = 0;
+         for (i=1;i<MAXDLREAD;i++) {
+            usr.dynlastread[i-1].area = usr.dynlastread[i].area;
+            usr.dynlastread[i-1].msg_num = usr.dynlastread[i].msg_num;
+         }
+
+         usr.dynlastread[i-1].area = area;
+         usr.dynlastread[i-1].msg_num = 0;
+      }
+   }
 }
 
 int quick_read_message(msg_num, flag)
@@ -236,12 +244,12 @@ int msg_num, flag;
 					}
 				}
 
-                                if (!strncmp(buff,"--- ",4) || !strncmp(buff," * Origin: ",11))
+                                if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                                         m_print("%s\n",buff);
                                 else
                                         m_print("%s\n",buff);
 
-                                if (!strncmp(buff," * Origin: ",11))
+                                if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                                         gather_origin_netnode (buff);
                         }
 
@@ -296,12 +304,12 @@ int msg_num, flag;
 				}
 			}
 
-			if (!strncmp(buff,"--- ",4) || !strncmp(buff,"* Origin: ",10))
+                        if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],10))
                                 m_print("%s\n",buff);
 			else
                                 m_print("%s\n",buff);
 
-                        if (!strncmp(buff," * Origin: ",11))
+                        if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                                 gather_origin_netnode (buff);
 
 			if(flag == 1)
@@ -468,12 +476,12 @@ int msg_num;
                                         }
                                 }
 
-                                if (!strncmp(buff,"--- ",4) || !strncmp(buff," * Origin: ",11))
+                                if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                                         m_print("%s\n",buff);
                                 else
                                         m_print("%s\n",buff);
 
-                                if (!strncmp(buff," * Origin: ",11))
+                                if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                                         gather_origin_netnode (buff);
                         }
 
@@ -541,12 +549,12 @@ int msg_num;
                                 }
                         }
 
-                        if (!strncmp(buff,"--- ",4) || !strncmp(buff,"* Origin: ",10))
+                        if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],10))
                                 m_print("%s\n",buff);
                         else
                                 m_print("%s\n",buff);
 
-                        if (!strncmp(buff," * Origin: ",11))
+                        if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                                 gather_origin_netnode (buff);
 
                         if(!(++line < (usr.len-1)) && usr.more)
@@ -580,161 +588,101 @@ int msg_num;
         return(1);
 }
 
-static int quick_msg_attrib(msg_ptr,s,line,f)
-struct _msghdr *msg_ptr;
+static int quick_msg_attrib (msgt, s, line, f)
+struct _msghdr *msgt;
 int s, line, f;
 {
-        char stringa[60];
+   int dy, mo, yr, hh, mm;
+   char stringa[20];
+   struct _msg tmsg;
 
-        m_print(bbstxt[B_FROM]);
+   memset ((char *)&tmsg, 0, sizeof (struct _msg));
 
-//        change_attr(LGREEN|_BLACK);
-        if(sys.netmail) {
-                sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",pascal_string(msg_ptr->whofrom),msg_fzone,msg_ptr->orignet,msg_ptr->orignode,msg_fpoint);
-                m_print("%36s   ",stringa);
-                msg.orig_net = msg_ptr->orignet;
-                msg.orig = msg_ptr->orignode;
-        }
-	else
-                m_print("%-36s   ",pascal_string(msg_ptr->whofrom));
+   if (msgt->msgattr & Q_PRIVATE)
+      tmsg.attr |= MSGPRIVATE;
+   if(msgt->msgattr & Q_RECEIVED)
+      tmsg.attr |= MSGREAD;
+   if(msgt->netattr & Q_CRASH)
+      tmsg.attr |= MSGCRASH;
+   if(msgt->netattr & Q_SENT)
+      tmsg.attr |= MSGSENT;
+   if(msgt->netattr & Q_FILE)
+      tmsg.attr |= MSGFILE;
+   if(msgt->netattr & Q_KILL)
+      tmsg.attr |= MSGKILL;
+   if(msgt->netattr & Q_FRQ)
+      tmsg.attr |= MSGFRQ;
+   if(msgt->netattr & Q_CPT)
+      tmsg.attr |= MSGCPT;
+   if(msgt->netattr & Q_ARQ)
+      tmsg.attr |= MSGARQ;
 
-        strcpy(msg.from, pascal_string(msg_ptr->whofrom));
+   strcpy (tmsg.to, pascal_string (msgt->whoto));
+   strcpy (tmsg.from, pascal_string (msgt->whofrom));
+   strcpy (tmsg.subj, pascal_string (msgt->subject));
 
-        change_attr(WHITE|_BLACK);
-        if(msg_ptr->msgattr & Q_PRIVATE)
-                m_print("PRIV. ");
-	if(msg_ptr->netattr & Q_CRASH)
-                m_print("C.M. ");
-	if(msg_ptr->msgattr & Q_RECEIVED)
-                m_print("LETTO ");
-	if(msg_ptr->netattr & Q_SENT)
-                m_print("INV. ");
-	if(msg_ptr->netattr & Q_FILE)
-                m_print("F/ATT. ");
-	if(msg_ptr->netattr & Q_KILL)
-                m_print("CANC. ");
-	if(msg_ptr->netattr & Q_FRQ)
-                m_print("F/REQ. ");
-	if(msg_ptr->netattr & Q_CPT)
-                m_print("RICEV. ");
-	if(msg_ptr->netattr & Q_ARQ)
-                m_print("AUDIT. ");
+   strcpy(stringa,pascal_string(msgt->date));
+   sscanf(stringa,"%2d-%2d-%2d",&mo,&dy,&yr);
+   strcpy(stringa,pascal_string(msgt->time));
+   sscanf(stringa,"%2d:%2d",&hh,&mm);
+   sprintf(tmsg.date, "%02d %s %02d  %2d:%02d:00", dy, mtext[mo-1], yr, hh, mm);
 
-        m_print(bbstxt[B_ONE_CR]);
-        if ((line=more_question(line)) == 0)
-		return(0);
+   line = msg_attrib (&tmsg, s, line, f);
+   memcpy ((char *)&msg, (char *)&tmsg, sizeof (struct _msg));
 
-	if(!f) {
-                m_print(bbstxt[B_TO]);
-//                change_attr(LGREEN|_BLACK);
-                if(sys.netmail) {
-                        sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",pascal_string(msg_ptr->whoto),msg_tzone,msg_ptr->destnet,msg_ptr->destnode,msg_tpoint);
-                        m_print("%36s   ",stringa);
-                        msg.dest_net = msg_ptr->destnet;
-                        msg.dest = msg_ptr->destnode;
-                }
-		else
-                        m_print("%-36s   ",pascal_string(msg_ptr->whoto));
-
-                strcpy(msg.to, pascal_string(msg_ptr->whoto));
-
-                change_attr(WHITE|_BLACK);
-                m_print("Msg: #%d, ",s);
-                m_print("%s ",pascal_string(msg_ptr->date));
-                m_print("%s\n",pascal_string(msg_ptr->time));
-
-                if ((line=more_question(line)) == 0)
-			return(0);
-	}
-
-        if(msg_ptr->netattr & Q_FILE || msg_ptr->netattr & Q_FRQ)
-                m_print(bbstxt[B_SUBJFILES]);
-        else
-                m_print(bbstxt[B_SUBJECT]);
-//        change_attr(LGREEN|_BLACK);
-        m_print("%s\n",pascal_string(msg_ptr->subject));
-
-        strcpy(msg.subj, pascal_string(msg_ptr->subject));
-
-        if ((line=more_question(line)) == 0)
-		return(0);
-
-        change_attr(CYAN|_BLACK);
-
-	return(line);
+   return (line);
 }
 
-static void quick_text_header(msg_ptr,s,fp)
-struct _msghdr *msg_ptr;
+static void quick_text_header(msgt, s, fp)
+struct _msghdr *msgt;
 int s;
 FILE *fp;
 {
-        char stringa[60];
+   int dy, mo, yr, hh, mm;
+   char stringa[20];
+   struct _msg tmsg;
 
-        fprintf (fp,bbstxt[B_FROM]);
+   memset ((char *)&tmsg, 0, sizeof (struct _msg));
 
-        if(sys.netmail) {
-                if (!msg_fzone)
-                        msg_fzone = alias[0].zone;
-                sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",pascal_string(msg_ptr->whofrom),msg_fzone,msg_ptr->orignet,msg_ptr->orignode,msg_fpoint);
-                fprintf (fp,"%36s   ",stringa);
-                msg.orig_net = msg_ptr->orignet;
-                msg.orig = msg_ptr->orignode;
-        }
-	else
-                fprintf (fp,"%-36s   ",pascal_string(msg_ptr->whofrom));
+   if (msgt->msgattr & Q_PRIVATE)
+      tmsg.attr |= MSGPRIVATE;
+   if(msgt->msgattr & Q_RECEIVED)
+      tmsg.attr |= MSGREAD;
+   if(msgt->netattr & Q_CRASH)
+      tmsg.attr |= MSGCRASH;
+   if(msgt->netattr & Q_SENT)
+      tmsg.attr |= MSGSENT;
+   if(msgt->netattr & Q_FILE)
+      tmsg.attr |= MSGFILE;
+   if(msgt->netattr & Q_KILL)
+      tmsg.attr |= MSGKILL;
+   if(msgt->netattr & Q_FRQ)
+      tmsg.attr |= MSGFRQ;
+   if(msgt->netattr & Q_CPT)
+      tmsg.attr |= MSGCPT;
+   if(msgt->netattr & Q_ARQ)
+      tmsg.attr |= MSGARQ;
 
-        if(msg_ptr->msgattr & Q_PRIVATE)
-                fprintf (fp,"PRIV. ");
-	if(msg_ptr->netattr & Q_CRASH)
-                fprintf (fp,"C.M. ");
-	if(msg_ptr->msgattr & Q_RECEIVED)
-                fprintf (fp,"LETTO ");
-	if(msg_ptr->netattr & Q_SENT)
-                fprintf (fp,"INV. ");
-	if(msg_ptr->netattr & Q_FILE)
-                fprintf (fp,"F/ATT. ");
-	if(msg_ptr->netattr & Q_KILL)
-                fprintf (fp,"CANC. ");
-	if(msg_ptr->netattr & Q_FRQ)
-                fprintf (fp,"F/REQ. ");
-	if(msg_ptr->netattr & Q_CPT)
-                fprintf (fp,"RICEV. ");
-	if(msg_ptr->netattr & Q_ARQ)
-                fprintf (fp,"AUDIT. ");
+   strcpy (tmsg.to, pascal_string (msgt->whoto));
+   strcpy (tmsg.from, pascal_string (msgt->whofrom));
+   strcpy (tmsg.subj, pascal_string (msgt->subject));
 
-        fprintf (fp,bbstxt[B_ONE_CR]);
+   strcpy(stringa,pascal_string(msgt->date));
+   sscanf(stringa,"%2d-%2d-%2d",&mo,&dy,&yr);
+   strcpy(stringa,pascal_string(msgt->time));
+   sscanf(stringa,"%2d:%2d",&hh,&mm);
+   sprintf(tmsg.date, "%02d %s %02d  %2d:%02d:00", dy, mtext[mo-1], yr, hh, mm);
 
-        fprintf (fp,bbstxt[B_TO]);
-        if(sys.netmail) {
-                if (!msg_tzone)
-                        msg_tzone = alias[0].zone;
-                sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",pascal_string(msg_ptr->whoto),msg_tzone,msg_ptr->destnet,msg_ptr->destnode,msg_tpoint);
-                fprintf (fp,"%36s   ",stringa);
-                msg.dest_net = msg_ptr->destnet;
-                msg.dest = msg_ptr->destnode;
-        }
-        else
-                fprintf (fp,"%-36s   ",pascal_string(msg_ptr->whoto));
-
-        fprintf (fp,"Msg: #%d, ",s);
-        fprintf (fp,"%s ",pascal_string(msg_ptr->date));
-        fprintf (fp,"%s\n",pascal_string(msg_ptr->time));
-
-        if(msg_ptr->netattr & Q_FILE || msg_ptr->netattr & Q_FRQ)
-                fprintf (fp,bbstxt[B_SUBJFILES]);
-        else
-                fprintf (fp,bbstxt[B_SUBJECT]);
-        fprintf (fp,"%s\n\n",pascal_string(msg_ptr->subject));
+   text_header (&tmsg, s, fp);
 }
 
 static char *pascal_string(s)
 char *s;
 {
-	strncpy(e_input,(char *)&s[1],(int)s[0]);
-	e_input[(int)s[0]] = '\0';
+   strncpy(e_input,(char *)&s[1],(int)s[0]);
+   e_input[(int)s[0]] = '\0';
 
-	return (e_input);
+   return (e_input);
 }
 
 int quick_write_message_text(msgn, flags, stringa, sm)
@@ -984,6 +932,7 @@ char *txt;
    m_print(bbstxt[B_SAVE_MESSAGE]);
    quick_scan_message_base (sys.quick_board, usr.msg);
    dest = msginfo.highmsg + 1;
+   activation_key ();
    m_print(" #%d ...", last_msg + 1);
 
    sprintf(filename,"%sMSGIDX.BBS",fido_msgpath);
@@ -1016,32 +965,26 @@ char *txt;
 
    memset(text, 0, 256);
 
-   if(sys.netmail)
-   {
-      if (msg_tpoint)
-      {
+   if(sys.netmail) {
+      if (msg_tpoint) {
          sprintf(buffer,msgtxt[M_TOPT], msg_tpoint);
          write_pascal_string (buffer, text, &m, &nb, fp);
       }
-      if (msg_tzone != msg_fzone)
-      {
+      if (msg_tzone != msg_fzone) {
          sprintf(buffer,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
          write_pascal_string (buffer, text, &m, &nb, fp);
       }
    }
 
-   if(sys.echomail)
-   {
+   if(sys.echomail) {
       sprintf(buffer,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
       write_pascal_string (buffer, text, &m, &nb, fp);
       sprintf(buffer,msgtxt[M_MSGID], alias[sys.use_alias].zone, alias[sys.use_alias].net, alias[sys.use_alias].node, time(NULL));
       write_pascal_string (buffer, text, &m, &nb, fp);
    }
 
-   if (txt == NULL)
-   {
-      while(messaggio[i] != NULL)
-      {
+   if (txt == NULL) {
+      while(messaggio[i] != NULL) {
          write_pascal_string (messaggio[i], text, &m, &nb, fp);
 
          if(messaggio[i][strlen(messaggio[i])-1] == '\r')
@@ -1053,9 +996,8 @@ char *txt;
    else {
       int fptxt;
 
-      fptxt = open(txt, O_RDONLY|O_BINARY);
-      if (fptxt == -1)
-      {
+      fptxt = shopen(txt, O_RDONLY|O_BINARY);
+      if (fptxt == -1) {
          fclose(fp);
          unlink(filename);
          return;
@@ -1077,14 +1019,12 @@ char *txt;
 
    write_pascal_string ("\r\n", text, &m, &nb, fp);
 
-   if (strlen(usr.signature) && registered)
-   {
+   if (strlen(usr.signature) && registered) {
       sprintf(buffer,msgtxt[M_SIGNATURE],usr.signature);
       write_pascal_string (buffer, text, &m, &nb, fp);
    }
 
-   if(sys.echomail)
-   {
+   if(sys.echomail) {
       sprintf(buffer,msgtxt[M_TEAR_LINE],VERSION, registered ? "" : NOREG);
       write_pascal_string (buffer, text, &m, &nb, fp);
 
@@ -1169,21 +1109,20 @@ char *txt;
    fwrite((char *)&msginfo,sizeof(struct _msginfo),1,fp);
    fclose(fp);
 
-   if(sys.echomail && sys.echotag[0])
-   {
+   if(sys.echomail && sys.echotag[0]) {
       fp = fopen ("ECHOTOSS.LOG", "at");
       fprintf (fp, "%s\n", sys.echotag);
       fclose (fp);
    }
 
    sprintf(filename,"%sECHOMAIL.BBS",fido_msgpath);
-   i = open (filename, O_WRONLY|O_BINARY|O_CREAT|O_APPEND, S_IREAD|S_IWRITE);
+   i = cshopen (filename, O_WRONLY|O_BINARY|O_CREAT|O_APPEND, S_IREAD|S_IWRITE);
    dest--;
    write (i, (char *)&dest, 2);
    close (i);
 
-   m_print("\n");
-   status_line(":Write message #%d", last_msg);
+   m_print(bbstxt[B_ONE_CR]);
+   status_line(msgtxt[M_INSUFFICIENT_DATA], last_msg);
 }
 
 static void write_pascal_string (st, text, pos, nb, fp)
@@ -1196,11 +1135,9 @@ FILE *fp;
    m = *pos;
    blocks = *nb;
 
-   for (v=0; st[v]; v++)
-   {
+   for (v=0; st[v]; v++) {
       text[m++] = st[v];
-      if (m == 256)
-      {
+      if (m == 256) {
          (unsigned char)text[0] = (unsigned char)m - 1;
          fwrite(text, 256, 1, fp);
          memset(text, 0, 256);
@@ -1221,7 +1158,7 @@ int start, board, verbose;
 	struct _msghdr msgt;
 
         sprintf(filename,"%sMSGHDR.BBS", fido_msgpath);
-	fd = open(filename,O_RDONLY|O_BINARY);
+        fd = shopen(filename,O_RDONLY|O_BINARY);
         if (fd == -1)
                 return;
 
@@ -1241,15 +1178,13 @@ int start, board, verbose;
                 msg_tzone = msgt.destzone;
                 msg_fzone = msgt.origzone;
 
-                if (verbose)
-                {
+                if (verbose) {
                         if ((line = quick_msg_attrib(&msgt,i,line,0)) == 0)
                                 break;
 
                         m_print(bbstxt[B_ONE_CR]);
                 }
-                else
-                {
+                else {
                         m_print ("%-4d %c%-20.20s ",
                                 i,
                                 stricmp (pascal_string(msgt.whofrom), usr.name) ? 'Š' : 'Ž',
@@ -1279,12 +1214,12 @@ int board;
         struct _msghdr msgt, backup;
 
         sprintf(filename,"%sMSGHDR.BBS", fido_msgpath);
-	fd = open(filename,O_RDONLY|O_BINARY);
+        fd = shopen(filename,O_RDONLY|O_BINARY);
         if (fd == -1)
                 return;
 
         sprintf(filename,"%sMSGTXT.BBS", fido_msgpath);
-        fdt = open(filename,O_RDONLY|O_BINARY);
+        fdt = shopen(filename,O_RDONLY|O_BINARY);
         if (fdt == -1)
                 return;
 
@@ -1351,7 +1286,7 @@ int i, line;
    struct _msghdr msgt;
 
    sprintf(filename,"%sMSGHDR.BBS", fido_msgpath);
-   fd = open(filename,O_RDONLY|O_BINARY);
+   fd = shopen(filename,O_RDONLY|O_BINARY);
    if (fd == -1)
       return (0);
 
@@ -1371,5 +1306,53 @@ int i, line;
       return (0);
 
    return (line);
+}
+
+int quick_kill_message (msg_num)
+int msg_num;
+{
+   int fd, fdidx, fdto;
+   char filename[80];
+   struct _msghdr msgt;
+   struct _msgidx idx;
+
+   sprintf (filename, "%sMSGHDR.BBS", fido_msgpath);
+   fd = open (filename, O_RDWR|O_BINARY);
+   if (fd == -1)
+      exit (1);
+
+   sprintf (filename, "%sMSGIDX.BBS", fido_msgpath);
+   fdidx = open(filename,O_RDWR|O_BINARY);
+
+   sprintf (filename, "%sMSGTOIDX.BBS", fido_msgpath);
+   fdto = open(filename,O_RDWR|O_BINARY);
+
+   lseek(fd,(long)sizeof(struct _msghdr) * msgidx[msg_num],SEEK_SET);
+   read(fd,(char *)&msgt,sizeof(struct _msghdr));
+
+   if (!strnicmp (&msgt.whofrom[1], usr.name, msgt.whofrom[0]) ||
+       !strnicmp (&msgt.whoto[1], usr.name, msgt.whoto[0]) || usr.priv == SYSOP) {
+      msgt.msgattr |= Q_RECKILL;
+      msgt.msgnum = 0;
+      lseek (fd, (long)sizeof(struct _msghdr) * msgidx[msg_num], SEEK_SET);
+      write (fd, (char *)&msgt, sizeof(struct _msghdr));
+
+      lseek (fdidx, (long)msgidx[msg_num] * sizeof (struct _msgidx), SEEK_SET);
+      read (fdidx, (char *)&idx, sizeof (struct _msgidx));
+      idx.msgnum = 0;
+      lseek (fdidx, (long)msgidx[msg_num] * sizeof (struct _msgidx), SEEK_SET);
+      write (fdidx, (char *)&idx, sizeof (struct _msgidx));
+
+      lseek (fdto, (long)msgidx[msg_num] * 36, SEEK_SET);
+      write (fdto, "\x0B* Deleted *                        ", 36);
+
+      return (1);
+   }
+
+   close (fd);
+   close (fdto);
+   close (fdidx);
+
+   return (1);
 }
 

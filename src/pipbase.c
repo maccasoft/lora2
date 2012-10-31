@@ -7,6 +7,7 @@
 #include <io.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys\stat.h>
 
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
@@ -274,7 +275,7 @@ int area;
    char fn[80];
 
    sprintf(fn, "%sMPTR%04x.PIP", pip_msgpath, area);
-   f1 = open(fn, O_RDONLY|O_BINARY);
+   f1 = shopen(fn, O_RDONLY|O_BINARY);
    num_msg = (int)(filelength(f1) / sizeof(MSGPTR));
    close(f1);
 
@@ -282,23 +283,33 @@ int area;
    last_msg = num_msg;
 
    for (i=0;i<MAXLREAD;i++)
-      if (usr.lastread[i].area == usr.msg)
+      if (usr.lastread[i].area == area)
          break;
-
-   if (i != MAXLREAD)
-   {
+   if (i != MAXLREAD) {
       if (usr.lastread[i].msg_num > last_msg)
-      {
-         i = usr.lastread[i].msg_num - last_msg;
-         usr.lastread[i].msg_num -= i;
-         if (usr.lastread[i].msg_num < 0)
-            usr.lastread[i].msg_num = 0;
-      }
-
+         usr.lastread[i].msg_num = last_msg;
       lastread = usr.lastread[i].msg_num;
    }
-   else
-      lastread = 0;
+   else {
+      for (i=0;i<MAXDLREAD;i++)
+         if (usr.dynlastread[i].area == area)
+            break;
+      if (i != MAXDLREAD) {
+         if (usr.dynlastread[i].msg_num > last_msg)
+            usr.dynlastread[i].msg_num = last_msg;
+         lastread = usr.dynlastread[i].msg_num;
+      }
+      else {
+         lastread = 0;
+         for (i=1;i<MAXDLREAD;i++) {
+            usr.dynlastread[i-1].area = usr.dynlastread[i].area;
+            usr.dynlastread[i-1].msg_num = usr.dynlastread[i].msg_num;
+         }
+
+         usr.dynlastread[i-1].area = area;
+         usr.dynlastread[i-1].msg_num = 0;
+      }
+   }
 }
 
 static int full_pip_msg_read(area, msg, mark)
@@ -514,12 +525,12 @@ char mark;
                   }
                }
 
-               if (!strncmp(buff,"--- ",4) || !strncmp(buff," * Origin: ",11))
+               if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                   m_print("%s\n",buff);
                else
                   m_print("%s\n",buff);
 
-               if (!strncmp(buff," * Origin: ",11))
+               if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                   gather_origin_netnode (buff);
             }
 
@@ -589,12 +600,12 @@ char mark;
                }
             }
 
-            if (!strncmp(buff,"--- ",4) || !strncmp(buff," * Origin: ",11))
+            if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                m_print("%s\n",buff);
             else
                m_print("%s\n",buff);
 
-            if (!strncmp(buff," * Origin: ",11))
+            if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                gather_origin_netnode (buff);
 
             if(!(++line < (usr.len-1)) && usr.more)
@@ -851,12 +862,12 @@ int flag;
                   }
                }
 
-               if (!strncmp(buff,"--- ",4) || !strncmp(buff," * Origin: ",11))
+               if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                   m_print("%s\n",buff);
                else
                   m_print("%s\n",buff);
 
-               if (!strncmp(buff," * Origin: ",11))
+               if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                   gather_origin_netnode (buff);
             }
 
@@ -919,12 +930,12 @@ int flag;
                }
             }
 
-            if (!strncmp(buff,"--- ",4) || !strncmp(buff," * Origin: ",11))
+            if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                m_print("%s\n",buff);
             else
                m_print("%s\n",buff);
 
-            if (!strncmp(buff," * Origin: ",11))
+            if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                gather_origin_netnode (buff);
 
             if(flag == 1)
@@ -979,6 +990,7 @@ char *txt;
    m_print(bbstxt[B_SAVE_MESSAGE]);
    pip_scan_message_base(sys.pip_board);
    dest = last_msg + 1;
+   activation_key ();
    m_print(" #%d ...",dest);
 
    sprintf(fn,"%sMPTR%04x.PIP", pip_msgpath, sys.pip_board);
@@ -1065,7 +1077,7 @@ char *txt;
       int fptxt, m;
       char buffer[2050];
 
-      fptxt = open(txt, O_RDONLY|O_BINARY);
+      fptxt = shopen(txt, O_RDONLY|O_BINARY);
       if (fptxt != -1)
       {
          do {
@@ -1121,8 +1133,8 @@ char *txt;
       fclose (f2);
    }
 
-   m_print("\n");
-   status_line(":Write message #%d",dest);
+   m_print(bbstxt[B_ONE_CR]);
+   status_line(msgtxt[M_INSUFFICIENT_DATA],dest);
    last_msg = dest;
 }
 
@@ -1500,16 +1512,14 @@ FILE *sm;
             else
                fprintf(fpq,"%s\n",buff);
 
-            if (flags & QUOTE_TEXT)
-            {
+            if (flags & QUOTE_TEXT) {
                strcpy(buff, " > ");
                i = strlen(buff);
             }
             else
                i = 0;
          }
-         else
-         {
+         else {
             if(i<(usr.width-1))
                continue;
 
@@ -1520,16 +1530,14 @@ FILE *sm;
             m=0;
 
             if(i != 0)
-               for(z=i+1;z<(usr.width-1);z++)
-               {
+               for(z=i+1;z<(usr.width-1);z++) {
                   wrp[m++]=buff[z];
                   buff[i]='\0';
                }
 
             wrp[m]='\0';
 
-            if (!shead)
-            {
+            if (!shead) {
                if (flags & INCLUDE_HEADER)
                   text_header (&msgt,msg_num,fpq);
                else if (flags & QWK_TEXTFILE)
@@ -1537,8 +1545,7 @@ FILE *sm;
                shead = 1;
             }
 
-            if (flags & QWK_TEXTFILE)
-            {
+            if (flags & QWK_TEXTFILE) {
                write_qwk_string (buff, qwkbuffer, &pos, &blks, fpq);
                write_qwk_string ("\r\n", qwkbuffer, &pos, &blks, fpq);
             }
@@ -1579,3 +1586,68 @@ FILE *sm;
 
    return (1);
 }
+
+int pip_kill_message (msg)
+int msg;
+{
+   FILE *f1,*f2;
+   MSGPTR hdr;
+   MSGPKTHDR mpkt;
+   char fn[80];
+   struct _msg msgt;
+
+   msg--;
+
+   sprintf (fn, "%sMPTR%04x.PIP", pip_msgpath, sys.pip_board);
+   f1 = fopen (fn, "rb+");
+
+   if (f1 == NULL)
+      return (0);
+
+   if (fseek(f1,sizeof(hdr)*msg,SEEK_SET)) {
+      fclose(f1);
+      return (0);
+   }
+   if (fread(&hdr,sizeof(hdr),1,f1)==0) {
+      fclose(f1);
+      return (0);
+   }
+   if (hdr.status & SET_MPTR_DEL) {
+      fclose(f1);
+      return (0);
+   }
+
+   sprintf(fn,"%sMPKT%04x.PIP", pip_msgpath,sys.pip_board);
+   f2 = fopen(fn,"rb+");
+   if (f2 == NULL) {
+      fclose(f1);
+      return (0);
+   }
+
+   if (!((hdr.status&SET_MPTR_RCVD) || (hdr.status&SET_MPTR_DEL))) {
+      fseek(f2,hdr.pos,SEEK_SET);
+      fread(&mpkt,sizeof(mpkt),1,f2);
+
+      memset ((char *)&msgt, 0, sizeof (struct _msg));
+
+      read0(msgt.date,f2);
+      read0(msgt.to,f2);
+      read0(msgt.from,f2);
+      read0(msgt.subj,f2);
+
+      if (!stricmp (msgt.from, usr.name) || !stricmp (msgt.to, usr.name) || usr.priv == SYSOP) {
+         hdr.status |= SET_MPTR_DEL;
+         fseek (f1, sizeof(hdr) * msg, SEEK_SET);
+         fwrite (&hdr, sizeof(hdr), 1, f1);
+         fclose (f1);
+         fclose (f2);
+         return (1);
+      }
+   }
+
+   fclose (f1);
+   fclose (f2);
+
+   return (0);
+}
+

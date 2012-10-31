@@ -1047,30 +1047,28 @@ int n;
    int i;
    char c[128];
 
-   if (!isdigit (p[n]))
-      {
-      return (0);
-      }
-
    (void) strcpy (c, p);
    (void) strupr (c);
 
-   for (i = n - 11; i < n - 3; i++)
-      {
+   for (i = n - 11; i < n - 3; i++) {
       if ((!isdigit (c[i])) && ((c[i] > 'F') || (c[i] < 'A')))
          return (0);
-      }
+   }
 
-   for (i = 0; i < 7; i++)
-      {
+   if ((c[n] == 'Q') && (c[n-1] == 'E') && (c[n-2] == 'R') && (c[n-3] == '.')) {
+      made_request = 1;
+      return (0);
+   }
+
+   for (i = 0; i < 7; i++) {
       if (strnicmp (&c[n - 2], suffixes[i], 2) == 0)
          break;
-      }
+   }
 
-   if (i >= 7)
-      {
-      return (0);
-      }
+   if (i >= 7) {
+      if ((c[n] != 'T') || (c[n-1] != 'K') || (c[n-2] != 'P') || (c[n-3] != '.'))
+         return (0);
+   }
 
    got_arcmail = 1;
    return (1);

@@ -236,53 +236,57 @@ int external_editor (quote)
 int quote;
 {
    int never;
+   char filename[20];
    struct stat st1, st2;
 
-   if (quote)
-   {
+   strcpy (filename, "MSGTMP");
+
+   if (quote) {
       if (sys.quick_board)
-         quick_write_message_text(lastread, 2, "MSGTMP", NULL);
+         quick_write_message_text(lastread, 2, filename, NULL);
       else if (sys.pip_board)
-         pip_write_message_text(lastread, 2, "MSGTMP", NULL);
+         pip_write_message_text(lastread, 2, filename, NULL);
+      else if (sys.squish)
+         squish_write_message_text(lastread, 2, filename, NULL);
       else
-         write_message_text(lastread, 2, "MSGTMP", NULL);
+         write_message_text(lastread, 2, filename, NULL);
    }
 
-   if (stat ("MSGTMP", &st1))
+   if (stat (filename, &st1))
       never = 1;
    else
       never = 0;
 
    outside_door(ext_editor);
 
-   if (stat ("MSGTMP", &st2) || !st2.st_size)
-   {
-      unlink("MSGTMP");
+   if (stat (filename, &st2) || !st2.st_size) {
+      unlink (filename);
       change_attr (LRED|_BLACK);
       m_print(bbstxt[B_LORE_MSG3]);
       return (0);
    }
 
-   if (!never && st1.st_mtime == st2.st_mtime)
-   {
-      unlink("MSGTMP");
+   if (!never && st1.st_mtime == st2.st_mtime) {
+      unlink (filename);
       change_attr (LRED|_BLACK);
-      m_print(bbstxt[B_LORE_MSG3]);
+      m_print (bbstxt[B_LORE_MSG3]);
       return (0);
    }
 
    cls ();
 
    if (sys.quick_board)
-      quick_save_message("MSGTMP");
+      quick_save_message (filename);
    else if (sys.pip_board)
-      pip_save_message("MSGTMP");
+      pip_save_message (filename);
+   else if (sys.squish)
+      squish_save_message (filename);
    else
-      save_message("MSGTMP");
+      save_message (filename);
 
    usr.msgposted++;
 
-   unlink("MSGTMP");
+   unlink (filename);
    return (1);
 }
 

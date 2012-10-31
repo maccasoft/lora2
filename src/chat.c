@@ -47,7 +47,7 @@ int flag;
 
    line = 5;
    sprintf(linea,USERON_NAME, sys_path);
-   fd = open(linea, O_RDONLY|O_BINARY);
+   fd = shopen(linea, O_RDONLY|O_BINARY);
 
    while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron)) {
       if (useron.donotdisturb || !useron.name[0])
@@ -104,7 +104,7 @@ void online_users (flag)
 
    line = 3;
    sprintf (linea, USERON_NAME, sys_path);
-   fd = open (linea, O_RDONLY|O_BINARY);
+   fd = shopen (linea, O_RDONLY|O_BINARY);
 
    while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron)) {
       if (useron.donotdisturb || !useron.name[0])
@@ -167,7 +167,7 @@ void send_online_message()
    change_attr(LRED|_BLACK);
 
    sprintf(filename, USERON_NAME, sys_path);
-   fd = open(filename, O_RDONLY|O_BINARY);
+   fd = shopen(filename, O_RDONLY|O_BINARY);
    lseek(fd, (long)ul * sizeof(struct _useron), SEEK_SET);
 
    if (read(fd, (char *)&useron, sizeof(struct _useron)) != sizeof(struct _useron) ||
@@ -219,7 +219,7 @@ int sta, toggle, cb;
    struct _useron useron;
 
    sprintf(filename,USERON_NAME, sys_path);
-   fd = open(filename, O_CREAT|O_RDWR|O_BINARY,S_IREAD|S_IWRITE);
+   fd = cshopen(filename, O_CREAT|O_RDWR|O_BINARY,S_IREAD|S_IWRITE);
 
    memset((char *)&useron, 0, sizeof(struct _useron));
 
@@ -274,7 +274,7 @@ char *user_name;
    rc = 0;
 
    sprintf(filename,USERON_NAME, sys_path);
-   fd = open(filename, O_RDONLY|O_BINARY);
+   fd = shopen(filename, O_RDONLY|O_BINARY);
 
    while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron))
       if (!strcmp(useron.name, user_name))
@@ -318,7 +318,7 @@ int flag, cb_num;
 
         line += 5;
         sprintf(linea,USERON_NAME, sys_path);
-        fd = open(linea, O_RDONLY|O_BINARY);
+        fd = shopen(linea, O_RDONLY|O_BINARY);
 
         while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron))
         {
@@ -498,7 +498,7 @@ void cb_chat()
          m_print( linea);
       }
 */
-      fd2 = open(filename, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
+      fd2 = cshopen(filename, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
       if (fd2 != -1)
       {
          if (filelength (fd2) > 0L)
@@ -534,7 +534,7 @@ int cb_num;
    struct _useron useron;
 
    sprintf(filename,USERON_NAME, sys_path);
-   fd = open(filename, O_RDONLY|O_BINARY);
+   fd = shopen(filename, O_RDONLY|O_BINARY);
 
    while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron))
    {
@@ -852,7 +852,7 @@ char *message;
    long cb_time;
 
    sprintf(filename, USERON_NAME, sys_path);
-   fd = open(filename, O_RDONLY|O_BINARY);
+   fd = shopen(filename, O_RDONLY|O_BINARY);
 
    while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron))
    {

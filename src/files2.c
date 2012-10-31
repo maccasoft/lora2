@@ -19,9 +19,6 @@
 
 typedef unsigned int uint;
 
-#define shopen(path,access)       sopen(path,access,SH_DENYNONE,S_IREAD | S_IWRITE)
-#define cshopen(path,access,mode) sopen(path,access,SH_DENYNONE,mode)
-
 #define ts_year(ts)  ((uint)((ts >> 25) & 0x7f) + 1980)
 #define ts_month(ts) ((uint)(ts >> 21) & 0x0f)	    /* 1..12 means Jan..Dec */
 #define ts_day(ts)   ((uint)(ts >> 16) & 0x1f)	    /* 1..31 means 1st..31st */
