@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <dos.h>
 #include <io.h>
+#include <share.h>
 #include <alloc.h>
 #include <fcntl.h>
 #include <string.h>
@@ -14,8 +15,9 @@
 #include <cxl\cxlwin.h>
 #include <cxl\cxlstr.h>
 
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 #include "zmodem.h"
@@ -27,30 +29,34 @@ static void compilation_data(void);
 
 #define MAX_INDEX    500
 
-void software_version()
+void software_version (arguments)
+char *arguments;
 {
    unsigned char c, i;
+#ifndef __OS2__
    union REGS inregs, outregs;
+#endif
+   unsigned pp;
    float t, u;
-   struct dfree df;
+   struct diskfree_t df;
 
    cls();
 
    change_attr(LMAGENTA|_BLACK);
    m_print("%s - The Computer-Based Information System\n", VERSION);
-   m_print("CopyRight (c) 1989-92 by Marco Maccaferri. All Rights Reserved.\n");
+   m_print("CopyRight (c) 1989-93 by Marco Maccaferri. All Rights Reserved.\n");
 
    change_attr(LCYAN|_BLACK);
    m_print("\nJanus revision 0.31 - (C) Copyright 1987-90, Bit Bucket Software Co.\n");
    m_print("MsgAPI - Copyright 1990, 1991 by Scott J. Dudley.  All rights reserved.\n");
-//   m_print("\"Squish\" and \"SquishMail\" are trademarks of Scott J. Dudley.\n");
 
    compilation_data();
 
    activation_key ();
    if (registered)
-      m_print ("Registered to: %s\n               %s\n\n", sysop, system_name);
+      m_print ("Registered to: %s\n               %s\n\n", config->sysop, config->system_name);
 
+#ifndef __OS2__
    c = peekb(0xFFFF,0x000E);
 
    change_attr(WHITE|_BLACK);
@@ -85,33 +91,48 @@ void software_version()
       m_print(bbstxt[B_TYPE_GENERIC]);
       break;
    }
+#else
+   change_attr(WHITE|_BLACK);
+   m_print(bbstxt[B_COMPUTER]);
+   m_print(bbstxt[B_TYPE_GENERIC]);
+#endif
 
-   display_cpu();
+   display_cpu ();
 
-   inregs.h.ah=0x30;
-   intdos(&inregs,&outregs);
-   change_attr(YELLOW|_BLACK);
-   m_print(bbstxt[B_OS_DOS],outregs.h.al,outregs.h.ah);
-   is_4dos();
+#ifdef __OS2__
+   m_print (bbstxt[B_OS_OS2], _osmajor / 10, _osminor);
+   m_print (bbstxt[B_ONE_CR]);
+   m_print (bbstxt[B_ONE_CR]);
+#else
+   inregs.h.ah = 0x30;
+   intdos (&inregs, &outregs);
+   if (outregs.h.al >= 20)
+      m_print (bbstxt[B_OS_OS2], outregs.h.al / 10, outregs.h.ah);
+   else
+      m_print (bbstxt[B_OS_DOS], outregs.h.al, outregs.h.ah);
+   is_4dos( );
 
-   fossil_version2();
+   fossil_version2 ();
 
    change_attr(LGREEN|_BLACK);
    m_print(bbstxt[B_HEAP_RAM], coreleft());
+#endif
 
-   getdfree (3, &df);
-   if ( df.df_sclus != 0xFFFF ) {
-      t = (float)df.df_total * df.df_bsec * df.df_sclus / 1048576L;
-      u = (float)df.df_avail * df.df_bsec * df.df_sclus / 1048576L;
-      m_print (bbstxt[B_GENERAL_FREE1], u, t, (int)(u * 100 / t));
-   }
+   if (strstr (arguments, "/NDSK") == NULL) {
+      if (!_dos_getdiskfree (3, &df)) {
+         t = (float)df.total_clusters * df.bytes_per_sector * df.sectors_per_cluster / 1048576L;
+         u = (float)df.avail_clusters * df.bytes_per_sector * df.sectors_per_cluster / 1048576L;
+         pp = (unsigned )(u * 100 / t);
+         m_print (bbstxt[B_GENERAL_FREE1], u, t, pp);
+      }
 
-   for (i = 4; i <= 26; i++) {
-      getdfree (i, &df);
-      if ( df.df_sclus != 0xFFFF ) {
-         t = (float)df.df_total * df.df_bsec * df.df_sclus / 1048576L;
-         u = (float)df.df_avail * df.df_bsec * df.df_sclus / 1048576L;
-         m_print (bbstxt[B_GENERAL_FREE2], i + 64, u, t, (int)(u * 100 / t));
+      for (i = 4; i <= 26; i++) {
+         if (!_dos_getdiskfree (i, &df)) {
+            t = (float)df.total_clusters * df.bytes_per_sector * df.sectors_per_cluster / 1048576L;
+            u = (float)df.avail_clusters * df.bytes_per_sector * df.sectors_per_cluster / 1048576L;
+            pp = (unsigned )(u * 100 / t);
+            m_print (bbstxt[B_GENERAL_FREE2], i + 64, u, t, pp);
+         }
       }
    }
 
@@ -122,6 +143,7 @@ void software_version()
 
 void is_4dos()
 {
+#ifndef __OS2__
    union REGS inregs, outregs;
 
    inregs.x.ax = 0xD44D;
@@ -130,64 +152,160 @@ void is_4dos()
 
    if (outregs.x.ax == 0x44DD)
       m_print(bbstxt[B_DOS_4DOS], outregs.h.bl, outregs.h.bh);
+#endif
 }
 
 void display_cpu()
 {
-   m_print(" (CPU ");
+   short type;
 
-   asm   pushf
-   asm   xor     dx,dx
-   asm   xor     ax,ax
-   asm   push    ax
-   asm   popf
-   asm   pushf
-   asm   pop     ax
-   asm   and     ax,0f000h
-   asm   cmp     ax,0f000h
-   asm   je      l1
-   asm   mov     ax,07000h
-   asm   push    ax
-   asm   popf
-   asm   pushf
-   asm   pop     ax
-   asm   and     ax,07000h
-   asm   jne     l2
-   m_print("80286");
-   asm   jmp     fine
-l2:
-   m_print("80386");
-   asm   jmp     fine
-l1:
-   asm   mov     ax,0ffffh
-   asm   mov     cl,21h
-   asm   shl     ax,cl
-   asm   je      l3
-   m_print("80186");
-   asm   jmp     fine
-l3:
-   asm   xor     al,al
-   asm   mov     al,40h
-   asm   mul     al
-   asm   je      l4
-   m_print("8086/88");
-   asm   jmp     fine
-l4:
-    m_print("V20/30");
-fine:
-   asm   popf
+   asm pushf                           // Save old flags
 
-   m_print(")\n");
+   asm mov     dx, 86                  // Test for 8086
+   asm push    sp                      // If SP decrements before
+   asm pop     ax                      // a value is PUSHed
+   asm cmp     sp, ax                  // it's a real-mode chip
+   asm jne     Exit                    // 8088,8086,80188,80186,NECV20/V30
+
+   asm mov     dx, 286                 // Test for 286
+   asm pushf                           // If NT (Nested Task)
+   asm pop     ax                      // bit (bit 14) in the
+   asm or      ax, 4000h               // flags register
+   asm push    ax                      // can't be set (in real mode)
+   asm popf                            // then it's a 286
+   asm pushf
+   asm pop     ax
+   asm test    ax, 4000h
+   asm jz      Exit
+
+   asm mov     dx, 386                 // Test for 386/486
+   asm .386                            // do some 32-bit stuff
+   asm mov     ebx, esp                // Zero lower 2 bits of ESP
+   asm and     esp, 0FFFFFFFCh         // to avoid AC fault on 486
+   asm pushfd                          // Push EFLAGS register
+   asm pop     eax                     // EAX = EFLAGS
+   asm mov     ecx, eax                // ECX = EFLAGS
+   asm xor     eax, 40000h             // Toggle AC bit(bit 18)
+                                                // in EFLAGS register
+   asm push    eax                     // Push new value
+   asm popfd                           // Put it in EFLAGS
+   asm pushfd                          // Push EFLAGS
+   asm pop     eax                     // EAX = EFLAGS
+   asm and     eax, 40000h             // Isolate bit 18 in EAX
+   asm and     ecx, 40000h             // Isolate bit 18 in ECX
+   asm cmp     eax, ecx                // Is EAX and ECX equal?
+   asm je      A_386                   // Yup, it's a 386
+   asm mov     dx, 486                 // Nope,it's a 486
+A_386:
+   asm push    ecx                     // Restore
+   asm popfd                           // EFLAGS
+   asm mov     esp, ebx                // Restore ESP
+Exit:
+   asm mov     type, dx                // Put CPU type in type
+   asm popf                            // Restore old flags
+
+   m_print (" (CPU 80%d)\n", type);
 }
 
+/*
+   byte present_86 = 0, present_286 = 0, present_386 = 0, present_486 = 0;
+
+// The purpose of this code is to allow the user the ability to identify the
+// processor and coprocessor that is currently in the system.  The algorithm
+// of the program is to first determine the processor id.
+// When that is accomplished, the program continues to then identify whether
+// a coprocessor exists in the system.  If a coprocessor or integrated
+// coprocessor exists, the program will identify the coprocessor id.  If one
+// does not exist, the program then terminates.
+
+// 8086 CPU check
+// Bits 12-15 are always set on the 8086 processor.
+
+   asm mov cx,0F000H      // handy constant   v5.92
+   asm pushf              // save EFLAGS
+   asm pop bx             // store EFLAGS in BX
+   asm mov ax,0fffh       // clear bits 12-15
+   asm and ax,bx          // in EFLAGS
+   asm push ax            // store new EFLAGS value on stack
+   asm popf               // replace current EFLAGS value
+   asm pushf              // set new EFLAGS
+   asm pop ax             // store new EFLAGS in AX
+   asm and ax,cx          // if bits 12-15 are set, v5.92
+   asm cmp ax,cx          // then CPU is an 8086/8088 v5.92
+   present_86 = 1;
+   asm je msgterm         // if CPU is 8086/8088, check for 8087
+
+// 80286 CPU check
+// Bits 12-15 are always clear on the 80286 processor.
+
+   asm or bx,cx           // try to set bits 12-15  v5.92
+   asm push bx
+   asm popf
+   asm pushf
+   asm pop ax
+   asm and ax,cx          // if bits 12-15 are cleared v5.92
+   present_86 = 0;
+   present_286 = 1;
+   asm jz msgterm         // if CPU is 80286, check for 80287
+
+// i386 CPU check
+// The AC bit, bit #18, is a new bit introduced in the EFLAGS register on the
+//  i486 DX CPU to generate alignment faults.  This bit can be set on the
+//  i486 DX CPU, but not on the i386 CPU.
+
+   asm mov bx,sp          // save current stack pointer to align it
+   asm and sp,not 3       // align stack to avoid AC fault
+   asm db 66h
+   asm pushf              // push original EFLAGS
+   asm db 66h
+   asm pop ax             // get original EFLAGS
+   asm db 66h
+   asm mov cx,ax          // save original EFLAGS
+   asm db 66h             // xor EAX,40000h
+   asm xor ax,0           // flip AC bit in EFLAGS
+   asm dw 4               // upper 16-bits of xor constant
+   asm db 66h
+   asm push ax            // save for EFLAGS
+   asm db 66h
+   asm popf               // copy to EFLAGS
+   asm db 66h
+   asm pushf              // push EFLAGS
+   asm db 66h
+   asm pop ax             // get new EFLAGS value
+   asm db 66h
+   asm xor ax,cx          // if AC bit cannot be changed, CPU is
+   present_286 = 0;
+   present_386 = 1;
+   asm je msgterm         // if CPU is i386, now check for 80287/80387 MCP
+
+// i486 DX CPU / i487 SX MCP and i486 SX CPU checking
+
+   present_386 = 0;
+   present_486 = 1;
+
+msgterm:
+   m_print (" (CPU 80");
+   if (present_86)
+      m_print ("86");
+   else if (present_286)
+      m_print ("286");
+   else if (present_386)
+      m_print ("386");
+   else if (present_486)
+      m_print ("486");
+
+   m_print (")\n");
+*/
 
 void display_area_list(type, flag, sig)   /* flag == 1, Normale due colonne */
 int type, flag, sig;                      /* flag == 2, Normale una colonna */
 {                                         /* flag == 3, Anche nomi, una colonna */
    int fd, fdi, i, pari, area, linea, nsys, nm;
-   char stringa[13], filename[50], dir[80], first;
+   char stringa[80], filename[50], dir[80], first;
    struct _sys tsys;
    struct _sys_idx sysidx[10];
+
+   memset (&tsys, 0, sizeof (struct _sys));
 
    if (!type)
        return;
@@ -214,19 +332,34 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
    }
 
    if (type == 1) {
-      sprintf(filename,"%sSYSMSG.IDX", sys_path);
+      sprintf(filename,"%sSYSMSG.DAT", config->sys_path);
       area = usr.msg;
    }
    else if (type == 2) {
-      sprintf(filename,"%sSYSFILE.IDX", sys_path);
+      sprintf(filename,"%sSYSFILE.DAT", config->sys_path);
       area = usr.files;
    }
    else
       return;
 
-   fdi = shopen(filename, O_RDONLY|O_BINARY);
-   if (fdi == -1)
+   fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD);
+   if (fd == -1)
       return;
+
+   if (type == 1) {
+      sprintf(filename,"%sSYSMSG.IDX", config->sys_path);
+      area = usr.msg;
+   }
+   else if (type == 2) {
+      sprintf(filename,"%sSYSFILE.IDX", config->sys_path);
+      area = usr.files;
+   }
+
+   fdi = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD);
+   if (fdi == -1) {
+      close (fd);
+      return;
+   }
 
    do {
       if (!get_command_word (stringa, 12)) {
@@ -247,20 +380,10 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
       }
 
       if (stringa[0] == area_change_key[2] || (!stringa[0] && !area)) {
-         first = 0;
-         if (type == 1)
-            sprintf(filename,SYSMSG_PATH, sys_path);
-         else if (type == 2)
-            sprintf(filename,"%sSYSFILE.DAT", sys_path);
-         fd = shopen(filename, O_RDONLY|O_BINARY);
-         if (fd == -1) {
-            close (fdi);
-            return;
-         }
-
          cls();
          m_print(bbstxt[B_AREAS_TITLE], (type == 1) ? bbstxt[B_MESSAGE] : bbstxt[B_FILE]);
 
+         first = 0;
          pari = 0;
          linea = 4;
          nm = 0;
@@ -274,6 +397,11 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
                if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
                   continue;
 
+               if (sig) {
+                  if (sysidx[i].sig != sig)
+                     continue;
+               }
+
                if (type == 1) {
                   if (read_system_file ("MSGAREA"))
                      break;
@@ -281,32 +409,42 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
                   lseek(fd, (long)nm * SIZEOF_MSGAREA, SEEK_SET);
                   read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA);
 
-                  if (sig) {
-                     if (tsys.msg_sig != sig && !tsys.msg_restricted)
+                  if (sig || tsys.msg_restricted) {
+                     if (tsys.msg_sig != sig)
                         continue;
                   }
 
                   if (flag == 1) {
-                     strcpy(dir, tsys.msg_name);
+                     strcpy (dir, tsys.msg_name);
                      dir[31] = '\0';
-                     m_print("%3d ... ",sysidx[i].area);
+
+                     sprintf (stringa, "%3d ... %-31s ", sysidx[i].area, dir);
+
                      if (pari) {
-                        m_print("%s\n",dir);
+                        m_print ("%s\n", strtrim (stringa));
                         pari = 0;
                         if (!(linea = more_question(linea)))
                            break;
                      }
                      else {
-                        m_print("%-31s ",dir);
+                        m_print (stringa);
                         pari = 1;
                      }
                   }
-                  else if (flag == 2 || flag == 3) {
-                     m_print("%3d ... ",sysidx[i].area);
-                     if (flag == 3)
-                        m_print("%-12s ",sysidx[i].key);
-                     m_print(" %s\n",tsys.msg_name);
-
+                  else if (flag == 2) {
+                     m_print("%3d ... %s\n", sysidx[i].area, tsys.msg_name);
+                     if (!(linea = more_question(linea)))
+                        break;
+                  }
+                  else if (flag == 3) {
+                     m_print("%3d ... %-12s %s\n", sysidx[i].area, sysidx[i].key, tsys.msg_name);
+                     if (!(linea = more_question(linea)))
+                        break;
+                  }
+                  else if (flag == 4) {
+                     if (!sysidx[i].key[0])
+                        sprintf (sysidx[i].key, "%d", sysidx[i].area);
+                     m_print("%-12s ... %s\n", sysidx[i].key, tsys.msg_name);
                      if (!(linea = more_question(linea)))
                         break;
                   }
@@ -318,40 +456,48 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
                   lseek(fd, (long)nm * SIZEOF_FILEAREA, SEEK_SET);
                   read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA);
 
-                  if (sig) {
-                     if (tsys.file_sig != sig && !tsys.file_restricted)
+                  if (sig || tsys.file_restricted) {
+                     if (tsys.file_sig != sig)
                         continue;
                   }
 
                   if (flag == 1) {
-                     strcpy(dir, tsys.file_name);
+                     strcpy (dir, tsys.file_name);
                      dir[31] = '\0';
-                     m_print("%3d ... ",sysidx[i].area);
+
+                     sprintf (stringa, "%3d ... %-31s ", sysidx[i].area, dir);
+
                      if (pari) {
-                        m_print("%s\n",dir);
+                        m_print ("%s\n", strtrim (stringa));
                         pari = 0;
                         if (!(linea = more_question(linea)))
                            break;
                      }
                      else {
-                        m_print("%-31s ",dir);
+                        m_print (stringa);
                         pari = 1;
                      }
                   }
-                  else if (flag == 2 || flag == 3) {
-                     m_print("%3d ... ",sysidx[i].area);
-                     if (flag == 3)
-                        m_print("%-12s ",sysidx[i].key);
-                     m_print(" %s\n",tsys.file_name);
-
+                  else if (flag == 2) {
+                     m_print("%3d ... %s\n", sysidx[i].area, tsys.file_name);
+                     if (!(linea = more_question(linea)))
+                        break;
+                  }
+                  else if (flag == 3) {
+                     m_print("%3d ... %-12s %s\n", sysidx[i].area, sysidx[i].key, tsys.file_name);
+                     if (!(linea = more_question(linea)))
+                        break;
+                  }
+                  else if (flag == 4) {
+                     if (!sysidx[i].key[0])
+                        sprintf (sysidx[i].key, "%d", sysidx[i].area);
+                     m_print("%-12s ... %s\n", sysidx[i].key, tsys.file_name);
                      if (!(linea = more_question(linea)))
                         break;
                   }
                }
             }
          } while (linea && nsys == 10);
-
-         close(fd);
 
          if (pari)
             m_print(bbstxt[B_ONE_CR]);
@@ -372,7 +518,7 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
          if (i == nsys)
             continue;
 
-         do {
+         for (;;) {
             i++;
             if (i >= nsys) {
                i = 0;
@@ -382,10 +528,17 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
                   nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
                }
                nsys /= sizeof (struct _sys_idx);
+               i = 0;
+            }
+            if (sig) {
+               if (sysidx[i].sig != sig)
+                  continue;
             }
             if (sysidx[i].area == area)
                break;
-         } while (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags);
+            if (usr.priv >= sysidx[i].priv && (usr.flags & sysidx[i].flags) == sysidx[i].flags)
+               break;
+         }
 
          area = sysidx[i].area;
       }
@@ -404,7 +557,7 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
          if (i == nsys)
             continue;
 
-         do {
+         for (;;) {
             i--;
             if (i < 0) {
                if (lseek(fdi, tell(fdi) - (10L + (long)nsys) * sizeof (struct _sys_idx), SEEK_SET) == -1L)
@@ -416,14 +569,21 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
                if (i < 0)
                   break;
             }
+            if (sig) {
+               if (sysidx[i].sig != sig)
+                  continue;
+            }
             if (sysidx[i].area == area)
                break;
-         } while (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags);
+            if (usr.priv >= sysidx[i].priv && (usr.flags & sysidx[i].flags) == sysidx[i].flags)
+               break;
+         }
 
          area = sysidx[i].area;
       }
       else if (strlen(stringa) < 1 && read_system (usr.msg, type)) {
          close (fdi);
+         close (fd);
          return;
       }
       else {
@@ -438,7 +598,11 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
                for(i=0;i<nsys;i++) {
                   if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
                      continue;
-                  if (!stricmp(stringa,sysidx[i].key)) {
+                  if (sig) {
+                     if (sysidx[i].sig != sig)
+                        continue;
+                  }
+                  if (!stricmp(strbtrim (stringa), strbtrim (sysidx[i].key))) {
                      area = sysidx[i].area;
                      break;
                   }
@@ -453,6 +617,10 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
                for(i=0;i<nsys;i++) {
                   if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
                      continue;
+                  if (sig) {
+                     if (sysidx[i].sig != sig)
+                        continue;
+                  }
                   if (sysidx[i].area == area)
                      break;
                }
@@ -465,6 +633,7 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
    } while (area == -1 || !read_system(area, type));
 
    close (fdi);
+   close (fd);
 
    if (type == 1) {
       status_line(msgtxt[M_BBS_EXIT], area, sys.msg_name);
@@ -485,11 +654,18 @@ int sig;
 
    first = 1;
 
-   sprintf(filename,"%sSYSMSG.IDX", sys_path);
-   area = usr.msg;
-   fdi = shopen (filename, O_RDONLY|O_BINARY);
-   if (fdi == -1)
+   sprintf(filename,"%sSYSMSG.DAT", config->sys_path);
+   fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD);
+   if (fd == -1)
       return;
+
+   sprintf(filename,"%sSYSMSG.IDX", config->sys_path);
+   area = usr.msg;
+   fdi = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD);
+   if (fdi == -1) {
+      close (fd);
+      return;
+   }
 
    do {
       if (!get_command_word (stringa, 12)) {
@@ -507,17 +683,10 @@ int sig;
       }
 
       if (stringa[0] == area_change_key[2] || (!stringa[0] && !area)) {
-         first = 0;
-         sprintf(filename,SYSMSG_PATH, sys_path);
-         fd = shopen(filename, O_RDONLY|O_BINARY);
-         if (fd == -1) {
-            close (fdi);
-            return;
-         }
-
          cls();
          m_print(bbstxt[B_AREAS_TITLE], bbstxt[B_MESSAGE]);
 
+         first = 0;
          pari = 0;
          linea = 4;
          nm = 0;
@@ -530,12 +699,16 @@ int sig;
             for (i=0; i < nsys; i++, nm++) {
                if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
                   continue;
+               if (sig) {
+                  if (sysidx[i].sig != sig)
+                     continue;
+               }
 
                lseek(fd, (long)nm * SIZEOF_MSGAREA, SEEK_SET);
                read(fd, (char *)&sys.msg_name, SIZEOF_MSGAREA);
 
                if (sig) {
-                  if (sys.msg_sig != sig && !sys.msg_restricted)
+                  if (sys.msg_sig != sig)
                      continue;
                }
 
@@ -556,8 +729,6 @@ int sig;
                }
             }
          } while (linea && nsys == 10);
-
-         close(fd);
 
          if (pari)
             m_print(bbstxt[B_ONE_CR]);
@@ -630,6 +801,7 @@ int sig;
       }
       else if (strlen(stringa) < 1 && read_system (usr.msg, 1)) {
          close (fdi);
+         close (fd);
          return;
       }
       else {
@@ -644,7 +816,11 @@ int sig;
                for(i=0;i<nsys;i++) {
                   if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
                      continue;
-                  if (!stricmp(stringa,sysidx[i].key)) {
+                  if (sig) {
+                     if (sysidx[i].sig != sig)
+                        continue;
+                  }
+                  if (!stricmp(strbtrim (stringa), strbtrim (sysidx[i].key))) {
                      area = sysidx[i].area;
                      break;
                   }
@@ -659,6 +835,10 @@ int sig;
                for(i=0;i<nsys;i++) {
                   if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
                      continue;
+                  if (sig) {
+                     if (sysidx[i].sig != sig)
+                        continue;
+                  }
                   if (sysidx[i].area == area)
                      break;
                }
@@ -671,17 +851,18 @@ int sig;
    } while (area == -1 || !read_system(area, 1));
 
    close (fdi);
+   close (fd);
 
    status_line(msgtxt[M_BBS_EXIT], area, sys.msg_name);
    usr.msg = area;
 }
 
-int read_system(s, type)
-int s, type;
+int read_system (int s, int type)
 {
-   int fd, nsys, i, mn=0;
+   int fd, nsys, i, mn = 0;
    char filename[50];
    struct _sys_idx sysidx[10];
+   struct _sys tsys;
    MSG *ptr;
 
    if (type != 1 && type != 2)
@@ -693,18 +874,18 @@ int s, type;
    }
 
    if (type == 1)
-      sprintf(filename,"%sSYSMSG.IDX", sys_path);
+      sprintf(filename,"%sSYSMSG.IDX", config->sys_path);
    else if (type == 2)
-      sprintf(filename,"%sSYSFILE.IDX", sys_path);
+      sprintf(filename,"%sSYSFILE.IDX", config->sys_path);
 
-   fd = shopen(filename, O_RDONLY|O_BINARY);
+   fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD);
    if (fd == -1)
       return (0);
 
    do {
       nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
       nsys /= sizeof (struct _sys_idx);
-      for (i=0; i < nsys; i++, mn++) {
+      for (i = 0; i < nsys; i++, mn++) {
          if (sysidx[i].area == s)
             break;
       }
@@ -712,19 +893,28 @@ int s, type;
 
    close (fd);
 
-   if (i == nsys || sysidx[i].priv > usr.priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+   if (i == nsys)
       return (0);
+//   if (usr.name[0] && (sysidx[i].priv > usr.priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags))
+//      return (0);
 
    i = mn;
 
    if (type == 1) {
-      sprintf(filename,SYSMSG_PATH, sys_path);
-      fd = shopen(filename, O_RDONLY|O_BINARY);
+      sprintf(filename,SYSMSG_PATH, config->sys_path);
+      fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD);
       if (fd == -1)
          return (0);
       lseek (fd, (long)i * SIZEOF_MSGAREA, SEEK_SET);
-      read(fd, (char *)&sys.msg_name, SIZEOF_MSGAREA);
+      read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA);
       close(fd);
+
+      if (usr.priv < tsys.msg_priv)
+         return (0);
+      if ((usr.flags & tsys.msg_flags) != tsys.msg_flags)
+         return (0);
+
+      memcpy (&sys, &tsys, SIZEOF_MSGAREA);
 
       if (sys.pip_board) {
          sprintf(filename, "%sMPTR%04x.PIP", pip_msgpath, sys.pip_board);
@@ -763,13 +953,21 @@ int s, type;
       }
    }
    else if (type == 2) {
-      sprintf(filename,"%sSYSFILE.DAT", sys_path);
-      fd = shopen(filename, O_RDONLY|O_BINARY);
-      if (fd == -1)
-         return (0);
+      sprintf(filename,"%sSYSFILE.DAT", config->sys_path);
+      while ((fd = sopen (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+         ;
       lseek (fd, (long)i * SIZEOF_FILEAREA, SEEK_SET);
-      read(fd, (char *)&sys.file_name, SIZEOF_FILEAREA);
+      read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA);
       close(fd);
+
+      if (caller && usr.name[0]) {
+         if (usr.priv < tsys.file_priv)
+            return (0);
+         if ((usr.flags & tsys.file_flags) != tsys.file_flags)
+            return (0);
+      }
+
+      memcpy (&sys.file_name, &tsys.file_name, SIZEOF_FILEAREA);
 
       sys.filepath[strlen (sys.filepath) - 1] = '\0';
       if (!dexists (sys.filepath)) {
@@ -799,11 +997,11 @@ struct _sys *tsys;
    }
 
    if (type == 1)
-      sprintf(filename,"%sSYSMSG.IDX", sys_path);
+      sprintf(filename,"%sSYSMSG.IDX", config->sys_path);
    else if (type == 2)
-      sprintf(filename,"%sSYSFILE.IDX", sys_path);
+      sprintf(filename,"%sSYSFILE.IDX", config->sys_path);
 
-   fd = shopen(filename, O_RDONLY|O_BINARY);
+   fd = cshopen(filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
    if (fd == -1)
       return (0);
 
@@ -824,8 +1022,8 @@ struct _sys *tsys;
    i = mn;
 
    if (type == 1) {
-      sprintf(filename,SYSMSG_PATH, sys_path);
-      fd = shopen(filename, O_RDONLY|O_BINARY);
+      sprintf(filename,SYSMSG_PATH, config->sys_path);
+      fd = cshopen(filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
       if (fd == -1)
          return (0);
       lseek (fd, (long)i * SIZEOF_MSGAREA, SEEK_SET);
@@ -833,8 +1031,8 @@ struct _sys *tsys;
       close(fd);
    }
    else if (type == 2) {
-      sprintf(filename,"%sSYSFILE.DAT", sys_path);
-      fd = shopen(filename, O_RDONLY|O_BINARY);
+      sprintf(filename,"%sSYSFILE.DAT", config->sys_path);
+      fd = cshopen(filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
       if (fd == -1)
          return (0);
       lseek (fd, (long)i * SIZEOF_FILEAREA, SEEK_SET);
@@ -848,7 +1046,7 @@ struct _sys *tsys;
 void user_list(args)
 char *args;
 {
-   char stringa[40], linea[80], *p, handle, swap, vote;
+   char stringa[40], linea[80], *p, handle, swap, vote, filebox;
    int fd, line, act, nn, day, mont, year;
    int mdays[] = {31,28,31,30,31,30,31,31,30,31,30,31};
    long days, now;
@@ -858,13 +1056,15 @@ char *args;
    line = 3;
    act = 0;
    nn = 0;
-   vote = handle = swap = 0;
+   filebox = vote = handle = swap = 0;
 
    cls();
 
    change_attr(YELLOW|_BLACK);
    if ((p=strstr (args,"/H")) != NULL)
       handle = 1;
+   if ((p=strstr (args,"/F")) != NULL)
+      filebox = 1;
    if ((p=strstr (args,"/V")) != NULL)
       vote = 1;
    if ((p=strstr (args,"/S")) != NULL)
@@ -923,11 +1123,14 @@ char *args;
    m_print(bbstxt[B_USERLIST_TITLE]);
    m_print(bbstxt[B_USERLIST_UNDERLINE]);
 
-   sprintf(linea, "%s.BBS", user_file);
+   sprintf(linea, "%s.BBS", config->user_file);
    fd=shopen(linea,O_RDONLY|O_BINARY);
 
    while(read(fd,(char *)&tempusr,sizeof(struct _usr)) == sizeof (struct _usr)) {
       if (tempusr.usrhidden || tempusr.deleted || !tempusr.name[0])
+         continue;
+
+      if (filebox && !tempusr.havebox)
          continue;
 
       if (vote && tempusr.priv != vote_priv)
@@ -1006,43 +1209,42 @@ void update_user()
    struct _usridx usridx[MAX_INDEX];
 
    if (!local_mode)
-      FLUSH_OUTPUT();
+      FLUSH_OUTPUT ();
 
    if (usr.name[0] && usr.city[0] && usr.pwd[0]) {
-      sprintf (filename, USERON_NAME, sys_path);
-      fd = shopen (filename, O_RDWR|O_BINARY);
+      sprintf (filename, USERON_NAME, config->sys_path);
+      fd = sh_open (filename, SH_DENYNONE, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
 
       while (fd != -1) {
-         prev = tell(fd);
+         prev = tell (fd);
 
-         if (read(fd, (char *)&useron, sizeof(struct _useron)) != sizeof(struct _useron))
+         if (read (fd, (char *)&useron, sizeof (struct _useron)) != sizeof (struct _useron))
             break;
 
-         if (!strcmp (useron.name,usr.name) && useron.line == line_offset) {
-            lseek(fd,prev,SEEK_SET);
-            memset((char *)&useron, 0, sizeof(struct _useron));
+         if (!strcmp (useron.name, usr.name) && useron.line == line_offset) {
+            lseek (fd, prev, SEEK_SET);
+            memset ((char *)&useron, 0, sizeof(struct _useron));
             write (fd, (char *)&useron, sizeof(struct _useron));
             break;
          }
       }
 
-      close(fd);
+      close (fd);
 
       fflag = 0;
       posit = 0;
 
       crc = crc_name (usr.name);
 
-      sprintf (filename, "%s.IDX", user_file);
-      fd = shopen (filename, O_RDWR|O_BINARY);
+      sprintf (filename, "%s.IDX", config->user_file);
+      fd = sh_open (filename, SH_DENYWR, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
 
       do {
-         i = read(fd,(char *)&usridx,sizeof(struct _usridx) * MAX_INDEX);
+         i = read (fd, (char *)&usridx, sizeof (struct _usridx) * MAX_INDEX);
          m = i / sizeof (struct _usridx);
 
-         for (i=0; i < m; i++)
-            if (usridx[i].id == crc)
-            {
+         for (i = 0; i < m; i++)
+            if (usridx[i].id == crc) {
                m = 0;
                posit += i;
                fflag = 1;
@@ -1055,55 +1257,60 @@ void update_user()
 
       close (fd);
 
-      sprintf (filename, "%s.BBS", user_file);
-
-      fd = shopen (filename, O_RDWR|O_BINARY);
-      lseek (fd, (long)posit * sizeof (struct _usr), SEEK_SET);
-
       if (!fflag)
-         status_line("!Can't update %s",usr.name);
-      else
-      {
-         online = (int)((time(NULL)-start_time)/60);
+         status_line ("!Can't update %s", usr.name);
+      else {
+         online = (int)((time (NULL) - start_time) / 60);
          usr.time += online;
          if (lorainfo.logindate[0])
             strcpy (usr.ldate, lorainfo.logindate);
-         write(fd,(char *)&usr,sizeof(struct _usr));
-         set_last_caller();
+
+         sprintf (filename, "%s.BBS", config->user_file);
+         fd = sh_open (filename, SH_DENYWR, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+         lseek (fd, (long)posit * sizeof (struct _usr), SEEK_SET);
+         write (fd, (char *)&usr, sizeof (struct _usr));
+         close (fd);
+
+         set_last_caller ();
       }
 
-      close(fd);
+      online = (int)((time (NULL) - start_time) / 60);
+      status_line("+%s off-line. Calls=%ld, Len=%d, Today=%d", usr.name, usr.times, online, usr.time);
+      sysinfo.today.humanconnects += time (NULL) - start_time;
+      sysinfo.week.humanconnects += time (NULL) - start_time;
+      sysinfo.month.humanconnects += time (NULL) - start_time;
+      sysinfo.year.humanconnects += time (NULL) - start_time;
    }
 
-   if(usr.name[0])
-   {
-      online = (int)((time(NULL)-start_time)/60);
-      status_line("+%s off-line. Calls=%ld, Len=%d, Today=%d",usr.name,usr.times,online,usr.time);
-   }
-
-   memset(usr.name, 0, 36);
+   memset (usr.name, 0, 36);
 }
 
-void space(s)
-int s;
+void space (int s)
 {
-   while(s-- > 0)
-   {
+   int i;
+
+   for (i = 0; i < s; i++) {
       if (!local_mode)
-         BUFFER_BYTE(' ');
+         BUFFER_BYTE (' ');
       if (snooping)
-         wputc(' ');
+         wputc (' ');
    }
 
    if (!local_mode)
       UNBUFFER_BYTES ();
 }
 
-static void compilation_data()
+static void compilation_data (void)
 {
-  #define COMPILER "Borland C"
-  #define COMPVERMAJ    __TURBOC__/0x100
-  #define COMPVERMIN    __TURBOC__ % 0x100
+#ifdef __OS2__
+  #define COMPILER      "Borland C"
+  #define COMPVERMAJ    1
+  #define COMPVERMIN    0
+#else
+  #define COMPILER      "Borland C"
+  #define COMPVERMAJ    3
+  #define COMPVERMIN    10
+#endif
 
   m_print(bbstxt[B_COMPILER], __DATE__,__TIME__,COMPILER,COMPVERMAJ,COMPVERMIN);
 }
@@ -1115,7 +1322,7 @@ char *args;
    char linea[82], filename[80];
    struct _lastcall lc;
 
-   sprintf(filename, "%sLASTCALL.BBS", sys_path);
+   sprintf(filename, "%sLASTCALL.BBS", config->sys_path);
    fd = shopen(filename, O_RDONLY|O_BINARY);
 
    memset((char *)&lc, 0, sizeof(struct _lastcall));
@@ -1149,7 +1356,7 @@ char *args;
       m_print(linea);
       change_attr(WHITE|_BLACK);
       m_print("%2d    ", lc.line);
-      m_print("%6d ", lc.baud);
+      m_print("%6u ", lc.baud);
       m_print("    %s ", lc.logon);
       m_print("  %s ", lc.logoff);
       m_print(" %5d  ", lc.times);
@@ -1213,7 +1420,7 @@ void message_to_next_caller ()
       return;
    }
 
-   sprintf(filename,"%sNEXT%d.BBS",sys_path,line_offset);
+   sprintf(filename,"%sNEXT%d.BBS",config->sys_path,line_offset);
    fp = fopen(filename,"wb");
    if (fp == NULL) {
       free_message_array ();
@@ -1223,15 +1430,15 @@ void message_to_next_caller ()
    memset((char *)&msg,0,sizeof(struct _msg));
    msg.attr = MSGLOCAL;
 
-   msg.dest_net=alias[sys.use_alias].net;
-   msg.dest=alias[sys.use_alias].node;
+   msg.dest_net=config->alias[sys.use_alias].net;
+   msg.dest=config->alias[sys.use_alias].node;
    strcpy (msg.from, usr.name);
    strcpy (msg.subj, "Logout comment");
    data(msg.date);
    msg.up=0;
-   msg_fzone=alias[sys.use_alias].zone;
-   msg.orig=alias[sys.use_alias].node;
-   msg.orig_net=alias[sys.use_alias].net;
+   msg_fzone=config->alias[sys.use_alias].zone;
+   msg.orig=config->alias[sys.use_alias].node;
+   msg.orig_net=config->alias[sys.use_alias].net;
    time(&t);
    tim=localtime(&t);
    msg.date_written.date=(tim->tm_year-80)*512+(tim->tm_mon+1)*32+tim->tm_mday;
@@ -1262,7 +1469,7 @@ void read_comment ()
    char filename[130], *p;
    struct _msg msgt;
 
-   sprintf(filename,"%sNEXT%d.BBS",sys_path,line_offset);
+   sprintf(filename,"%sNEXT%d.BBS",config->sys_path,line_offset);
    fp = fopen(filename,"rb");
    if (fp == NULL)
       return;
@@ -1276,19 +1483,9 @@ void read_comment ()
    change_attr(LGREY|_BLACK);
 
    while (fgets(filename,128,fp) != NULL) {
-      for (p=filename;(*p) && (*p != 0x1B);p++) {
-         if (!CARRIER || RECVD_BREAK()) {
-            CLEAR_OUTBOUND();
-            fclose(fp);
-            return;
-         }
-
-         if (!local_mode)
-            BUFFER_BYTE(*p);
-         if (snooping)
-            wputc(*p);
-      }
-
+      while (strlen (filename) > 0 && (filename[strlen (filename) - 1] == 0x0D || filename[strlen (filename) - 1] == 0x0A))
+         filename[strlen (filename) -1] = '\0';
+      m_print ("%s\n", filename);
       if (!(line=more_question(line)) || !CARRIER)
          break;
    }
@@ -1303,7 +1500,7 @@ void read_comment ()
       press_enter ();
    }
 
-   sprintf(filename,"%sNEXT%d.BBS",sys_path,line_offset);
+   sprintf(filename,"%sNEXT%d.BBS",config->sys_path,line_offset);
    unlink (filename);
 }
 
@@ -1413,7 +1610,7 @@ void time_statistics ()
    this_call += usr.time * 60;
    m_print (bbstxt[B_TSTATS_4], (int)(this_call/60), (int)(this_call % 60));
    m_print (bbstxt[B_TSTATS_5], time_remain ());
-   m_print (bbstxt[B_TSTATS_6], class[usr_class].max_call);
+   m_print (bbstxt[B_TSTATS_6], config->class[usr_class].max_call);
 
    press_enter ();
 }

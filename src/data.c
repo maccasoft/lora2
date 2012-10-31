@@ -1,29 +1,25 @@
 #include <stdio.h>
 #include <dos.h>
 
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
 #include "sched.h"
 #include "msgapi.h"
+#include "version.h"
 
-char *VERSION = "LoraBBS v2.20", *NOREG = " (Eval.)";
-char *log_name, *user_file, *availist, *about, *text_path, *password;
-char *sys_path, *rookie, *welcome, *newuser2, *sysop, *menu_bbs;
-char *system_name, *hold_area, *filepath, *net_info, *request_list;
-char *banner, *mail_only, *enterbbs, *sched_name, *dateformat, *timeformat;
-char *request_template = "%s%04x%04x.REQ", *ipc_path, *flag_dir;
-char *ext_flags = "ODCH", *fido_msgpath, cmd_string[MAX_CMDLEN];
-char *prot_filepath, *know_filepath, *norm_filepath, *ext_mail_cmd;
+char *log_name, *availist, *about, *text_path, *password;
+char *rookie, *welcome, *newuser2, *sysop;
+char *system_name, *hold_area, *filepath, *request_list;
+char *dateformat, *timeformat;
+char *request_template = "%s%04x%04x.REQ", *ipc_path;
+char *ext_flags = "ODCHI", *fido_msgpath, cmd_string[MAX_CMDLEN];
+char *ext_mail_cmd, usr_rip = 0;
 char *norm_about, *norm_availist, e_input[128], *answer, *mdm_flags;
 char *norm_request_list, *prot_request_list, *prot_availist, *prot_about;
-char *know_request_list, *know_availist, *know_about, *ext_editor;
-char *lang_name[MAX_LANG], *lang_descr[MAX_LANG], area_change_key[3];
-char *pip_msgpath, lang_keys[MAX_LANG], *lang_txtpath[MAX_LANG];
-char *QWKDir, *BBSid, *galileo, *location, *phone, *flags, *glob_text_path;
-char *bad_msgs, *dupes, *netmail_dir, *modem_busy, def_pack, *puma_exe, *hslink_exe;
-char *local_editor, *pre_import, *after_import, *pre_export, *after_export;
-char *pack_zip[MAX_PACKERS], *pack_arj[MAX_PACKERS], *pack_lha[MAX_PACKERS], *pack_lzh[MAX_PACKERS], *pack_arc[MAX_PACKERS], min_calls;
-char *newareas_create, *newareas_link;
+char *know_request_list, *know_availist, *know_about;
+char area_change_key[3];
+char *pip_msgpath;
+char *location, *phone, *flags;
+char *bad_msgs, *dupes, *netmail_dir, *modem_busy, *puma_exe, *hslink_exe;
 
 char *ONLINE_MSGNAME = "%sLINE%d.BBS";
 char *USERON_NAME    = "%sUSERON.BBS";
@@ -32,34 +28,28 @@ char *SYSMSG_PATH    = "%sSYSMSG.DAT";
 
 char use_tasker, local_mode, user_status, frontdoor;
 
-byte logon_priv, vote_priv, up_priv, down_priv, vote_limit;
+byte vote_priv, up_priv, down_priv, vote_limit;
 
 int local_kbd, assumed, have_dv, target_up, target_down, max_kbytes;
 int write_screen, speed_graphics, com_port, know_max_kbytes, prot_max_kbytes;
 int registered, max_requests, next_call, max_call, norm_max_kbytes;
 int no_logins, status, mainview, line_offset, aftermail_exit;
 int isOriginator, CurrentReqLim, locked = 1, blank_timer;
-int made_request, function_active, aftercaller_exit;
+int made_request, function_active, aftercaller_exit, totalmsg;
 int norm_max_requests, prot_max_requests, know_max_requests;
-int remote_zone, remote_net, remote_node, remote_point;
-int called_zone, called_net, called_node, max_readpriv;
-
-char far exit300, exit1200, exit2400, exit9600, exit14400, exit19200;
-char far exit16800, exit38400, exit4800, exit7200, exit12000;
+int remote_zone, remote_net, remote_node, remote_point, have_os2;
+int called_zone, called_net, called_node, max_readpriv, msg_parent, msg_child;
 
 char have_ml, have_tv, have_ddos;
 
-long logon_flags, cps = 0L, keycode = 0L;
+long cps = 0L, keycode = 0L, totaltime;
 
-struct _alias alias[MAX_ALIAS];
-struct class_rec class[MAXCLASS];
+struct _configuration *config = NULL;
 struct _sysinfo sysinfo;
 struct _linestat linestat;
 struct _call_list far call_list[MAX_OUT];
 struct _lastcall lastcall;
 struct _lorainfo lorainfo;
-struct _noask noask;
-struct _alias resync[MAX_RESYNC];
 
 MSG *sq_ptr;
 
@@ -81,7 +71,7 @@ char ctrlc_ctr;
         word speed;
         byte answer_flag;
         byte lock_baud;
-        byte terminal;
+        byte terminal, emulator;
         byte got_arcmail;
         byte caller = 0;
         byte nopause = 0;
@@ -176,9 +166,34 @@ struct parse_list levels[] = {
 	FAVORED, "Favored",
 	EXTRA, "Extra",
 	CLERK, "Clerk",
-	ASSTSYSOP, "Asstsysop",
+        ASSTSYSOP, "Asst. Sysop",
 	SYSOP, "Sysop",
 	HIDDEN, "Hidden"
+};
+
+char *wtext [] = {
+   "Sun",
+   "Mon",
+   "Tue",
+   "Wed",
+   "Thu",
+   "Fri",
+   "Sat"
+};
+
+char *mday[] = {
+   "January",
+   "February",
+   "March",
+   "April",
+   "May",
+   "June",
+   "July",
+   "August",
+   "September",
+   "October",
+   "November",
+   "December"
 };
 
 unsigned long far cr3tab[] = {                /* CRC polynomial 0xedb88320 */
@@ -512,11 +527,11 @@ char *msgtxt[] = {
 /*M_OUT_REQUESTS           */        ":Outbound file requests",
 /*M_END_OUT_REQUESTS       */        ":End of outbound file requests",
 /*-_FREQ_DECLINED          */        "*File Requests declined",
-/*-_ADDRESS                */        "\r\r* Network Address %d:%d/%d.0 Using %s\n\n",
+/*-_ADDRESS                */        "\r\r* Network Address %d:%d/%d.%d Using %s\n\n",
 /*-_NOBODY_HOME            */        "*Sensor doesn't report intelligent life",
 /*-_NO_CARRIER             */        "*Lost Carrier",
 /*-_PROTECTED_SESSION      */        "*Password-protected session",
-/*-_PWD_ERROR              */        "!Password Error from (%d/%d): His='%s' Ours='%s'",
+/*-_PWD_ERROR              */        "!Password Error from (%d:%d/%d.%d): His='%s' Ours='%s'",
 /*-_CALLED                 */        "!Called %d:%d/%d and got %d:%d/%d",
 /*-_WAZOO_METHOD           */        ":WaZOO method: %s",
 /*-_WAZOO_END              */        "*End of WaZOO Session",
@@ -535,9 +550,9 @@ char *msgtxt[] = {
 /*M_EVENT_EXIT             */        "#Exit at start of event with errorlevel %d",
 /*M_BBS_EXIT               */        ":Message Area #%d %s",
 /*M_BBS_SPAWN              */        ":File Area #%d %s",
-/*M_EXT_MAIL               */        "Taking modem off-hook",
-/*M_SETTING_BAUD           */        "Waiting for a call",
-/*-_REMOTE_USES            */        "*Remote Uses",
+/*M_EXT_MAIL               */        "Shutdown",
+/*M_SETTING_BAUD           */        "Idle",
+/*-_REMOTE_USES            */        "*Remote Uses %s",
 /*M_VERSION                */        "Version",
 /*M_PROGRAM                */        "Program",
 /*M_SEND_FALLBACK          */        "*Sending mail using FTS-0001 compatible fallback",
@@ -545,7 +560,7 @@ char *msgtxt[] = {
 /*M_TOO_LONG               */        "!Tired of waiting for other end.",
 /*M_0001_END               */        "*End of FTS-0001 compatible session",
 /*M_RECV_FALLBACK          */        "*Receiving mail using FTS-0001 compatible fallback",
-/*M_GIVING_MAIL            */        "*Giving mail to %d/%d",
+/*M_GIVING_MAIL            */        "*Giving mail to %d:%d/%d.%d",
 /*M_REFUSE_PICKUP          */        "*Node %s refused to pickup mail",
 /*M_MEM_ERROR              */        "!Memory overflow error",
 /*M_OUTBOUND               */        "Outbound",
@@ -570,9 +585,13 @@ char *msgtxt[] = {
 /*M_FUNCTION_KEY           */        ":Function key exit - errorlevel %d",
 /*-_POLL_MODE              */        ":Entering POLL Mode",
 /*-_POLL_COMPLETED         */        ":Poll completed",
-/*-_SHELLING               */        ":Shelling to Command Interpreter",
+#ifdef __OS2__
+/*-_SHELLING               */        ":Invoking OS/2 shell",
+#else
+/*-_SHELLING               */        ":Invoking DOS shell",
+#endif
 /*-_TYPE_EXIT              */        "\nLoraBBS DOS Shell - Type EXIT To Return - Free RAM %ld\n",
-/*-_BINKLEY_BACK           */        ":Lora BBS Reactivated",
+/*-_BINKLEY_BACK           */        ":LoraBBS Reactivated",
 /*M_NONE_EVENTS            */        "Scheduler empty",
 /*-_READY_CONNECT          */        "+Connect %u%s%s",
 /*-_DIALING_NUMBER         */        ":Dialing %s",
@@ -642,7 +661,7 @@ char *msgtxt[] = {
 /*M_CLOSE_MSG              */        "Close",
 /*M_UNLINK_MSG             */        "Unlink",
 /*M_WRITE_MSG              */        "Write",
-/*M_SKIP_MSG               */        "SKIP command received",
+/*M_SKIP_MSG               */        "!SKIP command received",
 /*M_READ_FILE_LIST         */        "#Read File List `%s'",
 /*M_NO_SYSTEM_FILE         */        "!No System file",
 /*M_DL_PATH                */        "!DL-Path: `%s'",
@@ -681,8 +700,8 @@ char *msgtxt[] = {
 /*-_DRIVER_DEAD_3          */        "attempting to run Lora BBS again.\n",
 /*M_FAILED_CREATE_FLAG     */        "!Could not create temp flagfile %s",
 /*M_CREATED_FLAGFILE       */        " Created flagfile %s",
-/*M_THIS_ADDRESS_LOCKED    */        " Other node sending to %d:%d/%d",
-/*M_BAD_CLEAR_FLAGFILE     */        "!Erroneous attempt to clear flag for %d:%d/%d",
+/*M_THIS_ADDRESS_LOCKED    */        " Other node sending to %d:%d/%d.%d",
+/*M_BAD_CLEAR_FLAGFILE     */        "!Erroneous attempt to clear flag for %d:%d/%d.%d",
 /*M_CLEARED_FLAGFILE       */        " Deleted flagfile %s",
 /*M_FAILED_CLEAR_FLAG      */        "!Unable to delete flag file %s",
 /*M_BYTE_LIMIT             */        "!Exceeded file request byte limit",
@@ -696,11 +715,11 @@ char *msgtxt[] = {
 char **bbstxt;
 
 char *protocols [] = {
-        "Xmodem",
-        "1k-Xmodem",
-        "Zmodem",
-        "HS/Link",
-        "Puma",
-        "Sealink"
+   "XXmodem",
+   "11k-Xmodem",
+   "ZZmodem",
+   "HHS/Link",
+   "PPuma",
+   "SSealink"
 };
 

@@ -12,9 +12,11 @@
 #include <alloc.h>
 
 #include <cxl\cxlwin.h>
+#include <cxl\cxlvid.h>
 
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "zmodem.h"
 #include "externs.h"
 #include "prototyp.h"
@@ -22,6 +24,16 @@
 #include "janus.h"
 #include "tc_utime.h"
 
+#define MAX_EMSI_ADDR   30
+
+void update_filesio (int, int);
+void set_prior (int);
+int is_mailpkt (char *p, int n);
+
+extern int emsi;
+extern long tot_sent, tot_rcv;
+extern char oksend[MAX_EMSI_ADDR];
+extern struct _alias addrs[MAX_EMSI_ADDR + 1];
 
 /* Private routines */
 static void getfname(word);
@@ -62,6 +74,7 @@ static char *Rxfname;     /* Full path of file we're receiving               */
 static byte *Rxbufptr;    /* Current position within packet reception buffer */
 static byte *Rxbufmax;    /* Upper bound of packet reception buffer          */
 static byte Do_after;     /* What to do with file being sent when we're done */
+static byte jfsent;       /* Did we manage to send anything this session?    */
 static byte WaitFlag;     /* Tells rcvrawbyte() whether or not to wait       */
 static byte SharedCap;    /* Capability bits both sides have in common       */
 static int Txfile;        /* File handle of file we're sending               */
@@ -79,7 +92,7 @@ static long TotalBytes;   /* Total bytes xferred in this session             */
 static long Txsttime;     /* Time at which we started sending current file   */
 static long Rxsttime;     /* Time at which we started receiving current file */
 
-static int janus_handle;
+// static int janus_handle;
 
 
 /*****************************************************************************/
@@ -92,12 +105,13 @@ void Janus(void) {
    byte pkttype;          /* Type of packet last received                    */
    byte tx_inhibit;       /* Flag to wait and send after done receiving      */
    byte *holdname;        /* Name of hold area                               */
-   byte fsent;            /* Did we manage to send anything this session?    */
    byte sending_req;      /* Are we currently sending requested files?       */
    byte attempting_req;   /* Are we waiting for the sender to start our req? */
    byte req_started;      /* Has the sender started servicing our request?   */
    int txoldeta;          /* Last transmission ETA displayed                 */
    int rxoldeta;          /* Last reception ETA displayed                    */
+   int nreceived;         /* Number of received files                        */
+   int nsent;             /* Number of sent files                            */
    word blklen;           /* Length of last data block sent                  */
    word txblklen;         /* Size of data block to try to send this time     */
    word txblkmax;         /* Max size of data block to send at this speed    */
@@ -120,33 +134,35 @@ void Janus(void) {
    long last_blkpos;      /* File position of last out-of-sequence BLKPKT    */
    FILE *reqfile;         /* File handle for .REQ file                       */
 
-
+//   set_prior (3);                               /* Time Critical             */
    XON_DISABLE();
    sprintf (ReqTmp, "JANUS%03x.TMP", line_offset);
 
    CurrentReqLim = max_requests;
-   janus_handle = -1;
-   Tx_y = 0;
-   Rx_y = 1;
+//   janus_handle = -1;
+   Tx_y = 9;
+   Rx_y = 10;
    SharedCap = 0;
    TotalBytes = 0;
    lasttx = 0L;
    last_blkpos = 0L;
    rxstpos = 0L;
    req_sent = 0;
+   nreceived = nsent = 0;
    time(&starttime);
+   update_filesio (nsent, nreceived);
 
    /*------------------------------------------------------------------------*/
    /* Allocate memory                                                        */
    /*------------------------------------------------------------------------*/
-   Rxbuf = Txbuf + 4096 + 8;
+   Rxbuf = (char *) Txbuf + 4096 + 8;
    Txfname = Rxfname = NULL;
    if (!(Txfname = malloc(PATHLEN)) || !(Rxfname = malloc(PATHLEN))) {
       status_line(msgtxt[M_MEM_ERROR]);
       modem_hangup();
       goto freemem;
    }
-   Rxbufmax = Rxbuf + BUFMAX + 8;
+   Rxbufmax = (byte *) (Rxbuf + BUFMAX + 8);
 
    open_janus_filetransfer();
 
@@ -156,8 +172,8 @@ void Janus(void) {
    tx_inhibit = FALSE;
    last_rpostime = xmit_retry = 0L;
    TimeoutSecs = (unsigned int)(40960U / rate);
-   if (TimeoutSecs < 10)
-      TimeoutSecs = 10;
+   if (TimeoutSecs < 30)
+      TimeoutSecs = 30;
    long_set_timer(&brain_dead,120);
    txblkmax = rate/300 * 128;
    if (txblkmax > BUFMAX)
@@ -165,15 +181,17 @@ void Janus(void) {
    txblklen = txblkmax;
    goodbytes = goodneeded = 0;
    Txfile = -1;
-   sending_req = fsent = FALSE;
+   sending_req = jfsent = FALSE;
    xstate = XSENDFNAME;
    getfname(INITIAL_XFER);
 
    /*------------------------------------------------------------------------*/
    /* Initialize file reception variables                                    */
    /*------------------------------------------------------------------------*/
-   holdname = HoldAreaNameMunge (remote_zone);
-   sprintf(Abortlog_name,"%s%04x%04x.Z\0",holdname,called_net,called_node);
+   holdname = HoldAreaNameMunge (config->alias[0].zone);
+   sprintf(Abortlog_name,"%sRECOVERY.Z\0",holdname);
+//   holdname = HoldAreaNameMunge (remote_zone);
+//   sprintf(Abortlog_name,"%s%04x%04x.Z\0",holdname,called_net,called_node);
 
    Diskavail = (filepath[1] == ':') ? zfree(filepath) : 0x7FFFFFFFL;
    Rxbufptr = NULL;
@@ -237,7 +255,7 @@ void Janus(void) {
             txpos += blklen;
             sendpkt(Txbuf, sizeof(txpos)+blklen, BLKPKT);
             update_status(&txpos,&txoldpos,Txlen-txpos,&txoldeta,Tx_y);
-            fsent = TRUE;
+            jfsent = TRUE;
             if (txpos >= Txlen || blklen < txblklen) {
                long_set_timer(&xmit_retry,TimeoutSecs);
                xstate = XRCVEOFACK;
@@ -322,8 +340,20 @@ void Janus(void) {
                         rxclose(GOOD_XFER);
                         Rxlen -= rxstpos;
                         through(&Rxlen,&Rxsttime);
+                        tot_rcv += Rxlen;
+                        sysinfo.today.bytereceived += Rxlen;
+                        sysinfo.week.bytereceived += Rxlen;
+                        sysinfo.month.bytereceived += Rxlen;
+                        sysinfo.year.bytereceived += Rxlen;
+                        sysinfo.today.filereceived++;
+                        sysinfo.week.filereceived++;
+                        sysinfo.month.filereceived++;
+                        sysinfo.year.filereceived++;
+                        nreceived++;
+                        update_filesio (nsent, nreceived);
                         j_status("%s-J%s %s",msgtxt[M_FILE_RECEIVED], (SharedCap&CANCRC32)?"/32":" ",Rxfname);
-
+//                        prints (10, 65, YELLOW|_BLACK, "              ");
+//                        prints (11, 65, YELLOW|_BLACK, "              ");
                         wgotoxy (Rx_y, 0);
                         wclreol();
 
@@ -383,6 +413,8 @@ void Janus(void) {
                         xstate = XSENDBLK;
                      } else {
                         j_status(msgtxt[M_REMOTE_REFUSED],Txfname);
+//                        prints (8, 65, YELLOW|_BLACK, "              ");
+//                        prints (9, 65, YELLOW|_BLACK, "              ");
                         wgotoxy (Tx_y, 0);
                         wclreol();
                         if (sending_req) {
@@ -410,9 +442,8 @@ void Janus(void) {
                if (xstate == XRCVFNACK) {
                   xmit_retry = 0L;
                   SharedCap = *(strchr(Rxbuf,'\0')+1);
-                  if (CurrentReqLim && CurrentReqLim > 0) {
-                     sprintf(Txbuf,"%s%04X%04X.REQ",filepath,
-                        alias[assumed].net,alias[assumed].node);
+                  if (!max_requests || (CurrentReqLim && CurrentReqLim > 0)) {
+                     sprintf (Txbuf, "%s%04X%04X.REQ", filepath, config->alias[assumed].net, config->alias[assumed].node);
                      errno = 0;
                      reqfile = fopen(Txbuf,"wt");
                      j_error(msgtxt[M_OPEN_MSG],Txbuf);
@@ -461,12 +492,28 @@ void Janus(void) {
                   if (xstate == XRCVEOFACK) {
                      Txlen -= txstpos;
                      through(&Txlen,&Txsttime);
+                     tot_sent += Txlen;
+                     sysinfo.today.bytesent += Txlen;
+                     sysinfo.week.bytesent += Txlen;
+                     sysinfo.month.bytesent += Txlen;
+                     sysinfo.year.bytesent += Txlen;
+                     sysinfo.today.filesent++;
+                     sysinfo.week.filesent++;
+                     sysinfo.month.filesent++;
+                     sysinfo.year.filesent++;
+                     nsent++;
+                     update_filesio (nsent, nreceived);
                      j_status("%s-J%s %s",msgtxt[M_FILE_SENT],(SharedCap&CANCRC32)?"/32":" ",Txfname);
-
+//                     prints (8, 65, YELLOW|_BLACK, "              ");
+//                     prints (9, 65, YELLOW|_BLACK, "              ");
                      wgotoxy (Tx_y, 0);
                      wclreol();
 
                      if (sending_req) {
+                        sysinfo.today.filerequest++;
+                        sysinfo.week.filerequest++;
+                        sysinfo.month.filerequest++;
+                        sysinfo.year.filerequest++;
                         if (!(sending_req = get_reqname(FALSE)))
                            getfname(GOOD_XFER);
                      } else
@@ -533,7 +580,8 @@ giveup:        j_status(msgtxt[M_SESSION_ABORT]);
    /* All done; make sure other end is also finished (one way or another)    */
    /*------------------------------------------------------------------------*/
 breakout:
-   if (!fsent) j_status(msgtxt[M_NOTHING_TO_SEND], remote_zone,remote_net,remote_node,remote_point);
+   if (!jfsent && !emsi)
+      j_status(msgtxt[M_NOTHING_TO_SEND], remote_zone,remote_net,remote_node,remote_point);
 abortxfer:
    through(&TotalBytes,&starttime);
    endbatch();
@@ -548,7 +596,9 @@ freemem:
       free(Txfname);
    if (Rxfname)
       free(Rxfname);
-   flag_file (CLEAR_FLAG, called_zone, called_net, called_node, 1);
+//   if (!emsi)
+//      flag_file (CLEAR_FLAG, called_zone, called_net, called_node, 1);
+//   set_prior (4);                               /* Always High                                     */
 }
 
 
@@ -565,21 +615,91 @@ static void getfname(word xfer_flag) {
    static byte point4d, floflag, bad_xfers, outboundname[PATHLEN];
    static long floname_pos;
    static FILE *flofile;
-   static int have_lock;
+   static int have_lock, whichaka = 0;
    char *holdname;
 
-   register char *p;
-   int i;
+   char *p;
+   int i, v;
    long curr_pos;
    struct stat f;
 
    /*------------------------------------------------------------------------*/
    /* Initialize static variables on first call of the batch                 */
    /*------------------------------------------------------------------------*/
+emsi_send:
    if (xfer_flag == INITIAL_XFER) {
       point4d = floflag = outboundname[0] = '\0';
       flofile = NULL;
-      have_lock = flag_file (TEST_AND_SET, called_zone, called_net, called_node, 1);
+      if (emsi) {
+         if (whichaka != -1) {
+            called_zone = remote_zone = addrs[whichaka].zone;
+            called_net = remote_net = addrs[whichaka].net;
+            called_node = remote_node = addrs[whichaka].node;
+            remote_point = addrs[whichaka].point;
+
+            if (addrs[whichaka].point) {
+               for (v = 0; v < MAX_ALIAS && config->alias[v].net; v++) {
+                  if (!config->alias[v].net)
+                     break;
+                  if (addrs[whichaka].zone == config->alias[v].zone && addrs[whichaka].net == config->alias[v].net && addrs[whichaka].node == config->alias[v].node && config->alias[v].fakenet)
+                     break;
+               }
+
+               if (v < MAX_ALIAS && config->alias[v].net) {
+                  called_node = addrs[whichaka].point;
+                  called_net = config->alias[v].fakenet;
+               }
+               else
+                  called_net = -1;
+            }
+         }
+         else {
+            remote_zone = called_zone;
+            remote_net = called_net;
+            remote_node = called_node;
+            remote_point = 0;
+         }
+
+         if (get_bbs_record (called_zone, called_net, called_node, 0)) {
+            if (nodelist.password[0] && strcmp(strupr(nodelist.password),strupr(remote_password))) {
+               status_line(msgtxt[M_PWD_ERROR],remote_zone,remote_net,remote_node,remote_point,remote_password,nodelist.password);
+               whichaka++;
+               if (addrs[whichaka].net) {
+                  xfer_flag = INITIAL_XFER;
+                  jfsent = 0;
+                  goto emsi_send;
+               }
+               else {
+                  whichaka--;
+                  goto end_send;
+               }
+            }
+         }
+         else if (remote_point) {
+            if (get_bbs_record (remote_zone, remote_net, remote_node, remote_point)) {
+               if (nodelist.password[0] && strcmp(strupr(nodelist.password),strupr(remote_password))) {
+                  status_line(msgtxt[M_PWD_ERROR],remote_zone,remote_net,remote_node,remote_point,remote_password,nodelist.password);
+                  whichaka++;
+                  if (addrs[whichaka].net) {
+                     xfer_flag = INITIAL_XFER;
+                     jfsent = 0;
+                     goto emsi_send;
+                  }
+                  else {
+                     whichaka--;
+                     goto end_send;
+                  }
+               }
+            }
+         }
+      }
+
+      if (emsi && whichaka != -1) {
+         if (oksend[whichaka])
+            have_lock = FALSE;
+         else
+            have_lock = TRUE;
+      }
 
    /*------------------------------------------------------------------------*/
    /* If we were already sending a file, close it and clean up               */
@@ -605,11 +725,13 @@ static void getfname(word xfer_flag) {
                break;
             case TRUNC_AFTER:
                j_status(msgtxt[M_TRUNC_MSG],Txfname);
-               Txfile = cshopen(Txfname,O_TRUNC|O_RDWR,S_IREAD|S_IWRITE);
-               if (Txfile != -1)
+               unlink (Txfname);
+               Txfile = open (Txfname, O_CREAT|O_TRUNC|O_RDWR, S_IREAD|S_IWRITE);
+               if (Txfile != -1) {
                   errno = 0;
-               j_error(msgtxt[M_TRUNC_MSG],Txfname);
-               close(Txfile);
+                  j_error(msgtxt[M_TRUNC_MSG],Txfname);
+                  close(Txfile);
+               }
                Txfile = -1;
          }
          /*------------------------------------------------------------------*/
@@ -687,9 +809,19 @@ nxtout:
                *p++ = 'L';
                *p = 'O';
                ++floflag;
-            } else
+            } else {
 end_send:
                outboundname[0] = Txfname[0] = Txbuf[0] = Txbuf[1] = floflag = '\0';
+               if (emsi) {
+                  whichaka++;
+                  if (addrs[whichaka].net) {
+                     if (!jfsent) j_status(msgtxt[M_NOTHING_TO_SEND], remote_zone,remote_net,remote_node,remote_point);
+                     xfer_flag = INITIAL_XFER;
+                     jfsent = 0;
+                     goto emsi_send;
+                  }
+               }
+            }
          }
       }
       /*---------------------------------------------------------------------*/
@@ -757,7 +889,10 @@ rdflo:
                   goto rdflo;
                break;
             default:
-               Do_after = NOTHING_AFTER;
+               if (dexists (Txfname))
+                  Do_after = NOTHING_AFTER;
+               else
+                  goto rdflo;
                break;
          }
          /*------------------------------------------------------------------*/
@@ -822,8 +957,8 @@ rdflo:
 /* CRC is computed from contents and packet_type only; if PKTSTRT or PKTEND  */
 /* get munged we'll never even find the CRC.                                 */
 /*****************************************************************************/
-static void sendpkt(register byte *buf,int len,int type) {
-   register word crc;
+static void sendpkt(byte *buf,int len,int type) {
+   unsigned short crc;
 
    if ((SharedCap & CANCRC32) && type != FNAMEPKT)
       sendpkt32(buf,len,type);
@@ -834,11 +969,11 @@ static void sendpkt(register byte *buf,int len,int type) {
       crc = 0;
       while (--len >= 0) {
          txbyte(*buf);
-         crc = xcrc(crc, ((word)(*buf++)) );
+         crc = xcrc(crc, ((byte)(*buf++)) );
       }
 
       BUFFER_BYTE((byte)type);
-      crc = xcrc(crc,type);
+      crc = xcrc(crc,(byte)type);
 
       BUFFER_BYTE(DLE);
       BUFFER_BYTE(PKTENDCHR ^ 0x40);
@@ -854,7 +989,7 @@ static void sendpkt(register byte *buf,int len,int type) {
 /*****************************************************************************/
 /* Build and send a packet using 32-bit CRC; same as sendpkt in other ways   */
 /*****************************************************************************/
-static void sendpkt32(register byte *buf,register int len,int type) {
+static void sendpkt32(byte *buf,int len,int type) {
    unsigned long crc32;
 
    BUFFER_BYTE(DLE);
@@ -863,12 +998,12 @@ static void sendpkt32(register byte *buf,register int len,int type) {
    crc32 = 0xFFFFFFFFL;
    while (--len >= 0) {
       txbyte(*buf);
-      crc32 = Z_32UpdateCRC(((word)*buf),crc32);
+      crc32 = Z_32UpdateCRC(((byte)*buf),crc32);
       ++buf;
    }
 
    BUFFER_BYTE((byte)type);
-   crc32 = Z_32UpdateCRC(type,crc32);
+   crc32 = Z_32UpdateCRC((byte)type,crc32);
 
    BUFFER_BYTE(DLE);
    BUFFER_BYTE(PKTENDCHR ^ 0x40);
@@ -888,7 +1023,7 @@ static void sendpkt32(register byte *buf,register int len,int type) {
 /* DLE, XON, and XOFF using DLE prefix byte and ^ 0x40. Also escape          */
 /* CR-after-'@' to avoid Telenet/PC-Pursuit problems.                        */
 /*****************************************************************************/
-static void txbyte(register byte c) {
+static void txbyte(byte c) {
    static byte lastsent;
 
    switch (c) {
@@ -915,7 +1050,7 @@ sendit:  BUFFER_BYTE(lastsent = c);
 /* detected to abort file reception.  Set Rxfname, Rxlen, Rxfile.            */
 /*****************************************************************************/
 static long procfname(void) {
-   register byte *p;
+   byte *p;
    char linebuf[128], *fileinfo, *badfname;
    long filestart, bytes;
    FILE *abortlog;
@@ -943,7 +1078,9 @@ static long procfname(void) {
 
    strcpy(linebuf,Rxbuf);
    strlwr(linebuf);
-   if (is_arcmail (linebuf, strlen(linebuf) - 1) )
+   if (is_mailpkt (linebuf, strlen(linebuf) - 1) )
+      p = "MailPKT";
+   else if (is_arcmail (linebuf, strlen(linebuf) - 1) )
       p = "ARCMail";
    else
       p = NULL;
@@ -997,10 +1134,10 @@ static long procfname(void) {
    p = strchr(strcpy(Rxfname,filepath),'\0');
    errno = 0;
    if (Resume_WaZOO) {
-      strcpy(p,badfname);
-      Rxfile = cshopen(Rxfname,O_CREAT|O_RDWR|O_BINARY,S_IREAD|S_IWRITE);
+      strcpy (p, badfname);
+      Rxfile = sh_open (Rxfname, SH_DENYRW, O_CREAT|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
    } else {
-      strcpy(p,Rxbuf);
+      strcpy (p, Rxbuf);
       /*---------------------------------------------------------------------*/
       /* If the file already exists:                                         */
       /* 1) And the new file has the same time and size, skip it             */
@@ -1022,7 +1159,7 @@ static long procfname(void) {
             j_error(msgtxt[M_UNLINK_MSG],Rxfname);
          }
       }
-      Rxfile = cshopen(Rxfname,O_CREAT|O_EXCL|O_RDWR|O_BINARY,S_IREAD|S_IWRITE);
+      Rxfile = sh_open (Rxfname, SH_DENYRW, O_CREAT|O_EXCL|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
    }
    if (Rxfile != -1)
       errno = 0;
@@ -1051,7 +1188,12 @@ static long procfname(void) {
    bytes = Rxlen - filestart + 10240;
    if (bytes > Diskavail) {
       j_status(msgtxt[M_OUT_OF_DISK_SPACE]);
-      close(Rxfile);
+      if (filelength (Rxfile) == 0L) {
+         close (Rxfile);
+         unlink (Rxfname);
+      }
+      else
+         close (Rxfile);
       return -1L;
    }
 
@@ -1076,40 +1218,40 @@ static long procfname(void) {
 /*****************************************************************************/
 static byte rcvpkt() {
    static byte rxcrc32;
-   static word crc;
+   static unsigned short crc;
    static unsigned long crc32;
-   register byte *p;
-   register int c;
-   int i;
+   byte *p;
+   short i, c;
    unsigned long pktcrc;
 
    /*------------------------------------------------------------------------*/
    /* Abort transfer if operator pressed ESC                                 */
    /*------------------------------------------------------------------------*/
-/*
-   if (got_ESC()) {
+   if (local_kbd == 0x1B) {
+      local_kbd = -1;
       j_status(GenericError,msgtxt[M_KBD_MSG]);
       return HALTPKT;
    }
-*/
+
    /*------------------------------------------------------------------------*/
    /* If not accumulating packet yet, find start of next packet              */
    /*------------------------------------------------------------------------*/
    WaitFlag = FALSE;
-   if (!(p = Rxbufptr)) {
-      do
-         c = rxbyte();
-      while (c >= 0 || c == PKTEND);
+   p = Rxbufptr;
+   if (!p) {
+      do {
+         c = rxbyte ();
+      } while (c >= 0 || c == PKTEND);
 
       switch (c) {
          case PKTSTRT:
             rxcrc32 = FALSE;
-            p = Rxbuf;
+            p = (byte *) Rxbuf;
             crc = 0;
             break;
          case PKTSTRT32:
             rxcrc32 = TRUE;
-            p = Rxbuf;
+            p = (byte *) Rxbuf;
             crc32 = 0xFFFFFFFFL;
             break;
          case NOCARRIER:
@@ -1126,12 +1268,12 @@ static byte rcvpkt() {
    if (rxcrc32) {
       while ((c = rxbyte()) >= 0 && p < Rxbufmax) {
          *p++ = (byte)c;
-         crc32 = Z_32UpdateCRC(c,crc32);
+         crc32 = Z_32UpdateCRC((byte)c,crc32);
       }
    } else {
       while ((c = rxbyte()) >= 0 && p < Rxbufmax) {
          *p++ = (byte)c;
-         crc = xcrc(crc,c);
+         crc = xcrc(crc,(byte)c);
       }
    }
 
@@ -1157,7 +1299,7 @@ static byte rcvpkt() {
                /* return packet type                                         */
                /*------------------------------------------------------------*/
                Rxbufptr = NULL;
-               Rxblklen = --p - Rxbuf;
+               Rxblklen = (word) (--p - (byte *) Rxbuf);
                return *p;
             }
          }
@@ -1206,7 +1348,7 @@ static byte rcvpkt() {
 /* recovery cleanup if neccessary.                                           */
 /*****************************************************************************/
 static void rxclose(word xfer_flag) {
-   register byte *p;
+   byte *p;
    byte namebuf[PATHLEN], linebuf[128], c;
    FILE *abortlog, *newlog;
    struct utimbuf utimes;
@@ -1303,7 +1445,7 @@ static void rxclose(word xfer_flag) {
 /* Try REAL HARD to disengage batch session cleanly                          */
 /*****************************************************************************/
 static void endbatch(void) {
-   register int done, timeouts;
+   int done, timeouts;
    long timeval, brain_dead;
 
    /*------------------------------------------------------------------------*/
@@ -1311,7 +1453,8 @@ static void endbatch(void) {
    /*------------------------------------------------------------------------*/
    done = timeouts = 0;
    long_set_timer(&brain_dead,120);
-   goto reject;
+   sendpkt (NULL, 0, HALTPKT);
+   long_set_timer (&timeval, TimeoutSecs);
 
    /*------------------------------------------------------------------------*/
    /* Wait for the other end to acknowledge that it's halting                */
@@ -1364,8 +1507,8 @@ static void j_message(word pos,char *va_alist,...)
 
    char buf[128];
    y = pos;
+   if (y);
    va_start(arg_ptr, va_alist);
-   wactiv(janus_handle);
    wgotoxy(y,MSG_X);
 
    (void) vsprintf(buf,va_alist,arg_ptr);
@@ -1426,7 +1569,7 @@ static int long_time_gone(long *TimePtr) {
 /* Returns raw byte, BUFEMPTY, PKTSTRT, PKTEND, or NOCARRIER.                */
 /*****************************************************************************/
 static int rxbyte(void) {
-   register int c, w;
+   int c, w;
 
    if ((c = rcvrawbyte()) == DLE) {
       w = WaitFlag++;
@@ -1454,29 +1597,29 @@ static int rxbyte(void) {
 /* If waitflag is true, will wait for a byte for Timeoutsecs; otherwise      */
 /* will return BUFEMPTY if a byte isn't ready and waiting in inbound buffer. */
 /*****************************************************************************/
-static int rcvrawbyte(void) {
-   register int c;
+static int rcvrawbyte(void)
+{
    long timeval;
 
-   if ((c = PEEKBYTE()) >= 0)
-      return MODEM_IN();
+   if ((int) PEEKBYTE () >= 0)
+      return MODEM_IN ();
 
    if (!CARRIER)
       return NOCARRIER;
    if (!WaitFlag)
       return BUFEMPTY;
 
-   timeval = time(NULL) + TimeoutSecs;
+   timeval = time (NULL) + TimeoutSecs;
 
-   while ((c = PEEKBYTE()) < 0) {
+   while ((int) PEEKBYTE () < 0) {
       if (!CARRIER)
          return NOCARRIER;
-      if (time(NULL) > timeval)
+      if (time (NULL) > timeval)
          return BUFEMPTY;
-//      time_release();
+      time_release ();
    }
 
-   return MODEM_IN();
+   return MODEM_IN ();
 }
 
 
@@ -1484,15 +1627,36 @@ static int rcvrawbyte(void) {
 /* Display start-of-transfer summary info                                    */
 /*****************************************************************************/
 static void xfer_summary(char *xfertype,char *fname,long *len,int y) {
+/*
    char buf[128];
 
-   if (whandle() != janus_handle)
-      wactiv(janus_handle);
+   if (*len);
+
+   if (xfertype);
+   if (y == 0) {
+      prints (8, 65, YELLOW|_BLACK, "              ");
+      prints (9, 65, YELLOW|_BLACK, "              ");
+      sprintf (buf, "%-12.12s", strupr (fname));
+      prints (8, 65, YELLOW|_BLACK, buf);
+      prints (9, 65, YELLOW|_BLACK, "0 (00%)");
+   }
+   else if (y == 1) {
+      prints (10, 65, YELLOW|_BLACK, "              ");
+      prints (11, 65, YELLOW|_BLACK, "              ");
+      sprintf (buf, "%-12.12s", strupr (fname));
+      prints (10, 65, YELLOW|_BLACK, buf);
+      prints (11, 65, YELLOW|_BLACK, "0 (00%)");
+   }
+
+   time_release ();
+*/
+   char buf[128];
+
    wgotoxy(y,2);
    sprintf(buf,"%s %12.12s;        0/%8ldb,%4d min.                       ",
       xfertype, fname, *len, (int)((*len*10/rate*100/JANUS_EFFICIENCY+59)/60));
    wputs(buf);
-//   time_release ();
+   time_release ();
 }
 
 
@@ -1500,10 +1664,33 @@ static void xfer_summary(char *xfertype,char *fname,long *len,int y) {
 /* Update any status line values which have changed                          */
 /*****************************************************************************/
 static void update_status(long *pos,long *oldpos,long left,int *oldeta,int y) {
+/*
   char buf[16];
-  register int eta;
+  int eta, i;
 
-  wactiv(janus_handle);
+   if (y == 0) {
+      if (*pos != *oldpos) {
+         *oldpos = *pos;
+         sprintf (buf, "%ld (%02.1f%%)", *pos, (float)((float)(*pos) * 100 / (*pos + left)));
+         prints (9, 65, YELLOW|_BLACK, buf);
+      }
+      i = (int)(left * 10 / rate * 100 / JANUS_EFFICIENCY);
+      eta = (i + 59) / 60;
+      sprintf(buf,"%4d",*oldeta = eta);
+   }
+   else if (y == 1) {
+      if (*pos != *oldpos) {
+         *oldpos = *pos;
+         sprintf (buf, "%ld (%02.1f%%)", *pos, (float)((float)(*pos) * 100 / (*pos + left)));
+         prints (11, 65, YELLOW|_BLACK, buf);
+      }
+      i = (int)(left * 10 / rate * 100 / JANUS_EFFICIENCY);
+      eta = (i + 59) / 60;
+      sprintf(buf,"%4d",*oldeta = eta);
+   }
+*/
+  char buf[16];
+  int eta;
 
   if (*pos != *oldpos) {
      sprintf(buf,"%8ld",*oldpos = *pos);
@@ -1525,7 +1712,7 @@ static void update_status(long *pos,long *oldpos,long left,int *oldeta,int y) {
 static void through(long *bytes,long *started) {
    static byte *scrn = "+CPS: %u (%lu bytes)  Efficiency: %lu%%%%";
    unsigned long elapsed;
-   register word cps;
+   word cps;
 
    elapsed = time(NULL) - *started;
    cps = (elapsed) ? (word)(*bytes/elapsed) : 0;
@@ -1539,23 +1726,43 @@ static void through(long *bytes,long *started) {
 /*****************************************************************************/
 static int get_filereq(byte req_started) {
    byte reqname[PATHLEN], linebuf[128];
-   register byte *p;
-   int gotone = FALSE;
+   byte *p;
+   int gotone = FALSE, i;
    FILE *reqfile;
 
-   if (flag_file (TEST_AND_SET, called_zone, called_net, called_node, 1))
-      return FALSE;
+//   if (flag_file (TEST_AND_SET, called_zone, called_net, called_node, 1))
+//      return FALSE;
 
-   strcpy(reqname,Abortlog_name);
-   strcpy(strchr(reqname,'Z'),"REQ");
+   if (!(remote_capabilities & WZ_FREQ) || (cur_event > -1 && (e_ptrs[cur_event]->behavior & MAT_NOOUTREQ)) ) {
+      status_line (msgtxt[M_FREQ_DECLINED]);
+      return (FALSE);
+   }
+
+   if (emsi) {
+      for (i = 0; i < MAX_EMSI_ADDR; i++) {
+         if (addrs[i].net == 0)
+            break;
+         if (flag_file (TEST_AND_SET, addrs[i].zone, addrs[i].net, addrs[i].node, addrs[i].point, 0))
+            continue;
+         if (addrs[i].point)
+            sprintf (reqname, "%s%04x%04x.PNT\\%08d.REQ", HoldAreaNameMunge (addrs[i].zone), addrs[i].net, addrs[i].node, addrs[i].point);
+         else
+            sprintf (reqname, request_template, HoldAreaNameMunge (addrs[i].zone), addrs[i].net, addrs[i].node);
+         if (dexists(reqname))
+            break;
+      }
+
+      if (i >= MAX_EMSI_ADDR || !addrs[i].net)
+         return (FALSE);
+   }
+   else
+      sprintf (reqname, request_template, HoldAreaNameMunge (called_zone), called_net, called_node);
 
    if (req_started)
       mark_done(reqname);
 
    if (dexists(reqname)) {
-      if (!(remote_capabilities & WZ_FREQ))
-         j_status(msgtxt[M_FREQ_DECLINED]);
-      else if (!(SharedCap & CANFREQ))
+      if (!(SharedCap & CANFREQ))
          j_status(msgtxt[M_REMOTE_CANT_FREQ]);
       else {
          errno = 0;
@@ -1617,7 +1824,7 @@ int record_reqfile(char *fname) {
 /* Get next file which was requested, if any                                 */
 /*****************************************************************************/
 static byte get_reqname(byte first_req) {
-   register byte *p;
+   byte *p;
    byte gotone = FALSE;
    FILE *tmpfile;
    struct stat f;
@@ -1708,18 +1915,17 @@ static void mark_done(char *fname) {
 
 static void open_janus_filetransfer()
 {
-        janus_handle = wopen(16,0,19,79,1,WHITE|_RED,WHITE|_RED);
-        wactiv(janus_handle);
-        wtitle(" Janus Transfer Status ", TLEFT, WHITE|_RED);
+//        janus_handle = wopen(16,0,19,79,1,WHITE|_RED,WHITE|_RED);
+//        wactiv(janus_handle);
+//        wtitle(" Janus Transfer Status ", TLEFT, WHITE|_RED);
 }
 
 static void close_janus_filetransfer()
 {
-        if (janus_handle != -1) {
-                wactiv(janus_handle);
-                wclose();
-                wunlink(janus_handle);
-                janus_handle = -1;
-        }
+//        if (janus_handle != -1) {
+//                wactiv(janus_handle);
+//                wclose();
+//                janus_handle = -1;
+//        }
 }
 

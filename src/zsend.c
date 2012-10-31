@@ -6,13 +6,17 @@
 #include <stdlib.h>
 
 #include <cxl\cxlwin.h>
+#include <cxl\cxlvid.h>
 
 #include "zmodem.h"
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 
+
+extern long tot_sent;
 
 /*--------------------------------------------------------------------------*/
 /* Private routines                                                         */
@@ -134,20 +138,33 @@ int wazoo;
    /*--------------------------------------------------------------------*/
    fstat (fileno (Infile), &f);
 
-   zsend_handle = wopen(16,0,19,79,1,WHITE|_RED,WHITE|_RED);
-   wactiv(zsend_handle);
-   wtitle(" ZModem Transfer Status ", TLEFT, WHITE|_RED);
+   if (caller || emulator)
+      {
+      zsend_handle = wopen(16,0,19,79,1,WHITE|_RED,WHITE|_RED);
+      wactiv(zsend_handle);
+      wtitle(" ZModem Transfer Status ", TLEFT, WHITE|_RED);
+      }
 
    i = (int) (f.st_size * 10 / rate + 53) / 54;
    sprintf (j, "Z-Send %s, %ldb, %d min.", Filename, f.st_size, i);
    file_length = f.st_size;
 
-   wgotoxy (0, 2);
-   wputs (j);
-   status_line(" %s", j);
-   wgotoxy (1, 69);
-   sprintf (j, "%3d min", i);
-   wputs (j);
+   if (caller || emulator)
+      {
+      wgotoxy (0, 2);
+      wputs (j);
+      status_line(" %s", j);
+      wgotoxy (1, 69);
+      sprintf (j, "%3d min", i);
+      wputs (j);
+      }
+   else
+      {
+      wprints (9, 2, WHITE|_BLACK, j);
+      status_line(" %s", j);
+      sprintf (j, "%3d min", i);
+      wprints (10, 69, WHITE|_BLACK, j);
+      }
 
    /*--------------------------------------------------------------------*/
    /* Get outgoing file name; no directory path, lower case              */
@@ -198,6 +215,17 @@ int wazoo;
          fclose (Infile);
          Infile = NULL;
 
+         if (!caller) {
+            sysinfo.today.bytesent += f.st_size;
+            sysinfo.week.bytesent += f.st_size;
+            sysinfo.month.bytesent += f.st_size;
+            sysinfo.year.bytesent += f.st_size;
+            sysinfo.today.filesent++;
+            sysinfo.week.filesent++;
+            sysinfo.month.filesent++;
+            sysinfo.year.filesent++;
+         }
+
          status_line ("%s-Z%s %s", msgtxt[M_FILE_SENT], Crc32t ? "/32" : "", Filename);
          goto Done;
 
@@ -219,13 +247,14 @@ Err_Out:
    rc = FALSE;
 
 Done:
-   if (zsend_handle != -1)
-   {
+   if ( (caller || emulator) && zsend_handle != -1)
+      {
       wactiv(zsend_handle);
       wclose();
-      wunlink(zsend_handle);
       zsend_handle = -1;
-   }
+      }
+   else if (!caller)
+      wfill (9, 0, 10, 77, ' ', WHITE|_BLACK);
 
    if (Infile)
       fclose (Infile);
@@ -280,7 +309,10 @@ register byte *hdr;
    if (type != ZDATA)
       {
       while (CARRIER && !OUT_EMPTY ())
+         {
          time_release ();
+         release_timeslice ();
+         }
       if (!CARRIER)
          CLEAR_OUTBOUND ();
       }
@@ -363,7 +395,10 @@ unsigned short frameend;
       {
       SENDBYTE (XON);
       while (CARRIER && !OUT_EMPTY ())
+         {
          time_release ();
+         release_timeslice ();
+         }
       if (!CARRIER)
          CLEAR_OUTBOUND ();
       }
@@ -513,7 +548,7 @@ int blen;
 int wazoo;
 {
    register int c;
-   long timerset ();
+   long timerset (), t;
 
 #ifdef DEBUG
    show_debug_name ("ZS_SendFile");
@@ -521,23 +556,26 @@ int wazoo;
 
    while (1)
       {
-/*      if (got_ESC ())
+      if (local_kbd == 0x1B)
          {
          CLEAR_OUTBOUND ();
          XON_DISABLE ();
 
          send_can ();
          t = timerset (200);
+         local_kbd = -1;
 
          while (!timeup (t) && !OUT_EMPTY () && CARRIER)
+            {
             time_release ();
+            release_timeslice ();
+            }
 
          XON_ENABLE ();
          status_line (msgtxt[M_KBD_MSG]);
          return ERROR;
          }
-      else */
-      if (!CARRIER)
+      else if (!CARRIER)
          return ERROR;
 
       Txhdr[ZF0] = LZCONV;                       /* Default file conversion
@@ -608,8 +646,7 @@ int wazoo;
    int i;
    char j[100];
    word newcnt, blklen, maxblklen, goodblks, goodneeded = 1;
-
-   long timerset ();
+   long timerset (), t;
 
 #ifdef DEBUG
    show_debug_name ("ZS_SendFileData");
@@ -660,6 +697,7 @@ WaitAck:
             /* Receive init                            */
             /*-----------------------------------------*/
             throughput (1, Txpos - Strtpos);
+            tot_sent += Txpos - Strtpos;
             return OK;
 
          case TIMEOUT:
@@ -670,7 +708,10 @@ WaitAck:
 
          default:
             status_line (msgtxt[M_CAN_MSG]);
-            fclose (Infile);
+            if (Infile) {
+               fclose (Infile);
+               Infile = NULL;
+            }
             return ERROR;
          }                                       /* switch */
 
@@ -703,28 +744,36 @@ WaitAck:
 
    do
       {
-/*      if (got_ESC ())
+      if (local_kbd == 0x1B)
          {
          CLEAR_OUTBOUND ();
          XON_DISABLE ();
 
          send_can ();
          t = timerset (200);
+         local_kbd = -1;
 
          while (!timeup (t) && !OUT_EMPTY () && CARRIER)
+            {
             time_release ();
+            release_timeslice ();
+            }
 
          XON_ENABLE ();
          status_line (msgtxt[M_KBD_MSG]);
          goto oops;
-         }*/
+         }
 
       if (!CARRIER)
          goto oops;
 
       if ((c = fread (Txbuf, 1, blklen, Infile)) != z_size)
          {
-         wgotoxy (1, 12);
+         z_size = c;
+         if (caller || emulator)
+            wgotoxy (1, 12);
+         else
+            wgotoxy (10, 12);
          wputs (ultoa (((unsigned long) (z_size = c)), e_input, 10));
          wputs ("    ");
          }
@@ -739,14 +788,26 @@ WaitAck:
 
       Txpos += c;
 
-      i = (int) ((file_length - Txpos) * 10 / rate + 53) / 54;
-      sprintf (j, "%3d min", i);
+      if (!caller && !emulator)
+         {
+         i = (int) ((file_length - Txpos) * 10 / rate + 53) / 54;
 
-      wgotoxy (1, 2);
-      wputs (ultoa (((unsigned long) Txpos), e_input, 10));
-      wputs ("  ");
-      wgotoxy (1, 69);
-      wputs (j);
+         sprintf (j, "%lu  ", (unsigned long) Txpos);
+         wprints (10, 2, WHITE|_BLACK, j);
+         sprintf (j, "%3d min", i);
+         wprints (10, 69, WHITE|_BLACK, j);
+         }
+      else
+         {
+         i = (int) ((file_length - Txpos) * 10 / rate + 53) / 54;
+         sprintf (j, "%3d min", i);
+
+         wgotoxy (1, 2);
+         wputs (ultoa (((unsigned long) Txpos), e_input, 10));
+         wputs ("  ");
+         wgotoxy (1, 69);
+         wputs (j);
+         }
 
       if (blklen < maxblklen && ++goodblks > goodneeded)
          {
@@ -799,6 +860,7 @@ WaitAck:
             /* Receive init                            */
             /*-----------------------------------------*/
             throughput (1, Txpos - Strtpos);
+            tot_sent += Txpos - Strtpos;
             return OK;
 
          case ZSKIP:
@@ -806,13 +868,19 @@ WaitAck:
             /* Request to skip the current file        */
             /*-----------------------------------------*/
             status_line (msgtxt[M_SKIP_MSG]);
-            fclose (Infile);
+            if (Infile) {
+               fclose (Infile);
+               Infile = NULL;
+            }
             return c;
 
          default:
       oops:
             status_line (msgtxt[M_CAN_MSG]);
-            fclose (Infile);
+            if (Infile) {
+               fclose (Infile);
+               Infile = NULL;
+            }
             return ERROR;
          }                                       /* switch */
       }                                          /* while */
@@ -862,8 +930,7 @@ int num_errs;
             rewind (Infile);                     /* In case file EOF seen */
             fseek (Infile, Rxpos, SEEK_SET);
             Txpos = Rxpos;
-            sprintf (j, msgtxt[M_RESENDING_FROM],
-                     ultoa (((unsigned long) (Txpos)), e_input, 10));
+            sprintf (j, msgtxt[M_RESENDING_FROM], ultoa (((unsigned long) (Txpos)), e_input, 10));
             z_message (j);
             return c;
 
@@ -871,7 +938,10 @@ int num_errs;
             status_line (msgtxt[M_SKIP_MSG]);
 
          case ZRINIT:
-            fclose (Infile);
+            if (Infile) {
+               fclose (Infile);
+               Infile = NULL;
+            }
             return c;
 
          case ZACK:
@@ -911,7 +981,10 @@ static void ZS_EndSend ()
             SENDBYTE ('O');
             SENDBYTE ('O');
             while (CARRIER && !OUT_EMPTY ())
+               {
                time_release ();
+               release_timeslice ();
+               }
             if (!CARRIER)
                CLEAR_OUTBOUND ();
             /* fallthrough... */

@@ -8,195 +8,237 @@
 #include <sys/stat.h>
 
 #include <cxl\cxlvid.h>
+#include <cxl\cxlstr.h>
 
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 
+void fullscreen_editor (void);
+
+void add_quote_string (char *str, char *from)
+{
+   int i;
+   char string[36], *p, initials[10];
+
+   strcpy (string, from);
+
+   i = 0;
+   if ((p = strtok (string, " ")) != NULL)
+      do {
+         initials[i++] = *p;
+      } while ((p = strtok (NULL, " ")) != NULL);
+   initials[i] = '\0';
+
+   strcpy (string, config->quote_string);
+   strsrep (string, "~", initials);
+   strsrep (string, "@", strupr (initials));
+   strsrep (string, "#", strlwr (initials));
+
+   strcpy (str, string);
+}
+
+void add_quote_header (FILE *fp, char *from, char *to, char *dt, char *tm)
+{
+   char result[180], *date, *time;
+
+   if (tm == NULL) {
+      date = strtok (dt, " ");
+      time = strtok (NULL, " ");
+   }
+   else {
+      date = dt;
+      time = tm;
+   }
+
+   strcpy (result, config->quote_header);
+   strsrep (result, "@", (to == NULL) ? "" : to);
+   strsrep (result, "#", (from == NULL) ? "" : from);
+   strsrep (result, "`", (date == NULL) ? "" : date);
+   strsrep (result, "~", (time == NULL) ? "" : time);
+
+   if (fp != NULL)
+      fprintf (fp, "%s\n\n", result);
+}
 
 int write_message_text(msg_num, flags, quote_name, sm)
 int msg_num, flags;
 char *quote_name;
 FILE *sm;
 {
-        FILE *fp, *fpq;
-        int i, z, m, pos, blks;
-        char c, buff[80], wrp[80], qwkbuffer[130], shead;
-        long fpos, qpos;
-        struct _msg msgt;
-        struct QWKmsghd QWK;
+   FILE *fp, *fpq;
+   int i, z, m, pos, blks;
+   char c, buff[80], wrp[80], qwkbuffer[130], shead, *p;
+   long fpos, qpos;
+   struct _msg msgt;
+   struct QWKmsghd QWK;
 
-        sprintf(buff,"%s%d.MSG",sys.msg_path,msg_num);
-        fp = fopen(buff,"r+b");
-        if(fp == NULL)
-                return(0);
+   sprintf(buff,"%s%d.MSG",sys.msg_path,msg_num);
+   fp = fopen(buff,"r+b");
+   if(fp == NULL)
+           return(0);
 
-        fread((char *)&msgt,sizeof(struct _msg),1,fp);
+   fread((char *)&msgt,sizeof(struct _msg),1,fp);
 
-        if(msgt.attr & MSGPRIVATE)
-        {
-                if(msg_num == 1 && sys.echomail)
-                {
-			fclose(fp);
-			return(0);
-		}
+   if(msgt.attr & MSGPRIVATE) {
+      if(msg_num == 1 && sys.echomail) {
+         fclose(fp);
+         return(0);
+      }
 
-                if(stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name))
-                {
-			fclose(fp);
-			return(0);
-		}
-        }
+      if(stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name)) {
+         fclose(fp);
+         return(0);
+      }
+   }
 
-        blks = 1;
-        pos = 0;
-        memset (qwkbuffer, ' ', 128);
-        shead = 0;
+   blks = 1;
+   pos = 0;
+   memset (qwkbuffer, ' ', 128);
+   shead = 0;
 
-        if (sm == NULL)
-        {
-           fpq = fopen(quote_name, (flags & APPEND_TEXT) ? "at" : "wt");
-           if (fpq == NULL)
-                return(0);
-        }
-        else
-           fpq = sm;
+   if (sm == NULL) {
+      fpq = fopen(quote_name, (flags & APPEND_TEXT) ? "at" : "wt");
+      if (fpq == NULL)
+           return(0);
+   }
+   else
+      fpq = sm;
 
-        i = 0;
-        if (flags & QUOTE_TEXT)
-        {
-                strcpy(buff, " > ");
-                i = strlen(buff);
-        }
+   i = 0;
+   if (flags & QUOTE_TEXT) {
+      add_quote_string (buff, msgt.from);
+      i = strlen (buff);
+   }
 
-        fpos = filelength(fileno(fp));
+   fpos = filelength (fileno (fp));
 
-        while(ftell(fp) < fpos)
-        {
-                c = fgetc(fp);
+   while (ftell (fp) < fpos) {
+      c = fgetc (fp);
 
-                if((byte)c == 0x8D || c == 0x0A || c == '\0')
-                        continue;
+      if((byte)c == 0x8D || c == 0x0A || c == '\0')
+              continue;
 
-                buff[i++]=c;
+      buff[i++]=c;
 
-                if(c == 0x0D) {
-                        buff[i-1]='\0';
+      if (c == 0x0D) {
+         buff[i-1]='\0';
 
-                        if(buff[0] == 0x01)
-                        {
-                                if (!strncmp(&buff[1],"INTL",4) && !shead)
-                                        sscanf(&buff[6],"%d:%d/%d %d:%d/%d",&msg_tzone,&i,&i,&msg_fzone,&i,&i);
-                                if (!strncmp(&buff[1],"TOPT",4) && !shead)
-                                        sscanf(&buff[6],"%d",&msg_tpoint);
-                                if (!strncmp(&buff[1],"FMPT",4) && !shead)
-                                        sscanf(&buff[6],"%d",&msg_fpoint);
-                                i=0;
-				continue;
-			}
-                        else if (!shead)
-                        {
-                                if (flags & INCLUDE_HEADER) {
-                                        text_header (&msgt,msg_num,fpq);
-                                }
-                                else if (flags & QWK_TEXTFILE)
-                                        qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
-                                shead = 1;
-                        }
+         if ((p = strchr (buff, 0x01)) != NULL) {
+            if (!strncmp(&p[1],"INTL",4) && !shead)
+               sscanf(&p[6],"%d:%d/%d %d:%d/%d",&msg_tzone,&i,&i,&msg_fzone,&i,&i);
+            if (!strncmp(&p[1],"TOPT",4) && !shead)
+               sscanf(&p[6],"%d",&msg_tpoint);
+            if (!strncmp(&p[1],"FMPT",4) && !shead)
+               sscanf(&p[6],"%d",&msg_fpoint);
+         }
+         else if (!shead) {
+            if (flags & INCLUDE_HEADER) {
+               text_header (&msgt,msg_num,fpq);
+            }
+            else if (flags & QWK_TEXTFILE)
+               qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
+            else if (flags & QUOTE_TEXT)
+               add_quote_header (fpq, msgt.from, msgt.to, msgt.date, NULL);
+            shead = 1;
+         }
 
-                        if(buff[0] == 0x01 || !strncmp(buff,"SEEN-BY",7)) {
-                                i=0;
-                                continue;
-                        }
+         if (strchr (buff, 0x01) != NULL || stristr (buff, "SEEN-BY") != NULL) {
+            if (flags & QUOTE_TEXT) {
+               add_quote_string (buff, msgt.from);
+               i = strlen (buff);
+            }
+            else
+               i = 0;
+            continue;
+         }
 
-                        if (flags & QWK_TEXTFILE)
-                        {
-                                write_qwk_string (buff, qwkbuffer, &pos, &blks, fpq);
-                                write_qwk_string ("\r\n", qwkbuffer, &pos, &blks, fpq);
-                        }
-                        else
-                                fprintf(fpq,"%s\n",buff);
+         if (flags & QWK_TEXTFILE) {
+            write_qwk_string (buff, qwkbuffer, &pos, &blks, fpq);
+            write_qwk_string ("\r\n", qwkbuffer, &pos, &blks, fpq);
+         }
+         else
+            fprintf(fpq,"%s\n",buff);
 
-                        if (flags & QUOTE_TEXT)
-                        {
-                                strcpy(buff, " > ");
-                                i = strlen(buff);
-                        }
-                        else
-                                i = 0;
-                }
-                else {
-                        if(i<(usr.width-2))
-                                continue;
+         if (flags & QUOTE_TEXT) {
+            add_quote_string (buff, msgt.from);
+            i = strlen (buff);
+         }
+         else
+            i = 0;
+      }
+      else {
+         if(i<(usr.width-2))
+            continue;
 
-                        buff[i]='\0';
-                        while(i>0 && buff[i] != ' ')
-                                i--;
+         buff[i]='\0';
+         while(i>0 && buff[i] != ' ')
+            i--;
 
-                        m=0;
+         m=0;
 
-                        if(i != 0)
-                                for(z=i+1;buff[z];z++)
-                                        wrp[m++]=buff[z];
+         if(i != 0)
+            for(z=i+1;buff[z];z++)
+               wrp[m++]=buff[z];
 
-                        buff[i]='\0';
-                        wrp[m]='\0';
+         buff[i]='\0';
+         wrp[m]='\0';
 
-                        if (!shead)
-                        {
-                                if (flags & INCLUDE_HEADER) {
-                                        text_header (&msgt,msg_num,fpq);
-                                }
-                                else if (flags & QWK_TEXTFILE)
-                                        qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
-                                shead = 1;
-                        }
+         if (!shead) {
+            if (flags & INCLUDE_HEADER) {
+               text_header (&msgt,msg_num,fpq);
+            }
+            else if (flags & QWK_TEXTFILE)
+               qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
+            else if (flags & QUOTE_TEXT)
+               add_quote_header (fpq, msgt.from, msgt.to, msgt.date, NULL);
+            shead = 1;
+         }
 
-                        if (flags & QWK_TEXTFILE)
-                        {
-                                write_qwk_string (buff, qwkbuffer, &pos, &blks, fpq);
-                                write_qwk_string ("\r\n", qwkbuffer, &pos, &blks, fpq);
-                        }
-                        else
-                                fprintf(fpq,"%s\n",buff);
+         if (flags & QWK_TEXTFILE) {
+            write_qwk_string (buff, qwkbuffer, &pos, &blks, fpq);
+            write_qwk_string ("\r\n", qwkbuffer, &pos, &blks, fpq);
+         }
+         else
+            fprintf(fpq,"%s\n",buff);
 
-                        if (flags & QUOTE_TEXT)
-                                strcpy(buff, " > ");
-                        else
-                                buff[0] = '\0';
-                        strcat(buff,wrp);
-                        i = strlen(buff);
-                }
-        }
+         if (flags & QUOTE_TEXT)
+            add_quote_string (buff, msgt.from);
+         else
+            buff[0] = '\0';
+         strcat (buff, wrp);
+         i = strlen (buff);
+      }
+   }
 
-        fclose(fp);
+   fclose(fp);
 
-        if (flags & QWK_TEXTFILE)
-        {
-                qwkbuffer[128] = 0;
-                fwrite(qwkbuffer, 128, 1, fpq);
-                blks++;
+   if (flags & QWK_TEXTFILE) {
+      qwkbuffer[128] = 0;
+      fwrite(qwkbuffer, 128, 1, fpq);
+      blks++;
 
-             /* Now update with record count */
-                fseek(fpq,qpos,SEEK_SET);          /* Restore back to header start */
-                sprintf(buff,"%d",blks);
-                ljstring(QWK.Msgrecs,buff,6);
-                fwrite((char *)&QWK,128,1,fpq);           /* Write out the header */
-                fseek(fpq,0L,SEEK_END);               /* Bump back to end of file */
+   /* Now update with record count */
+      fseek(fpq,qpos,SEEK_SET);          /* Restore back to header start */
+      sprintf(buff,"%d",blks);
+      ljstring(QWK.Msgrecs,buff,6);
+      fwrite((char *)&QWK,128,1,fpq);           /* Write out the header */
+      fseek(fpq,0L,SEEK_END);               /* Bump back to end of file */
 
-                if (sm == NULL)
-                        fclose(fpq);
+      if (sm == NULL)
+         fclose(fpq);
 
-                return (blks);
-        }
-        else
-                fprintf(fpq,bbstxt[B_TWO_CR]);
+      return (blks);
+   }
+   else
+      fprintf(fpq,bbstxt[B_TWO_CR]);
 
-        if (sm == NULL)
-                fclose(fpq);
+   if (sm == NULL)
+      fclose(fpq);
 
-        return(1);
+   return(1);
 }
 
 void write_qwk_string (st, text, pos, nb, fp)
@@ -259,7 +301,10 @@ int quote;
    else
       never = 0;
 
-   editor_door(ext_editor);
+   if (config->external_editor[0])
+      editor_door(config->external_editor);
+   else
+      fullscreen_editor ();
 
    lastread = securetmp;
 
@@ -312,7 +357,7 @@ FILE *fp;
 
    if(sys.netmail) {
       if (!msg_fzone)
-         msg_fzone = alias[0].zone;
+         msg_fzone = config->alias[0].zone;
       sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",msg_ptr->from,msg_fzone,msg_ptr->orig_net,msg_ptr->orig,msg_fpoint);
       fprintf (fp,"%36s   ",stringa);
    }
@@ -352,7 +397,7 @@ FILE *fp;
    fprintf (fp,"To      : ");
    if(sys.netmail) {
       if (!msg_tzone)
-         msg_tzone = alias[0].zone;
+         msg_tzone = config->alias[0].zone;
       sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",msg_ptr->to,msg_tzone,msg_ptr->dest_net,msg_ptr->dest,msg_tpoint);
       fprintf (fp,"%36s   ",stringa);
    }
@@ -432,10 +477,8 @@ long *qpos;
    sprintf(msg_line,"%d",msg_ptr->reply);
    ljstring(QMsgHead->Msgrply,msg_line,8);
 
-   sys.msg_num--;
    QMsgHead->Msgarealo = (char) (sys.msg_num % 255); /* Lo byte area # */
    QMsgHead->Msgareahi = (char) (sys.msg_num / 255); /* Hi byte area # */
-   sys.msg_num++;
 
    *qpos = ftell (fp);
    fwrite(QMsgHead,128,1,fp);           /* Write out the header */

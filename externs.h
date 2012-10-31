@@ -1,8 +1,5 @@
 
-#include "sched.h"
-#include "msgapi.h"
-
-extern byte logon_priv, vote_priv, up_priv, down_priv, vote_limit;
+extern byte vote_priv, up_priv, down_priv, vote_limit;
 
 extern int max_requests, line_offset, aftermail_exit, aftercaller_exit;
 extern int speed_graphics, registered, assumed, target_up, target_down;
@@ -12,30 +9,29 @@ extern int isOriginator, CurrentReqLim, have_dv, prot_max_kbytes;
 extern int made_request, function_active, com_port, know_max_kbytes;
 extern int norm_max_requests, prot_max_requests, know_max_requests;
 extern int remote_zone, remote_net, remote_node, remote_point;
-extern int called_zone, called_net, called_node;
+extern int called_zone, called_net, called_node, totalmsg, have_os2;
 
 extern char far *prodcode[];
 
-extern char *VERSION, *NOREG, *log_name, *user_file, *sys_path, *mtext[];
+extern char *VERSION, *NOREG, *log_name, *user_file, *mtext[];
 extern char *mesi[], *menu_bbs, *sysop, *system_name, hex[], *hold_area;
-extern char *filepath, *availist, *about, *request_list, *puma_exe, *hslink_exe;
-extern char *net_info, *banner, *enterbbs, *mail_only, *text_path;
-extern char *sched_name, *dateformat, *timeformat, *password, min_calls;
+extern char *availist, *about, *request_list, *puma_exe, *hslink_exe;
+extern char *text_path, *filepath;
+extern char *sched_name, *dateformat, *timeformat, *password;
 extern char *ext_flags, *ipc_path, *fido_msgpath, cmd_string[];
 extern char *request_template, **bbstxt, *flag_dir, *protocols[];
-extern char *prot_filepath, *know_filepath, e_input[128], *glob_text_path;
-extern char *norm_filepath, *norm_about, *norm_availist, *answer;
+extern char e_input[128], *glob_text_path;
+extern char *norm_about, *norm_availist, *answer;
 extern char *norm_request_list, *prot_request_list, *prot_availist, *prot_about;
 extern char *know_request_list, *know_availist, *know_about, *mdm_flags;
 extern char *lang_name[MAX_LANG], *lang_descr[MAX_LANG], area_change_key[3];
 extern char *ext_mail_cmd, *ext_editor, *pip_msgpath, lang_keys[MAX_LANG];
-extern char *lang_txtpath[MAX_LANG], *QWKDir, *BBSid, frontdoor;
-extern char *galileo, *location, *phone, *flags, *modem_busy, def_pack;
-extern char *bad_msgs, *dupes, *netmail_dir, *newareas_create, *newareas_link;
-extern char *local_editor, *pre_import, *after_import, *pre_export, *after_export;
-extern char *pack_zip[MAX_PACKERS], *pack_arj[MAX_PACKERS], *pack_lha[MAX_PACKERS], *pack_lzh[MAX_PACKERS], *pack_arc[MAX_PACKERS];
+extern char *lang_txtpath[MAX_LANG], frontdoor;
+extern char *galileo, *location, *phone, *flags, *modem_busy;
+extern char *bad_msgs, *dupes, *netmail_dir;
+extern char *local_editor;
 
-extern long logon_flags, cps, keycode;
+extern long cps, keycode, totaltime;
 
 extern char *msgtxt[];
 
@@ -47,19 +43,12 @@ extern char *SYSMSG_PATH;
 extern char use_tasker, local_mode, user_status;
 extern char have_ml, have_tv, have_ddos;
 
-extern char far exit300, exit1200, exit2400, exit9600, exit14400;
-extern char far exit16800, exit19200, exit38400, exit4800, exit7200;
-extern exit12000;;
-
-extern struct _alias alias[MAX_ALIAS];
-extern struct class_rec class[MAXCLASS];
+extern struct _configuration *config;
 extern struct _sysinfo sysinfo;
 extern struct _linestat linestat;
 extern struct _call_list far call_list[MAX_OUT];
 extern struct _lastcall lastcall;
 extern struct _lorainfo lorainfo;
-extern struct _noask noask;
-extern struct _alias resync[MAX_RESYNC];
 
 extern MSG *sq_ptr;
 
@@ -99,7 +88,7 @@ extern int no_requests;
 extern  word speed;
 extern  byte answer_flag;
 extern  byte lock_baud;
-extern  byte terminal;
+extern  byte terminal, emulator;
 extern  byte got_arcmail;
 extern  byte caller;
 extern  byte nopause;

@@ -1,5 +1,5 @@
 /*
-	--- Version 3.1 91-08-17 23:05 ---
+	--- Version 3.2 91-09-03 22:31 ---
 
    EXEC.H: EXEC function with memory swap - Main function header file.
 
@@ -16,7 +16,7 @@
 extern int do_exec (char *xfn, char *pars, int spawn, unsigned needed,
 						  char **envp);
 
-/*>e
+/*
    The EXEC function.
 
       Parameters:
@@ -117,124 +117,10 @@ extern int do_exec (char *xfn, char *pars, int spawn, unsigned needed,
 
          0x0600:       Redirection syntax error
          0x06xx:       DOS error xx on redirection
-<*/
+*/
 
-/*>d
-   Die EXEC Funktion.
 
-      Parameter:
-
-         xfn      ist ein String mit dem Namen der auszufÅhrenden Datei.
-                  Ist der String leer, wird die COMSPEC Umgebungsvariable
-                  benutzt um COMMAND.COM oder das Equivalent zu laden.
-                  Ist kein Pfad angegeben, wird nach dem aktuellen Pfad
-                  der in der PATH Umgebungsvariablen angegebene Pfad
-                  durchsucht.
-                  Ist kein Dateityp angegeben, wird der Pfad nach
-                  einer COM oder EXE Datei (in dieser Reihenfolge) abgesucht.
-
-         pars     Die Kommandozeile
-
-         spawn    Wenn 0, wird der Programmlauf beendet wenn das
-                  aufgerufene Programm zurÅckkehrt, die Funktion kehrt
-                  nicht zurÅck.
-
-                  HINWEIS: Wenn die auszufÅhrende Datei nicht gefunden
-                        wird, kehrt die Funktion mit einem Fehlercode
-                        zurÅck, auch wenn der 'spawn' Parameter 0 ist.
-
-                  Wenn nicht 0, kehrt die Funktion nach AusfÅhrung des
-                  Programms zurÅck. Falls notwendig (siehe den Parameter
-                  "needed") wird der Programmspeicherbereich vor Aufruf 
-                  ausgelagert.
-                  Zur Auslagerung mu· der Parameter eine Kombination der
-                  folgenden Flags enthalten:
-
-                     USE_EMS  (0x01)  - Auslagerung auf EMS zulassen
-                     USE_XMS  (0x02)  - Auslagerung auf XMS zulassen
-                     USE_FILE (0x04)  - Auslagerung auf Datei zulassen
-
-                  Die Reihenfolge der Versuche, auf die verschiedenen
-                  Medien auszulagern kann mit einem der folgenden
-                  Flags beeinflu·t werden:
-
-                     EMS_FIRST (0x00) - EMS, XMS, Datei (Standard)
-                     XMS_FIRST (0x10) - XMS, EMS, Datei
-
-                  Wenn die Auslagerung auf Datei erfolgt, kann das
-                  Attribut dieser Datei auf "hidden" gesetzt werden,
-                  damit der Benutzer nicht durch unversehends auftauchende
-                  Dateien verwirrt wird:
-
-                     HIDE_FILE (0x40) - Auslagerungsdatei "hidden" erzeugen
-
-                  Au·erdem kann das Verhalten auf Netzwerk-Laufwerken 
-                  beeinflu·t werden mit
-
-                     NO_PREALLOC (0x100) - nicht PrÑallozieren
-                     CHECK_NET (0x200)   - nicht PrÑallozieren wenn Netz.
-
-                  Diese PrÅfung auf Netzwerk ist hauptsÑchlich sinnvoll
-                  fÅr Novell Netze, bei denen eine PrÑallozierung eine
-                  erhebliche Verzîgerung bewirkt. Sie kînnen entweder mit
-                  NO_PREALLOC eine PrÑallozierung in jedem Fall ausschlie·en,
-                  oder die Entscheidung mit CHECK_NET prep_swap Åberlassen.
-                  In diesem Fall wird nicht prÑalloziert wenn die Datei
-                  auf einem Netzwerk-Laufwerk liegt (funktioniert nur
-                  mit DOS Version 3.1 und spÑteren).
-
-         needed   Der zur AusfÅhrung des Programms benîtigte Speicher
-                  in Paragraphen (16 Bytes). Wenn nicht ausreichend 
-                  freier Speicher vorhanden ist, wird der Programm-
-                  speicherbereich ausgelagert.
-                  Bei Angabe von 0 wird nie ausgelagert, bei Angabe
-                  von 0xffff wird immer ausgelagert.
-                  Ist der Parameter 'spawn' 0, hat 'needed' keine Bedeutung.
-
-         envp     Die dem gerufenen Programm zu Åbergebenden 
-                  Umgebungsvariablen. Ist der Parameter NULL,
-                  wird eine Kopie der Vater-Umgebung benutzt,
-                  d.h. da· Aufrufe von "putenv" keinen Effekt haben.
-                  Wenn nicht NULL mu· envp auf ein Array von Zeigern
-                  auf Strings zeigen, das durch einen NULL Zeiger
-                  abgeschlossen wird. HierfÅr kann die Standardvariable 
-                  "environ" benutzt werden.
-
-      Liefert:
-
-         0x0000..00FF: RÅckgabewert des aufgerufenen Programms
-
-         0x0101:       Fehler bei Vorbereitung zum Auslagern
-                        kein Speicherplatz in XMS/EMS/Datei
-         0x0102:       Fehler bei Vorbereitung zum Auslagern
-                        der Programmcode ist zu nah am Beginn des
-                        Programms.
-
-         0x0200:       AuszufÅhrende Programmdatei nicht gefunden
-         0x0201:       Programmdatei: UngÅltiges Laufwerk
-         0x0202:       Programmdatei: UngÅltiger Pfad
-         0x0203:       Programmdatei: UngÅltiger Dateiname
-         0x0204:       Programmdatei: UngÅltiger Laufwerksbuchstabe
-         0x0205:       Programmdatei: Pfad zu lang
-         0x0206:       Programmdatei: Laufwerk nicht bereit
-         0x0207:       Batchfile/COMMAND: COMMAND.COM nicht gefunden
-         0x0208:       Fehler beim allozieren eines temporÑren Puffers
-
-         0x03xx:       DOS-Fehler-Code xx bei Aufruf von EXEC
-
-         0x0400:       Fehler beim allozieren der Umgebungsvariablenkopie
-
-         0x0500:       Auslagerung angefordert, aber prep_swap wurde nicht
-                       aufgerufen oder lieferte einen Fehler
-         0x0501:       MCBs entsprechen nicht dem erwarteten Aufbau
-         0x0502:       Fehler beim Auslagern
-
-         0x0600:       Redirection Syntaxfehler
-         0x06xx:       DOS-Fehler xx bei Redirection
-<*/
-
-/*e Return codes (only upper byte significant) */
-/*d Fehlercodes (nur das obere Byte signifikant) */
+/* Return codes (only upper byte significant) */
 
 #define RC_PREPERR   0x0100
 #define RC_NOFILE    0x0200
@@ -243,8 +129,7 @@ extern int do_exec (char *xfn, char *pars, int spawn, unsigned needed,
 #define RC_SWAPERR   0x0500
 #define RC_REDIRERR  0x0600
 
-/*e Swap method and option flags */
-/*d Auslagerungsmethoden ond Optionen */
+/* Swap method and option flags */
 
 #define USE_EMS      0x01
 #define USE_XMS      0x02
@@ -256,4 +141,76 @@ extern int do_exec (char *xfn, char *pars, int spawn, unsigned needed,
 #define CHECK_NET    0x200
 
 #define USE_ALL      (USE_EMS | USE_XMS | USE_FILE)
+
+
+/*
+   The function pointed to by "spawn_check" will be called immediately 
+   before doing the actual swap/exec, provided that
+
+      - the preparation code did not detect an error, and
+      - "spawn_check" is not NULL.
+
+   The function definition is
+      int name (int cmdbat, int swapping, char *execfn, char *progpars)
+
+   The parameters passed to this function are
+
+      cmdbat      1: Normal EXE/COM file
+                  2: Executing BAT file via COMMAND.COM
+                  3: Executing COMMAND.COM (or equivalent)
+
+      swapping    < 0: Exec, don't swap
+                    0: Spawn, don't swap
+                  > 0: Spawn, swap
+
+      execfn      the file name to execute (complete with path)
+
+      progpars    the program parameter string
+
+   If the routine returns anything other than 0, the swap/exec will
+   not be executed, and do_exec will return with this code.
+
+   You can use this function to output messages (for example, the
+   usual "enter EXIT to return" message when loading COMMAND.COM)
+   and to do clean-up and additional checking.
+
+   CAUTION: If swapping is > 0, the routine may not modify the 
+   memory layout, i.e. it may not call any memory allocation or
+   deallocation routines.
+
+   "spawn_check" is initialized to NULL.
+*/
+
+typedef int (spawn_check_proc)(int cmdbat, int swapping, char *execfn, char *progpars);
+extern spawn_check_proc *spawn_check;
+
+/*
+   The 'swap_prep' variable can be accessed from the spawn_check
+   call-back routine for additional information on the nature and
+   parameters of the swap. This variable will ONLY hold useful
+   information if the 'swapping' parameter to spawn_check is > 0.
+   The contents of this variable may not be changed.
+
+   The 'swapmethod' field will contain one of the flags USE_FILE, 
+   USE_XMS, or USE_EMS.
+
+   Caution: The module using this data structure must be compiled
+   with structure packing on byte boundaries on, i.e. with /Zp1 for
+   MSC, or -a- for Turbo/Borland.
+*/
+
+typedef struct {
+               long xmm;            /* XMM entry address */
+               int first_mcb;       /* Segment of first MCB */
+               int psp_mcb;         /* Segment of MCB of our PSP */
+               int env_mcb;         /* MCB of Environment segment */
+               int noswap_mcb;      /* MCB that may not be swapped */
+               int ems_pageframe;   /* EMS page frame address */
+               int handle;          /* EMS/XMS/File handle */
+               int total_mcbs;      /* Total number of MCBs */
+               char swapmethod;     /* Method for swapping */
+               char swapfilename[81]; /* Swap file name if swapping to file */
+               } prep_block;
+
+extern prep_block swap_prep;
 

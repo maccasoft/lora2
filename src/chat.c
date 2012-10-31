@@ -9,18 +9,26 @@
 #include <time.h>
 #include <sys/stat.h>
 
+#ifdef __OS2__
+#define INCL_DOSPROCESS
+#define INCL_NOPMAPI
+#include <os2.h>
+#endif
+
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
 #include <cxl\cxlstr.h>
 
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 
+#ifdef __OS2__
+void VioUpdate (void);
+#endif
 static int cb_online_users(int, int, int);
-static void setfreq (int);
-static void speaker (int);
 static void chat_wrap (char *, int);
 static void cb_send_message (char *, int);
 
@@ -46,7 +54,7 @@ int flag;
    m_print(bbstxt[B_ONLINE_UNDERLINE]);
 
    line = 5;
-   sprintf(linea,USERON_NAME, sys_path);
+   sprintf(linea,USERON_NAME, config->sys_path);
    fd = shopen(linea, O_RDONLY|O_BINARY);
 
    while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron)) {
@@ -75,11 +83,14 @@ int flag;
       case QUESTIONAIRE:
          p = "New user";
          break;
+      case 7:
+         p = "QWK Door";
+         break;
       }
 
       useron.city[21] = '\0';
 
-      sprintf (linea,"%-29.29s  %4d  %8d  %s  %s\n", useron.name, useron.line, useron.baud, p, useron.city);
+      sprintf (linea,"%-29.29s  %4d  %8u  %s  %s\n", useron.name, useron.line, useron.baud, p, useron.city);
       m_print(linea);
 
       if (!(line = more_question(line)) || !CARRIER)
@@ -92,57 +103,6 @@ int flag;
    if (flag && CARRIER)
       press_enter ();
 }
-/*
-void online_users (flag)
-{
-   int fd, line;
-   char *p, linea[80];
-   struct _useron useron;
-
-   m_print("\nUsername                             Node         Status\n");
-   m_print("-----------------------------------  ----  -----------------------------\n");
-
-   line = 3;
-   sprintf (linea, USERON_NAME, sys_path);
-   fd = shopen (linea, O_RDONLY|O_BINARY);
-
-   while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron)) {
-      if (useron.donotdisturb || !useron.name[0])
-         continue;
-
-      switch (useron.status) {
-      case 0:
-         p = "Login";
-         break;
-      case BROWSING:
-         p = "Available for chat";
-         break;
-      case UPLDNLD:
-         p = "Upload/Download";
-         break;
-      case READWRITE:
-         p = "Read/Write msgs.";
-         break;
-      case DOOR:
-         p = "Ext.Door";
-         break;
-      case CHATTING:
-         p = "Chatting on CB system";
-         break;
-      case QUESTIONAIRE:
-         p = "New user questionnaire";
-         break;
-      }
-
-      m_print ("%-35s  %4d  %s\n", useron.name, useron.line, p);
-      if (!(line = more_question(line)) || !CARRIER)
-         break;
-   }
-
-   close(fd);
-   m_print(bbstxt[B_ONE_CR]);
-}
-*/
 
 void send_online_message()
 {
@@ -166,20 +126,20 @@ void send_online_message()
    ul = atoi(linea) - 1;
    change_attr(LRED|_BLACK);
 
-   sprintf(filename, USERON_NAME, sys_path);
+   sprintf(filename, USERON_NAME, config->sys_path);
    fd = shopen(filename, O_RDONLY|O_BINARY);
-   lseek(fd, (long)ul * sizeof(struct _useron), SEEK_SET);
+   lseek (fd, (long)ul * sizeof(struct _useron), SEEK_SET);
 
-   if (read(fd, (char *)&useron, sizeof(struct _useron)) != sizeof(struct _useron) ||
-       useron.donotdisturb || !useron.name[0])
-   {
+   if (read(fd, (char *)&useron, sizeof(struct _useron)) != sizeof(struct _useron) || useron.donotdisturb || !useron.name[0]) {
       m_print(bbstxt[B_INVALID_LINE]);
+      close (fd);
       return;
    }
 
+   close (fd);
    strltrim (cmd_string);
-   if (!cmd_string[0])
-   {
+
+   if (!cmd_string[0]) {
       m_print(bbstxt[B_MESSAGE_FOR], useron.name);
       change_attr(WHITE|_BLACK);
       m_print(":");
@@ -187,8 +147,7 @@ void send_online_message()
       if (!strlen(linea) || !CARRIER)
          return;
    }
-   else
-   {
+   else {
       cmd_string[77] = '0';
       strcpy (linea, cmd_string);
       cmd_string[0] = '\0';
@@ -197,16 +156,63 @@ void send_online_message()
    change_attr(CYAN|_BLACK);
    m_print(bbstxt[B_PROCESSING]);
 
-   sprintf(filename, ONLINE_MSGNAME, ipc_path, ul+1);
-   fp = fopen(filename, "at");
-   fprintf(fp, bbstxt[B_IPC_HEADER]);
-   fprintf(fp, bbstxt[B_IPC_FROM], usr.name, line_offset);
-   fprintf(fp, bbstxt[B_IPC_MESSAGE], linea);
-   fprintf(fp, "\001");
-   fclose(fp);
+   sprintf (filename, ONLINE_MSGNAME, ipc_path, ul+1);
+   fp = fopen (filename, "at");
+   fprintf (fp, bbstxt[B_IPC_HEADER]);
+   fprintf (fp, bbstxt[B_IPC_FROM], usr.name, line_offset);
+   fprintf (fp, bbstxt[B_IPC_MESSAGE], linea);
+   fprintf (fp, "\001");
+   fclose (fp);
 
-   m_print(bbstxt[B_MESSAGE_SENT]);
-   press_enter();
+   m_print (bbstxt[B_MESSAGE_SENT]);
+   press_enter ();
+}
+
+void set_mailon (zz, ne, no, po, location)
+int zz, ne, no, po;
+char *location;
+{
+   char string[80];
+
+   memset ((char *)&usr, 0, sizeof (struct _usr));
+   sprintf (string, "Mail with %d:%d/%d.%d", zz, ne, no, po);
+   strcpy (usr.name, string);
+   strcpy (string, location);
+   if (strlen (string) > 25)
+      string[25] = '\0';
+   strcpy (usr.city, string);
+   usr.quiet = 1;
+   data (usr.ldate);
+   set_useron_record (0, 0, 0);
+}
+
+void reset_mailon ()
+{
+   int fd;
+   char filename[80];
+   long prev;
+   struct _useron useron;
+
+   set_last_caller ();
+
+   sprintf (filename, USERON_NAME, config->sys_path);
+   fd = shopen (filename, O_RDWR|O_BINARY);
+
+   while (fd != -1) {
+      prev = tell (fd);
+
+      if (read (fd, (char *)&useron, sizeof(struct _useron)) != sizeof(struct _useron))
+         break;
+
+      if (useron.line == line_offset) {
+         lseek(fd,prev,SEEK_SET);
+         memset((char *)&useron, 0, sizeof(struct _useron));
+         write (fd, (char *)&useron, sizeof(struct _useron));
+         break;
+      }
+   }
+
+   close(fd);
 }
 
 void set_useron_record(sta, toggle, cb)
@@ -218,39 +224,34 @@ int sta, toggle, cb;
    long prev;
    struct _useron useron;
 
-   sprintf(filename,USERON_NAME, sys_path);
+   sprintf(filename,USERON_NAME, config->sys_path);
    fd = cshopen(filename, O_CREAT|O_RDWR|O_BINARY,S_IREAD|S_IWRITE);
 
    memset((char *)&useron, 0, sizeof(struct _useron));
 
-   if (lseek(fd, (line_offset-1) * (long)sizeof(struct _useron), SEEK_SET) == -1)
-   {
-      for (i=0;i<line_offset;i++)
-      {
+   if (lseek(fd, (line_offset-1) * (long)sizeof(struct _useron), SEEK_SET) == -1) {
+      for (i=0;i<line_offset;i++) {
          prev = tell(fd);
          if (read(fd, (char *)&useron, sizeof(struct _useron)) != sizeof(struct _useron))
             write(fd, (char *)&useron, sizeof(struct _useron));
       }
    }
-   else
-   {
+   else {
       prev = tell(fd);
       read(fd, (char *)&useron, sizeof(struct _useron));
    }
 
-   if (first)
-   {
+   if (first) {
       first = 0;
       useron.donotdisturb = usr.quiet;
    }
 
-   strcpy(useron.name, usr.name);
-   strcpy(useron.city, usr.city);
+   strcpy (useron.name, usr.name);
+   strcpy (useron.city, usr.city);
    useron.line = line_offset;
    useron.baud = local_mode ? 0 : rate;
 
-   if (sta > 0)
-   {
+   if (sta > 0) {
       useron.status = sta;
       user_status = sta;
    }
@@ -259,31 +260,28 @@ int sta, toggle, cb;
 
    useron.cb_channel = cb;
 
-   lseek(fd, prev, SEEK_SET);
-   write(fd, (char *)&useron, sizeof(struct _useron));
-   close(fd);
+   lseek (fd, prev, SEEK_SET);
+   write (fd, (char *)&useron, sizeof (struct _useron));
+   close (fd);
 }
 
 int check_multilogon(user_name)
 char *user_name;
 {
-   int fd, rc;
+   int fd, rc = 0;
    char filename[80];
    struct _useron useron;
 
-   rc = 0;
+   sprintf (filename, USERON_NAME, config->sys_path);
+   fd = shopen (filename, O_RDONLY|O_BINARY);
 
-   sprintf(filename,USERON_NAME, sys_path);
-   fd = shopen(filename, O_RDONLY|O_BINARY);
-
-   while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron))
-      if (!strcmp(useron.name, user_name))
-      {
+   while (read (fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron))
+      if (!strcmp (useron.name, user_name)) {
          rc = 1;
          break;
       }
 
-   close(fd);
+   close (fd);
 
    return (rc);
 }
@@ -317,16 +315,14 @@ int flag, cb_num;
         first = 1;
 
         line += 5;
-        sprintf(linea,USERON_NAME, sys_path);
-        fd = shopen(linea, O_RDONLY|O_BINARY);
+        sprintf (linea, USERON_NAME, config->sys_path);
+        fd = shopen (linea, O_RDONLY|O_BINARY);
 
-        while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron))
-        {
+        while (read (fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron)) {
                 if (!useron.name[0] || useron.cb_channel != cb_num)
                         continue;
 
-                if (first)
-                {
+                if (first) {
                         sprintf(linea,bbstxt[B_CALLERS_ON_CHANNEL], cb_num);
                         i = (80 - strlen(linea)) / 2;
                         space(i);
@@ -356,7 +352,7 @@ int flag, cb_num;
                 m_print(linea);
                 change_attr(WHITE|_BLACK);
                 m_print("%2d    ", useron.line);
-                m_print("  %5d   ", useron.baud);
+                m_print("  %5u   ", useron.baud);
                 change_attr(YELLOW|_BLACK);
                 sprintf(linea,"%s\n", useron.city);
                 linea[24] = '\0';
@@ -533,11 +529,10 @@ int cb_num;
    long cb_time;
    struct _useron useron;
 
-   sprintf(filename,USERON_NAME, sys_path);
+   sprintf(filename,USERON_NAME, config->sys_path);
    fd = shopen(filename, O_RDONLY|O_BINARY);
 
-   while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron))
-   {
+   while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron)) {
       if (!useron.name[0] || useron.cb_channel != cb_num)
          continue;
       if (useron.line == line_offset)
@@ -582,31 +577,71 @@ int task;
    return (15);
 }
 
-void yelling_at_sysop(secs)
+void yelling_at_sysop (char *arguments)
 {
    FILE *fp;
-   int wh;
-   char linea[128], s1[20], s2[20], s3[20];
+   int i, wh, secs = 0;
+   char linea[128], s1[20], s2[20], s3[20], *p;
    long t1, maxt;
+   struct dosdate_t dosdate;
+   struct time dostime;
      
-   wh = wopen(10,23,15,55,1,LCYAN|_BLUE,LCYAN|_BLUE);
-   wactiv(wh);
+   _dos_getdate (&dosdate);
+
+   if (config->page_start[dosdate.dayofweek] || config->page_end[dosdate.dayofweek]) {
+      gettime (&dostime);
+      i = dostime.ti_hour * 60 + dostime.ti_min;
+
+      if (i < config->page_start[dosdate.dayofweek] || i > config->page_end[dosdate.dayofweek]) {
+         read_system_file ("NOTAVAIL");
+         return;
+      }
+   }
+   else {
+      read_system_file ("NOTAVAIL");
+      return;
+   }
+
+   if ((p = stristr (arguments, "/A=\"")) != NULL) {
+      strcpy (linea, &p[4]);
+      p = strtok (linea, "\"");
+      m_print (p);
+   }
+   else
+      m_print (bbstxt[B_YELLING]);
+
+   hidecur ();
+
+   wh = wopen (10, 23, 15, 55, 1, LCYAN|_BLUE, LCYAN|_BLUE);
+   wactiv (wh);
    wtitle ("µ Sysop Page Æ", TCENTER, LCYAN|_BLUE);
 
-   wcenters(1,LCYAN|_BLUE,"[C] To break in for a chat");
-   wcenters(2,LCYAN|_BLUE,"[A] To terminate the page ");
+   wcenters (1, LCYAN|_BLUE, "[C] To break in for a chat");
+   wcenters (2, LCYAN|_BLUE, "[A] To terminate the page ");
 
-   maxt = timerset (secs * 100);
+   if ((p = stristr (arguments, "/T=")) != NULL)
+      secs = atoi (&p[3]);
 
-   if ((fp = fopen ("PAGE.DAT", "rt")) != NULL)
-   {
-      for (;;)
-      {
-         if (timeup (maxt))
+   if (!secs)
+      maxt = -1L;
+   else
+      maxt = timerset (secs * 100);
+
+   if ((p = stristr (arguments, "/F=")) != NULL) {
+      strcpy (linea, &p[3]);
+      p = strtok (linea, " ");
+   }
+   else
+      p = "PAGE.DAT";
+
+   if ((fp = fopen (p, "rt")) != NULL) {
+      for (;;) {
+         if (maxt != -1L && timeup (maxt))
             break;
 
-         if (fgets(linea, 127, fp) == NULL)
-         {
+         if (fgets(linea, 127, fp) == NULL) {
+            if (maxt == -1L)
+               break;
             rewind (fp);
             if (fgets(linea, 127, fp) == NULL)
                break;
@@ -618,20 +653,34 @@ void yelling_at_sysop(secs)
 
          sscanf(linea,"%s %s %s",s1, s2, s3);
 
-         if (!stricmp (s1, "TONE"))
-         {
-            setfreq (atoi (s2) );
+         if (!stricmp (s1, "TONE")) {
+#ifdef __OS2__
+            if (!usr.nerd)
+               DosBeep (atol (s2), atol (s3) * 10);
+            else
+               DosSleep (atol (s3) * 100);
+            time_release ();
+            if ( toupper(local_kbd) == 'C') {
+               wclose();
+               wactiv (mainview);
+               fclose (fp);
+               sysop_chatting ();
+               return;
+            }
+            if ( toupper(local_kbd) == 'A')
+               break;
+#else
+            if (!usr.nerd)
+               sound (atoi (s2) );
+            else
+               nosound ();
             t1 = timerset (atoi (s3) );
-            speaker (usr.nerd ? 0 : 1);
-            while (!timeup (t1))
-            {
+            while (!timeup (t1)) {
                if (!CARRIER)
                   return;
-               if ( toupper(local_kbd) == 'C')
-               {
-                  speaker(0);
+               if ( toupper(local_kbd) == 'C') {
+                  nosound ();
                   wclose();
-                  wunlink (wh);
                   wactiv (mainview);
                   fclose (fp);
                   sysop_chatting ();
@@ -641,19 +690,29 @@ void yelling_at_sysop(secs)
                   break;
                time_release ();
             }
+#endif
          }
-         else if (!stricmp (s1, "WAIT"))
-         {
-            speaker (0);
+         else if (!stricmp (s1, "WAIT")) {
+#ifdef __OS2__
+            DosSleep (atol (s2) * 10);
+            time_release ();
+            if ( toupper(local_kbd) == 'C') {
+               wclose();
+               wactiv (mainview);
+               fclose (fp);
+               sysop_chatting ();
+               return;
+            }
+            if ( toupper(local_kbd) == 'A')
+               break;
+#else
+            nosound ();
             t1 = timerset (atoi (s2) );
-            while (!timeup (t1))
-            {
+            while (!timeup (t1)) {
                if (!CARRIER)
                   return;
-               if ( toupper(local_kbd) == 'C')
-               {
+               if ( toupper(local_kbd) == 'C') {
                   wclose();
-                  wunlink (wh);
                   wactiv (mainview);
                   fclose (fp);
                   sysop_chatting ();
@@ -663,10 +722,10 @@ void yelling_at_sysop(secs)
                   break;
                time_release ();
             }
+#endif
          }
 
-         if ( toupper(local_kbd) == 'A')
-         {
+         if ( toupper(local_kbd) == 'A') {
             local_kbd = -1;
             break;
          }
@@ -675,10 +734,14 @@ void yelling_at_sysop(secs)
       fclose (fp);
    }
 
-   speaker (0);
+#ifndef __OS2__
+   nosound ();
+#endif
    wclose();
-   wunlink (wh);
    wactiv (mainview);
+
+   if (snooping)
+      showcur ();
 
    read_system_file ("PAGED");
 }
@@ -689,12 +752,13 @@ void sysop_chatting ()
    char wrp[80];
    long start_write;
 
+   showcur ();
+
    lorainfo.wants_chat = 0;
    if (function_active == 1)
       f1_status();
 
-   if (local_mode)
-   {
+   if (local_mode) {
       sysop_error ();
       return;
    }
@@ -702,6 +766,7 @@ void sysop_chatting ()
    local_kbd = -1;
    start_write = time(NULL);
 
+   status_line ("+Sysop entered chat mode");
    if (!read_system_file ("STARTCHT"))
       m_print(bbstxt[B_BREAKING_CHAT]);
 
@@ -713,6 +778,7 @@ void sysop_chatting ()
          return;
    }
 
+   status_line ("+Chat mode ended");
    if (!read_system_file ("ENDCHT"))
       m_print(bbstxt[B_CHAT_END]);
    local_kbd = -1;
@@ -722,127 +788,103 @@ void sysop_chatting ()
    usr.chat_minutes = (int)((time(NULL)-start_write)/60);
 }
 
-static void setfreq(hertz)
-int hertz;
-{
-   unsigned int divisor;
-
-   divisor = (unsigned int)(1193180L/hertz);
-   outp(0x43,0xB6);
-   outp(0x42,divisor & 0377);
-   outp(0x42,divisor >> 8);
-}
-
-static void speaker(on)
-int on;
-{
-   int portval;
-
-   portval = inp(0x61);
-   if(on)
-      portval |= 03;
-   else
-      portval &=~ 03;
-   outp(0x61, portval);
-}
-
 static void chat_wrap(wrp, width)
 char *wrp;
 int width;
 {
-        static char color = YELLOW|_BLACK;
-        char c, s[80];
-        int z, i, m;
+   static char color = YELLOW|_BLACK;
+   unsigned char c, s[80];
+   int z, i, m;
 
-        strcpy(s,wrp);
-        z = strlen(wrp);
+   strcpy (s, wrp);
+   z = strlen (wrp);
 
-        m_print("%c%s", color, wrp);
+   m_print ("%c%s", color, wrp);
 
-        while(z < width) {
-                if (PEEKBYTE() == -1 && local_kbd == -1)
-                {
-                        if (!CARRIER)
-                                return;
-                        time_release();
-                        continue;
-                }
+   while (z < width) {
+#ifdef __OS2__
+      UNBUFFER_BYTES ();
+      VioUpdate ();
+#endif
 
-                if (PEEKBYTE() != -1)
-                {
-                        c = TIMED_READ(1);
-                        if (color != (CYAN+_BLACK))
-                        {
-                                color = CYAN|_BLACK;
-                                change_attr (color);
-                        }
-                }
-                else if (local_kbd != -1) {
-                        c = (char)local_kbd;
-                        if (c == 0x1B)
-                                return;
-                        local_kbd = -1;
-                        if (color != (YELLOW+_BLACK))
-                        {
-                                color = YELLOW|_BLACK;
-                                change_attr (color);
-                        }
-                }
+      while (PEEKBYTE () == -1 && local_kbd == -1) {
+         if (!CARRIER)
+            return;
+         time_release ();
+      }
 
-                if(c == 0x0D && z == 0) {
-                        m_print("\n");
-                        s[0]='\0';
-                        wrp[0]='\0';
-                        return;
-                }
+      if (PEEKBYTE () != -1) {
+         c = TIMED_READ (1);
+         if (color != (CYAN + _BLACK)) {
+            color = CYAN|_BLACK;
+            change_attr (color);
+         }
+      }
+      else if (local_kbd != -1) {
+         c = (char)local_kbd;
+         if (c == 0x1B)
+            return;
+         local_kbd = -1;
+         if (color != (YELLOW + _BLACK)) {
+            color = YELLOW|_BLACK;
+            change_attr (color);
+         }
+      }
 
-                if((c == 0x08 || c == 0x7F) && (z>0)) {
-                        s[--z]='\0';
-                        SENDBYTE('\b');
-                        SENDBYTE(' ');
-                        SENDBYTE('\b');
-                        if (snooping)
-                                wputs("\b \b");
-                }
+      if (c == 0x0D && z == 0) {
+         m_print ("\n");
+         s[0] = '\0';
+         wrp[0] = '\0';
+         return;
+      }
 
-                if(c < 20 && c != 0x0D && c != 0x7F)
-                        continue;
+      if ((c == 0x08 || c == 0x7F) && (z > 0)) {
+         s[--z] = '\0';
+         SENDBYTE ('\b');
+         SENDBYTE (' ');
+         SENDBYTE ('\b');
+         if (snooping)
+            wputs ("\b \b");
+      }
 
-                s[z++]=c;
+      if (c < 20 && c != 0x0D && c != 0x7F)
+         continue;
 
-                if(c == 0x0D) {
-                        m_print("\n");
-                        s[z]='\0';
-                        wrp[0]='\0';
-                        return;
-                }
+      s[z++] = c;
 
-                SENDBYTE(c);
-                if (snooping)
-                        wputc(c);
-        }
+      if (c == 0x0D) {
+         m_print ("\n");
+         s[z] = '\0';
+         wrp[0] = '\0';
+         return;
+      }
 
-        s[z]='\0';
+      SENDBYTE (c);
+      if (snooping)
+         wputc (c);
+   }
 
-        while(z > 0 && s[z] != ' ')
-                z--;
+   s[z] = '\0';
 
-        m=0;
+   while (z > 0 && s[z] != ' ')
+      z--;
 
-        if(z != 0) {
-                for(i=z+1;i<=width;i++) {
-                        SENDBYTE(0x08);
-                        wrp[m++]=s[i];
-                        if (snooping)
-                                wputs("\b");
-                        s[i]='\0';
-                }
+   m = 0;
 
-                space(width-z);
-        }
+   if (z != 0) {
+      for (i = z + 1; i <= width; i++) {
+         SENDBYTE (0x08);
+         wrp[m++] = s[i];
+         if (snooping)
+            wputs ("\b");
+         s[i] = '\0';
+      }
 
-        wrp[m]='\0';
-        m_print("\n");
+      space (width - z);
+   }
+
+   wrp[m] = '\0';
+   m_print ("\n");
 }
 
 void broadcast_message (message)
@@ -853,11 +895,10 @@ char *message;
    struct _useron useron;
    long cb_time;
 
-   sprintf(filename, USERON_NAME, sys_path);
+   sprintf(filename, USERON_NAME, config->sys_path);
    fd = shopen(filename, O_RDONLY|O_BINARY);
 
-   while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron))
-   {
+   while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron)) {
       if (!useron.name[0] || useron.donotdisturb)
          continue;
       if (useron.line == line_offset)

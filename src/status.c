@@ -6,31 +6,51 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <io.h>
+#include <dos.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 
 #include <cxl\cxlwin.h>
+#include <cxl\cxlvid.h>
 
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 
-void status_line(char *format, ...)
+#ifdef __OS2__
+void VioUpdate (void);
+#endif
+int scrollbox(int wsrow,int wscol,int werow,int wecol,int count,int direction);
+
+static char *string = NULL;
+
+void open_logfile (void)
+{
+   if ((logf = sh_fopen (log_name, "at", SH_DENYNONE)) == NULL)
+      return;
+
+   if (config->logbuffer > 64)
+      config->logbuffer = 64;
+   if (config->logbuffer < 0)
+      config->logbuffer = 0;
+
+   setvbuf (logf, NULL, _IOFBF, (int)config->logbuffer * 1024);
+}
+
+void status_line (char *format, ...)
 {
    va_list var_args;
-   char *string;
+   char tmpdata[80];
    struct tm *tim;
    long tempo;
 
-   string=(char *)malloc(256);
+   if (string == NULL)
+      string = (char *)malloc (2048);
 
-   if (string==NULL || strlen(format) > 256)
-   {
-      if (string)
-         free(string);
+   if (string == NULL || strlen (format) > 256)
       return;
-   }
 
    va_start(var_args,format);
    vsprintf(string,format,var_args);
@@ -39,57 +59,64 @@ void status_line(char *format, ...)
    tempo = time(0);
    tim   = localtime(&tempo);
 
-   if (frontdoor)
-      fprintf(logf,"%c %02d:%02d:%02d  %s\n", string[0], tim->tm_hour, tim->tm_min, tim->tm_sec, &string[1]);
-   else
-      fprintf(logf,"%c %02d %3s %02d:%02d:%02d LORA %s\n", string[0], tim->tm_mday, mtext[tim->tm_mon], tim->tm_hour, tim->tm_min, tim->tm_sec, &string[1]);
+   if (logf != NULL) {
+      if (frontdoor)
+         fprintf(logf,"%c %02d:%02d:%02d  %s\n", string[0], tim->tm_hour, tim->tm_min, tim->tm_sec, &string[1]);
+      else
+         fprintf(logf,"%c %02d %3s %02d:%02d:%02d LORA %s\n", string[0], tim->tm_mday, mtext[tim->tm_mon], tim->tm_hour, tim->tm_min, tim->tm_sec, &string[1]);
+   }
 
-   fflush(logf);
-   real_flush(fileno(logf));
+   if (!caller && !emulator) {
+      string[44] = '\0';
+      sprintf (tmpdata, "%c %02d:%02d %s", string[0], tim->tm_hour, tim->tm_min, &string[1]);
+      scrollbox (2, 1, 11, 51, 1, D_UP);
+      prints (11, 1, WHITE|_BLACK, tmpdata);
+   }
 
-   free(string);
+//   fflush(logf);
+#ifndef __OS2__
+//   real_flush(fileno(logf));
+#endif
 }
 
+extern long elapsed;
 
 void local_status(char *format, ...)
 {
    va_list var_args;
-   char *string;
 
-   string=(char *)malloc(256);
+   if (string == NULL)
+      string = (char *)malloc (2048);
 
    if (string==NULL || strlen(format) > 256)
-   {
-      if (string)
-         free(string);
       return;
-   }
 
    va_start(var_args,format);
    vsprintf(string,format,var_args);
    va_end(var_args);
 
-   wgotoxy(2,2);
-   wtextattr (LCYAN|_BLUE);
-   wclreol();
-   wprints(2,2,LCYAN|_BLUE,string);
+   if (strlen (string)) {
+      prints (5, 65, YELLOW|_BLACK, "              ");
+      prints (5, 65, YELLOW|_BLACK, string);
+      elapsed = time (NULL);
+   }
 
-   free(string);
+#ifdef __OS2__
+   VioUpdate ();
+#endif
 }
 
 void m_print(char *format, ...)
 {
    va_list var_args;
-   char *string, *q, visual, strm[2];
+   char *q, visual, strm[2];
    byte c, a, m;
 
-   string=(char *)malloc(256);
+   if (string == NULL)
+      string = (char *)malloc (2048);
 
-   if (string==NULL || strlen(format) > 256) {
-      if (string)
-         free(string);
+   if (string==NULL || strlen(format) > 256)
       return;
-   }
 
    va_start(var_args,format);
    vsprintf(string,format,var_args);
@@ -103,11 +130,111 @@ void m_print(char *format, ...)
 
       if (*q == LF) {
          if (!local_mode) {
-            SENDBYTE('\r');
-            SENDBYTE('\n');
+            BUFFER_BYTE ('\r');
+            BUFFER_BYTE ('\n');
          }
+         if (snooping) {
+            wputc ('\r');
+            wputc ('\n');
+         }
+      }
+      else if (*q == CTRLV) {
+         q++;
+         if (*q == CTRLA) {
+            q++;
+
+            if (*q == CTRLP) {
+               q++;
+               change_attr(*q & 0x7F);
+            }
+            else
+               change_attr(*q);
+         }
+         else if (*q == CTRLG)
+            del_line();
+         else if (*q == CTRLC)
+            cup (1);
+         else if (*q == CTRLD)
+            cdo (1);
+         else if (*q == CTRLE)
+            cle (1);
+         else if (*q == CTRLF)
+            cri (1);
+         else if (*q == CTRLH) {
+            cpos ( *(q+1), *(q+2) );
+            q += 2;
+         }
+      }
+      else if (*q == CTRLL)
+         cls ();
+      else if (*q == CTRLY) {
+         c = *(++q);
+         if (!usr.ibmset && (unsigned char)c >= 128)
+            c = bbstxt[B_ASCII_CONV][(unsigned char)c - 128];
+         a = *(++q);
+         if(usr.avatar && !local_mode) {
+            BUFFER_BYTE (CTRLY);
+            BUFFER_BYTE (c);
+            BUFFER_BYTE (a);
+         }
+         else if (!local_mode)
+            for(m=0;m<a;m++)
+               BUFFER_BYTE(c);
          if (snooping)
-            wputs("\n");
+            wdupc (c, a);
+      }
+      else if (*q == CTRLA) {
+         m_print (bbstxt[B_PRESS_ENTER]);
+         input (strm, 0);
+      }
+      else {
+         c = *q;
+         if (!usr.ibmset && (unsigned char)c >= 128)
+            c = bbstxt[B_ASCII_CONV][c - 128];
+         if (!local_mode)
+            BUFFER_BYTE (c);
+         if (snooping && visual)
+            wputc(c);
+      }
+   }
+
+#ifndef __OS2__
+   if (!local_mode)
+      UNBUFFER_BYTES ();
+#endif
+}
+
+void m_print2(char *format, ...)
+{
+   va_list var_args;
+   char *q, visual, strm[2];
+   byte c, a, m;
+
+   if (string == NULL)
+      string = (char *)malloc (2048);
+
+   if (string==NULL || strlen(format) > 256)
+      return;
+
+   va_start(var_args,format);
+   vsprintf(string,format,var_args);
+   va_end(var_args);
+
+   visual = 1;
+
+   for(q=string;*q;q++) {
+      if (*q == 0x1B)
+         visual = 0;
+
+      if (*q == LF) {
+         if (!local_mode) {
+            BUFFER_BYTE('\r');
+            BUFFER_BYTE('\n');
+         }
+         if (snooping) {
+            wputc ('\r');
+            wputc ('\n');
+         }
       }
       else if (*q == CTRLV) {
          q++;
@@ -172,14 +299,16 @@ void m_print(char *format, ...)
    if (!local_mode)
       UNBUFFER_BYTES ();
 
-   free(string);
+#ifdef __OS2__
+   VioUpdate ();
+#endif
 }
 
 void show_account ()
 {
    m_print (bbstxt[B_MINUTES_LEFT], time_remain ());
    m_print (bbstxt[B_IN_BANK], usr.account);
-   m_print (bbstxt[B_KBYTES_LEFT], class[usr_class].max_dl - usr.dnldl);
+   m_print (bbstxt[B_KBYTES_LEFT], config->class[usr_class].max_dl - usr.dnldl);
    m_print (bbstxt[B_K_IN_BANK], usr.f_account);
 
    press_enter ();
@@ -216,9 +345,9 @@ void deposit_kbytes ()
    int col;
    char stringa[6];
 
-   m_print (bbstxt[B_KBYTES_LEFT], class[usr_class].max_dl - usr.dnldl);
+   m_print (bbstxt[B_KBYTES_LEFT], config->class[usr_class].max_dl - usr.dnldl);
    m_print (bbstxt[B_K_IN_BANK], usr.f_account);
-   m_print (bbstxt[B_K_CAN_DEPOSIT], class[usr_class].max_dl - usr.dnldl);
+   m_print (bbstxt[B_K_CAN_DEPOSIT], config->class[usr_class].max_dl - usr.dnldl);
 
    do {
       m_print(bbstxt[B_HOW_MUCH_DEPOSIT]);
@@ -226,7 +355,7 @@ void deposit_kbytes ()
       if (!CARRIER || !stringa[0])
          return;
       col = atoi(stringa);
-   } while ((col < 0 || col > (class[usr_class].max_dl - usr.dnldl)) && CARRIER);
+   } while ((col < 0 || col > (config->class[usr_class].max_dl - usr.dnldl)) && CARRIER);
 
    if (col > 0) {
       usr.f_account += col;
@@ -250,7 +379,7 @@ void withdraw_time ()
       if (!CARRIER || !stringa[0])
          return;
       col = atoi(stringa);
-      if ((time_remain() + col) > (allowed ? allowed : time_to_next(1))) {
+      if ((time_remain() + col) > time_to_next(1)) {
          read_system_file ("TIMEWARN");
          col = -1;
          continue;
@@ -272,7 +401,7 @@ void withdraw_kbytes ()
    int col;
    char stringa[6];
 
-   m_print (bbstxt[B_KBYTES_LEFT], class[usr_class].max_dl - usr.dnldl);
+   m_print (bbstxt[B_KBYTES_LEFT], config->class[usr_class].max_dl - usr.dnldl);
    m_print (bbstxt[B_K_IN_BANK], usr.f_account);
 
    do {
@@ -335,12 +464,12 @@ int num;
    struct _bbslist bbs;
 
    if (num)
-      sprintf (filename, "%sBBSLIST%d.BBS", sys_path, num);
+      sprintf (filename, "%sBBSLIST%d.BBS", config->sys_path, num);
    else
-      sprintf (filename, "%sBBSLIST.BBS", sys_path);
+      sprintf (filename, "%sBBSLIST.BBS", config->sys_path);
    fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
-   sprintf (filename, "%sBBS%d.TXT", sys_path, line_offset);
+   sprintf (filename, "%sBBS%d.TXT", config->sys_path, line_offset);
    fp = fopen (filename, "wt");
 
    while (read (fd, (char *)&bbs, sizeof (struct _bbslist)) == sizeof (struct _bbslist)) {
@@ -410,9 +539,9 @@ int num;
       return;
 
    if (num)
-      sprintf (filename, "%sBBSLIST%d.BBS", sys_path, num);
+      sprintf (filename, "%sBBSLIST%d.BBS", config->sys_path, num);
    else
-      sprintf (filename, "%sBBSLIST.BBS", sys_path);
+      sprintf (filename, "%sBBSLIST.BBS", config->sys_path);
    fd = cshopen (filename, O_APPEND|O_WRONLY|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
    write (fd, (char *)&bbs, sizeof (struct _bbslist));
    close (fd);
@@ -426,9 +555,9 @@ int num;
    struct _bbslist bbs;
 
    if (num)
-      sprintf (filename, "%sBBSLIST%d.BBS", sys_path, num);
+      sprintf (filename, "%sBBSLIST%d.BBS", config->sys_path, num);
    else
-      sprintf (filename, "%sBBSLIST.BBS", sys_path);
+      sprintf (filename, "%sBBSLIST.BBS", config->sys_path);
    fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
    cls ();
@@ -462,9 +591,9 @@ int num;
       return;
 
    if (num)
-      sprintf (filename, "%sBBSLIST%d.BBS", sys_path, num);
+      sprintf (filename, "%sBBSLIST%d.BBS", config->sys_path, num);
    else
-      sprintf (filename, "%sBBSLIST.BBS", sys_path);
+      sprintf (filename, "%sBBSLIST.BBS", config->sys_path);
    fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
    cls ();
@@ -472,7 +601,7 @@ int num;
 
    while (read (fd, (char *)&bbs, sizeof (struct _bbslist)) == sizeof (struct _bbslist)) {
       strcpy (filename, bbs.bbs_name);
-      if (stristr (filename, name)) {
+      if (!name[0] || stristr (filename, name)) {
          if (!(line = bbs_list (line, &bbs)))
             break;
       }
@@ -484,15 +613,13 @@ int num;
    press_enter ();
 }
 
-void bbs_change (num)
-int num;
+void bbs_change (int num, int restricted)
 {
    int fd;
    char filename [80], name[40], found;
    long pos;
    struct _bbslist bbs;
 
-   cls ();
    name[0] = 0;
    m_print (bbstxt[B_BBS_NAMETOCHANGE]);
    chars_input (name, 39, INPUT_FIELD);
@@ -500,10 +627,10 @@ int num;
       return;
 
    if (num)
-      sprintf (filename, "%sBBSLIST%d.BBS", sys_path, num);
+      sprintf (filename, "%sBBSLIST%d.BBS", config->sys_path, num);
    else
-      sprintf (filename, "%sBBSLIST.BBS", sys_path);
-   fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+      sprintf (filename, "%sBBSLIST.BBS", config->sys_path);
+   fd = sh_open (filename, SH_DENYNONE, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
    cls ();
    found = 0;
@@ -523,6 +650,13 @@ int num;
    if (!found) {
       close (fd);
       return;
+   }
+
+   if (restricted) {
+      if (usr.priv < SYSOP && stricmp (usr.name, bbs.sysop_name) && stricmp (usr.handle, bbs.sysop_name)) {
+         m_print (bbstxt[B_BBSLIST_NOCHANGE]);
+         return;
+      }
    }
 
    cpos (2, 1);
@@ -554,8 +688,7 @@ int num;
    close (fd);
 }
 
-void bbs_remove (num)
-int num;
+void bbs_remove (int num, int restricted)
 {
    int fd;
    char filename [80], name[40];
@@ -569,9 +702,9 @@ int num;
       return;
 
    if (num)
-      sprintf (filename, "%sBBSLIST%d.BBS", sys_path, num);
+      sprintf (filename, "%sBBSLIST%d.BBS", config->sys_path, num);
    else
-      sprintf (filename, "%sBBSLIST.BBS", sys_path);
+      sprintf (filename, "%sBBSLIST.BBS", config->sys_path);
    fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
    m_print (bbstxt[B_ONE_CR]);
@@ -584,8 +717,16 @@ int num;
       if (stristr (filename, name)) {
          bbs_list (0, &bbs);
          m_print (bbstxt[B_BBSLIST_REMOVE]);
-         if (yesno_question (DEF_NO) == DEF_YES)
-            continue;
+         if (yesno_question (DEF_NO) == DEF_YES) {
+            if (restricted) {
+               if (usr.priv < SYSOP && stricmp (usr.name, bbs.sysop_name) && stricmp (usr.handle, bbs.sysop_name))
+                  m_print (bbstxt[B_BBSLIST_NODELETE]);
+               else
+                  continue;
+            }
+            else
+               continue;
+         }
       }
 
       lseek (fd, wpos, SEEK_SET);
@@ -598,6 +739,7 @@ int num;
    close (fd);
 }
 
+/*
 void vote_user (n)
 int n;
 {
@@ -620,7 +762,7 @@ int n;
          return;
    }
 
-   sprintf(linea, "%s.BBS", user_file);
+   sprintf(linea, "%s.BBS", config->user_file);
    fd=shopen(linea,O_RDWR|O_BINARY);
    prev = tell(fd);
 
@@ -669,5 +811,5 @@ void ballot_votes ()
       usr.votes = 0;
    }
 }
-
+*/
 

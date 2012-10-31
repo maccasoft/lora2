@@ -1,30 +1,45 @@
 #include <stdio.h>
 #include <conio.h>
 #include <string.h>
+#include <ctype.h>
 #include <dir.h>
 #include <io.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <time.h>
 #include <stdlib.h>
 #include <dos.h>
+#include <alloc.h>
 #include <sys/stat.h>
+
+#ifdef __OS2__
+#define INCL_DOS
+#define INCL_NOPMAPI
+#define INCL_VIO
+#include <os2.h>
+#endif
 
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
 #include <cxl\cxlstr.h>
+#include <cxl\cxlkey.h>
 
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
-#include "zmodem.h"
 #include "quickmsg.h"
 
-static void create_quickbase_file (void);
-static int no_dups(int, int, int);
-void display_outbound_info (int);
+extern int outinfo;
+extern char *wtext[];
 
-int node_sort_func (const void *a1, const void *b1)
+static void create_quickbase_file (void);
+int no_dups(int, int, int, int);
+void get_bad_call (int, int, int, int, int);
+int isbundle (char *);
+
+static int node_sort_func (const void *a1, const void *b1)
 {
    struct _call_list *a, *b;
 
@@ -33,83 +48,304 @@ int node_sort_func (const void *a1, const void *b1)
 
    if (a->zone != b->zone)  return (a->zone - b->zone);
    if (a->net != b->net)    return (a->net - b->net);
-   return (a->node - b->node);
+   if (a->node != b->node)    return (a->node - b->node);
+   return (a->point - b->point);
 }
 
-void get_call_list()
+void sort_call_list ()
+{
+   qsort (&call_list[0], max_call, sizeof (struct _call_list), node_sort_func);
+}
+
+void build_node_queue (int zone, int net, int node, int point, int i)
 {
    FILE *fp;
-   int i, net, node, m, z;
-   char c, filename[100], outbase[100], *p;
-   struct ffblk blk, blk2, blko;
+   int fd, m;
+   char filename[120], something = 0;
+   struct ffblk blk, blk2;
 
-   for(i=0;i<MAX_OUT;i++) {
-      call_list[i].zone = 0;
-      call_list[i].net  = 0;
-      call_list[i].node = 0;
+   if (i != -1) {
       call_list[i].type = 0;
-      call_list[i].size = 0L;
+      call_list[i].size = call_list[i].b_mail = call_list[i].b_data = 0;
+      call_list[i].n_mail = call_list[i].n_data = 0;
    }
 
-   max_call = 0;
+   if (!point)
+      sprintf (filename, "%s%04X%04X.*", HoldAreaNameMunge (zone), net, node);
+   else
+      sprintf (filename, "%s%04X%04X.PNT\\%08X.*", HoldAreaNameMunge (zone), net, node, point);
 
-   strcpy (filename, HoldAreaNameMunge (alias[0].zone));
+   if (findfirst (filename, &blk, 0))
+      return;
+
+   if (i == -1)
+      i = no_dups (zone, net, node, point);
+
+   memset (&call_list[i], 0, sizeof (struct _call_list));
+   call_list[i].zone = zone;
+   call_list[i].net = net;
+   call_list[i].node = node;
+   call_list[i].point = point;
+
+   do {
+      m = strlen (strupr (blk.ff_name));
+      if (blk.ff_name[m - 1] == 'T' && blk.ff_name[m - 2] == 'U') {
+         if (blk.ff_fdate > call_list[i].fdate || blk.ff_ftime > call_list[i].ftime) {
+            call_list[i].fdate = blk.ff_fdate;
+            call_list[i].ftime = blk.ff_ftime;
+         }
+         something = 1;
+         call_list[i].size += blk.ff_fsize;
+         call_list[i].n_mail++;
+         call_list[i].b_mail += blk.ff_fsize;
+      }
+      else if (blk.ff_name[m - 1] == 'O' && blk.ff_name[m - 2] == 'L') {
+         if (blk.ff_fdate > call_list[i].fdate || blk.ff_ftime > call_list[i].ftime) {
+            call_list[i].fdate = blk.ff_fdate;
+            call_list[i].ftime = blk.ff_ftime;
+         }
+         something = 1;
+
+         if (!point)
+            sprintf (filename, "%s%s", HoldAreaNameMunge (zone), blk.ff_name);
+         else
+            sprintf (filename, "%s%04X%04X.PNT\\%s", HoldAreaNameMunge (zone), net, node, blk.ff_name);
+
+         fp = sh_fopen (filename, "rt", SH_DENYNONE);
+         while (fp != NULL && fgets (filename, 99, fp) != NULL) {
+            if (filename[strlen (filename) - 1] == '\n')
+               filename[strlen (filename) - 1] = '\0';
+            if (strchr (filename, '*') == NULL && strchr (filename, '?') == NULL) {
+               if ((fd = open (filename, O_RDONLY|O_BINARY)) != -1) {
+                  call_list[i].size += filelength (fd);
+                  if (isbundle (&filename[strlen (filename) - 12])) {
+                     call_list[i].n_mail++;
+                     call_list[i].b_mail += filelength (fd);
+                  }
+                  else {
+                     call_list[i].n_data++;
+                     call_list[i].b_data += filelength (fd);
+                  }
+                  close (fd);
+               }
+               else if ((fd = open (&filename[1], O_RDONLY)) != -1) {
+                  call_list[i].size += filelength (fd);
+                  if (isbundle (&filename[strlen (filename) - 12])) {
+                     call_list[i].n_mail++;
+                     call_list[i].b_mail += filelength (fd);
+                  }
+                  else {
+                     call_list[i].n_data++;
+                     call_list[i].b_data += filelength (fd);
+                  }
+                  close (fd);
+               }
+            }
+            else {
+               if (!findfirst (filename, &blk2, 0))
+                  do {
+                     call_list[i].size += blk2.ff_fsize;
+                     if (isbundle (blk2.ff_name)) {
+                        call_list[i].n_mail++;
+                        call_list[i].b_mail += blk2.ff_fsize;
+                     }
+                     else {
+                        call_list[i].n_data++;
+                        call_list[i].b_data += blk2.ff_fsize;
+                     }
+                  } while (!findnext(&blk2));
+               else if (!findfirst (&filename[1], &blk2, 0))
+                  do {
+                     call_list[i].size += blk2.ff_fsize;
+                     if (isbundle (blk2.ff_name)) {
+                        call_list[i].n_mail++;
+                        call_list[i].b_mail += blk2.ff_fsize;
+                     }
+                     else {
+                        call_list[i].n_data++;
+                        call_list[i].b_data += blk2.ff_fsize;
+                     }
+                  } while (!findnext(&blk2));
+            }
+         }
+         fclose (fp);
+      }
+      if (blk.ff_name[m-3] == 'C' && blk.ff_name[m-2] == 'U')
+         call_list[i].type |= MAIL_CRASH;
+      else if (blk.ff_name[m-3] == 'C' && blk.ff_name[m-2] == 'L')
+         call_list[i].type |= MAIL_CRASH;
+      else if (blk.ff_name[m-3] == 'I' && blk.ff_name[m-2] == 'L')
+         call_list[i].type |= MAIL_WILLGO;
+      else if (blk.ff_name[m-3] == 'F' && blk.ff_name[m-2] == 'L')
+         call_list[i].type |= MAIL_NORMAL;
+      else if (blk.ff_name[m-3] == 'D')
+         call_list[i].type |= MAIL_DIRECT;
+      else if (blk.ff_name[m-3] == 'H')
+         call_list[i].type |= MAIL_HOLD;
+      else if (blk.ff_name[m-3] == 'O' && blk.ff_name[m-2] == 'U')
+         call_list[i].type |= MAIL_NORMAL;
+      else if (blk.ff_name[m-1] == 'Q' && blk.ff_name[m-2] == 'E' && blk.ff_name[m-3] == 'R') {
+         if (!(call_list[i].type & MAIL_REQUEST)) {
+            call_list[i].type |= MAIL_REQUEST;
+            call_list[i].size += blk.ff_fsize;
+         }
+         something = 1;
+      }
+   } while (!findnext (&blk));
+
+   if (something && max_call <= i)
+      max_call = i + 1;
+}
+
+void build_call_queue (int force)
+{
+   FILE *fp;
+   int fd, i, net, node, m, z, point;
+   char c, filename[100], outbase[100], *p, noinside = 0;
+   struct ffblk blk, blk2, blko, blkp;
+
+   memset ((char *)&call_list, 0, sizeof (struct _call_list) * MAX_OUT);
+   max_call = 0;
+   next_call = 0;
+
+   wfill (14, 1, 21, 51, ' ', LCYAN|_BLACK);
+
+   if (!force) {
+      sprintf (filename, "%sQUEUE.DAT", config->sys_path);
+      fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
+      if (fd != -1) {
+         max_call = 0;
+         read (fd, (char *)&max_call, sizeof (short));
+         read (fd, (char *)&call_list, sizeof (struct _call_list) * max_call);
+         close (fd);
+         noinside = 1;
+
+         for (i = 0; i < max_call; i++)
+            call_list[i].type &= ~(MAIL_EXISTS|MAIL_INSPECT|MAIL_WILLGO);
+      }
+   }
+
+   strcpy (filename, HoldAreaNameMunge (config->alias[0].zone));
    filename[strlen(filename) - 1] = '\0';
    strcpy (outbase, filename);
    strcat (filename, ".*");
 
    if (!findfirst (filename, &blko, FA_DIREC))
       do {
-         p = strchr (blko.ff_name, '.');
+         p = strchr (strupr (blko.ff_name), '.');
 
          sprintf (filename, "%s%s\\*.*", outbase, p == NULL ? "" : p);
          c = '\0';
 
-         if(!findfirst(filename,&blk,0))
+         if(!findfirst(filename,&blk,FA_DIREC))
             do {
-               m = strlen (blk.ff_name);
-               if ((blk.ff_name[m-1] == 'T' && blk.ff_name[m-2] == 'U') ||
-                   (blk.ff_name[m-1] == 'O' && blk.ff_name[m-2] == 'L') ||
-                   (blk.ff_name[m-1] == 'Q' && blk.ff_name[m-2] == 'E' && blk.ff_name[m-3] == 'R')) {
+               m = strlen (strupr (blk.ff_name));
+               if (m < 3)
+                  continue;
+
+               // Si tratta di .?UT .?LO o .REQ
+               if ((blk.ff_name[m-1] == 'T' && blk.ff_name[m-2] == 'U') || (blk.ff_name[m-1] == 'O' && blk.ff_name[m-2] == 'L') || (blk.ff_name[m-1] == 'Q' && blk.ff_name[m-2] == 'E' && blk.ff_name[m-3] == 'R')) {
                   sscanf(blk.ff_name,"%4x%4x.%c",&net,&node,&c);
 
                   if (p == NULL) {
-                     i = no_dups (alias[0].zone, net, node);
-                     call_list[i].zone = alias[0].zone;
+                     i = no_dups (config->alias[0].zone, net, node, 0);
+                     call_list[i].zone = config->alias[0].zone;
                   }
                   else {
                      sscanf (&p[1], "%3x", &z);
-                     i = no_dups (z, net, node);
+                     i = no_dups (z, net, node, 0);
                      call_list[i].zone = z;
                   }
 
                   call_list[i].net  = net;
                   call_list[i].node = node;
+                  call_list[i].type |= MAIL_EXISTS;
 
-                  if (blk.ff_name[m-1] == 'T' && blk.ff_name[m-2] == 'U')
-                     call_list[i].size += blk.ff_fsize;
-                  else if (blk.ff_name[m-1] == 'O' && blk.ff_name[m-2] == 'L') {
-                     sprintf(filename,"%s%s",HoldAreaNameMunge (call_list[i].zone),blk.ff_name);
-                     fp = fopen(filename,"rt");
-                     while (fgets(filename, 99, fp) != NULL) {
-                        if (filename[strlen(filename)-1] == '\n')
-                           filename[strlen(filename)-1] = '\0';
-                        if (!findfirst (filename, &blk2, 0))
-                           do {
-                              call_list[i].size += blk2.ff_fsize;
-                           } while (!findnext(&blk2));
-                        else if (!findfirst (&filename[1], &blk2, 0))
-                           do {
-                              call_list[i].size += blk2.ff_fsize;
-                           } while (!findnext(&blk2));
+                  if (blk.ff_fdate > call_list[i].fdate || blk.ff_ftime > call_list[i].ftime) {
+                     call_list[i].fdate = blk.ff_fdate;
+                     call_list[i].ftime = blk.ff_ftime;
+                     if (noinside && max_call > i)
+                        call_list[i].type |= MAIL_INSPECT;
+                  }
+
+                  if (!noinside || max_call <= i) {
+                     if (!get_bbs_record (call_list[i].zone, call_list[i].net, call_list[i].node, call_list[i].point))
+                        call_list[i].type |= MAIL_UNKNOWN;
+
+                     if (blk.ff_name[m-1] == 'T' && blk.ff_name[m-2] == 'U') {
+                        call_list[i].size += blk.ff_fsize;
+                        call_list[i].n_mail++;
+                        call_list[i].b_mail += blk.ff_fsize;
                      }
-                     fclose (fp);
+                     else if (blk.ff_name[m-1] == 'O' && blk.ff_name[m-2] == 'L') {
+                        sprintf(filename,"%s%s",HoldAreaNameMunge (call_list[i].zone),blk.ff_name);
+                        fp = sh_fopen (filename, "rt", SH_DENYNONE);
+                        while (fp != NULL && fgets(filename, 99, fp) != NULL) {
+                           if (filename[strlen(filename)-1] == '\n')
+                              filename[strlen(filename)-1] = '\0';
+                           if (strchr (filename, '*') == NULL && strchr (filename, '?') == NULL) {
+                              if ((fd = open (filename, O_RDONLY)) != -1) {
+                                 call_list[i].size += filelength (fd);
+                                 if (isbundle (&filename[strlen (filename) - 12])) {
+                                    call_list[i].n_mail++;
+                                    call_list[i].b_mail += filelength (fd);
+                                 }
+                                 else {
+                                    call_list[i].n_data++;
+                                    call_list[i].b_data += filelength (fd);
+                                 }
+                                 close (fd);
+                              }
+                              else if ((fd = open (&filename[1], O_RDONLY)) != -1) {
+                                 call_list[i].size += filelength (fd);
+                                 if (isbundle (&filename[strlen (filename) - 12])) {
+                                    call_list[i].n_mail++;
+                                    call_list[i].b_mail += filelength (fd);
+                                 }
+                                 else {
+                                    call_list[i].n_data++;
+                                    call_list[i].b_data += filelength (fd);
+                                 }
+                                 close (fd);
+                              }
+                           }
+                           else {
+                              if (!findfirst (filename, &blk2, 0))
+                                 do {
+                                    call_list[i].size += blk2.ff_fsize;
+                                    if (isbundle (blk2.ff_name)) {
+                                       call_list[i].n_mail++;
+                                       call_list[i].b_mail += blk2.ff_fsize;
+                                    }
+                                    else {
+                                       call_list[i].n_data++;
+                                       call_list[i].b_data += blk2.ff_fsize;
+                                    }
+                                 } while (!findnext(&blk2));
+                              else if (!findfirst (&filename[1], &blk2, 0))
+                                 do {
+                                    call_list[i].size += blk2.ff_fsize;
+                                    if (isbundle (blk2.ff_name)) {
+                                       call_list[i].n_mail++;
+                                       call_list[i].b_mail += blk2.ff_fsize;
+                                    }
+                                    else {
+                                       call_list[i].n_data++;
+                                       call_list[i].b_data += blk2.ff_fsize;
+                                    }
+                                 } while (!findnext(&blk2));
+                           }
+                        }
+                        fclose (fp);
+                     }
                   }
 
                   if (blk.ff_name[m-3] == 'C' && blk.ff_name[m-2] == 'U')
                      call_list[i].type |= MAIL_CRASH;
                   else if (blk.ff_name[m-3] == 'C' && blk.ff_name[m-2] == 'L')
                      call_list[i].type |= MAIL_CRASH;
+                  else if (blk.ff_name[m-3] == 'I' && blk.ff_name[m-2] == 'L')
+                     call_list[i].type |= MAIL_WILLGO;
                   else if (blk.ff_name[m-3] == 'F' && blk.ff_name[m-2] == 'L')
                      call_list[i].type |= MAIL_NORMAL;
                   else if (blk.ff_name[m-3] == 'D')
@@ -120,59 +356,490 @@ void get_call_list()
                      call_list[i].type |= MAIL_NORMAL;
                   else if (blk.ff_name[m-1] == 'Q' && blk.ff_name[m-2] == 'E' && blk.ff_name[m-3] == 'R') {
                      call_list[i].type |= MAIL_REQUEST;
-                     call_list[i].size += blk.ff_fsize;
+                     if (!noinside || max_call <= i)
+                        call_list[i].size += blk.ff_fsize;
                   }
 
                   if (max_call <= i)
                      max_call = i + 1;
+
+                  time_release ();
                }
+
+               // E' stata trovata la directory per i point .PNT
+               else if (blk.ff_name[m-1] == 'T' && blk.ff_name[m-2] == 'N' && blk.ff_name[m-3] == 'P' && blk.ff_name[m-4] == '.') {
+                  sscanf(blk.ff_name,"%4x%4x.", &net, &node);
+                  sprintf (filename, "%s%s\\%s\\*.*", outbase, p == NULL ? "" : p, blk.ff_name);
+
+                  if (!findfirst (filename, &blkp, 0))
+                     do {
+                        m = strlen (strupr (blkp.ff_name));
+
+                        // Si tratta di .?UT .?LO o .REQ
+                        if ((blkp.ff_name[m-1] == 'T' && blkp.ff_name[m-2] == 'U') || (blkp.ff_name[m-1] == 'O' && blkp.ff_name[m-2] == 'L') || (blkp.ff_name[m-1] == 'Q' && blkp.ff_name[m-2] == 'E' && blkp.ff_name[m-3] == 'R')) {
+                           sscanf(blkp.ff_name,"%4x%4x.%c", &i, &point, &c);
+
+                           if (p == NULL) {
+                              i = no_dups (config->alias[0].zone, net, node, point);
+                              call_list[i].zone = config->alias[0].zone;
+                           }
+                           else {
+                              sscanf (&p[1], "%3x", &z);
+                              i = no_dups (z, net, node, point);
+                              call_list[i].zone = z;
+                           }
+
+                           call_list[i].net  = net;
+                           call_list[i].node = node;
+                           call_list[i].point = point;
+                           call_list[i].type |= MAIL_EXISTS;
+
+                           if (blkp.ff_fdate > call_list[i].fdate || blkp.ff_ftime > call_list[i].ftime) {
+                              call_list[i].fdate = blkp.ff_fdate;
+                              call_list[i].ftime = blkp.ff_ftime;
+                              if (noinside && max_call > i)
+                                 call_list[i].type |= MAIL_INSPECT;
+                           }
+
+                           if (!noinside || max_call <= i) {
+                              if (!get_bbs_record (call_list[i].zone, call_list[i].net, call_list[i].node, call_list[i].point)) {
+                                 if (!get_bbs_record (call_list[i].zone, call_list[i].net, call_list[i].node, 0))
+                                    call_list[i].type |= MAIL_UNKNOWN;
+                              }
+
+                              if (blkp.ff_name[m-1] == 'T' && blkp.ff_name[m-2] == 'U') {
+                                 call_list[i].size += blkp.ff_fsize;
+                                 call_list[i].n_mail++;
+                                 call_list[i].b_mail += blkp.ff_fsize;
+                              }
+                              else if (blkp.ff_name[m-1] == 'O' && blkp.ff_name[m-2] == 'L') {
+                                 sprintf(filename,"%s\\%04x%04x.PNT\\%s",HoldAreaNameMunge (call_list[i].zone),call_list[i].net,call_list[i].node,blkp.ff_name);
+                                 fp = sh_fopen (filename, "rt", SH_DENYNONE);
+                                 while (fp != NULL && fgets(filename, 99, fp) != NULL) {
+                                    if (filename[strlen(filename)-1] == '\n')
+                                       filename[strlen(filename)-1] = '\0';
+                                    if (strchr (filename, '*') == NULL && strchr (filename, '?') == NULL) {
+                                       if ((fd = open (filename, O_RDONLY)) != -1) {
+                                          call_list[i].size += filelength (fd);
+                                          if (isbundle (&filename[strlen (filename) - 12])) {
+                                             call_list[i].n_mail++;
+                                             call_list[i].b_mail += filelength (fd);
+                                          }
+                                          else {
+                                             call_list[i].n_data++;
+                                             call_list[i].b_data += filelength (fd);
+                                          }
+                                          close (fd);
+                                       }
+                                       else if ((fd = open (&filename[1], O_RDONLY)) != -1) {
+                                          call_list[i].size += filelength (fd);
+                                          if (isbundle (&filename[strlen (filename) - 12])) {
+                                             call_list[i].n_mail++;
+                                             call_list[i].b_mail += filelength (fd);
+                                          }
+                                          else {
+                                             call_list[i].n_data++;
+                                             call_list[i].b_data += filelength (fd);
+                                          }
+                                          close (fd);
+                                       }
+                                    }
+                                    else {
+                                       if (!findfirst (filename, &blk2, 0))
+                                          do {
+                                             call_list[i].size += blk2.ff_fsize;
+                                             if (isbundle (blk2.ff_name)) {
+                                                call_list[i].n_mail++;
+                                                call_list[i].b_mail += blk2.ff_fsize;
+                                             }
+                                             else {
+                                                call_list[i].n_data++;
+                                                call_list[i].b_data += blk2.ff_fsize;
+                                             }
+                                          } while (!findnext(&blk2));
+                                       else if (!findfirst (&filename[1], &blk2, 0))
+                                          do {
+                                             call_list[i].size += blk2.ff_fsize;
+                                             if (isbundle (blk2.ff_name)) {
+                                                call_list[i].n_mail++;
+                                                call_list[i].b_mail += blk2.ff_fsize;
+                                             }
+                                             else {
+                                                call_list[i].n_data++;
+                                                call_list[i].b_data += blk2.ff_fsize;
+                                             }
+                                          } while (!findnext(&blk2));
+                                    }
+                                 }
+                                 fclose (fp);
+                              }
+                           }
+
+                           if (blkp.ff_name[m-3] == 'C' && blkp.ff_name[m-2] == 'U')
+                              call_list[i].type |= MAIL_CRASH;
+                           else if (blkp.ff_name[m-3] == 'C' && blkp.ff_name[m-2] == 'L')
+                              call_list[i].type |= MAIL_CRASH;
+                           else if (blkp.ff_name[m-3] == 'F' && blkp.ff_name[m-2] == 'L')
+                              call_list[i].type |= MAIL_NORMAL;
+                           else if (blkp.ff_name[m-3] == 'D')
+                              call_list[i].type |= MAIL_DIRECT;
+                           else if (blkp.ff_name[m-3] == 'H')
+                              call_list[i].type |= MAIL_HOLD;
+                           else if (blkp.ff_name[m-3] == 'O' && blkp.ff_name[m-2] == 'U')
+                              call_list[i].type |= MAIL_NORMAL;
+                           else if (blkp.ff_name[m-1] == 'Q' && blkp.ff_name[m-2] == 'E' && blkp.ff_name[m-3] == 'R') {
+                              call_list[i].type |= MAIL_REQUEST;
+                              call_list[i].size += blkp.ff_fsize;
+                           }
+
+                           if (max_call <= i)
+                              max_call = i + 1;
+                        }
+
+                        // Si tratta del contatore di tentativi .$$?
+                        else if (blk.ff_name[m-2] == '$' && blk.ff_name[m-3] == '$' && blk.ff_name[m-4] == '.') {
+                           sscanf(blkp.ff_name,"%4x%4x", &i, &point);
+
+                           if (p == NULL) {
+                              i = no_dups (config->alias[0].zone, net, node, point);
+                              call_list[i].zone = config->alias[0].zone;
+                           }
+                           else {
+                              sscanf (&p[1], "%3x", &z);
+                              i = no_dups (z, net, node, point);
+                              call_list[i].zone = z;
+                           }
+
+                           call_list[i].net  = net;
+                           call_list[i].node = node;
+                           call_list[i].point = point;
+
+                           call_list[i].call_wc = blk.ff_name[m - 1] - '0';
+
+                           sprintf(filename,"%s\\%04x%04x.PNT\\%s",HoldAreaNameMunge (call_list[i].zone),call_list[i].net,call_list[i].node,blkp.ff_name);
+                           fd = shopen (filename, O_RDONLY|O_BINARY);
+                           read (fd, (char *) &call_list[i].call_nc, sizeof (short));
+                           read (fd, (char *) &call_list[i].flags, sizeof (short));
+                           close (fd);
+
+                           if (max_call <= i)
+                              max_call = i + 1;
+                        }
+
+                        time_release ();
+                     } while(!findnext(&blkp));
+               }
+
+               // Si tratta del contatore dei tentativi di chiamata .$$?
+               else if (blk.ff_name[m-2] == '$' && blk.ff_name[m-3] == '$' && blk.ff_name[m-4] == '.') {
+                  sscanf(blk.ff_name,"%4x%4x",&net,&node);
+
+                  if (p == NULL) {
+                     i = no_dups (config->alias[0].zone, net, node, 0);
+                     call_list[i].zone = config->alias[0].zone;
+                  }
+                  else {
+                     sscanf (&p[1], "%3x", &z);
+                     i = no_dups (z, net, node, 0);
+                     call_list[i].zone = z;
+                  }
+
+                  call_list[i].net  = net;
+                  call_list[i].node = node;
+
+                  call_list[i].call_wc = blk.ff_name[m - 1] - '0';
+
+                  sprintf(filename,"%s%s",HoldAreaNameMunge (call_list[i].zone),blk.ff_name);
+                  fd = shopen (filename, O_RDONLY|O_BINARY);
+                  read (fd, (char *) &call_list[i].call_nc, sizeof (short));
+                  read (fd, (char *) &call_list[i].flags, sizeof (short));
+                  close (fd);
+
+                  if (max_call <= i)
+                     max_call = i + 1;
+               }
+
+               time_release ();
             } while(!findnext(&blk));
+
+         time_release ();
       } while (!findnext (&blko));
 
+   m = 0;
+   for (i = 0; i < max_call; i++) {
+      if ((call_list[i].type & ~MAIL_EXISTS) && (call_list[i].type & MAIL_EXISTS)) {
+         memcpy (&call_list[m], &call_list[i], sizeof (struct _call_list));
+         m++;
+      }
+   }
+   max_call = m;
+
    qsort (&call_list[0], max_call, sizeof (struct _call_list), node_sort_func);
-   next_call = 0;
+   next_call = -1;
+
+   for (m = 0; m < max_call; m++)
+      if (call_list[m].type & MAIL_WILLGO) {
+         next_call = m;
+         break;
+      }
+
+   if (next_call == -1)
+      for (m = 0; m < max_call; m++) {
+         if ( call_list[m].type & MAIL_UNKNOWN )
+            continue;
+         else if ( !(call_list[m].type & (MAIL_CRASH|MAIL_DIRECT|MAIL_NORMAL)) )
+            continue;
+         else if (cur_event >= 0 && (e_ptrs[cur_event]->behavior & MAT_NOOUT))
+            continue;
+         else if ((call_list[m].type & MAIL_CRASH) && (e_ptrs[cur_event]->behavior & MAT_NOCM))
+            continue;
+         else if (!(call_list[m].type & MAIL_CRASH) && (e_ptrs[cur_event]->behavior & MAT_CM))
+            continue;
+         else if (cur_event >= 0 && e_ptrs[cur_event]->res_net && (call_list[m].net != e_ptrs[cur_event]->res_net || call_list[m].node != e_ptrs[cur_event]->res_node))
+            continue;
+         else {
+            next_call = m;
+            break;
+         }
+      }
+
+   if (next_call == -1)
+      next_call = 0;
+
+   sprintf (filename, "%sQUEUE.DAT", config->sys_path);
+   fd = sh_open (filename, SH_DENYRW, O_WRONLY|O_BINARY|O_CREAT|O_TRUNC, S_IREAD|S_IWRITE);
+   if (fd != -1) {
+      write (fd, (char *)&max_call, sizeof (short));
+      write (fd, (char *)&call_list, sizeof (struct _call_list) * max_call);
+      close (fd);
+   }
 }
+
+void get_call_list (void)
+{
+   int fd = 0, i;
+   char filename[80];
+
+   build_call_queue (0);
+   for (i = 0; i < max_call; i++) {
+      if (call_list[i].type & MAIL_INSPECT) {
+         build_node_queue (call_list[i].zone, call_list[i].net, call_list[i].node, call_list[i].point, i);
+         fd = 1;
+      }
+   }
+
+   if (fd) {
+      sprintf (filename, "%sQUEUE.DAT", config->sys_path);
+      fd = sh_open (filename, SH_DENYRW, O_WRONLY|O_BINARY|O_CREAT|O_TRUNC, S_IREAD|S_IWRITE);
+      if (fd != -1) {
+         write (fd, (char *)&max_call, sizeof (short));
+         write (fd, (char *)&call_list, sizeof (struct _call_list) * max_call);
+         close (fd);
+      }
+   }
+}
+
+void rebuild_call_queue (void)
+{
+   status_line ("+Building the outbound queue");
+   build_call_queue (1);
+   status_line ("+%d queue record(s) in database", max_call);
+}
+
+void get_bad_call (bzone, bnet, bnode, bpoint, rwd)
+int bzone, bnet, bnode, bpoint, rwd;
+{
+   int res, i, j, flags;
+   struct ffblk bad_dta;
+   char *HoldName, fname[80];
+
+   HoldName = HoldAreaNameMunge (bzone);
+   if (bpoint)
+      sprintf (fname, "%s%04x%04x.PNT\\%08X.$$?", HoldName, bnet, bnode, bpoint);
+   else
+      sprintf (fname, "%s%04x%04x.$$?", HoldName, bnet, bnode);
+   j = strlen (fname) - 1;
+   res = 0;
+   flags = 0;
+
+   i = 0;
+   if (!findfirst(fname,&bad_dta,0))
+      do {
+         if (isdigit (bad_dta.ff_name[11])) {
+            fname[j] = bad_dta.ff_name[11];
+            res = fname[j] - '0';
+            break;
+         }
+      } while (!findnext(&bad_dta));
+
+   call_list[rwd].call_wc = res;
+
+   res = 0;
+   flags = 0;
+
+   if ((i = sh_open (fname, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) != -1) {
+      read (i, (char *) &res, sizeof (short));
+      read (i, (char *) &flags, sizeof (short));
+      close (i);
+   }
+
+   call_list[rwd].call_nc = res;
+   call_list[rwd].flags = flags;
+}
+
 
 void display_outbound_info (start)
 int start;
 {
-   int i, row, v;
+   int i, row, v, mc, mnc;
    char j[30];
 
-   row = 4;
-   wfill (4, 16, 6, 46, ' ', LCYAN|_BLUE);
-
-   for (i=start;i<max_call && row<7;i++,row++) {
-      sprintf (j, "%d:%d/%d", call_list[i].zone, call_list[i].net, call_list[i].node);
-      wprints (row, 18, LCYAN|_BLUE, j);
-      if (call_list[i].size < 1024L)
-         sprintf (j, "%ldb", call_list[i].size);
-      else
-         sprintf (j, "%ldKb", call_list[i].size / 1024L);
-      wrjusts (row, 38, LCYAN|_BLUE, j);
-      v = 0;
-      if (call_list[i].type & MAIL_CRASH)
-         j[v++] = 'C';
-      if (call_list[i].type & MAIL_NORMAL)
-         j[v++] = 'N';
-      if (call_list[i].type & MAIL_DIRECT)
-         j[v++] = 'D';
-      if (call_list[i].type & MAIL_HOLD)
-         j[v++] = 'H';
-      if (call_list[i].type & MAIL_REQUEST)
-         j[v++] = 'R';
-      j[v] = '\0';
-      wrjusts (row, 45, LCYAN|_BLUE, j);
+   if (cur_event > -1) {
+      mc = e_ptrs[cur_event]->with_connect ? e_ptrs[cur_event]->with_connect : max_connects;
+      mnc = e_ptrs[cur_event]->no_connect ? e_ptrs[cur_event]->no_connect : max_noconnects;
    }
+   else
+      mc = mnc = 32767;
+
+   row = 14;
+   wfill (14, 1, 21, 51, ' ', LCYAN|_BLACK);
+
+   if (max_call) {
+      for (i=start;i<max_call && row<22;i++,row++) {
+         sprintf (j, "%d:%d/%d.%d", call_list[i].zone, call_list[i].net, call_list[i].node, call_list[i].point);
+         wprints (row, 2, LCYAN|_BLACK, j);
+         if (call_list[i].size < 10240L)
+            sprintf (j, "%ldb ", call_list[i].size);
+         else
+            sprintf (j, "%ldKb", call_list[i].size / 1024L);
+         wrjusts (row, 38, LCYAN|_BLACK, j);
+         v = 0;
+         if (call_list[i].type & MAIL_CRASH)
+            j[v++] = 'C';
+         if (call_list[i].type & MAIL_NORMAL)
+            j[v++] = 'N';
+         if (call_list[i].type & MAIL_DIRECT)
+            j[v++] = 'D';
+         if (call_list[i].type & MAIL_HOLD)
+            j[v++] = 'H';
+         if (call_list[i].type & MAIL_REQUEST)
+            j[v++] = 'R';
+         if (call_list[i].type & MAIL_WILLGO)
+            j[v++] = 'I';
+         j[v] = '\0';
+         wrjusts (row, 29, LCYAN|_BLACK, j);
+
+         sprintf (j, "%d", call_list[i].call_nc);
+         wrjusts (row, 20, LCYAN|_BLACK, j);
+         sprintf (j, "%d", call_list[i].call_wc);
+         wrjusts (row, 23, LCYAN|_BLACK, j);
+
+         if (next_call == i)
+            wprints (row, 40, YELLOW|_BLACK, "");
+
+         if (cur_event >= 0) {
+            if ( !(call_list[i].type & MAIL_WILLGO) ) {
+               if ( call_list[i].type & MAIL_UNKNOWN ) {
+                  wprints (row, 41, LCYAN|_BLACK, "Unlisted");
+                  wprints (row, 40, LCYAN|_BLACK, "*");
+               }
+               else if ( !(call_list[i].type & (MAIL_CRASH|MAIL_DIRECT|MAIL_NORMAL)) ) {
+                  wprints (row, 41, LCYAN|_BLACK, "Hold");
+                  wprints (row, 40, LCYAN|_BLACK, "*");
+               }
+               else if ( e_ptrs[cur_event]->behavior & MAT_NOOUT )
+                  wprints (row, 41, LCYAN|_BLACK, "Temp.hold");
+               else if ((call_list[i].type & MAIL_CRASH) && (e_ptrs[cur_event]->behavior & MAT_NOCM))
+                  wprints (row, 41, LCYAN|_BLACK, "Temp.hold");
+               else if (!(call_list[i].type & MAIL_CRASH) && (e_ptrs[cur_event]->behavior & MAT_CM))
+                  wprints (row, 41, LCYAN|_BLACK, "Temp.hold");
+               else if (e_ptrs[cur_event]->res_net && (call_list[i].net != e_ptrs[cur_event]->res_net || call_list[i].node != e_ptrs[cur_event]->res_node))
+                  wprints (row, 41, LCYAN|_BLACK, "Temp.hold");
+               else if ( call_list[i].call_nc >= mnc || call_list[i].call_wc >= mc ) {
+                  wprints (row, 41, LCYAN|_BLACK, "Undialable");
+                  wprints (row, 40, LCYAN|_BLACK, "*");
+               }
+               else {
+                  switch (call_list[i].flags) {
+                     case NO_CARRIER:
+                        wprints (row, 41, LCYAN|_BLACK, "No Carrier");
+                        break;
+                     case NO_DIALTONE:
+                        wprints (row, 41, LCYAN|_BLACK, "No Dialtone");
+                        break;
+                     case BUSY:
+                        wprints (row, 41, LCYAN|_BLACK, "Busy");
+                        break;
+                     case NO_ANSWER:
+                        wprints (row, 41, LCYAN|_BLACK, "No Answer");
+                        break;
+                     case VOICE:
+                        wprints (row, 41, LCYAN|_BLACK, "Voice");
+                        break;
+                     case ABORTED:
+                        wprints (row, 41, LCYAN|_BLACK, "Aborted");
+                        break;
+                     case TIMEDOUT:
+                        wprints (row, 41, LCYAN|_BLACK, "Timeout");
+                        break;
+                     default:
+                        wprints (row, 41, LCYAN|_BLACK, "------");
+                        break;
+                  }
+               }
+            }
+            else {
+               if ( call_list[i].type & MAIL_UNKNOWN ) {
+                  wprints (row, 41, LCYAN|_BLACK, "Unlisted");
+                  wprints (row, 40, LCYAN|_BLACK, "*");
+               }
+               else if ( call_list[i].call_nc >= mnc || call_list[i].call_wc >= mc ) {
+                  wprints (row, 41, LCYAN|_BLACK, "Undialable");
+                  wprints (row, 40, LCYAN|_BLACK, "*");
+               }
+               else {
+                  switch (call_list[i].flags) {
+                     case NO_CARRIER:
+                        wprints (row, 41, LCYAN|_BLACK, "No Carrier");
+                        break;
+                     case NO_DIALTONE:
+                        wprints (row, 41, LCYAN|_BLACK, "No Dialtone");
+                        break;
+                     case BUSY:
+                        wprints (row, 41, LCYAN|_BLACK, "Busy");
+                        break;
+                     case NO_ANSWER:
+                        wprints (row, 41, LCYAN|_BLACK, "No Answer");
+                        break;
+                     case VOICE:
+                        wprints (row, 41, LCYAN|_BLACK, "Voice");
+                        break;
+                     case ABORTED:
+                        wprints (row, 41, LCYAN|_BLACK, "Aborted");
+                        break;
+                     case TIMEDOUT:
+                        wprints (row, 41, LCYAN|_BLACK, "Timeout");
+                        break;
+                     default:
+                        wprints (row, 41, LCYAN|_BLACK, "------");
+                        break;
+                  }
+               }
+            }
+         }
+      }
+   }
+   else
+      wprints (17, 13, LCYAN|_BLACK, "Nothing in outbound area");
 }
 
-static int no_dups (zone, net, node)
-int zone, net, node;
+int no_dups (zone, net, node, point)
+int zone, net, node, point;
 {
    int i;
 
-   for(i = 0; call_list[i].net; i++) {
-      if (call_list[i].zone == zone && call_list[i].net == net && call_list[i].node == node)
+   for(i = 0; i < max_call; i++) {
+      if (call_list[i].zone == zone && call_list[i].net == net && call_list[i].node == node && call_list[i].point == point)
          break;
    }
 
@@ -197,13 +864,15 @@ void sysop_error()
       getch();
 
    wclose();
-   wunlink(wh);
    showcur();
 }
 
 void clear_status()
 {
    int wh;
+
+   if (!snooping)
+      return;
 
    wh = whandle();
    wactiv(status);
@@ -219,7 +888,7 @@ void f1_status()
    int wh, i;
    char j[80], jn[36];
 
-   if (!usr.name[0])
+   if (!usr.name[0] || !snooping)
       return;
 
    wh = whandle();
@@ -272,6 +941,9 @@ char *pwd, *name, *city;
    int wh;
    char j[80], jn[36];
 
+   if (!snooping)
+      return;
+
    wh = whandle();
    wactiv(status);
    wfill(0,0,1,64,' ',BLACK|_LGREY);
@@ -314,6 +986,9 @@ void f2_status()
    int wh;
    char j[80];
 
+   if (!snooping)
+      return;
+
    wh = whandle();
    wactiv(status);
    wfill(0,0,1,64,' ',BLACK|_LGREY);
@@ -328,65 +1003,128 @@ void f2_status()
    function_active = 2;
 }
 
+char *get_flagA_text (long f)
+{
+   strcpy (e_input, "--------");
+   if (f & 0x80)
+      e_input[0] = '0';
+   if (f & 0x40)
+      e_input[1] = '1';
+   if (f & 0x20)
+      e_input[2] = '2';
+   if (f & 0x10)
+      e_input[3] = '3';
+   if (f & 0x08)
+      e_input[4] = '4';
+   if (f & 0x04)
+      e_input[5] = '5';
+   if (f & 0x02)
+      e_input[6] = '6';
+   if (f & 0x01)
+      e_input[7] = '7';
+
+   return (e_input);
+}
+
+char *get_flagB_text (long f)
+{
+   strcpy (e_input, "--------");
+   if (f & 0x80)
+      e_input[0] = '8';
+   if (f & 0x40)
+      e_input[1] = '9';
+   if (f & 0x20)
+      e_input[2] = 'A';
+   if (f & 0x10)
+      e_input[3] = 'B';
+   if (f & 0x08)
+      e_input[4] = 'C';
+   if (f & 0x04)
+      e_input[5] = 'D';
+   if (f & 0x02)
+      e_input[6] = 'E';
+   if (f & 0x01)
+      e_input[7] = 'F';
+
+   return (e_input);
+}
+
+char *get_flagC_text (long f)
+{
+   strcpy (e_input, "--------");
+   if (f & 0x80)
+      e_input[0] = 'G';
+   if (f & 0x40)
+      e_input[1] = 'H';
+   if (f & 0x20)
+      e_input[2] = 'I';
+   if (f & 0x10)
+      e_input[3] = 'J';
+   if (f & 0x08)
+      e_input[4] = 'K';
+   if (f & 0x04)
+      e_input[5] = 'L';
+   if (f & 0x02)
+      e_input[6] = 'M';
+   if (f & 0x01)
+      e_input[7] = 'N';
+
+   return (e_input);
+}
+
+char *get_flagD_text (long f)
+{
+   strcpy (e_input, "--------");
+   if (f & 0x80)
+      e_input[0] = 'O';
+   if (f & 0x40)
+      e_input[1] = 'P';
+   if (f & 0x20)
+      e_input[2] = 'Q';
+   if (f & 0x10)
+      e_input[3] = 'R';
+   if (f & 0x08)
+      e_input[4] = 'S';
+   if (f & 0x04)
+      e_input[5] = 'T';
+   if (f & 0x02)
+      e_input[6] = 'U';
+   if (f & 0x01)
+      e_input[7] = 'V';
+
+   return (e_input);
+}
+
 void f3_status()
 {
-   int wh, i, x;
+   int wh;
    char j[80];
    long flag;
 
-   wh = whandle();
-   wactiv(status);
-   wfill(0,0,1,64,' ',BLACK|_LGREY);
+   if (!snooping)
+      return;
 
-   sprintf(j, "Uploads: %ldK, %d files  Downloads: %ldK, %d files", usr.upld, usr.n_upld, usr.dnld, usr.n_dnld);
-   wprints(0,1,BLACK|_LGREY,j);
+   wh = whandle ();
+   wactiv (status);
+   wfill (0, 0, 1, 64, ' ', BLACK|_LGREY);
+
+   sprintf (j, "Uploads: %ldK, %d files  Downloads: %ldK, %d files", usr.upld, usr.n_upld, usr.dnld, usr.n_dnld);
+   wprints (0, 1, BLACK|_LGREY, j);
 
    flag = usr.flags;
-   wprints(1,1,BLACK|_LGREY,"Flags: ");
 
-   x = 0;
+   strcpy (j, "Flags: A: ");
+   strcat (j, get_flagA_text ((flag >> 24) & 0xFF));
+   strcat (j, " B: ");
+   strcat (j, get_flagB_text ((flag >> 16) & 0xFF));
+   strcat (j, " C: ");
+   strcat (j, get_flagC_text ((flag >> 8) & 0xFF));
+   strcat (j, " D: ");
+   strcat (j, get_flagD_text (flag & 0xFF));
 
-   for (i=0;i<8;i++)
-   {
-      if (flag & 0x80000000L)
-         j[x++] = '0' + i;
-      else
-         j[x++] = '-';
-      flag = flag << 1;
-   }
+   wprints (1, 1, BLACK|_LGREY, j);
 
-   for (i=0;i<8;i++)
-   {
-      if (flag & 0x80000000L)
-         j[x++] = ((i<2)?'8':'?') + i;
-      else
-         j[x++] = '-';
-      flag = flag << 1;
-   }
-
-   for (i=0;i<8;i++)
-   {
-      if (flag & 0x80000000L)
-         j[x++] = 'G' + i;
-      else
-         j[x++] = '-';
-      flag = flag << 1;
-   }
-
-   for (i=0;i<8;i++)
-   {
-      if (flag & 0x80000000L)
-         j[x++] = 'O' + i;
-      else
-         j[x++] = '-';
-      flag = flag << 1;
-   }
-
-   j[x] = '\0';
-
-   wprints(1,8,BLACK|_LGREY,j);
-
-   wactiv(wh);
+   wactiv (wh);
    function_active = 3;
 }
 
@@ -394,6 +1132,9 @@ void f4_status()
 {
    int wh, sc;
    char j[80];
+
+   if (!snooping)
+      return;
 
    wh = whandle();
    wactiv(status);
@@ -427,12 +1168,15 @@ void f9_status()
 {
    int wh;
 
+   if (!snooping)
+      return;
+
    wh = whandle();
    wactiv(status);
    wfill(0,0,1,64,' ',BLACK|_LGREY);
 
-   wprints(0,1,BLACK|_LGREY,"ALT: [H]angup [J]Shell [L]ockOut [D]Snoop [M]Poll [C]hat e[X]it ");
-   wprints(1,1,BLACK|_LGREY,"     [K]eyboard [S]ecurity -Inc/-Dec Time [F1]-[F4]=Extra     ");
+   wprints(0,1,BLACK|_LGREY,"ALT: [H]angup [J]Shell [L]ockOut [C]hat [S]ecurity [N]erd");
+   wprints(1,1,BLACK|_LGREY,"                       -Inc/-Dec Time [F1]-[F4]=Extra");
 
    wactiv(wh);
    function_active = 9;
@@ -443,18 +1187,19 @@ void f9_status()
 #define DUPE_FOOTER  (MAXDUPES * 4)
 
 struct _dupecheck {
-   char areatag[48];
-   int  dupe_pos;
-   int  max_dupes;
-   long area_pos;
+   char  areatag[48];
+   short dupe_pos;
+   short max_dupes;
+   long  area_pos;
+//   long  dupes[MAXDUPES];
 };
 
 struct _dupeindex {
-   char areatag[48];
-   long area_pos;
+   char  areatag[48];
+   long  area_pos;
 };
 
-void system_crash()
+void system_crash (void)
 {
    int fd, fdidx;
    char filename[80], nusers;
@@ -465,13 +1210,15 @@ void system_crash()
    struct _usridx usridx;
    struct _dupeindex dupeindex;
    struct _dupecheck dupecheck;
+   struct _sys tsys;
+   struct _sys_idx sysidx;
 
-   sprintf(filename, USERON_NAME, sys_path);
-   fd = shopen(filename, O_RDWR|O_BINARY);
+   sprintf (filename, USERON_NAME, config->sys_path);
+   fd = sh_open (filename, SH_DENYNONE, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
    prev = 0L;
 
-   sprintf (filename, "%sLORAINFO.T%02X", sys_path, line_offset);
+   sprintf (filename, "%sLORAINFO.T%02X", config->sys_path, line_offset);
    unlink (filename);
 
    while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron)) {
@@ -490,7 +1237,7 @@ void system_crash()
 
    close(fd);
 
-   sprintf (filename, "%s.BBS", user_file);
+   sprintf (filename, "%s.BBS", config->user_file);
    fd = shopen(filename, O_RDWR|O_BINARY);
    if (fd == -1)
       fd = cshopen (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
@@ -502,17 +1249,14 @@ void system_crash()
       get_down (1, 3);
    }
 
-   sprintf (filename, "%s.IDX", user_file);
+   sprintf (filename, "%s.IDX", config->user_file);
    fdidx = shopen(filename, O_RDWR|O_BINARY);
    if (fdidx == -1)
       fdidx = cshopen (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
    fstat (fdidx, &statidx);
 
    if ( (statbuf.st_size / sizeof (struct _usr)) != (statidx.st_size / sizeof (struct _usridx)) ) {
-      status_line("!%s", "Rebuilding user index file");
-      wputs ("* ");
-      wputs ("Rebuilding user index file");
-      wputs ("\n");
+      status_line("!Rebuilding user index file");
       chsize (fdidx, 0L);
 
       nusers = 0;
@@ -541,39 +1285,45 @@ void system_crash()
    close (fd);
    close (fdidx);
 
-   sprintf (filename, "%sDUPES.DAT", sys_path);
-   fd = open (filename, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
+   sprintf (filename, "%sDUPES.DAT", config->sys_path);
+   fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
    if (fd != -1) {
       fstat (fd, &statbuf);
-      sprintf (filename, "%sDUPES.IDX", sys_path);
+      sprintf (filename, "%sDUPES.IDX", config->sys_path);
       fdidx = open (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
       fstat (fdidx, &statidx);
 
       if ( (statbuf.st_size / (sizeof (struct _dupecheck) + DUPE_FOOTER)) != (statidx.st_size / sizeof (struct _dupeindex)) ) {
-         status_line("!%s", "Rebuilding duplicate index file");
-         wputs ("* ");
-         wputs ("Rebuilding duplicate index file");
-         wputs ("\n");
+         status_line("!Rebuilding duplicate index file");
          chsize (fdidx, 0L);
 
+         while (read (fd, (char *)&dupecheck, DUPE_HEADER) == DUPE_HEADER) {
+            memcpy (dupeindex.areatag, dupecheck.areatag, 48);
+            dupeindex.area_pos = dupecheck.area_pos;
+            write (fdidx, (char *)&dupeindex, sizeof(struct _dupeindex));
+            lseek (fd, (long)DUPE_FOOTER, SEEK_CUR);
+         }
+/*
          while (read (fd, (char *)&dupecheck, sizeof(struct _dupecheck)) == sizeof(struct _dupecheck)) {
             memcpy (dupeindex.areatag, dupecheck.areatag, 48);
             dupeindex.area_pos = dupecheck.area_pos;
             write (fdidx, (char *)&dupeindex, sizeof(struct _dupeindex));
             lseek (fd, (long)DUPE_FOOTER, SEEK_CUR);
          }
+*/
       }
 
       close (fd);
       close (fdidx);
    }
 
-   sprintf (filename, SYSMSG_PATH, sys_path);
-   fd = shopen(filename, O_RDWR|O_BINARY);
-   if (fd == -1)
-      fd = cshopen (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+   sprintf (filename, SYSMSG_PATH, config->sys_path);
+   fd = sh_open(filename, SH_DENYWR, O_RDONLY|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
    fstat (fd, &statbuf);
-   close (fd);
+
+   sprintf (filename, "%sSYSMSG.IDX", config->sys_path);
+   fdidx = sh_open(filename, SH_DENYWR, O_WRONLY|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+   fstat (fdidx, &statidx);
 
    if ((statbuf.st_size % (long)SIZEOF_MSGAREA) != 0L) {
       close (fd);
@@ -582,12 +1332,31 @@ void system_crash()
       get_down (1, 3);
    }
 
-   sprintf (filename, "%sSYSFILE.DAT", sys_path);
-   fd = shopen(filename, O_RDWR|O_BINARY);
-   if (fd == -1)
-      fd = cshopen (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
-   fstat (fd, &statbuf);
+   if ( (statbuf.st_size / SIZEOF_MSGAREA) != (statidx.st_size / sizeof (struct _sys_idx)) ) {
+      status_line("!Rebuilding message areas index");
+      chsize (fdidx, 0L);
+
+      while (read (fd, (char *)&tsys, SIZEOF_MSGAREA) == SIZEOF_MSGAREA) {
+         memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
+         sysidx.priv = tsys.msg_priv;
+         sysidx.flags = tsys.msg_flags;
+         sysidx.area = tsys.msg_num;
+         strcpy (sysidx.key, tsys.qwk_name);
+         sysidx.sig = tsys.msg_sig;
+         write (fdidx, (char *)&sysidx, sizeof (struct _sys_idx));
+      }
+   }
+
    close (fd);
+   close (fdidx);
+
+   sprintf (filename, "%sSYSFILE.DAT", config->sys_path);
+   fd = sh_open(filename, SH_DENYWR, O_RDONLY|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+   fstat (fd, &statbuf);
+
+   sprintf (filename, "%sSYSFILE.IDX", config->sys_path);
+   fdidx = sh_open(filename, SH_DENYWR, O_WRONLY|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+   fstat (fdidx, &statidx);
 
    if ((statbuf.st_size % (long)SIZEOF_FILEAREA) != 0L) {
       close (fd);
@@ -596,30 +1365,90 @@ void system_crash()
       get_down (1, 3);
    }
 
+   if ( (statbuf.st_size / SIZEOF_FILEAREA) != (statidx.st_size / sizeof (struct _sys_idx)) ) {
+      status_line("!Rebuilding file areas index");
+      chsize (fdidx, 0L);
+
+      while (read (fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
+         memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
+         sysidx.priv = tsys.file_priv;
+         sysidx.flags = tsys.file_flags;
+         sysidx.area = tsys.file_num;
+         strcpy (sysidx.key, tsys.short_name);
+         sysidx.sig = tsys.msg_sig;
+         write (fdidx, (char *)&sysidx, sizeof (struct _sys_idx));
+      }
+   }
+
+   close (fd);
+   close (fdidx);
+
    create_quickbase_file ();
    build_nodelist_index (0);
 }
 
 void get_last_caller()
 {
-   int fd;
-   char filename[80];
+   int fd, fdd, v;
+   char filename[80], destname[80];
    struct _lastcall lc;
+   long tempo;
+
+   tempo = time (NULL);
 
    memset ((char *)&lastcall, 0, sizeof (struct _lastcall));
 
-   sprintf(filename, "%sLASTCALL.BBS", sys_path);
-   fd = cshopen(filename, O_RDONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
+   sprintf (filename, "%sLASTCALL.BBS", config->sys_path);
+   fd = cshopen(filename, O_RDWR|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
+   if (filelength (fd) > 0L) {
+      v = sizeof (struct _lastcall);
+      if ((filelength (fd) % (long)v) != 0L)
+         v = sizeof (struct _lastcall) - 4;
 
-   while (read(fd, (char *)&lc, sizeof(struct _lastcall)) == sizeof(struct _lastcall)) {
-      if (lc.line == line_offset)
-         memcpy ((char *)&lastcall, (char *)&lc, sizeof (struct _lastcall));
+      sprintf(destname, "%sLASTCALL.NEW", config->sys_path);
+      fdd = cshopen(destname, O_RDWR|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
+
+      memset ((char *)&lc, 0, sizeof (struct _lastcall));
+
+      while (read(fd, (char *)&lc, v) == v) {
+         if (lc.timestamp) {
+            if (tempo - lc.timestamp < 86400L)
+               write (fdd, (char *)&lc, sizeof (struct _lastcall));
+         }
+      }
+
+      lseek (fd, 0L, SEEK_SET);
+      lseek (fdd, 0L, SEEK_SET);
+
+      while (read(fdd, (char *)&lc, sizeof(struct _lastcall)) == sizeof(struct _lastcall))
+         write (fd, (char *)&lc, sizeof (struct _lastcall));
+      chsize (fd, tell (fd));
+
+      close (fd);
+      close (fdd);
+
+      unlink (destname);
    }
+   else if (fd != -1)
+      close (fd);
+
+   memset ((char *)&lastcall, 0, sizeof (struct _lastcall));
+
+   sprintf(filename, "%sLASTCALL.BBS", config->sys_path);
+   fd = cshopen(filename, O_RDONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
+   if (filelength (fd) > 0L) {
+      while (read(fd, (char *)&lc, sizeof(struct _lastcall)) == sizeof(struct _lastcall)) {
+         if (lc.line == line_offset)
+            memcpy ((char *)&lastcall, (char *)&lc, sizeof (struct _lastcall));
+      }
+
+      close (fd);
+   }
+   else if (fd != -1)
+      close (fd);
 
    if (!lastcall.name[0])
       strcpy(lastcall.name, msgtxt[M_NEXT_NONE]);
-
-   close (fd);
 }
 
 void set_last_caller()
@@ -628,11 +1457,15 @@ void set_last_caller()
    char filename[80];
    struct _lastcall lc;
 
-   sprintf(filename, "%sLASTCALL.BBS", sys_path);
+   if (local_mode && usr.priv == SYSOP)
+      return;
+
+   sprintf(filename, "%sLASTCALL.BBS", config->sys_path);
    fd = cshopen(filename, O_APPEND|O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
 
    memset((char *)&lc, 0, sizeof(struct _lastcall));
 
+   lc.timestamp = time (NULL);
    lc.line = line_offset;
    strcpy(lc.name, usr.name);
    strcpy(lc.city, usr.city);
@@ -655,10 +1488,8 @@ void set_last_caller()
    if (m < i)
       m += 24;
 
-   for (; i <= m; i++)
-   {
-      if (linestat.busyperhour[i % 24] < 65435U)
-      {
+   for (; i <= m; i++) {
+      if (linestat.busyperhour[i % 24] < 65435U) {
          if (atoi(lc.logon) == atoi(lc.logoff))
             linestat.busyperhour[i % 24] += atoi (&lc.logoff[3]) - atoi (&lc.logon[3]) + 1;
          else if (i == atoi (lc.logon))
@@ -669,55 +1500,6 @@ void set_last_caller()
             linestat.busyperhour[i % 24] += 60;
       }
    }
-}
-
-void manual_poll ()
-{
-   int wh, i, zone, net, node, point;
-   char stringa1[20];
-
-   i = (80 - strlen (msgtxt[M_PHONE_OR_NODE]) - 21) / 2;
-   wh = wopen(18,i,20,i + strlen (msgtxt[M_PHONE_OR_NODE]) + 21,1,LCYAN|_BLUE,LCYAN|_BLUE);
-   wactiv(wh);
-
-   showcur ();
-
-   wputs (msgtxt[M_PHONE_OR_NODE]);
-
-   winpbeg (WHITE|_RED, WHITE|_RED);
-   winpdef (0, strlen (msgtxt[M_PHONE_OR_NODE]), stringa1,
-            "???????????????????", '?', 0, NULL, 0);
-
-   if (winpread () == W_ESCPRESS || !strlen (stringa1))
-   {
-      hidecur ();
-      wclose ();
-      wunlink (wh);
-      return;
-   }
-   strtrim (stringa1);
-
-   wclose ();
-   wunlink (wh);
-   hidecur ();
-
-   parse_netnode(stringa1, &zone, &net, &node, &point);
-
-   if (point)
-   {
-      sysop_error ();
-      return;
-   }
-
-   if (!get_bbs_record (zone, net, node, 0)) {
-      if ( strchr (stringa1, ':') || strchr (stringa1, '/') || strchr (stringa1, '.') )
-         return;
-   }
-
-   status_line (msgtxt[M_POLL_MODE]);
-   (void) poll(30, 0, zone, net, node);
-   status_line (msgtxt[M_POLL_COMPLETED]);
-   local_status("Waiting for a call");
 }
 
 static void create_quickbase_file ()
@@ -737,8 +1519,7 @@ static void create_quickbase_file ()
 
    sprintf(filename,"%sMSGINFO.BBS",fido_msgpath);
    fd = shopen(filename,O_RDONLY|O_BINARY);
-   if (fd == -1)
-   {
+   if (fd == -1) {
       fd = cshopen(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
       if (fd == -1)
          return;
@@ -798,10 +1579,7 @@ static void create_quickbase_file ()
    close (fd);
 
    if (creating)
-   {
-      wputs ("* Creating QuickBBS message base files\n");
       status_line ("!Creating QuickBBS message base files");
-   }
 
    if (msginfo.totalmsgs == nhdr &&
        msginfo.totalmsgs == nidx &&
@@ -864,161 +1642,323 @@ static void create_quickbase_file ()
 */
 }
 
-void keyboard_password ()
-{
-   int wh, i;
-   char stringa1[40], stringa2[40];
-
-   i = (80 - strlen (msgtxt[M_INPUT_COMMAND]) - 32) / 2;
-   wh = wopen(18,i,20,i + strlen (msgtxt[M_INPUT_COMMAND]) + 32,1,LCYAN|_BLUE,LCYAN|_BLUE);
-   wactiv(wh);
-
-   read_sysinfo();
-   showcur ();
-
-   wputs (msgtxt[M_INPUT_COMMAND]);
-
-   winpbeg (WHITE|_RED, WHITE|_RED);
-   winpdef (0, strlen (msgtxt[M_INPUT_COMMAND]), stringa1,
-            "??????????????????????????????", 'P', 0, NULL, 0);
-
-   if (winpread () == W_ESCPRESS)
-   {
-      hidecur ();
-      wclose ();
-      wunlink (wh);
-      return;
-   }
-   strtrim (stringa1);
-
-   wputs (msgtxt[M_ELEMENT_CHOSEN]);
-
-   winpbeg (WHITE|_RED, WHITE|_RED);
-   winpdef (0, strlen (msgtxt[M_INPUT_COMMAND]), stringa2,
-            "??????????????????????????????", 'P', 0, NULL, 0);
-
-   if (winpread () == W_ESCPRESS)
-   {
-      hidecur ();
-      wclose ();
-      wunlink (wh);
-      return;
-   }
-   strtrim (stringa2);
-
-   wclose ();
-   wunlink (wh);
-   hidecur ();
-
-   if (strcmp(stringa1, stringa2))
-   {
-      wputs ("\a");
-      return;
-   }
-
-   strcpy (sysinfo.pwd, stringa1);
-   write_sysinfo ();
-
-   if (sysinfo.pwd[0])
-      password = sysinfo.pwd;
-   else
-      password = NULL;
-
-   if (password != NULL)
-   {
-      locked = 1;
-      if (function_active == 4)
-         f4_status ();
-   }
-}
-
 void set_security ()
 {
-   int wh, i, x;
-   char stringa[12], stringa2[33], *sf = "Flags: ";
-   long flag;
+   word ch;
+   byte news;
 
-   i = (80 - strlen (msgtxt[M_SET_SECURITY]) - 13) / 2;
-   x = (80 - strlen (sf) - 35) / 2;
-   if (x < i)
-   {
-      i = x;
-      x = strlen (sf) + 35;
+   wactiv (status);
+   clear_status ();
+   news = usr.priv;
+
+   wprints (0, 1, BLACK|_LGREY, "Current security: ");
+   wprints (0, 19, BLACK|_LGREY, get_priv_text (usr.priv));
+   wprints (1, 1, BLACK|_LGREY, "New security: ");
+   wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+
+   for (;;) {
+      ch = getxch ();
+      if ( (ch & 0xFF) != 0 ) {
+         ch &= 0xFF;
+         ch = toupper (ch);
+      }
+
+      if (ch == 0x0D || ch == 0x1B)
+         break;
+
+      switch (ch) {
+         case 'T':
+            news = TWIT;
+            wprints (1, 15, BLACK|_LGREY, "           ");
+            wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+            break;
+
+         case 'D':
+            news = DISGRACE;
+            wprints (1, 15, BLACK|_LGREY, "           ");
+            wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+            break;
+
+         case 'L':
+            news = LIMITED;
+            wprints (1, 15, BLACK|_LGREY, "           ");
+            wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+            break;
+
+         case 'N':
+            news = NORMAL;
+            wprints (1, 15, BLACK|_LGREY, "           ");
+            wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+            break;
+
+         case 'W':
+            news = WORTHY;
+            wprints (1, 15, BLACK|_LGREY, "           ");
+            wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+            break;
+
+         case 'P':
+            news = PRIVIL;
+            wprints (1, 15, BLACK|_LGREY, "           ");
+            wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+            break;
+
+         case 'F':
+            news = FAVORED;
+            wprints (1, 15, BLACK|_LGREY, "           ");
+            wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+            break;
+
+         case 'E':
+            news = EXTRA;
+            wprints (1, 15, BLACK|_LGREY, "           ");
+            wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+            break;
+
+         case 'C':
+            news = CLERK;
+            wprints (1, 15, BLACK|_LGREY, "           ");
+            wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+            break;
+
+         case 'A':
+            news = ASSTSYSOP;
+            wprints (1, 15, BLACK|_LGREY, "           ");
+            wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+            break;
+
+         case 'S':
+            news = SYSOP;
+            wprints (1, 15, BLACK|_LGREY, "           ");
+            wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+            break;
+
+         case 0x4800:
+            if (news == TWIT)
+               news = DISGRACE;
+            else if (news == DISGRACE)
+               news = LIMITED;
+            else if (news == LIMITED)
+               news = NORMAL;
+            else if (news == NORMAL)
+               news = WORTHY;
+            else if (news == WORTHY)
+               news = PRIVIL;
+            else if (news == PRIVIL)
+               news = FAVORED;
+            else if (news == FAVORED)
+               news = EXTRA;
+            else if (news == EXTRA)
+               news = CLERK;
+            else if (news == CLERK)
+               news = ASSTSYSOP;
+            else if (news == ASSTSYSOP)
+               news = SYSOP;
+            else if (news == SYSOP)
+               news = TWIT;
+            wprints (1, 15, BLACK|_LGREY, "           ");
+            wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+            break;
+
+         case 0x5000:
+            if (news == TWIT)
+               news = SYSOP;
+            else if (news == DISGRACE)
+               news = TWIT;
+            else if (news == LIMITED)
+               news = DISGRACE;
+            else if (news == NORMAL)
+               news = LIMITED;
+            else if (news == WORTHY)
+               news = NORMAL;
+            else if (news == PRIVIL)
+               news = WORTHY;
+            else if (news == FAVORED)
+               news = PRIVIL;
+            else if (news == EXTRA)
+               news = FAVORED;
+            else if (news == CLERK)
+               news = EXTRA;
+            else if (news == ASSTSYSOP)
+               news = CLERK;
+            else if (news == SYSOP)
+               news = ASSTSYSOP;
+            wprints (1, 15, BLACK|_LGREY, "           ");
+            wprints (1, 15, BLACK|_LGREY, get_priv_text (news));
+            break;
+      }
    }
-   else
-      x = strlen (msgtxt[M_SET_SECURITY]) + 13;
 
-   wh = wopen(18,i,21,i + x,1,LCYAN|_BLUE,LCYAN|_BLUE);
-   wactiv(wh);
+   if (ch == 0x0D) {
+      usr.priv = news;
+      usr_class = get_class(usr.priv);
+   }
 
-   strcpy (stringa, get_priv_text(usr.priv) );
+   f3_status ();
+   wactiv (mainview);
+}
+
+long recover_flags (char *s)
+{
+   int i;
+   long result;
+
+   result = 0L;
+
+   for (i = 0; i < 8; i++) {
+      if (s[i] != '-')
+         result |= 1L << (7 - i);
+   }
+
+   return (result);
+}
+
+void set_flags (void)
+{
+   int i, x;
+   char j[10], f1[10], f2[10], f3[10], f4[10];
+   long news, flag;
+
+   wactiv (status);
+   clear_status ();
+
+   flag = news = usr.flags;
+
+   wprints (0, 1, BLACK|_LGREY, "Current flags:");
+   wprints (0, 16, BLACK|_LGREY, "A:          B:          C:          D:");
 
    x = 0;
-   flag = usr.flags;
-
-   for (i=0;i<8;i++)
-   {
+   for (i = 0; i < 8; i++) {
       if (flag & 0x80000000L)
-         stringa2[x++] = '0' + i;
+         j[x++] = '0' + i;
+      else
+         j[x++] = '-';
       flag = flag << 1;
    }
+   j[x] = '\0';
+   wprints (0, 19, BLACK|_LGREY, j);
+   strcpy (f1, j);
 
-   for (i=0;i<8;i++)
-   {
+   x = 0;
+   for (i=0;i<8;i++) {
       if (flag & 0x80000000L)
-         stringa2[x++] = (i<2)?'8':'?' + i;
+         j[x++] = ((i<2)?'8':'?') + i;
+      else
+         j[x++] = '-';
       flag = flag << 1;
    }
+   j[x] = '\0';
+   wprints (0, 31, BLACK|_LGREY, j);
+   strcpy (f2, j);
 
-   for (i=0;i<8;i++)
-   {
+   x = 0;
+   for (i=0;i<8;i++) {
       if (flag & 0x80000000L)
-         stringa2[x++] = 'G' + i;
+         j[x++] = 'G' + i;
+      else
+         j[x++] = '-';
       flag = flag << 1;
    }
+   j[x] = '\0';
+   wprints (0, 43, BLACK|_LGREY, j);
+   strcpy (f3, j);
 
-   for (i=0;i<8;i++)
-   {
+   x = 0;
+   for (i=0;i<8;i++) {
       if (flag & 0x80000000L)
-         stringa2[x++] = 'O' + i;
+         j[x++] = 'O' + i;
+      else
+         j[x++] = '-';
       flag = flag << 1;
    }
+   j[x] = '\0';
+   wprints (0, 55, BLACK|_LGREY, j);
+   strcpy (f4, j);
 
-   stringa2[x] = '\0';
+   wprints (1, 1, BLACK|_LGREY, "New flags: ");
+   wprints (1, 16, BLACK|_LGREY, "A:          B:          C:          D:");
 
-   showcur ();
+   winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+   winpdef (1, 19, f1, "????????", 0, 1, NULL, 0);
+   winpdef (1, 31, f2, "????????", 0, 1, NULL, 0);
+   winpdef (1, 43, f3, "????????", 0, 1, NULL, 0);
+   winpdef (1, 55, f4, "????????", 0, 1, NULL, 0);
 
-   wprints (0,1,LCYAN|_BLUE,msgtxt[M_SET_SECURITY]);
-   wprints (1,1,LCYAN|_BLUE,sf);
-
-   winpbeg (WHITE|_RED, WHITE|_RED);
-   winpdef (0, strlen (msgtxt[M_SET_SECURITY])+1, stringa,
-            "???????????", 'M', 1, NULL, 0);
-   winpdef (1, strlen (sf)+1, stringa2,
-            "????????????????????????????????", 'U', 1, NULL, 0);
-
-   if (winpread () == W_ESCPRESS)
-   {
-      hidecur ();
-      wclose ();
-      wunlink (wh);
-      return;
+   if (winpread () != W_ESCPRESS) {
+      news &= 0xFFFFFF00L;
+      news |= recover_flags (f4);
+      news &= 0xFFFF00FFL;
+      news |= recover_flags (f3) << 8;
+      news &= 0xFF00FFFFL;
+      news |= recover_flags (f2) << 16;
+      news &= 0x00FFFFFFL;
+      news |= recover_flags (f1) << 24;
+      usr.flags = news;
    }
 
-   hidecur ();
-   wclose ();
-   wunlink (wh);
+   f3_status ();
+   wactiv (mainview);
+}
 
-   strtrim (stringa);
-   strtrim (stringa2);
+int share_loaded (void)
+{
+#ifndef __OS2__
+   union REGS inregs, outregs;
 
-   usr.priv = get_priv (stringa);
-   usr.flags = get_flags (stringa2);
-   usr_class = get_class(usr.priv);
+   inregs.x.ax = 0x1000;
+   int86(0x2F, &inregs, &outregs);
 
-   if (function_active == 1)
-      f1_status ();
-   else if (function_active == 3)
-      f3_status ();
+   if (outregs.h.al != 0xFF)
+      return (0);
+#endif
+
+   return (-1);
+}
+
+void show_statistics (fmem)
+long fmem;
+{
+   int c;
+   double t, u;
+   unsigned pp;
+#ifndef __OS2__
+   long freeram;
+#endif
+   long t1;
+   struct diskfree_t df;
+   struct tm *tim;
+
+   if (frontdoor) {
+      t1 = time (NULL);
+      tim = localtime (&t1);
+      fprintf (logf, "\n----------  %s %02d %s %02d, %s\n", wtext[tim->tm_wday], tim->tm_mday, mtext[tim->tm_mon], tim->tm_year % 100, VERSION);
+   }
+   else
+      status_line("+Begin, %s, (task %d)", &VERSION[8], line_offset);
+
+#ifdef __OS2__
+   c = getdisk ();
+   if (!_dos_getdiskfree (c + 1, &df)) {
+      t = (float)df.total_clusters * df.bytes_per_sector * df.sectors_per_cluster / 1048576L;
+      u = (float)df.avail_clusters * df.bytes_per_sector * df.sectors_per_cluster / 1048576L;
+      pp = (unsigned )(u * 100 / t);
+      status_line (":STATS: %c: %.1f of %.1f Mb free, %d%%", (char)(c + 'A'), u, t, pp);
+   }
+#else
+   t1 = farcoreleft ();
+   freeram = fmem - t1;
+   status_line (":STATS: %ldK used, %ldK available", freeram / 1024L, t1 / 1024L);
+
+   c = getdisk ();
+   if (!_dos_getdiskfree (c + 1, &df)) {
+      t = (float)df.total_clusters * df.bytes_per_sector * df.sectors_per_cluster / 1048576L;
+      u = (float)df.avail_clusters * df.bytes_per_sector * df.sectors_per_cluster / 1048576L;
+      pp = (unsigned )(u * 100 / t);
+      status_line (":       %c: %.1f of %.1f Mb free, %d%%", (char)(c + 'A'), u, t, pp);
+   }
+#endif
+
+   if (share_loaded ())
+      status_line (":Message base sharing enabled");
 }
 

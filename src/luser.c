@@ -7,26 +7,36 @@
 #include <sys\stat.h>
 
 #include "lora.h"
+#include "version.h"
 
 void Kill_Users (int, int);
 void Purge_Users (void);
-void Sort_Users (void);
+void Sort_Users (int bypriv);
 
 void main (argc, argv)
 int argc;
 char *argv[];
 {
-   int i, days, level, pack, sort;
+   int i, days, level, pack, sort, bypriv;
 
-   printf("\nLUSER; LoraBBS User maintenance utility, Version 2.20\n");
-   printf("       Copyright (c) 1991-92 by Marco Maccaferri, All Rights Reserved\n\n");
+#ifdef __OS2__
+   printf("\nLUSER; LoraBBS-OS/2 User maintenance utility, Version %s\n", LUSER_VERSION);
+#else
+   printf("\nLUSER; LoraBBS-DOS User maintenance utility, Version %s\n", LUSER_VERSION);
+#endif
+   printf("       Copyright (c) 1991-94 by Marco Maccaferri, All Rights Reserved\n\n");
 
-   pack = sort = days = level = 0;
+   bypriv = pack = sort = days = level = 0;
 
-   for (i=1;i<argc;i++)
-   {
-      if (!stricmp (argv[i], "-S"))
+   for (i=1;i<argc;i++) {
+      if (!stricmp (argv[i], "-S")) {
          sort = 1;
+         bypriv = 0;
+      }
+      else if (!stricmp (argv[i], "-SP")) {
+         sort = 1;
+         bypriv = 1;
+      }
       else if (!stricmp (argv[i], "-P"))
          pack = 1;
       else if (!strnicmp (argv[i], "-D", 2))
@@ -35,19 +45,18 @@ char *argv[];
          level = atoi (&argv[i][2]);
    }
 
-   if ( (!sort && !pack && !days && !level) || argc == 1 )
-   {
+   if ( (!sort && !pack && !days && !level) || argc == 1 ) {
       printf(" * Command-line parameters:\n\n");
 
       printf("      -S       Sort users in alphabetical order\n");
+      printf("      -SP      Sort users by level and in alphabetical order\n");
       printf("      -P       Pack user file\n");
       printf("      -D[n]    Delete users who haven't called in [n] days\n");
       printf("      -M[s]    Only purge users with security level less than [s]\n\n");
 
       printf(" * Please refer to the documentation for a more complete command summary\n\n");
    }
-   else
-   {
+   else {
       printf(" * Active options:\n\n");
 
       if (sort)
@@ -63,7 +72,7 @@ char *argv[];
       if (days)
          Kill_Users (days, level);
       if (sort)
-         Sort_Users ();
+         Sort_Users (bypriv);
       if (pack)
          Purge_Users ();
    }
@@ -126,8 +135,7 @@ int day, kill_priv;
 
       days = (int) (day_now - day_mess);
 
-      if ((days > day) && (kill_priv == 0 || usr.priv < kill_priv))
-      {
+      if ((days > day) && (kill_priv == 0 || usr.priv < kill_priv)) {
          usr.deleted = 1;
          lseek (fd, pos, SEEK_SET);
          write(fd, (char *) &usr, sizeof(struct _usr));
@@ -154,8 +162,7 @@ void Purge_Users ()
    fdn = open ("USERS.BBS", O_WRONLY|O_BINARY|O_CREAT|O_TRUNC,S_IREAD|S_IWRITE);
    fdi = open ("USERS.IDX", O_WRONLY|O_BINARY|O_CREAT|O_TRUNC,S_IREAD|S_IWRITE);
 
-   while (read (fdo, (char *)&usr, sizeof (struct _usr)) == sizeof (struct _usr))
-   {
+   while (read (fdo, (char *)&usr, sizeof (struct _usr)) == sizeof (struct _usr)) {
       if (!usr.name[0] || usr.deleted)
          continue;
       write (fdn, (char *)&usr, sizeof (struct _usr));
@@ -172,18 +179,33 @@ void Purge_Users ()
 
 struct _sort {
    char *name;
+   byte level;
    long pos;
 };
 
 int sort_function (const void *a1, const void *b1)
 {
    struct _sort *a, *b;
+
    a = (struct _sort *)a1;
    b = (struct _sort *)b1;
+
    return ( strcmp (a->name, b->name) );
 }
 
-void Sort_Users ()
+int sort_level_function (const void *a1, const void *b1)
+{
+   struct _sort *a, *b;
+
+   a = (struct _sort *)a1;
+   b = (struct _sort *)b1;
+
+   if (a->level == b->level)
+      return ( strcmp (a->name, b->name) );
+   return (b->level - a->level);
+}
+
+void Sort_Users (int bypriv)
 {
    int fdo, fdn, fdi, i, m;
    char *p;
@@ -200,8 +222,7 @@ void Sort_Users ()
 
    i = 0;
 
-   while (read (fdo, (char *)&usr, sizeof (struct _usr)) == sizeof (struct _usr))
-   {
+   while (read (fdo, (char *)&usr, sizeof (struct _usr)) == sizeof (struct _usr)) {
       sort[i].name = (char *)malloc (strlen(usr.name)+1);
       if (sort[i].name == NULL)
          exit (1);
@@ -213,13 +234,17 @@ void Sort_Users ()
       strcpy (sort[i].name, p);
       strcat (sort[i].name, " ");
       strcat (sort[i].name, usr.name);
+      sort[i].level = usr.priv;
       sort[i].pos = tell (fdo) - sizeof (struct _usr);
       i++;
    }
 
    close (fdo);
 
-   qsort ( (void *)sort, i, sizeof (struct _sort), sort_function);
+   if (bypriv)
+      qsort ( (void *)sort, i, sizeof (struct _sort), sort_level_function);
+   else
+      qsort ( (void *)sort, i, sizeof (struct _sort), sort_function);
 
    unlink ("USERS.BAK");
    rename ("USERS.BBS", "USERS.BAK");
@@ -228,8 +253,7 @@ void Sort_Users ()
    fdn = open ("USERS.BBS", O_WRONLY|O_BINARY|O_CREAT|O_TRUNC,S_IREAD|S_IWRITE);
    fdi = open ("USERS.IDX", O_WRONLY|O_BINARY|O_CREAT|O_TRUNC,S_IREAD|S_IWRITE);
 
-   for (m = 0; m < i; m++)
-   {
+   for (m = 0; m < i; m++) {
       lseek (fdo, sort[m].pos, SEEK_SET);
       read (fdo, (char *)&usr, sizeof (struct _usr));
       write (fdn, (char *)&usr, sizeof (struct _usr));

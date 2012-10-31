@@ -5,8 +5,9 @@
 #include <string.h>
 #include <alloc.h>
 
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 
@@ -29,12 +30,12 @@ int which;
    struct stat stbuf;
    FILE           *fpt;                         /* stream pointer           */
 
-   for (i = 0; lang_name[i] != NULL; i++);
+   for (i = 0; config->language[i].descr[0]; i++);
    if (which >= i)
       return (0);
 
-   strcpy (LANGpath, menu_bbs);
-   strcat (LANGpath, lang_name[which]);
+   strcpy (LANGpath, config->menu_path);
+   strcat (LANGpath, config->language[which].basename);
    strcat (LANGpath, ".LNG");
 
    /*
@@ -125,7 +126,7 @@ int which;
 
     for (i = 1; i <= pointer_size; i++)
         {
-        bbstxt[i] = memory + (int) (bbstxt[i] - bbstxt[0]);
+        bbstxt[i] = memory + (short) (bbstxt[i] - bbstxt[0]);
         }
     bbstxt[0] = memory;
 

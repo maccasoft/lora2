@@ -1,32 +1,115 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <dos.h>
+#include <io.h>
+#include <share.h>
+#include <errno.h>
 #include <string.h>
 #include <dir.h>
 #include <time.h>
-#include <io.h>
-#include <fcntl.h>
-#include <alloc.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#include <sys\stat.h>
+#ifdef __OS2__
+#include <conio.h>
 
-#include <cxl\cxlstr.h>
+#define INCL_DOS
+#define INCL_NOPMAPI
+#define INCL_VIO
+#include <os2.h>
+#else
+#include <bios.h>
+#endif
 
-#include "defines.h"
-#include "lora.h"
+#include <cxl\cxlvid.h>
+#include <cxl\cxlwin.h>
+#include <cxl\cxlkey.h>
+
+#include "tc_utime.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 
 char *firstchar(char *, char *, int);
 
+#ifdef __OS2__
+void pokeb (unsigned segment, unsigned offset, unsigned char value);
+unsigned char peekb (unsigned segment, unsigned offset);
+void VioUpdate (void);
 
-void timer (decs)
-int decs;
+extern int errno = 0;
+#endif
+
+int com_online (void)
 {
-	long timeout;
+   long t;
 
-	timeout = timerset ((unsigned int) (decs * 10));
-	while (!timeup (timeout))
-                time_release();
+   if (!config->dcd_timeout)
+      return (local_mode || (Com_(0x03) & config->carrier_mask));
+
+   if (local_mode || (Com_(0x03) & config->carrier_mask))
+      return (-1);
+
+   t = timerset (config->dcd_timeout * 100);
+   while (!timeup (t)) {
+      if (Com_(0x03) & config->carrier_mask)
+         return (-1);
+   }
+
+   return (0);
+}
+
+int esc_pressed (void)
+{
+   time_release ();
+   if (local_kbd == 0x1B) {
+      local_kbd = -1;
+      return (1);
+   }
+
+   return (0);
+}
+
+/*
+#ifdef __OS2__
+   if (kbhit ())
+      if (getch () == 0x1B)
+         return (1);
+
+   return (0);
+#else
+   if (bioskey (1))
+      if ((bioskey (0) & 0xFF) == 0x1B)
+         return (1);
+
+   return (0);
+#endif
+}
+*/
+
+/* always uses modification time */
+int cdecl utime(char *name, struct utimbuf *times)
+{
+   int handle;
+   struct date d;
+   struct time t;
+   struct ftime ft;
+
+   unixtodos(times->modtime, &d, &t);
+   ft.ft_tsec = t.ti_sec / 2;
+   ft.ft_min = t.ti_min;
+   ft.ft_hour = t.ti_hour;
+   ft.ft_day = d.da_day;
+   ft.ft_month = d.da_mon;
+   ft.ft_year = d.da_year - 1980;
+   if ((handle = shopen(name, O_RDONLY)) == -1)
+      return -1;
+
+   setftime(handle, &ft);
+   close(handle);
+   return 0;
 }
 
 char *fancy_str(s)
@@ -52,73 +135,6 @@ char *s;
 	}
 
 	return(s);
-}
-
-void press_enter()
-{
-	char stringa[2];
-
-        m_print("ç%s", bbstxt[B_PRESS_ENTER]);
-        chars_input(stringa,0,INPUT_NOLF);
-
-        m_print("\r");
-        space (strlen (bbstxt[B_PRESS_ENTER]) + 1);
-        m_print("\r");
-        restore_last_color ();
-}
-
-int continua()
-{
-        int i;
-
-        if (nopause)
-		return(1);
-
-        m_print(bbstxt[B_MORE]);
-        i = yesno_question(DEF_YES|EQUAL|NO_LF);
-
-        m_print("\r");
-        space (strlen (bbstxt[B_MORE]) + 14);
-        m_print("\r");
-        restore_last_color ();
-
-        if(i == DEF_NO)
-        {
-                nopause = 0;
-		return(0);
-	}
-
-        if (i == EQUAL)
-                nopause = 1;
-
-        return(1);
-}
-
-int more_question(line)
-int line;
-{
-        if(!(line++ < (usr.len-1)) && usr.more) {
-		line = 1;
-                if(!continua())
-			return(0);
-	}
-
-	return(line);
-}
-
-
-char *data(d)
-char *d;
-{
-	long tempo;
-	struct tm *tim;
-
-	tempo=time(0);
-	tim=localtime(&tempo);
-
-        sprintf(d,"%2d %3s %02d  %2d:%02d:%02d",tim->tm_mday,mtext[tim->tm_mon],\
-			tim->tm_year,tim->tm_hour,tim->tm_min,tim->tm_sec);
-	return(d);
 }
 
 int dexists (filename)
@@ -183,24 +199,11 @@ int time_remain()
         this_call=(int)((time(&t) - start_time)/60);
         time_gone=allowed - this_call;
 /*
-        if(time_gone > class[usr_class].max_time)
-                time_gone=class[usr_class].max_time-this_call;
+        if(time_gone > config->class[usr_class].max_time)
+                time_gone=config->class[usr_class].max_time-this_call;
 */
 
 	return(time_gone);
-}
-
-void big_pause (secs)
-int secs;
-{
-   long timeout, timerset ();
-
-   timeout = timerset ((unsigned int) (secs * 100));
-   while (!timeup (timeout))
-      {
-      if (PEEKBYTE() != -1)
-         break;
-      }
 }
 
 void show_controls(i)
@@ -211,73 +214,6 @@ int i;
 
    change_attr(i);
    m_print(bbstxt[B_CONTROLS]);
-}
-
-int yesno_question(def)
-int def;
-{
-        char stringa[4], c, bigyes[4], bigno[4];
-
-        sprintf(bigyes, "%c/%c", toupper(bbstxt[B_YES][0]), tolower(bbstxt[B_NO][0]));
-        sprintf(bigno, "%c/%c", tolower(bbstxt[B_YES][0]), toupper(bbstxt[B_NO][0]));
-
-        m_print(" [%s", (def & DEF_YES) ? bigyes : bigno);
-        m_print("%s", (def & EQUAL) ? "/=" : "");
-        m_print("%s", (def & TAG_FILES) ? "/d" : "");
-        m_print("%s", (def & QUESTION) ? "/?" : "");
-        m_print("]?  ");
-
-        do {
-                m_print ("\b \b");
-                if (!cmd_string[0])
-                {
-                        if (usr.hotkey)
-                                cmd_input (stringa, 1);
-                        else
-                                chars_input (stringa, 1, INPUT_NOLF);
-
-                        c = toupper(stringa[0]);
-                }
-                else
-                {
-                        c = toupper(cmd_string[0]);
-                        strcpy (&cmd_string[0], &cmd_string[1]);
-                        strtrim (cmd_string);
-                }
-                if (c == '?' && (def & QUESTION))
-                        break;
-                if (c == '=' && (def & EQUAL))
-                        break;
-                if (c == 'D' && (def & TAG_FILES))
-                        break;
-                if (time_remain() <= 0 || !CARRIER)
-                        return (DEF_NO);
-        } while (c != bigyes[0] && c != bigno[2] && c != '\0');
-
-        if (!(def & NO_LF))
-                m_print(bbstxt[B_ONE_CR]);
-
-        if (c == '?' && (def & QUESTION))
-                return (QUESTION);
-
-        if (c == '=' && (def & EQUAL))
-                return (EQUAL);
-
-        if (c == 'D' && (def & TAG_FILES))
-                return (TAG_FILES);
-
-        if (def & DEF_YES) {
-                if (c == bigno[2])
-                        return (DEF_NO);
-                else
-                        return (DEF_YES);
-        }
-        else {
-                if (c == bigyes[0])
-                        return (DEF_YES);
-                else
-                        return (DEF_NO);
-        }
 }
 
 word xcrc(crc,b)
@@ -362,7 +298,34 @@ int zone;
       q--;
 
    *q = '\0';
-   if (zone != (int) alias[0].zone && zone)
+   if (zone != (int) config->alias[0].zone && zone) {
+      sprintf(q, ".%03x", zone);
+      q[4] = '\0';
+   }
+
+//   mkdir (hold_area);
+   strcat (hold_area, "\\");
+
+   return (hold_area);
+}
+
+char *HoldAreaNameMungeCreate (zone)
+int zone;
+{
+   register char *q;
+
+   q = hold_area;
+
+   while (*q)
+      q++;
+
+   if ( *(q - 5) == '.')
+      q -= 5;
+   else
+      q--;
+
+   *q = '\0';
+   if (zone != (int) config->alias[0].zone && zone)
       sprintf(q, ".%03x", zone);
 
    mkdir (hold_area);
@@ -371,20 +334,27 @@ int zone;
    return (hold_area);
 }
 
-int stristr (s, p)
+char *stristr (s, p)
 char *s, *p;
 {
-        char *a;
+   int i, m;
 
-        strlwr(s);
-        strlwr(p);
+   if (s == NULL || p == NULL)
+      return (NULL);
 
-        while((a=strchr(s,*p)) != NULL) {
-                if(!strncmp(a,p,strlen(p)))
-                        return(1);
-                s=++a;
-        }
-        return(0);
+   m = strlen (p);
+
+   for (i = 0; s[i] != '\0'; i++) {
+      if (toupper (s[i]) != toupper (*p))
+         continue;
+      if (!strnicmp (&s[i], p, m))
+         break;
+   }
+
+   if (s[i] != '\0')
+      return (&s[i]);
+
+   return (NULL);
 }
 
 void ljstring(char *dest,char *src,int len)
@@ -406,12 +376,20 @@ void display_percentage (i, v)
 int i, v;
 {
    long t;
-   char filename[10], *backs = "\b\b\b\b\b";
+   char string[16];
 
-   t = (i * 100L) / v;
-   sprintf (filename, "%ld%%", t);
-   strncat (filename, backs, strlen (filename));
-   m_print (filename);
+   if (v)
+      t = (i * 100L) / v;
+   else
+      t = 100;
+
+   sprintf (string, "\b\b\b\b%3ld%%", t);
+   m_print (string);
+
+#ifdef __OS2__
+   UNBUFFER_BYTES ();
+   VioUpdate ();
+#endif
 }
 
 int is_here (z, ne, no, pp, forward, maxnodes)
@@ -437,39 +415,102 @@ int mail_sort_func (const void *a1, const void *b1)
    return ( (int)(a->node - b->node) );
 }
 
-void parse_netnode2(netnode, zone, net, node, point)
-char *netnode;
-int *zone, *net, *node, *point;
+void parse_netnode (char *netnode, int *zo, int *ne, int *no, int *po)
 {
    char *p;
+   unsigned short *zone, *net, *node, *point;
+
+   zone = (unsigned short *)zo;
+   net = (unsigned short *)ne;
+   node = (unsigned short *)no;
+   point = (unsigned short *)po;
+
+   *zone = config->alias[0].zone;
+   *net = config->alias[0].net;
+   *node = 0;
+   *point = 0;
 
    p = netnode;
+   while (!isdigit (*p) && *p != '.' && *p)
+      p++;
+   if (*p == '\0')
+      return;
+
+   /* If we have a zone (and the caller wants the zone to be passed back).. */
+
+   if (strchr(netnode,':') && zone) {
+      *zone = (unsigned short)atoi(p);
+      p = firstchar(p,":",2);
+   }
+
+   /* If we have a net number... */
+
+   if (p && strchr(netnode,'/') && net) {
+      *net=(unsigned short)atoi(p);
+      p=firstchar(p,"/",2);
+   }
+
+   /* We *always* need a node number... */
+
+   if (p && node)
+      *node=(unsigned short)atoi(p);
+
+   /* And finally check for a point number... */
+
+   if (p && strchr(netnode,'.') && point) {
+      p=firstchar(p,".",2);
+
+      if (p)
+         *point=(unsigned short)atoi(p);
+      else
+         *point=0;
+   }
+}
+
+void parse_netnode2 (char *netnode, int *zo, int *ne, int *no, int *po)
+{
+   char *p;
+   short *zone, *net, *node, *point;
+
+   zone = (short *)zo;
+   net = (short *)ne;
+   node = (short *)no;
+   point = (short *)po;
+
+   p = netnode;
+   while (!isdigit (*p) && *p != '.' && *p)
+      p++;
+   if (*p == '\0')
+      return;
 
    /* If we have a zone (and the caller wants the zone to be passed back).. */
 
    if (strchr (netnode, ':')) {
-      *zone = atoi(p);
+      *zone = (unsigned short)atoi(p);
       p = firstchar(p, ":", 2);
    }
 
    /* If we have a net number... */
 
    if (p && strchr (p, '/')) {
-      *net = atoi (p);
+      *net = (unsigned short)atoi (p);
       p = firstchar (p, "/", 2);
    }
    else if (!stricmp (p, "ALL")) {
-      *net = 0;
-      *node = 0;
-      *point = 0;
+      *net = -1;
+      *node = -1;
+      *point = -1;
       return;
    }
 
    /* We *always* need a node number... */
 
    if (p && *p != '.')
-      *node = atoi(p);
-   else if (p == NULL || !stricmp (p, "ALL"))
+      if (!stricmp (p, "ALL"))
+         *node = -1;
+      else
+         *node = (unsigned short)atoi(p);
+   else if (p == NULL)
       *node = 0;
 
    /* And finally check for a point number... */
@@ -480,8 +521,12 @@ int *zone, *net, *node, *point;
       else
          p=firstchar (p, ".", 2);
 
-      if (p)
-         *point = atoi(p);
+      if (p) {
+         if (!stricmp (p, "ALL"))
+            *point = -1;
+         else
+            *point = (unsigned short)atoi(p);
+      }
       else
          *point = 0;
    }
@@ -549,6 +594,250 @@ int findword;
    }
 
    return NULL;
+}
+
+int scrollbox(int sy,int sx,int ey,int ex,int num,int direction)
+{
+#ifdef __OS2__
+    register unsigned i,y;
+    unsigned p,d,inrow;
+
+    inrow=_vinfo.numcols*2;
+    d=(ex-sx+1)*2;
+
+    if (direction==SUP)
+        while (num--) {
+            for(y=sy;y<ey;y++) {
+                p=((y*_vinfo.numcols)+sx)*2;
+                for(i=0;i<d;i++) {
+                    pokeb(0,p,peekb(0,p+inrow));
+                    p++;
+                }
+            }
+            p=((y*_vinfo.numcols)+sx)*2;
+            d=ex-sx+1;
+            for(i=0;i<d;i++) {
+                pokeb(0,p++,' ');
+                pokeb(0,p++,7);
+            }
+        }
+    else {
+        while (num--) {
+            for(y=ey;y>sy;y--) {
+                p=((y*_vinfo.numcols)+sx)*2;
+                for(i=0;i<d;i++) {
+                    pokeb(0,p,peekb(0,p-inrow));
+                    p++;
+                }
+            }
+            p=((y*_vinfo.numcols)+sx)*2;
+            d=ex-sx+1;
+            for(i=0;i<d;i++) {
+                pokeb(0,p++,' ');
+                pokeb(0,p++,7);
+            }
+        }
+    }
+
+    VioUpdate();
+
+   /* return with no error */
+   return(W_NOERROR);
+#else
+    union REGS regs;
+
+    /* use BIOS function call 6 (up) or 7 (down) to scroll window */
+    regs.h.bh=0x07;
+    regs.h.ch=sy;
+    regs.h.cl=sx;
+    regs.h.dh=ey;
+    regs.h.dl=ex;
+    regs.h.al=num;
+    regs.h.ah=((direction==SDOWN)?7:6);
+    int86(0x10,&regs,&regs);
+
+    /* return with no error */
+    return(W_NOERROR);
+#endif
+}
+
+int isbundle (char *n)
+{
+   strupr (n);
+
+   return ((strstr (n, ".MO") || strstr (n, ".TU") || strstr (n, ".WE") || strstr (n, ".TH") || strstr (n, ".FR") || strstr (n, ".SA") || strstr (n, ".SU")));
+}
+
+void release_timeslice ()
+{
+#ifndef __OS2__
+   if (have_dv)
+      dv_pause ();
+   else if (have_ddos)
+      ddos_pause ();
+   else if (have_tv)
+      tv_pause ();
+   else if (have_ml)
+      ml_pause ();
+   else if (have_os2)
+      os2_pause ();
+   else
+      msdos_pause ();
+#else
+   DosSleep (30L);
+#endif
+}
+
+void stripcrlf (char *linea)
+{
+   while (linea[strlen (linea) -1] == 0x0D || linea[strlen (linea) - 1] == 0x0A)
+      linea[strlen (linea) -1] = '\0';
+}
+
+FILE *sh_fopen (char *filename, char *access, int shmode)
+{
+   FILE *fp;
+   long t1, t2;
+   long time (long *);
+
+   t1 = time (NULL);
+
+   while (time (NULL) < t1 + 20) {
+      if ((fp = _fsopen (filename, access, shmode)) != NULL || errno != EACCES)
+         break;
+      t2 = time (NULL);
+#ifdef __OS2__
+      while (time (NULL) < t2 + 1)
+         DosSleep (100L);
+#else
+      while (time (NULL) < t2 + 1)
+         ;
+#endif
+   }
+
+   return (fp);
+}
+
+int sh_open (char *file, int shmode, int omode, int fmode)
+{
+   int i;
+   long t1, t2;
+   long time (long *);
+
+   t1 = time (NULL);
+   while (time (NULL) < t1 + 20) {
+      if ((i = sopen (file, omode, shmode, fmode)) != -1 || errno != EACCES)
+         break;
+      t2 = time (NULL);
+#ifdef __OS2__
+      while (time (NULL) < t2 + 1)
+         DosSleep (100L);
+#else
+      while (time (NULL) < t2 + 1)
+         ;
+#endif
+   }
+
+   return (i);
+}
+
+/*---------------------------------------------------------------------------
+
+---------------------------------------------------------------------------*/
+char *packet_fgets (dest, max, fp)
+char *dest;
+int max;
+FILE *fp;
+{
+   int i, c;
+
+//   max--;
+   i = 0;
+
+   while (i < max) {
+      if ((c = fgetc (fp)) == EOF) {
+         if (i == 0)
+            return (NULL);
+         else
+            break;
+      }
+      dest[i++] = (char )c;
+      if ((char )c == '\0')
+         break;
+      if ((char )c == 0x0D) {
+         if ((c = fgetc (fp)) == 0x0A)
+            dest[i++] = (char )c;
+         else
+            ungetc (c, fp);
+         break;
+      }
+   }
+
+   dest[i] = '\0';
+   return (dest);
+}
+
+int m_getch (void)
+{
+   int i;
+
+   if (!local_mode) {
+      if (CHAR_AVAIL ())
+         return (TIMED_READ (1) & 0xFF);
+      if (local_kbd == -1)
+         time_release ();
+      else {
+         i = local_kbd;
+         local_kbd = -1;
+         return (i);
+      }
+   }
+   else {
+      if (local_kbd == -1)
+         time_release ();
+      else {
+         i = local_kbd;
+         local_kbd = -1;
+         return (i);
+      }
+   }
+
+   return (-1);
+}
+
+int get_emsi_field (char *s)
+{
+   char c;
+   int i = 0, start = 0;
+   long t;
+
+   t = timerset (100);
+
+   while (CARRIER && !timeup (t)) {
+      while (PEEKBYTE() == -1) {
+         if (!CARRIER || timeup (t))
+            return (0);
+      }
+
+      c = (char)TIMED_READ(1);
+      t = timerset (100);
+
+      if (!start && c != '{')
+         continue;
+
+      if (c == '{') {
+         start = 1;
+         continue;
+      }
+
+      if (c == '}' && start)
+         break;
+
+      s[i++] = c;
+   }
+
+   s[i] = '\0';
+   return (1);
 }
 
 

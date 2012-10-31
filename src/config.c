@@ -4,660 +4,181 @@
 #include <ctype.h>
 #include <time.h>
 #include <process.h>
+#include <conio.h>
+#include <io.h>
+#include <dos.h>
+
+#ifdef __OS2__
+#define INCL_DOS
+#define INCL_DOSDEVICES
+#define INCL_DOSDEVIOCTL
+#define INCL_DOSSEMAPHORES
+#define INCL_NOPMAPI
+#include <os2.h>
+#endif
 
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
 
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 #include "zmodem.h"
+#include "exec.h"
+
+#ifdef __OS2__
+extern HFILE hfComHandle;
+#endif
+
+int spawn_program (int swapout, char *outstring);
 
 extern int blank_timer;
+extern long exectime;
 
-static char *config_file = "LORA.CFG";
+char *config_file = "CONFIG.DAT";
+char **dos_argv;
+
 static MDM_TRNS *mm_head;
-static char **dos_argv;
 
 int far parse_config()
 {
    FILE *fp;
-   char linea[256], opt[13][50], *p, nzip, narc, narj, nlha, nlzh;
-   int line, cur_alias, i, cur_lang, nscan, cur_sync;
-   unsigned long crc;
-   MDM_TRNS *tmm, *mm;
+   char linea[256], *p, *pc;
 
-   nzip = narc = narj = nlha = nlzh = 0;
-   mm = NULL;
    _vinfo.dvcheck = 0;
    videoinit();
 
-   if ((p=getenv ("LORA")) != NULL) {
-      strcpy (linea, p);
-      append_backslash (linea);
-      strcat (linea, config_file);
-      config_file = linea;
-   }
+   pc = config_file;
 
-   fp = fopen(config_file,"rt");
+   fp = fopen (config_file, "rb");
    if (fp == NULL) {
-      printf (msgtxt[M_NO_CTL_FILE], config_file);
-      exit (250);
-   }
-
-   printf(msgtxt[M_SYSTEM_INITIALIZING]);
-
-   line = 0;
-   cur_alias = 0;
-   cur_lang = 0;
-   cur_sync = 0;
-
-   while (fgets(linea, 255, fp) != NULL) {
-      ++line;
-
-      linea[strlen(linea)-1] = '\0';
-      if (!strlen(linea) || linea[0] == ';' || linea[0] == '%')
-              continue;
-
-      nscan = sscanf(linea,"%s %s %s %s %s %s %s %s %s %s %s %s %s",
-                       opt[0], opt[1], opt[2], opt[3], opt[4],
-                       opt[5], opt[6], opt[7], opt[8], opt[9],
-                       opt[10], opt[11], opt[12]);
-
-      strupr (opt[0]);
-      crc = 0xFFFFFFFFL;
-      for (i=0;opt[0][i];i++)
-         crc = Z_32UpdateCRC (((unsigned short) opt[0][i]), crc);
-
-      switch (crc) {
-      case 0xB308A13EL:   /* CHECK_ECHOMAIL */
-         noask.secure = 1;
-         break;
-      case 0x55D2B4D5L:   /* PUMA_MPT */
-         noask.puma = 1;
-         if (nscan >= 2) {
-            puma_exe = (char *)malloc(strlen(opt[1])+1);
-            strcpy (puma_exe, replace_blank(opt[1]));
-         }
-         break;
-      case 0xF3F8C81FL:   /* HSLINK */
-         noask.hslink = 1;
-         if (nscan >= 2) {
-            hslink_exe = (char *)malloc(strlen(opt[1])+1);
-            strcpy (hslink_exe, replace_blank(opt[1]));
-         }
-         break;
-      case 0xDC146F2CL:   /* BLANK_SCREEN */
-         blank_timer = atoi (opt[1]);
-         break;
-      case 0x724E5D6BL:   /* NEWAREAS_CREATE */
-         newareas_create = (char *)malloc(strlen(opt[1])+1);
-         strcpy(newareas_create, replace_blank(opt[1]));
-         break;
-      case 0x1898A2A0L:   /* NEWAREAS_LINK */
-         newareas_link = (char *)malloc(strlen(opt[1])+1);
-         strcpy(newareas_link, replace_blank(opt[1]));
-         break;
-      case 0x144081C5L:   /* ROOKIE_CALLS */
-         min_calls = atoi (opt[1]);
-         break;
-      case 0x24C6912BL:   /* KEEP_NETMAIL */
-         noask.keeptransit = 1;
-         break;
-      case 0x33FDAD2DL:   /* PACK_ZIP */
-         if (nzip < MAX_PACKERS) {
-            pack_zip[nzip] = (char *)malloc(strlen(opt[1])+1);
-            strcpy(pack_zip[nzip], replace_blank(opt[1]));
-            nzip++;
-         }
-         break;
-      case 0x0E066BF8L:   /* PACK_ARC */
-         if (narc < MAX_PACKERS) {
-            pack_arc[narc] = (char *)malloc(strlen(opt[1])+1);
-            strcpy(pack_arc[narc], replace_blank(opt[1]));
-            narc++;
-         }
-         break;
-      case 0x77DAD35CL:   /* PACK_ARJ */
-         if (narj < MAX_PACKERS) {
-            pack_arj[narj] = (char *)malloc(strlen(opt[1])+1);
-            strcpy(pack_arj[narj], replace_blank(opt[1]));
-            narj++;
-         }
-         break;
-      case 0x59D5AB2BL:   /* PACK_LZH */
-         if (nlzh < MAX_PACKERS) {
-            pack_lzh[nlzh] = (char *)malloc(strlen(opt[1])+1);
-            strcpy(pack_lzh[nlzh], replace_blank(opt[1]));
-            nlzh++;
-         }
-         break;
-      case 0x58FD635CL:   /* PACK_LHA */
-         if (nlha < MAX_PACKERS) {
-            pack_lha[nlha] = (char *)malloc(strlen(opt[1])+1);
-            strcpy(pack_lha[nlha], replace_blank(opt[1]));
-            nlha++;
-         }
-         break;
-      case 0x1C309B04L:   /* MODEM_BUSY */
-         modem_busy = (char *)malloc(strlen(opt[1])+1);
-         strcpy(modem_busy, replace_blank(opt[1]));
-         break;
-      case 0xE0E646E3L:   /* BEFORE_IMPORT */
-         pre_import = (char *)malloc(strlen(opt[1])+1);
-         strcpy(pre_import, replace_blank(opt[1]));
-         break;
-      case 0x2B01B404L:   /* AFTER_IMPORT */
-         after_import = (char *)malloc(strlen(opt[1])+1);
-         strcpy(after_import, replace_blank(opt[1]));
-         break;
-      case 0x3F249E6AL:   /* BEFORE_EXPORT */
-         pre_export = (char *)malloc(strlen(opt[1])+1);
-         strcpy(pre_export, replace_blank(opt[1]));
-         break;
-      case 0xF4C36C8DL:   /* AFTER_EXPORT */
-         after_export = (char *)malloc(strlen(opt[1])+1);
-         strcpy(after_export, replace_blank(opt[1]));
-         break;
-      case 0x6EF35C4CL:   /* LOCAL_EDITOR */
-         local_editor = (char *)malloc(strlen(opt[1])+1);
-         strcpy(local_editor, replace_blank(opt[1]));
-         break;
-      case 0xE719B671L:   /* TEXTFILES_PATH */
-         append_backslash (opt[1]);
-         glob_text_path = (char *)malloc(strlen(opt[1])+1);
-         strcpy(glob_text_path, opt[1]);
-         break;
-      case 0x08F6F13CL:   /* MAX_KBYTES */
-         norm_max_kbytes = atoi(opt[1]);
-         break;
-      case 0xDD336D5DL:   /* VOTE_LIMIT */
-         vote_limit = atoi(opt[1]);
-         break;
-      case 0x3A957DA0L:   /* PROT_MAX_KBYTES */
-         prot_max_kbytes = atoi(opt[1]);
-         break;
-      case 0x9BDA3BA0L:   /* KNOW_MAX_KBYTES */
-         know_max_kbytes = atoi(opt[1]);
-         break;
-      case 0x250D8180L:   /* REGISTRATION_KEY */
-         keycode = atol (opt[1]);
-         break;
-      case 0xA2564291L:   /* NETMAIL */
-         append_backslash (opt[1]);
-         netmail_dir = (char *)malloc(strlen(opt[1])+1);
-         strcpy(netmail_dir, opt[1]);
-         break;
-      case 0xE919B64CL:   /* DEFAULT_PACKER */
-         if (!stricmp (opt[1], "ARC"))
-            def_pack = 0;
-         else if (!stricmp (opt[1], "ZIP"))
-            def_pack = 1;
-         else if (!stricmp (opt[1], "ARJ"))
-            def_pack = 2;
-         else if (!stricmp (opt[1], "LZH"))
-            def_pack = 3;
-         else if (!stricmp (opt[1], "LHA"))
-            def_pack = 4;
-         break;
-      case 0x7BAD9C45L:   /* DUPES */
-         append_backslash (opt[1]);
-         dupes = (char *)malloc(strlen(opt[1])+1);
-         strcpy(dupes, opt[1]);
-         break;
-      case 0x774D422EL:   /* BAD_MSGS */
-         append_backslash (opt[1]);
-         bad_msgs = (char *)malloc(strlen(opt[1])+1);
-         strcpy(bad_msgs, opt[1]);
-         break;
-      case 0x299701B6L:   /* SYSTEM_LOCATION */
-         location = (char *)malloc(strlen(opt[1])+1);
-         strcpy(location, replace_blank (opt[1]));
-         break;
-      case 0x7DE1BF9EL:   /* SYSTEM_PHONE */
-         phone = (char *)malloc(strlen(opt[1])+1);
-         strcpy(phone, opt[1]);
-         break;
-      case 0x32AB69F9L:   /* SYSTEM_FLAGS */
-         flags = (char *)malloc(strlen(opt[1])+1);
-         strcpy(flags, opt[1]);
-         break;
-      case 0x78F48F39L:   /* NO_EMSI */
-         noask.emsi = 1;
-         break;
-      case 0xF1D22F81L:   /* NO_LOGON_CHECKFILES */
-         noask.checkfile = 1;
-         break;
-      case 0x1B46DD7FL:   /* ANSILOGON */
-         if (!stricmp (opt[1], "YES"))
-            noask.ansilogon = 3;
-         else if (!stricmp (opt[1], "ASK"))
-            noask.ansilogon = 2;
-         else if (!stricmp (opt[1], "AUTO"))
-            noask.ansilogon = 1;
-         else if (!stricmp (opt[1], "NO"))
-            noask.ansilogon = 0;
-         break;
-      case 0x60F83BF0L:   /* NO_BIRTHDATE */
-         noask.birthdate = 1;
-         break;
-      case 0xC2ED9051L:   /* NO_VOICEPHONE */
-         noask.voicephone = 1;
-         break;
-      case 0x50394BF7L:   /* NO_DATAPHONE */
-         noask.dataphone = 1;
-         break;
-      case 0xBD5F1FACL:   /* ABOUT */
-         about = (char *)malloc(strlen(opt[1])+1);
-         strcpy(about, opt[1]);
-         norm_about = about;
-         break;
-      case 0xCDF46E64L:   /* ADDRESS */
-         sscanf(opt[1],"%d:%d/%d",&alias[cur_alias].zone,&alias[cur_alias].net,&alias[cur_alias].node);
-         if ((p = strchr (opt[1], '.')) != NULL) {
-            p++;
-            alias[cur_alias].point = atoi (p);
-         }
-         else
-            alias[cur_alias].point = 0;
-         if (nscan >= 3)
-            alias[cur_alias].fakenet = atoi(opt[2]);
-         cur_alias++;
-         break;
-      case 0x23BEF7BCL:   /* AFTERCALLER_EXIT */
-         aftercaller_exit = atoi(opt[1]);
-         break;
-      case 0x90616E40L:   /* AFTERMAIL_EXIT */
-         aftermail_exit = atoi(opt[1]);
-         break;
-      case 0x66318BCDL:   /* AREACHANGE_KEYS */
-         opt[1][3] = '\0';
-         strcpy (area_change_key, opt[1]);
-         break;
-      case 0xFD111729L:   /* AVAILIST */
-         availist = (char *)malloc(strlen(opt[1])+1);
-         strcpy(availist, opt[1]);
-         norm_availist = availist;
-         break;
-      case 0x1A12940FL:   /* DATEFORMAT */
-         dateformat = (char *)malloc(strlen(opt[1])+1);
-         strcpy(dateformat, opt[1]);
-         break;
-      case 0xE39FA725L:   /* DEFINE */
-         i = get_priv(opt[1]);
-         i = get_class(i);
-         class[i].max_call = atoi(opt[2]);
-         class[i].max_time = atoi(opt[3]);
-         class[i].min_baud = atoi(opt[4]);
-         class[i].min_file_baud = atoi(opt[5]);
-         class[i].max_dl = atoi(opt[6]);
-         class[i].ratio = atoi(opt[7]);
-         class[i].start_ratio = atoi(opt[8]);
-         class[i].dl_300 = atoi(opt[9]);
-         class[i].dl_1200 = atoi(opt[10]);
-         class[i].dl_2400 = atoi(opt[11]);
-         class[i].dl_9600 = atoi(opt[12]);
-         break;
-      case 0xAB65DC85L:   /* ENTERBBS */
-         enterbbs = (char *)malloc(strlen(opt[1])+1);
-         strcpy(enterbbs, replace_blank(opt[1]));
-         break;
-      case 0x42823B02L:   /* EXIT_300 */
-         exit300 = atoi (opt[1]);
-         break;
-      case 0x6118CF5EL:   /* EXIT_1200 */
-         exit1200 = atoi (opt[1]);
-         break;
-      case 0x77201C02L:   /* EXIT_2400 */
-         exit2400 = atoi (opt[1]);
-         break;
-      case 0x5B51BABAL:   /* EXIT_4800 */
-         exit4800 = atoi (opt[1]);
-         break;
-      case 0x44739082L:   /* EXIT_7200 */
-         exit7200 = atoi (opt[1]);
-         break;
-      case 0xA3A54F6DL:   /* EXIT_9600 */
-         exit9600 = atoi (opt[1]);
-         break;
-      case 0xAA6B5490L:   /* EXIT_12000 */
-         exit12000 = atoi (opt[1]);
-         break;
-      case 0x8809A390L:   /* EXIT_14400 */
-         exit14400 = atoi (opt[1]);
-         break;
-      case 0x2B1A927FL:   /* EXIT_16800 */
-         exit16800 = atoi (opt[1]);
-         break;
-      case 0x7EEE07FFL:   /* EXIT_19200 */
-         exit19200 = atoi (opt[1]);
-         break;
-      case 0xB81F4F48L:   /* EXIT_38400 */
-         exit38400 = atoi (opt[1]);
-         break;
-      case 0xEBDDEC93L:   /* EXTERNAL_EDITOR */
-         ext_editor = (char *)malloc(strlen(opt[1])+1);
-         strcpy(ext_editor, replace_blank(opt[1]));
-         break;
-      case 0x9CABE3DAL:   /* FLAG_PATH */
-         append_backslash (opt[1]);
-         flag_dir = (char *)malloc(strlen(opt[1])+1);
-         strcpy(flag_dir, opt[1]);
-         break;
-      case 0x122A332CL:   /* INBOUND */
-         translate_filenames (opt[1], 0, NULL);
-         append_backslash (opt[1]);
-         filepath = (char *)malloc(strlen(opt[1])+1);
-         strcpy(filepath, opt[1]);
-         norm_filepath = filepath;
-         break;
-      case 0xB0176D6EL:   /* INCLUDE */
-         break;
-      case 0xA0D08998L:   /* IPC_PATH */
-         append_backslash (opt[1]);
-         ipc_path = (char *)malloc(strlen(opt[1])+1);
-         strcpy(ipc_path, opt[1]);
-         break;
-      case 0x03EA195FL:   /* KNOW_ABOUT */
-         know_about = (char *)malloc(strlen(opt[1])+1);
-         strcpy(know_about, opt[1]);
-         break;
-      case 0xA7C23A9BL:   /* KNOW_AVAILIST */
-         know_availist = (char *)malloc(strlen(opt[1])+1);
-         strcpy(know_availist, opt[1]);
-         break;
-      case 0xC4D89AD2L:   /* KNOW_INBOUND */
-         translate_filenames (opt[1], 0, NULL);
-         append_backslash (opt[1]);
-         know_filepath = (char *)malloc(strlen(opt[1])+1);
-         strcpy(know_filepath, opt[1]);
-         break;
-      case 0x44D9E95AL:   /* KNOW_MAX_REQUESTS */
-         know_max_requests = atoi(opt[1]);
-         break;
-      case 0x20549DA5L:   /* KNOW_OKFILE */
-         know_request_list = (char *)malloc(strlen(opt[1])+1);
-         strcpy(know_request_list, opt[1]);
-         break;
-      case 0xED171206L:   /* LANGUAGE */
-         if (cur_lang < MAX_LANG) {
-            lang_name[cur_lang] = (char *)malloc(strlen(opt[1])+1);
-            strcpy(lang_name[cur_lang], opt[1]);
-            lang_keys[cur_lang] = toupper(opt[2][0]);
-            lang_descr[cur_lang] = (char *)malloc(strlen(opt[3])+1);
-            strcpy(lang_descr[cur_lang], replace_blank(opt[3]));
-            if (nscan >= 5) {
-               append_backslash (opt[4]);
-               lang_txtpath[cur_lang] = (char *)malloc(strlen(opt[4])+1);
-               strcpy(lang_txtpath[cur_lang], opt[4]);
-            }
-            else
-               lang_txtpath[cur_lang] = NULL;
-            if (cur_lang == 0)
-               text_path = lang_txtpath[cur_lang];
-            cur_lang++;
-         }
-         break;
-      case 0xB740DCC4L:   /* LOG_NAME */
-         if (log_name == NULL) {
-            translate_filenames (opt[1], 0, NULL);
-            log_name = (char *)malloc(strlen(opt[1])+1);
-            strcpy(log_name, opt[1]);
-         }
-         break;
-      case 0xAF52B711L:   /* LOG_STYLE */
-         if (!stricmp (opt[1], "SHORT"))
-            frontdoor = 1;
-         else if (!stricmp (opt[1], "VERBOSE"))
-            frontdoor = 0;
-         else
-            printf("Configuration error. Line %d. (%s, Code %08lX)\a\n", line, opt[1], crc);
-         break;
-      case 0xBE4AE788L:   /* LOGON_FLAGS */
-         logon_flags = get_flags(opt[1]);
-         break;
-      case 0x2FA56A21L:   /* LOGON_LEVEL */
-         logon_priv = get_priv(opt[1]);
-         break;
-      case 0x0FE55307L:   /* MAIL_BANNER */
-         banner = (char *)malloc(strlen(opt[1])+1);
-         strcpy(banner, replace_blank(opt[1]));
-         break;
-      case 0x375E6E2DL:   /* MAIL_ONLY */
-         mail_only = (char *)malloc(strlen(opt[1])+1);
-         strcpy(mail_only, replace_blank(opt[1]));
-         break;
-      case 0xE29C94CEL:   /* MAX_REQUESTS */
-         max_requests = atoi(opt[1]);
-         norm_max_requests = max_requests;
-         break;
-      case 0xB9E7B555L:   /* MENU_PATH */
-         append_backslash (opt[1]);
-         menu_bbs = (char *)malloc(strlen(opt[1])+1);
-         strcpy(menu_bbs, opt[1]);
-         break;
-      case 0x394E0AF4L:   /* MODEM_DIAL */
-         dial = (char *)malloc(strlen(opt[1])+1);
-         strcpy(dial, opt[1]);
-         break;
-      case 0x15DED6F2L:   /* MODEM_INIT */
-         if (init == NULL) {
-            init = (char *)malloc(strlen(opt[1])+1);
-            strcpy(init, opt[1]);
-         }
-         break;
-      case 0x903B6F4AL:   /* MODEM_PORT */
-         if (!speed)
-            speed = rate = atoi(opt[2]);
-
-         if (com_port == -1) {
-            com_port = atoi(&opt[1][3]);
-            com_port--;
-         }
-
-         if (!local_mode) {
-            if (!com_install(com_port))
-               exit (250);
-         }
-
-         com_baud (rate);
-
-	 Txbuf = Secbuf = (byte *) malloc (WAZOOMAX + 16);
-         if (Txbuf == NULL)
-            exit (250);
-         break;
-      case 0x9D455DDFL:   /* MODEM_TRANS */
-         tmm = (MDM_TRNS *) malloc (sizeof (MDM_TRNS));
-         if (tmm == NULL)
-            break;
-         tmm->mdm = (byte) atoi (opt[1]);
-         strcpy (tmm->pre, opt[2]);
-         strcpy (tmm->suf, opt[3]);
-         tmm->next = NULL;
-         if (mm_head == NULL)
-            mm_head = tmm;
-         else
-            mm->next = tmm;
-         mm = tmm;
-         break;
-      case 0x434AA02AL:   /* NODELIST */
-         append_backslash (opt[1]);
-         net_info = (char *)malloc(strlen(opt[1])+1);
-         strcpy(net_info, opt[1]);
-         break;
-      case 0x045E8B05L:   /* OKFILE */
-         request_list = (char *)malloc(strlen(opt[1])+1);
-         strcpy(request_list, opt[1]);
-         norm_request_list = request_list;
-         break;
-      case 0x18EA343DL:   /* OUTBOUND */
-         append_backslash (opt[1]);
-         hold_area = (char *)malloc(strlen(opt[1])+8);
-         strcpy(hold_area, opt[1]);
-         break;
-      case 0x527DA204L:   /* PIPBASE_PATH */
-         append_backslash (opt[1]);
-         pip_msgpath = (char *)malloc(strlen(opt[1])+1);
-         strcpy(pip_msgpath, opt[1]);
-         break;
-      case 0xFAE246D3L:   /* QUICKBASE_PATH */
-         append_backslash (opt[1]);
-         fido_msgpath = (char *)malloc(strlen(opt[1])+1);
-         strcpy(fido_msgpath, opt[1]);
-         break;
-      case 0xB536A5A9L:   /* QWK_BBSID */
-         BBSid = (char *)malloc(strlen(opt[1])+1);
-         strcpy(BBSid, opt[1]);
-         break;
-      case 0x966D89DFL:   /* QWK_TEMPDIR */
-         translate_filenames (opt[1], 0, NULL);
-         append_backslash (opt[1]);
-         QWKDir = (char *)malloc(strlen(opt[1])+1);
-         strcpy(QWKDir, opt[1]);
-         break;
-      case 0x44860CEEL:   /* RESYNC_CLOCK */
-         if (cur_sync < MAX_RESYNC) {
-            sscanf(opt[1],"%d:%d/%d",&resync[cur_sync].zone,&resync[cur_sync].net,&resync[cur_sync].node);
-            cur_sync++;
-         }
-         break;
-      case 0x1701576AL:   /* RESYNC_DIAL */
-         galileo = (char *)malloc(strlen(opt[1])+1);
-         strcpy(galileo, opt[1]);
-         break;
-      case 0x227A4A48L:   /* SCHED_NAME */
-         translate_filenames (opt[1], 0, NULL);
-         sched_name = (char *)malloc(strlen(opt[1])+1);
-         strcpy(sched_name, opt[1]);
-         break;
-      case 0x2A19FC42L:   /* SPEED_GRAPHICS */
-         speed_graphics = atoi(opt[1]);
-         break;
-      case 0x0672B019L:   /* SYSOP_NAME */
-         sysop = (char *)malloc(strlen(opt[1])+1);
-         strcpy(sysop, replace_blank(opt[1]));
-         break;
-      case 0xFCD28FE3L:   /* SYSTEM_NAME */
-         system_name = (char *)malloc(strlen(opt[1])+1);
-         strcpy(system_name, replace_blank(opt[1]));
-         break;
-      case 0xA9A57AEAL:   /* SYSTEM_PATH */
-         translate_filenames (opt[1], 0, NULL);
-         append_backslash (opt[1]);
-         sys_path = (char *)malloc(strlen(opt[1])+1);
-         strcpy(sys_path, opt[1]);
-         break;
-      case 0x1078CF0CL:   /* TASK_NUMBER */
-         line_offset = atoi(opt[1]);
-         break;
-      case 0xB6B776F2L:   /* TERMINAL */
-         terminal = 1;
-         break;
-      case 0xE5909DFFL:   /* TIMEFORMAT */
-         timeformat = (char *)malloc(strlen(opt[1])+1);
-         strcpy(timeformat, opt[1]);
-         break;
-      case 0x8CE2B4CDL:   /* USER_FILE */
-         translate_filenames (opt[1], 0, NULL);
-         user_file = (char *)malloc(strlen(opt[1])+1);
-         strcpy(user_file, opt[1]);
-         break;
-      case 0xB3EF0BC3L:   /* LOCK_RATE */
-         lock_baud = 1;
-         break;
-      case 0x0F6B4F98L:   /* MAX_CONNECTS */
-         max_connects = atoi(opt[1]);
-         break;
-      case 0xDD16F94BL:   /* MAX_NOCONNECTS */
-         max_noconnects = atoi(opt[1]);
-         break;
-      case 0x71E154ABL:   /* MAX_REREAD_PRIV */
-         max_readpriv = get_priv(opt[1]);
-         break;
-      case 0x90E0E157L:   /* MODEM_ANSWER */
-         answer = (char *)malloc(strlen(opt[1])+1);
-         strcpy(answer, opt[1]);
-         break;
-      case 0x02510977L:   /* MONOCHROME_ATTRIBUTE */
-         setvparam (VP_MONO);
-         break;
-      case 0xE6DE8C50L:   /* NO_DIRECTVIDEO */
-         setvparam (VP_BIOS);
-         break;
-      case 0x8A651D2DL:   /* NO_SNOOP */
-         snooping = 0;
-         break;
-      case 0xA7B8C8B8L:   /* PROT_ABOUT */
-         prot_about = (char *)malloc(strlen(opt[1])+1);
-         strcpy(prot_about, opt[1]);
-         break;
-      case 0x1629389CL:   /* PROT_AVAILIST */
-         prot_availist = (char *)malloc(strlen(opt[1])+1);
-         strcpy(prot_availist, opt[1]);
-         break;
-      case 0x2433B9E9L:   /* PROT_INBOUND */
-         translate_filenames (opt[1], 0, NULL);
-         append_backslash (opt[1]);
-         prot_filepath = (char *)malloc(strlen(opt[1])+1);
-         strcpy(prot_filepath, opt[1]);
-         break;
-      case 0xDB66ACB0L:   /* PROT_MAX_REQUESTS */
-         prot_max_requests = atoi(opt[1]);
-         break;
-      case 0x1E9EB8AFL:   /* PROT_OKFILE */
-         prot_request_list = (char *)malloc(strlen(opt[1])+1);
-         strcpy(prot_request_list, opt[1]);
-         break;
-      case 0x0B26E00EL:   /* SNOW_CHECKING */
-         setvparam (VP_CGA);
-         break;
-      case 0x3DDCD0B2L:   /* VOTE_START */
-         vote_priv = get_priv(opt[1]);
-         break;
-      case 0xC8A88571L:   /* VOTE_TARGET_UP */
-         target_up = atoi(opt[1]);
-         up_priv = get_priv(opt[2]);
-         break;
-      case 0x30B78403L:   /* VOTE_TARGET_DOWN */
-         target_down = atoi(opt[1]);
-         down_priv = get_priv(opt[2]);
-         break;
-      default:
-         printf("Configuration error. Line %d. (%s, Code %08lX)\n\a", line, opt[0], crc);
-         break;
+      if ((p=getenv ("LORA")) != NULL) {
+         strcpy (linea, p);
+         append_backslash (linea);
+         strcat (linea, config_file);
+         config_file = linea;
       }
+      fp = fopen (config_file, "rb");
    }
 
-   fclose(fp);
+try_setup:
+   if (fp != NULL) {
+      fread ((char *)config, sizeof (struct _configuration), 1, fp);
+      fclose (fp);
+
+      if (config->version != CONFIG_VERSION) {
+         printf ("\n\aConfiguration file error. Run LSETUP.\n");
+         exit (0);
+      }
+
+      hold_area = config->outbound;
+      netmail_dir = config->netmail_dir;
+      if (config->bad_msgs[0])
+         bad_msgs = config->bad_msgs;
+      if (config->dupes[0])
+         dupes = config->dupes;
+      pip_msgpath = config->pip_msgpath;
+      fido_msgpath = config->quick_msgpath;
+      ipc_path = config->ipc_path;
+      sysop = config->sysop;
+      system_name = config->system_name;
+      location = config->location;
+      phone = config->phone;
+      flags = config->flags;
+      lock_baud = config->lock_baud;
+      terminal = config->terminal;
+      if (config->modem_busy[0])
+         modem_busy = config->modem_busy;
+      if (config->answer[0])
+         answer = config->answer;
+      init = config->init;
+      dial = config->dial;
+      log_name = config->log_name;
+      frontdoor = config->log_style;
+      filepath = config->norm_filepath;
+      if (config->norm_okfile[0])
+         request_list = norm_request_list = config->norm_okfile;
+      if (config->prot_okfile[0])
+         prot_request_list = config->prot_okfile;
+      if (config->know_okfile[0])
+         know_request_list = config->know_okfile;
+      norm_max_kbytes = config->norm_max_kbytes;
+      prot_max_kbytes = config->prot_max_kbytes;
+      know_max_kbytes = config->know_max_kbytes;
+      norm_max_requests = config->norm_max_requests;
+      prot_max_requests = config->prot_max_requests;
+      know_max_requests = config->know_max_requests;
+      blank_timer = config->blank_timer;
+      if (config->line_offset == 0)
+         config->line_offset = 1;
+      line_offset = config->line_offset;
+      snooping = config->snooping;
+      aftercaller_exit = config->aftercaller_exit;
+      aftermail_exit = config->aftermail_exit;
+      dateformat = config->dateformat;
+      timeformat = config->timeformat;
+
+      if (config->no_direct)
+         setvparam (VP_BIOS);
+      else
+         setvparam (VP_DMA);
+      if (config->snow_check)
+         setvparam (VP_CGA);
+      if (config->mono_attr)
+         setvparam (VP_MONO);
+
+      if (!speed)
+         speed = rate = config->speed;
+      if (com_port == -1)
+         com_port = config->com_port;
+
+      if (!config->carrier_mask) {
+         config->carrier_mask = 128;
+         config->dcd_timeout = 1;
+      }
+
+      Txbuf = Secbuf = (byte *) malloc (WAZOOMAX + 16);
+      if (Txbuf == NULL)
+         exit (250);
+   }
+   else {
+      config_file = pc;
+      spawn_program (1, config_file);
+
+      fp = fopen (config_file, "rb");
+        if (fp != NULL)
+           goto try_setup;
+
+      exit (1);
+   }
+
+   config_file = pc;
 
    return(1);
 }
 
 void init_system()
 {
-   int i;
-
-   log_name = user_file = sys_path = NULL;
-   menu_bbs = sysop = system_name = net_info = request_list = NULL;
-   availist = about = hold_area = filepath = enterbbs = banner = NULL;
-   glob_text_path = sched_name = mail_only = password = flag_dir = NULL;
+   log_name = NULL;
+   sysop = system_name = request_list = NULL;
+   availist = about = hold_area = NULL;
+   password = NULL;
    pip_msgpath = timeformat = dateformat = text_path = ipc_path = NULL;
-   prot_filepath = know_filepath = answer = ext_mail_cmd = NULL;
-   ext_editor = norm_filepath = norm_about = norm_availist = NULL;
+   answer = ext_mail_cmd = NULL;
+   norm_about = norm_availist = NULL;
    norm_request_list = prot_request_list = prot_availist = prot_about = NULL;
-   galileo = know_request_list = know_availist = know_about = NULL;
+   know_request_list = know_availist = know_about = NULL;
    bad_msgs = dupes = netmail_dir = location = phone = flags = NULL;
-   pre_import = pre_export = after_import = after_export = modem_busy = NULL;
-   hslink_exe = puma_exe = newareas_create = local_editor = NULL;
+   modem_busy = NULL;
+   hslink_exe = puma_exe = NULL;
    mm_head = NULL;
 
    blank_timer = 0;
 
    vote_priv = up_priv = down_priv = 0;
-   logon_priv = TWIT;
 
-   def_pack = 0;
    norm_max_kbytes = prot_max_kbytes = know_max_kbytes = max_kbytes = 0;
    CurrentReqLim = max_call = speed_graphics = max_requests = 0;
    registered = line_offset = no_logins = next_call = 0;
@@ -667,39 +188,25 @@ void init_system()
    remote_zone = remote_net = remote_node = remote_point = 0;
    com_port = -1;
 
-   answer_flag = lock_baud = terminal = use_tasker = 0;
+   emulator = answer_flag = lock_baud = terminal = use_tasker = 0;
    got_arcmail = sliding = ackless_ok = do_chksum = may_be_seadog = 0;
    did_nak = netmail = who_is_he = overwrite = allow_reply = 0;
    frontdoor = local_mode = user_status = caller = 0;
    snooping = 1;
-   min_calls = 8;
-
-   exit300 = exit1200 = exit2400 = exit9600 = exit14400 = 0;
-   exit19200 = exit38400 = 0;
-
-   memset((char *)&alias[0], 0, sizeof(struct _alias)*MAX_ALIAS);
-   memset((char *)&class[0], 0, sizeof(struct class_rec)*MAXCLASS);
-   memset((char *)&noask, 0, sizeof(struct _noask));
-   memset((char *)&resync[0], 0, sizeof(struct _alias)*MAX_RESYNC);
 
    max_readpriv = ASSTSYSOP;
    sq_ptr = NULL;
 
    strcpy (area_change_key, "[]?");
+   config = (struct _configuration *)malloc (sizeof (struct _configuration));
+   if (config == NULL) {
+      printf ("\a\a\a");
+      exit (0);
+   }
 
-   for (i=0;i<MAXCLASS;i++)
-      class[i].priv = 255;
-   for (i=0;i<MAX_LANG;i++) {
-      lang_name[i] = NULL;
-      lang_descr[i] = NULL;
-   }
-   for (i=0;i<MAX_PACKERS;i++) {
-      pack_zip[i] = NULL;
-      pack_arc[i] = NULL;
-      pack_arj[i] = NULL;
-      pack_lzh[i] = NULL;
-      pack_lha[i] = NULL;
-   }
+#ifdef __OS2__
+   hfComHandle = -1;
+#endif
 }
 
 int get_priv(txt)
@@ -753,11 +260,11 @@ int get_class(p)
 int p;
 {
    int m;
-   for(m=0;m<MAXCLASS;m++) if(class[m].priv == p)
+   for(m=0;m<MAXCLASS;m++) if(config->class[m].priv == p)
       return(m);
-   for(m=0;m<MAXCLASS;m++) if(class[m].priv == 255)
+   for(m=0;m<MAXCLASS;m++) if(config->class[m].priv == 255)
    {
-      class[m].priv=p;
+      config->class[m].priv=p;
       return(m);
    }
    return(-1);
@@ -767,76 +274,117 @@ void parse_command_line(argc, argv)
 int argc;
 char **argv;
 {
-   int i;
+   int i, xms, ems, errors;
 
+   errors = 0;
+   xms = ems = 1;
    dos_argv = argv;
 
-   if (argc < 2)
-           return;
-
-   for (i=1;i<argc;i++) {
-      if (argv[i][0] != '-' && argv[i][0] != '/') {
-         printf(msgtxt[M_UNRECOGNIZED_OPTION], argv[i]);
+   for (i = 1; i < argc; i++) {
+      if (argv[i][0] != '-' && argv[i][0] != '/')
          continue;
-      }
 
-      switch (toupper(argv[i][1])) {
-      case 'B':
-         speed = rate = atoi(&argv[i][2]);
-         caller = 1;
-         if (rate == 0)
+      if (!stricmp (argv[i], "-NOXMS"))
+         xms = 0;
+      else if (!stricmp (argv[i], "-NOEMS"))
+         ems = 0;
+
+      switch (toupper (argv[i][1])) {
+         case 'B':
+            speed = rate = atoi(&argv[i][2]);
+            caller = 1;
+            if (rate == 0)
+               local_mode = 1;
+            dos_argv = NULL;
+            break;
+
+         case 'C':
+            config_file = &argv[i][2];
+            break;
+
+         case 'F':
+            mdm_flags = &argv[i][2];
+            break;
+
+#ifdef __OS2__
+         case 'H':
+            hfComHandle = atol (&argv[i][2]);
+            break;
+#endif
+
+         case 'I':
+            init = &argv[i][2];
+            break;
+
+         case 'L':
             local_mode = 1;
-         dos_argv = NULL;
-         break;
+            dos_argv = NULL;
+            break;
 
-      case 'C':
-         config_file = &argv[i][2];
-         break;
+         case 'M':
+            no_logins = 1;
+            if (argv[i][2])
+               ext_mail_cmd = (char *)&argv[i][2];
+            break;
 
-      case 'F':
-         mdm_flags = &argv[i][2];
-         break;
+         case 'N':
+            if (toupper (argv[i][2]) != 'B')
+               line_offset = atoi (&argv[i][2]);
+            break;
 
-      case 'I':
-         init = &argv[i][2];
-         break;
+         case 'O':
+            dos_argv = NULL;
+            parse_netnode (&argv[i][2], &remote_zone, &remote_net, &remote_node, &remote_point);
+            break;
 
-      case 'L':
-         local_mode = 1;
-         dos_argv = NULL;
-         break;
+         case 'T':
+            allowed = atoi(&argv[i][2]);
+            break;
 
-      case 'M':
-         no_logins = 1;
-         if (argv[i][2])
-            ext_mail_cmd = (char *)&argv[i][2];
-         break;
+         case 'P':
+            com_port = atoi(&argv[i][2]);
+            com_port--;
+            break;
 
-      case 'N':
-         line_offset = atoi(&argv[i][2]);
-         break;
+         case 'R':
+            log_name = (char *)&argv[i][2];
+            break;
 
-      case 'O':
-         dos_argv = NULL;
-         parse_netnode (&argv[i][2], &remote_zone, &remote_net, &remote_node, &remote_point);
-         break;
+         default:
+            errors = 1;
+            printf (msgtxt[M_UNRECOGNIZED_OPTION], argv[i]);
+            break;
+      }
+   }
 
-      case 'T':
-         allowed = atoi(&argv[i][2]);
-         break;
+#ifndef __OS2__
+   if (xms) {
+      if (_OvrInitExt (0L, 131072L) && ems)
+         _OvrInitEms (0, 0, 8);
+   }
+   else if (ems)
+      _OvrInitEms (0, 0, 8);
+#endif
 
-      case 'P':
-         com_port = atoi(&argv[i][2]);
-         com_port--;
-         break;
+   if (errors)
+      sleep (5);
+}
 
-      case 'R':
-         log_name = (char *)&argv[i][2];
-         break;
 
-      default:
-         printf(msgtxt[M_UNRECOGNIZED_OPTION], argv[i]);
-         break;
+void parse_config_line (argc, argv)
+int argc;
+char **argv;
+{
+   int i;
+
+   for (i = 1; i < argc; i++) {
+      if (argv[i][0] != '-' && argv[i][0] != '/')
+         continue;
+
+      switch (toupper (argv[i][1])) {
+         case 'C':
+            config_file = &argv[i][2];
+            break;
       }
    }
 }
@@ -856,26 +404,30 @@ byte type;
 char *phone;
 {
    char *predial, *postdial;
-   MDM_TRNS *m;
 
-   predial = dial;
-   postdial = "|";
+   predial = config->dial;
+   if (config->dial_suffix[0])
+      postdial = config->dial_suffix;
+   else
+      postdial = "|";
 
-   m = mm_head;
-   while (m != NULL)
-      {
-      if (m->mdm & type)
-         {
-         predial = m->pre;
-         postdial = m->suf;
-         break;
-         }
-      m = m->next;
+   if (type) {
+      if (type < 20) {
+         if (config->altdial[type - 1].prefix[0])
+            predial = config->altdial[type - 1].prefix;
+         if (config->altdial[type - 1].suffix[0])
+            postdial = config->altdial[type - 1].suffix;
       }
+      else {
+         type -= 20;
+         if (config->prefixdial[type].prefix[0])
+            predial = config->prefixdial[type].prefix;
+      }
+   }
 
-   mdm_sendcmd(predial);
-   mdm_sendcmd(phone);
-   mdm_sendcmd(postdial);
+   mdm_sendcmd (predial);
+   mdm_sendcmd (phone);
+   mdm_sendcmd (postdial);
 }
 
 long get_flags (char *p)
@@ -988,15 +540,28 @@ long get_flags (char *p)
    return (flag);
 }
 
-void get_down(errlev, flag)
+extern int ox, oy, wh1;
+
+void get_down (errlev, flag)
 int errlev, flag;
 {
-   struct tm *tim;
-   long tempo;
+   char filename[80];
 
-   tempo=time(0);
-   tim=localtime(&tempo);
+   sysinfo.today.exectime += time (NULL) - exectime;
+   sysinfo.week.exectime += time (NULL) - exectime;
+   sysinfo.month.exectime += time (NULL) - exectime;
+   sysinfo.year.exectime += time (NULL) - exectime;
+
+   MsgCloseApi ();
    write_sysinfo();
+   sprintf (filename, "F-TAG%d.TMP", config->line_offset);
+   unlink (filename);
+   sprintf (filename, "DL-REP%d.BBS", line_offset);
+   unlink (filename);
+   sprintf (filename, "REP%d.TXT", line_offset);
+   unlink (filename);
+
+   if (flag);
 
    if (!frontdoor) {
       status_line(":End");
@@ -1005,38 +570,23 @@ int errlev, flag;
 
    fclose(logf);
 
-   wcloseall ();
-
-   if (!local_mode) {
-      if (modem_busy != NULL)
-         mdm_sendcmd (modem_busy);
-      MDM_DISABLE();
-   }
-
    if (errlev || dos_argv == NULL) {
+      if (!local_mode) {
+         if (modem_busy != NULL)
+            mdm_sendcmd (modem_busy);
+      }
+
+      MDM_DISABLE();
+
+      wcloseall ();
       cclrscrn(LGREY|_BLACK);
-
-      if (flag == 1)
-         printf("* Exit at start of event with errorlevel %d\n", (errlev == -1) ? 0 : errlev);
-      else if (flag == 2)
-         printf("* Exit after caller with errorlevel %d\n", (errlev == -1) ? 0 : errlev);
-      else if (flag == 3)
-         printf("* Exit with errorlevel %d\n", (errlev == -1) ? 0 : errlev);
-
-      printf("* LoraBBS down at %d:%02d %d-%s-%02d\n",
-                  tim->tm_hour, tim->tm_min,
-                  tim->tm_mday, mtext[tim->tm_mon], tim->tm_year % 100);
-
-      if (!registered)
-         printf("* Don't forget to register.\n");
-
-      gotoxy_(20,0);
-      printf(msgtxt[M_THANKS], VERSION);
-
       showcur();
-      exit ((errlev == -1) ? 0 : errlev);
+      gotoxy (1, 10);
+      exit ((errlev == -1) ? config->altx_errorlevel : errlev);
    }
-   else
-      spawnvp (P_OVERLAY, dos_argv[0], dos_argv);
+   else {
+      MDM_DISABLE();
+      exit (255);
+   }
 }
 

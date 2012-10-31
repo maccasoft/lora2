@@ -5,19 +5,23 @@
 
 #define ECHOMAIL_RSN  0x0001
 #define NETMAIL_RSN   0x0002
+#define NO_PACK       0x0004
+
+#define Q_NO   0
+#define Q_YES  1
+#define Q_ASK  2
 
 #define PATHLEN           128
 #define MAX_PACKERS       20
-#define MAX_ALIAS         10
+#define MAX_ALIAS         20
 #define MAXCLASS          11
-#define MAX_OUT           64
+#define MAX_OUT           128
 #define MAX_MSGLINE       80
 #define MAX_PRIV_MAIL     200
 #define MSG_AREAS         500
 #define MAX_LANG          20
 #define MAX_CMDLEN        70
-#define MAX_RESYNC        10
-#define MAX_EXPORT_SEEN   40
+#define MAX_EXPORT_SEEN   512
 
 #define DEF_NO     0x0000
 #define DEF_YES    0x0001
@@ -55,8 +59,8 @@
 #define MAIL_RES0800 0x0800
 #define MAIL_RES1000 0x1000
 #define MAIL_RES2000 0x2000
-#define MAIL_RES4000 0x4000
-#define MAIL_RES8000 0x8000
+#define MAIL_INSPECT 0x4000
+#define MAIL_EXISTS  0x8000
 
 #define INITIALIZE   0
 #define TEST_AND_SET 1
@@ -128,6 +132,7 @@
 #define _FILE_HURL 62
 #define _MSG_FORWARD 63
 #define _MSG_INDIVIDUAL 64
+#define _F_TAG 65
 #define _RETURN_MENU 66
 #define _MENU_CLEAR 67
 #define _F_LOCATE 68
@@ -179,6 +184,8 @@
 #define _BANK_KDEPOSIT 114
 #define _BANK_KWITHDRAW 115
 #define _VOTE_USER 116
+#define _FBOX_KILL 127
+#define _FBOX_LIST 128
 
 #define MAX_LINE 100
 
@@ -792,5 +799,64 @@
 #define B_GROUP_LIST             319
 #define B_GENERAL_FREE1          320
 #define B_GENERAL_FREE2          321
+#define B_FILEBOX_NAME           322
+#define B_FILEBOX_NOTFOUND       323
+#define B_NO_FILEBOX             324
+#define B_SEND_ANOTHER           325
+#define B_NO_NEW_FILES           326
+#define B_FILELIST1              327
+#define B_FILELIST2              328
+#define B_ASK_TO_DOWNLOAD        329
+#define B_ASK_CORRECT_CITY       330
+#define B_CHECK_UPLOADS          331
+#define B_ALREADY_HAVE           332
+#define B_FB_DELETE_AFTER        333
+#define B_REPORT_SUCCESFUL       334
+#define B_REPORT_NOT_SENT        335
+#define B_QWK_LIMIT              336
+#define B_USE_HOTKEY             337
+#define B_ZIP                    338
+#define B_ARJ                    339
+#define B_LHA                    340
+#define B_NONE                   341
+#define B_HELP                   342
+#define B_AVAIL_COMPR            343
+#define B_DL_CONFIRM             344
+#define B_DL_LOGOFF              345
+#define B_TAG_CONFIRM            346
+#define B_TAG_FILENOTFOUND       347
+#define B_TAG_PENDING            348
+#define B_KILL_FILE              349
+#define B_KILL_REMOVE            350
+#define B_UPLOADER_NAME          351
+#define B_INACTIVE_HANG          352
+#define B_INACTIVE_WARN          353
+#define B_OS_OS2                 354
+#define B_TAG_FILE_NAME          355
+#define B_PAUSED_LIST            356
+#define B_NOTFOUND               357
+#define B_NOTAGGED_FILES         358
+#define B_TAGGEDLIST_HEADER      359
+#define B_TAGGEDLIST_FORMAT      360
+#define B_TAGGEDLIST_ASKREMOVE   361
+#define B_FILES_FORMAT_MISSING   362
+#define B_FILES_NODATE_MISSING   363
+#define B_FILES_NODATE           364
+#define B_FILES_MISSING          365
+#define B_FILES_XNODATE          366
+#define B_FILES_XDATE            367
+#define B_FILES_SPACELINE        368
+#define B_FILES_DASHLINE         369
+#define B_FILE_MOREQUESTION      370
+#define B_INTERNET_TO            371
+#define B_INTERNET               372
+#define B_NOTFOUND_NODELIST      373
+#define B_FOUND_NODELIST         374
+#define B_BBSLIST_NOCHANGE       375
+#define B_BBSLIST_NODELETE       376
+#define B_DATEFORMAT             377
+#define B_DATEFORMAT1            378
+#define B_DATEFORMAT2            379
+#define B_DATEFORMAT3            380
 
-#define X_TOTAL_MSGS             321
+#define X_TOTAL_MSGS             380

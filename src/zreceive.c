@@ -5,17 +5,22 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <time.h>
+#include <utime.h>
 
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
 
 #include "zmodem.h"
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
-#include "tc_utime.h"
 
+extern int freceived;
+extern long tot_rcv;
+
+int is_mailpkt (char *p, int n);
 
 /*--------------------------------------------------------------------------*/
 /* Local routines                                                           */
@@ -34,7 +39,7 @@ static void RZ_AckBibi (void);
 static long DiskAvail;
 static long filetime;
 static byte realname[64];
-static int zreceive_handle;
+static int zreceive_handle = -1;
 
 /*--------------------------------------------------------------------------*/
 /* Private data                                                             */
@@ -47,7 +52,7 @@ static char Attn[ZATTNLEN + 1];                  /* String rx sends to tx on
                                                   * err            */
 static FILE *Outfile;                            /* Handle of file being
                                                   * received           */
-static int Tryzhdrtype;                          /* Hdr type to send for Last
+static int   Tryzhdrtype;                        /* Hdr type to send for Last
                                                   * rx close      */
 static char isBinary;                            /* Current file is binary
                                                   * mode             */
@@ -55,7 +60,7 @@ static char EOFseen;                             /* indicates cpm eof (^Z)
                                                   * was received     */
 static char Zconv;                               /* ZMODEM file conversion
                                                   * request          */
-static int RxCount;                              /* Count of data bytes
+static int   RxCount;                            /* Count of data bytes
                                                   * received            */
 static byte Upload_path[PATHLEN];                /* Dest. path of file being
                                                   * received   */
@@ -107,10 +112,8 @@ FILE *xferinfo;
       --p;
    *(++p) = '\0';
 
-   HoldName = hold_area;
-
-   sprintf (Abortlog_name, "%s%04x%04x.Z\0",
-            HoldName, remote_net, remote_node);
+   HoldName = HoldAreaNameMunge (config->alias[0].zone);
+   sprintf (Abortlog_name, "%sRECOVERY.Z\0", HoldName);
 
    DiskAvail = zfree (Upload_path);
 
@@ -130,7 +133,7 @@ FILE *xferinfo;
    t = timerset (200);                           /* wait no more than 2
                                                   * seconds  */
    while (!timeup (t) && !OUT_EMPTY () && CARRIER)
-      time_release ();                           /* Give up slice while */
+      time_release ();
                                                   /* waiting  */
    XON_ENABLE ();                                /* Turn XON/XOFF back on...     */
 /*
@@ -139,6 +142,15 @@ FILE *xferinfo;
 */
    if (Outfile)
       fclose (Outfile);
+
+   if ((caller || emulator) && zreceive_handle != -1) {
+      wactiv (zreceive_handle);
+      wclose ();
+      zreceive_handle = -1;
+   }
+   else if (!caller)
+      wfill (9, 0, 10, 77, ' ', WHITE|_BLACK);
+
 
    return 0;
 }                                                /* get_Zmodem */
@@ -152,7 +164,7 @@ static int RZ_ReceiveData (buf, length)
 register byte *buf;
 register int length;
 {
-   register int c;
+   register short c;
    register word crc;
    char *endpos;
    int d;
@@ -250,7 +262,7 @@ static int RZ_32ReceiveData (buf, length)
 register byte *buf;
 register int length;
 {
-   register int c;
+   register short c;
    unsigned long crc;
    char *endpos;
    int d;
@@ -497,7 +509,7 @@ FILE *xferinfo;
          case ZEOF:
             if (Resume_WaZOO)
                {
-                                        remove_abort (Abortlog_name, Resume_name);
+               remove_abort (Abortlog_name, Resume_name);
                strcpy (namebuf, Upload_path);
                strcat (namebuf, Resume_name);
                unique_name (namebuf);
@@ -517,16 +529,15 @@ FILE *xferinfo;
             break;
 
          default:
-            fclose (Outfile);
+            if (Outfile != NULL)
+               fclose (Outfile);
             Outfile = NULL;
-            if (remote_capabilities)
-               {
+            if (remote_capabilities) {
                if (!Resume_WaZOO)
-                  {
-                                                add_abort (Abortlog_name, Resume_name, Filename, Upload_path, Resume_info);
-                  }
-               }
-            else unlink (Filename);
+                  add_abort (Abortlog_name, Resume_name, Filename, Upload_path, Resume_info);
+            }
+            else
+               unlink (Filename);
             return c;
          }                                       /* switch */
       }                                          /* while */
@@ -553,8 +564,17 @@ FILE *xferinfo;
 
    EOFseen = FALSE;
    c = RZ_GetHeader ();
-   if (c == ERROR || c == ZSKIP)
+   if (c == ERROR || c == ZSKIP) {
+      if ((caller || emulator) && zreceive_handle != -1) {
+         wactiv (zreceive_handle);
+         wclose ();
+         zreceive_handle = -1;
+      }
+      else if (!caller)
+         wfill (9, 0, 10, 77, ' ', WHITE|_BLACK);
+
       return (Tryzhdrtype = ZSKIP);
+   }
 
    n = 10;
    rxbytes = Filestart;
@@ -688,31 +708,45 @@ NxtHdr:
                goto NxtHdr;
 
             throughput (2, rxbytes - Filestart);
+            tot_rcv += rxbytes - Filestart;
 
             fclose (Outfile);
 
-            status_line ("%s-Z%s %s", msgtxt[M_FILE_RECEIVED], Crc32 ? "/32" : "", realname);
+            if (!caller) {
+               sysinfo.today.bytereceived += rxbytes - Filestart;
+               sysinfo.week.bytereceived += rxbytes - Filestart;
+               sysinfo.month.bytereceived += rxbytes - Filestart;
+               sysinfo.year.bytereceived += rxbytes - Filestart;
+               sysinfo.today.filereceived++;
+               sysinfo.week.filereceived++;
+               sysinfo.month.filereceived++;
+               sysinfo.year.filereceived++;
+            }
 
-            if (filetime)
+            status_line ("%s-Z%s %s", msgtxt[M_FILE_RECEIVED], Crc32 ? "/32" : "", realname);
+            update_filesio (fsent, ++freceived);
+
+            if (filetime && !caller)
                {
                utimes.actime = filetime;
                utimes.modtime = filetime;
-               utime (Filename, &utimes);
+               utime (realname, &utimes);
                }
 
             Outfile = NULL;
             if (xferinfo != NULL)
                {
-               fprintf (xferinfo, "%s\n", Filename);
+               fprintf (xferinfo, "%s\n", realname);
                }
 
-            if (zreceive_handle != -1)
-            {
+            if ((caller || emulator) && zreceive_handle != -1)
+               {
                wactiv(zreceive_handle);
                wclose();
-               wunlink(zreceive_handle);
                zreceive_handle = -1;
-            }
+               }
+            else if (!caller)
+               wfill (9, 0, 10, 77, ' ', WHITE|_BLACK);
 
             return c;
 
@@ -850,7 +884,7 @@ static int RZ_GetHeader ()
             }
          fstat (fileno (Outfile), &f);
          fclose (Outfile);
-         if (filesize == f.st_size && filetime == f.st_mtime)
+         if (caller || (filesize == f.st_size && filetime == f.st_mtime))
             {
             status_line (msgtxt[M_ALREADY_HAVE], Filename);
             return ZSKIP;
@@ -872,7 +906,7 @@ static int RZ_GetHeader ()
          }
       p = "wb";
       }
-   if ((Outfile = fopen (Filename, p)) == NULL)
+   if ((Outfile = sh_fopen (Filename, p, SH_DENYRW)) == NULL)
       {
       return ERROR;
       }
@@ -887,7 +921,9 @@ static int RZ_GetHeader ()
       status_line (msgtxt[M_SYNCHRONIZING_OFFSET], Filestart);
    fseek (Outfile, Filestart, SEEK_SET);
 
-   if (remote_capabilities && is_arcmail (theirname, strlen(theirname) - 1) )
+   if (remote_capabilities && is_mailpkt (theirname, strlen(theirname) - 1) )
+      p = "MailPKT";
+   else if (remote_capabilities && is_arcmail (theirname, strlen(theirname) - 1) )
       p = "ARCMail";
    else
       p = NULL;
@@ -900,18 +936,29 @@ static int RZ_GetHeader ()
             (int) ((filesize - Filestart) * 10 / rate + 53) / 54);
 
    file_length = filesize;
+   i = (int) ((filesize - Filestart) * 10 / rate + 53) / 54;
 
-   zreceive_handle = wopen(16,0,19,79,1,WHITE|_RED,WHITE|_RED);
-   wactiv(zreceive_handle);
-   wtitle(" ZModem Transfer Status ", TLEFT, WHITE|_RED);
+   if (caller || emulator) {
+      zreceive_handle = wopen(16,0,19,79,1,WHITE|_RED,WHITE|_RED);
+      wtitle(" ZModem Transfer Status ", TLEFT, WHITE|_RED);
 
-   wgotoxy (0, 2);
-   wputs (j);
-   status_line(" %s", j);
-   i = (int) (filesize * 10 / rate + 53) / 54;
-   wgotoxy (1, 69);
-   sprintf(j, "%3d min", i);
-   wputs (j);
+      wgotoxy (0, 2);
+      wputs (j);
+
+      status_line(" %s", j);
+
+      wgotoxy (1, 69);
+      sprintf(j, "%3d min", i);
+      wputs (j);
+   }
+   else {
+      wprints (9, 2, WHITE|_BLACK, j);
+
+      status_line(" %s", j);
+
+      sprintf(j, "%3d min", i);
+      wprints (10, 69, WHITE|_BLACK, j);
+   }
 
    throughput (0, 0L);
 
@@ -940,20 +987,24 @@ long *rxbytes;
 
    count = RxCount;
 
-/*   if (got_ESC ())
+   if (local_kbd == 0x1B)
       {
+      local_kbd = -1;
       send_can ();
       while ((i = Z_GetByte (20)) != TIMEOUT && i != RCDO)
-
          CLEAR_INBOUND ();
       send_can ();
-      z_log (msgtxt[M_KBD_MSG]);
+      status_line (msgtxt[M_KBD_MSG]);
       return ERROR;
-      } */
+      }
 
    if (count != z_size)
       {
-      wgotoxy (1, 12);
+      z_size = count;
+      if (caller || emulator)
+         wgotoxy (1, 12);
+      else
+         wgotoxy (10, 12);
       wputs (ultoa (((unsigned long) (z_size = count)), e_input, 10));
       wputs ("    ");
       }
@@ -990,15 +1041,29 @@ long *rxbytes;
       }
 
    *rxbytes += RxCount;
-   i = (int) ((file_length - *rxbytes)* 10 / rate + 53) / 54;
-   sprintf (j, "%3d min", i);
+   if (caller || emulator)
+      {
+      i = (int) ((file_length - *rxbytes)* 10 / rate + 53) / 54;
+      sprintf (j, "%3d min", i);
 
-   wgotoxy (1, 2);
-   wputs (ultoa (((unsigned long) (*rxbytes)), e_input, 10));
-   wgotoxy (1, 69);
-   sprintf (j, "%3d min", i);
-   wputs (j);
+      wgotoxy (1, 2);
+      wputs (ultoa (((unsigned long) (*rxbytes)), e_input, 10));
+      wgotoxy (1, 69);
+      sprintf (j, "%3d min", i);
+      wputs (j);
+      }
+   else
+      {
+      i = (int) ((file_length - *rxbytes)* 10 / rate + 53) / 54;
+      sprintf (j, "%3d min", i);
 
+      sprintf (j, "%lu  ", (unsigned long) (*rxbytes));
+      wprints (10, 2, WHITE|_BLACK, j);
+      sprintf (j, "%3d min", i);
+      wprints (10, 69, WHITE|_BLACK, j);
+      }
+
+   time_release ();
    return OK;
 
 oops:
@@ -1069,6 +1134,26 @@ int n;
       if ((c[n] != 'T') || (c[n-1] != 'K') || (c[n-2] != 'P') || (c[n-3] != '.'))
          return (0);
    }
+
+   got_arcmail = 1;
+   return (1);
+}
+
+int is_mailpkt (char *p, int n)
+{
+   int i;
+   char c[128];
+
+   (void) strcpy (c, p);
+   (void) strupr (c);
+
+   for (i = n - 11; i < n - 3; i++) {
+      if ((!isdigit (c[i])) && ((c[i] > 'F') || (c[i] < 'A')))
+         return (0);
+   }
+
+   if ((c[n] != 'T') || (c[n-1] != 'K') || (c[n-2] != 'P') || (c[n-3] != '.'))
+      return (0);
 
    got_arcmail = 1;
    return (1);

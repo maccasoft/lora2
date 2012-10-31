@@ -10,12 +10,15 @@
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
 
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 #include "quickmsg.h"
 #include "pipbase.h"
+
+void m_print2(char *format, ...);
 
 #define MAX_MAIL_BUFFER   20
 
@@ -26,6 +29,8 @@ static int pipbase_index (int, int *);
 static int fido_index (int, int *);
 static int squish_index (int, int *);
 
+static char *rotate = "|/-\\", rotatepos;
+
 int scan_mailbox()
 {
    int i, z, area_msg[MSG_AREAS];
@@ -35,6 +40,10 @@ int scan_mailbox()
    memset((char *)&area_msg, 0, sizeof(int) * MSG_AREAS);
 
    m_print(bbstxt[B_CHECK_MAIL]);
+
+   rotatepos = 0;
+   m_print (" \b%c", rotate[rotatepos]);
+   rotatepos = (rotatepos + 1) % 4;
 
    z = fido_index (z, &area_msg[0]);
    z = quick_index (z, &area_msg[0]);
@@ -108,7 +117,7 @@ int pause;
       if (sys.quick_board)
          i = quick_read_message(msg_list[start].msg_num, pause);
       else if (sys.pip_board)
-         i = pip_msg_read(usr.msg, msg_list[start].msg_num, 0, pause);
+         i = pip_msg_read(sys.pip_board, msg_list[start].msg_num, 0, pause);
       else if (sys.squish)
          i = squish_read_message (msg_list[start].msg_num, pause);
       else
@@ -178,7 +187,7 @@ int pause;
       if (sys.quick_board)
          i = quick_read_message(msg_list[start].msg_num, pause);
       else if (sys.pip_board)
-         i = pip_msg_read(usr.msg, msg_list[start].msg_num, 0, pause);
+         i = pip_msg_read(sys.pip_board, msg_list[start].msg_num, 0, pause);
       else if (sys.squish)
          i = squish_read_message (msg_list[start].msg_num, pause);
       else
@@ -215,8 +224,10 @@ int pause;
 
 void mail_read_nonstop ()
 {
-   while (last_mail < max_priv_mail && !RECVD_BREAK() && !local_mode) {
+   while (last_mail < max_priv_mail) {
       if (local_mode && local_kbd == 0x03)
+         break;
+      else if (!local_mode && !RECVD_BREAK())
          break;
       mail_read_forward(1);
       time_release ();
@@ -256,7 +267,10 @@ void mail_list()
          else
             scan_message_base(sys.msg_num, 1);
          m_print(bbstxt[B_AREALIST_HEADER],sys.msg_num,sys.msg_name);
+         if (bbstxt[B_AREALIST_HEADER][strlen (bbstxt[B_AREALIST_HEADER]) - 1] == '\r')
+            m_print (bbstxt[B_ONE_CR]);
          usr.msg = last_read_system = msg_list[z].area;
+         num_msg = last_msg = max_priv_mail;
       }
 
       if (sys.quick_board) {
@@ -302,7 +316,7 @@ void mail_list()
 static int quick_index (z, area_msg)
 int z, *area_msg;
 {
-   #define MAX_TOIDX_READ  10
+   #define MAX_TOIDX_READ  30
    FILE *fpi, *fpn;
    int i, m, fdhdr;
    word pos, currmsg[201];
@@ -312,34 +326,42 @@ int z, *area_msg;
    struct _sys tsys;
    struct _msgidx idx[MAX_TOIDX_READ];
 
-   for (i = 1; i < 201; i++) {
+   for (i = 0; i < 201; i++) {
       boards[i] = 0;
       currmsg[i] = 0;
    }
 
-   sprintf (filename, SYSMSG_PATH, sys_path);
-   fpi = fopen (filename, "rb");
+   sprintf (filename, SYSMSG_PATH, config->sys_path);
+   while ((i = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+      ;
+   fpi = fdopen (i, "rb");
    while (fread((char *)&tsys.msg_name,SIZEOF_MSGAREA,1,fpi) == 1) {
       if (!tsys.quick_board)
+         continue;
+      if (usr.priv < tsys.msg_priv || (usr.flags & tsys.msg_flags) != tsys.msg_flags)
          continue;
       boards[tsys.quick_board] = tsys.msg_num;
    }
    fclose (fpi);
 
    sprintf (filename, "%sMSGHDR.BBS", fido_msgpath);
-   fdhdr = shopen (filename, O_RDONLY|O_BINARY);
+   fdhdr = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
    if (fdhdr == -1)
       return (z);
 
    sprintf (filename, "%sMSGTOIDX.BBS", fido_msgpath);
-   fpi = fopen (filename, "rb");
+   while ((i = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+      ;
+   fpi = fdopen (i, "rb");
    if (fpi == NULL) {
       close (fdhdr);
       return (z);
    }
 
    sprintf (filename, "%sMSGIDX.BBS", fido_msgpath);
-   fpn = fopen (filename, "rb");
+   while ((i = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+      ;
+   fpn = fdopen (i, "rb");
    if (fpn == NULL) {
       close (fdhdr);
       fclose (fpi);
@@ -360,6 +382,11 @@ int z, *area_msg;
       }
 
       for (m = 0; m < i; m++) {
+         if (!idx[m].msgnum || !boards[idx[m].board]) {
+            pos++;
+            continue;
+         }
+
          currmsg[idx[m].board]++;
          strncpy (username, &to[m][1], to[m][0]);
          username[to[m][0]] = '\0';
@@ -367,16 +394,24 @@ int z, *area_msg;
             lseek (fdhdr, (long)pos * sizeof (struct _msghdr), SEEK_SET);
             read (fdhdr, (char *)&hdr, sizeof (struct _msghdr));
 
-            if (boards[hdr.board] && !(hdr.msgattr & Q_RECEIVED)) {
-               if (z >= MAX_PRIV_MAIL)
-                  break;
+            strncpy (username, &hdr.whoto[1], hdr.whoto[0]);
+            username[hdr.whoto[0]] = '\0';
+            if (!stricmp (username, usr.name) && hdr.board == idx[m].board) {
+               if (boards[hdr.board] && !(hdr.msgattr & Q_RECEIVED) && !(hdr.msgattr & Q_RECKILL)) {
+                  if (z >= MAX_PRIV_MAIL)
+                     break;
 
-               msg_list[z].area = boards[hdr.board];
-               msg_list[z++].msg_num = currmsg[hdr.board];
-               area_msg[boards[hdr.board]-1]++;
+                  msg_list[z].area = boards[hdr.board];
+                  msg_list[z++].msg_num = currmsg[hdr.board];
+                  area_msg[boards[hdr.board]-1]++;
+               }
             }
          }
          pos++;
+         if ((pos % 150) == 0) {
+            m_print2 ("\b%c", rotate[rotatepos]);
+            rotatepos = (rotatepos + 1) % 4;
+         }
       }
    } while (i == MAX_TOIDX_READ);
 
@@ -391,51 +426,89 @@ static int pipbase_index (z, area_msg)
 int z, *area_msg;
 {
    FILE *fpi;
-   int i, boards[MSG_AREAS + 1];
+   int f1, i, boards[MSG_AREAS + 1], oldboard;
    char filename[80];
    DESTPTR hdr;
+   MSGPTR mhdr;
    struct _sys tsys;
 
-   for (i = 1; i < MSG_AREAS; i++)
+   for (i = 0; i < MSG_AREAS + 1; i++)
       boards[i] = 0;
 
-   sprintf (filename, SYSMSG_PATH, sys_path);
-   fpi = fopen (filename, "rb");
+   sprintf (filename, SYSMSG_PATH, config->sys_path);
+   while ((i = sopen (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+      ;
+   fpi = fdopen (i, "rb");
 
    while (fread((char *)&tsys.msg_name,SIZEOF_MSGAREA,1,fpi) == 1) {
-      if (!sys.pip_board)
+      if (!tsys.pip_board || tsys.squish || tsys.quick_board)
          continue;
-      boards[sys.pip_board] = sys.msg_num;
+      if (usr.priv < tsys.msg_priv || (usr.flags & tsys.msg_flags) != tsys.msg_flags)
+         continue;
+      boards[tsys.pip_board] = tsys.msg_num;
    }
 
    fclose (fpi);
 
    sprintf (filename, "%sDESTPTR.PIP", pip_msgpath);
-   fpi = fopen (filename, "rb");
+   i = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
+   if (i == -1)
+      return (z);
+   fpi = fdopen (i, "rb");
    if (fpi == NULL)
       return (z);
 
    if (!local_mode)
       _BRK_ENABLE();
 
+   i = 0;
+   f1 = oldboard = -1;
+
    while (fread((char *)&hdr,sizeof(DESTPTR),1,fpi) == 1) {
       if (!local_mode) {
          if (!CARRIER || RECVD_BREAK())
             break;
       }
+
+      i++;
+      if ((i % 30) == 0) {
+         m_print2 ("\b%c", rotate[rotatepos]);
+         rotatepos = (rotatepos + 1) % 4;
+      }
+
       if (!boards[hdr.area])
          continue;
       if (!stricmp (usr.name, hdr.to)) {
+         if (oldboard != hdr.area) {
+            if (f1 != -1)
+               close (f1);
+            sprintf (filename, "%sMPTR%04x.PIP", pip_msgpath, hdr.area);
+            f1 = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
+            oldboard = hdr.area;
+         }
+
+         if (f1 != -1) {
+            if (lseek( f1, sizeof(mhdr) * hdr.msg, SEEK_SET))
+            read (f1, &mhdr, sizeof (mhdr));
+            if (mhdr.status & (SET_MPTR_RCVD|SET_MPTR_DEL))
+               continue;
+         }
+         else
+            continue;
+
          if (z >= MAX_PRIV_MAIL)
             break;
 
          msg_list[z].area = boards[hdr.area];
-         msg_list[z++].msg_num = hdr.msg;
+         msg_list[z++].msg_num = hdr.msg + 1;
          area_msg[boards[hdr.area]-1]++;
       }
    }
 
    fclose (fpi);
+   if (f1 != -1)
+      close (f1);
+
    return (z);
 }
 
@@ -443,14 +516,17 @@ static int fido_index (z, area_msg)
 int z, *area_msg;
 {
    FILE *fp;
-   int i, m, fd;
+   int i, m, fd, ct = 0;
    char filename[50];
    struct _mail idxm[MAX_MAIL_BUFFER];
    struct _sys tsys;
    struct _msg tmsg;
 
-   sprintf(filename,"%sMSGTOIDX.DAT",sys_path);
-   fp = fopen(filename, "rb");
+   sprintf (filename, "%sMSGTOIDX.DAT", config->sys_path);
+   i = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
+   if (i == -1)
+      return (z);
+   fp = fdopen (i, "rb");
 
    if (fp != NULL) {
       if (!local_mode)
@@ -465,7 +541,9 @@ int z, *area_msg;
          }
 
          for (m = 0; m < i; m++) {
-            if(idxm[m].to != usr.id || !idxm[m].area || !read_system2 (idxm[m].area, 1, &tsys))
+            if (idxm[m].to != usr.id || !idxm[m].area || !read_system2 (idxm[m].area, 1, &tsys))
+               continue;
+            if (usr.priv < tsys.msg_priv || (usr.flags & tsys.msg_flags) != tsys.msg_flags)
                continue;
 
             if (!local_mode) {
@@ -494,6 +572,11 @@ int z, *area_msg;
             msg_list[z++].msg_num = idxm[m].msg_num;
             area_msg[idxm[m].area-1]++;
          }
+
+         if ((ct++ % 2) == 0) {
+            m_print2 ("\b%c", rotate[rotatepos]);
+            rotatepos = (rotatepos + 1) % 4;
+         }
       } while (i == MAX_MAIL_BUFFER && z < MAX_PRIV_MAIL);
 
       fclose (fp);
@@ -502,72 +585,114 @@ int z, *area_msg;
    return (z);
 }
 
+#define MAX_SQIDX  32
+
+typedef struct _sqidx
+{
+   unsigned long offs;     /* offset del messaggio nel file dati */
+   unsigned long msgid;    /* unique msgid */
+   unsigned long in;       /* hash del destinatario */
+} SQIDX;
+
 static int squish_index (z, area_msg)
 int z, *area_msg;
 {
-   int fd, i, last_msg;
+   int fdidx, fd, i, last_msg;
+   unsigned int max;
    char filename[80];
+   dword hash, msgn;
    struct _sys tsys;
    MSGH *sq_msgh;
    XMSG xmsg;
+   SQIDX *sqidx;
 
-   sprintf (filename, SYSMSG_PATH, sys_path);
-   fd = open (filename, O_RDONLY|O_BINARY);
+   hash = SquishHash (usr.name);
+
+   sprintf (filename, SYSMSG_PATH, config->sys_path);
+   while ((fd = sopen (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+      ;
 
    while (read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA) {
       if (!tsys.squish)
          continue;
-
-      if (sq_ptr != NULL)
-         MsgCloseArea (sq_ptr);
-
-      sq_ptr = MsgOpenArea (tsys.msg_path, MSGAREA_NORMAL, MSGTYPE_SQUISH);
-      if (sq_ptr == NULL)
+      if (usr.priv < tsys.msg_priv || (usr.flags & tsys.msg_flags) != tsys.msg_flags)
          continue;
 
-      MsgUnlock (sq_ptr);
+      if (sq_ptr != NULL) {
+         MsgUnlock (sq_ptr);
+         MsgCloseArea (sq_ptr);
+         sq_ptr = NULL;
+      }
 
-      last_msg = (int)MsgGetNumMsg (sq_ptr);
-      if (!local_mode)
-         _BRK_ENABLE();
+      m_print2 ("\b%c", rotate[rotatepos]);
+      rotatepos = (rotatepos + 1) % 4;
 
-      for (i = 1; i <= last_msg; i++) {
-         sq_msgh = MsgOpenMsg (sq_ptr, MOPEN_RW, (dword)i);
-         if (sq_msgh == NULL)
-            continue;
+      sprintf (filename, "%s.SQI", tsys.msg_path);
+      fdidx = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
+      if (fdidx == -1)
+         continue;
 
-         if (!local_mode) {
-            if (!CARRIER || RECVD_BREAK()) {
-               lseek (fd, 0L, SEEK_END);
-               break;
+      sqidx = (SQIDX *)malloc ((unsigned int)filelength (fdidx));
+      if (sqidx == NULL) {
+         close (fdidx);
+         continue;
+      }
+
+      max = read (fdidx, sqidx, (unsigned int)filelength (fdidx));
+      close (fdidx);
+
+      max /= sizeof (SQIDX);
+      for (i = 0; i < max; i++) {
+         if (sqidx[i].in == hash) {
+            if (sq_ptr == NULL) {
+               sq_ptr = MsgOpenArea (tsys.msg_path, MSGAREA_NORMAL, MSGTYPE_SQUISH);
+               if (sq_ptr == NULL)
+                  continue;
+            }
+
+            msgn = MsgUidToMsgn (sq_ptr, sqidx[i].msgid, UID_EXACT);
+            if (msgn == 0)
+               continue;
+
+            sq_msgh = MsgOpenMsg (sq_ptr, MOPEN_RW, msgn);
+            if (sq_msgh == NULL)
+               continue;
+
+            if (MsgReadMsg (sq_msgh, &xmsg, 0L, 0L, NULL, 0, NULL) == -1) {
+               MsgCloseMsg (sq_msgh);
+               continue;
+            }
+
+            MsgCloseMsg (sq_msgh);
+
+            if (!stricmp (xmsg.to, usr.name) && !(xmsg.attr & MSGREAD)) {
+               if (z >= MAX_PRIV_MAIL)
+                  break;
+
+               msg_list[z].area = tsys.msg_num;
+               msg_list[z++].msg_num = (int)msgn;
+               area_msg[tsys.msg_num - 1]++;
             }
          }
+      }
 
-         if (MsgReadMsg (sq_msgh, &xmsg, 0L, 0L, NULL, 0, NULL) == -1) {
-            MsgCloseMsg (sq_msgh);
-            continue;
-         }
+      free (sqidx);
 
-         MsgCloseMsg (sq_msgh);
-
-         if (!stricmp (xmsg.to, usr.name) && !(xmsg.attr & MSGREAD)) {
-            if (z >= MAX_PRIV_MAIL)
-               break;
-
-            msg_list[z].area = tsys.msg_num;
-            msg_list[z++].msg_num = i;
-            area_msg[tsys.msg_num - 1]++;
-         }
+      if (sq_ptr != NULL) {
+         MsgCloseArea (sq_ptr);
+         sq_ptr = NULL;
       }
    }
 
    close (fd);
 
    if (sq_ptr != NULL) {
+      MsgUnlock (sq_ptr);
       MsgCloseArea (sq_ptr);
       sq_ptr = NULL;
    }
 
    return (z);
 }
+
 

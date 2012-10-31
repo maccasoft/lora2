@@ -1,5 +1,5 @@
 /*
-   --- Version 3.1 91-08-17 23:06 ---
+   --- Version 3.2 91-09-03 22:20 ---
 
    EXEC.C: EXEC function with memory swap - Prepare parameters.
 
@@ -17,21 +17,17 @@
 #include "checkpat.h"
 #include <bios.h>
 
-#include "defines.h"
-#include "lora.h"
-#include "externs.h"
-
-/*>e
+/*
    Set REDIRECT to 1 to support redirection, else to 0.
    CAUTION: The definition in 'spawn.asm' must match this definition!!
-<*/
+*/
 
 
-#define REDIRECT  1
+#define REDIRECT  0
 
-#define SWAP_FILENAME "$$AAAAAA.A%02X"
+#define SWAP_FILENAME "$$AAAAAA.AAA" 
 
-/*e internal flags for prep_swap */
+/* internal flags for prep_swap */
 
 #define CREAT_TEMP      0x0080
 #define DONT_SWAP_ENV   0x4000
@@ -39,7 +35,10 @@
 #define ERR_COMSPEC     -7
 #define ERR_NOMEM       -8
 
-/*e local variables */
+
+spawn_check_proc *spawn_check = NULL;
+
+/* local variables */
 
 static char drive [MAXDRIVE], dir [MAXDIR];
 static char name [MAXFILE], ext [MAXEXT];
@@ -47,27 +46,44 @@ static char cmdpath [MAXPATH] = "";
 static char cmdpars [80] = "";
 
 
-int do_spawn (int swapping,
-          char *xeqfn,
-          char *cmdtail,
-          unsigned envlen,
-          char *envp
+#ifdef __cplusplus
+extern "C" int
+#else
+extern int _cdecl
+#endif
+do_spawn (int swapping,     /* swap if non-0 */
+          char *xeqfn,      /* file to execute */
+          char *cmdtail,    /* command tail string */
+          unsigned envlen,  /* environment length */
+          char *envp        /* environment pointer */
 #if (REDIRECT)
-          ,char *rstdin,
+          ,char *rstdin,    /* redirection file names */
           char *rstdout,
           char *rstderr
 #endif
           );
-int prep_swap (int method,
-               char *swapfn);
-int exists (char *fname);
+
+#ifdef __cplusplus
+extern "C" int
+#else
+extern int _cdecl
+#endif
+prep_swap (int method,      /* swap method */
+           char *swapfn);   /* swap file name and/or path */
+
+#ifdef __cplusplus
+extern "C" int
+#else
+extern int _cdecl
+#endif
+exists (char *fname);
 
 /* --------------------------------------------------------------------- */
 
-/*>e Try '.COM', '.EXE', and '.BAT' on current filename, modify 
-   filename if found. <*/
+/* Try '.COM', '.EXE', and '.BAT' on current filename, modify 
+   filename if found. */
 
-int tryext (char *fn)
+static int tryext (char *fn)
 {
    char *ext;
 
@@ -85,10 +101,10 @@ int tryext (char *fn)
    return 0;
 }
 
-/*>e Try to find the file 'fn' in the current path. Modifies the filename
-   accordingly. <*/
+/* Try to find the file 'fn' in the current path. Modifies the filename
+   accordingly. */
 
-int findfile (char *fn)
+static int findfile (char *fn)
 {
    char *path, *penv;
    char *prfx;
@@ -164,11 +180,11 @@ int findfile (char *fn)
 }
 
 
-/*>e 
+/* 
    Get name and path of the command processor via the COMSPEC 
    environmnt variable. Any parameters after the program name
    are copied and inserted into the command line.
-<*/
+*/
 
 static void getcmdpath (void)
 {
@@ -206,15 +222,15 @@ static void getcmdpath (void)
 }
 
 
-/*>e
+/*
    tempdir: Set temporary file path.
             Read "TMP/TEMP" environment. If empty or invalid, clear path.
             If TEMP is drive or drive+backslash only, return TEMP.
             Otherwise check if given path is a valid directory.
             If so, add a backslash, else clear path.
-<*/
+*/
 
-int tempdir (char *outfn)
+static int tempdir (char *outfn)
 {
    int i, res;
    char *stmp [4];
@@ -238,7 +254,7 @@ int tempdir (char *outfn)
 
 #if (REDIRECT)
 
-int redirect (char *par, char **rstdin, char **rstdout, char **rstderr)
+static int redirect (char *par, char **rstdin, char **rstdout, char **rstderr)
 {
    char ch, sav;
    char *fn, *fnp;
@@ -321,7 +337,7 @@ int do_exec (char *exfn, char *epars, int spwn, unsigned needed, char **envp)
    unsigned avail;
    union REGS regs;
    unsigned envlen;
-   int rc;
+   int rc, ffrc;
    int idx;
    char **env;
    char *ep, *envptr, *envbuf;
@@ -331,26 +347,29 @@ int do_exec (char *exfn, char *epars, int spwn, unsigned needed, char **envp)
    char *rstdin = NULL, *rstdout = NULL, *rstderr = NULL;
 #endif
 
+   envlen = 0;
+   envptr = NULL;
+   envbuf = NULL;
+
    strcpy (execfn, exfn);
    getcmdpath ();
 
-   /*e First, check if the file to execute exists. */
-   /*d Zun„chst prfen ob die auszufhrende Datei existiert. */
+   /* First, check if the file to execute exists. */
 
-   if ((rc = findfile (execfn)) <= 0)
-      return RC_NOFILE | -rc;
+   if ((ffrc = findfile (execfn)) <= 0)
+      return RC_NOFILE | -ffrc;
 
-   if (rc > 1)   /* COMMAND.COM or Batch file */
+   if (ffrc > 1)   /* COMMAND.COM or Batch file */
       {
       if (!cmdpath [0])
          return RC_NOFILE | -ERR_COMSPEC;
 
-      idx = (rc == 2) ? strlen (execfn) + 5 : 1;
+      idx = (ffrc == 2) ? strlen (execfn) + 5 : 1;
       progpars = (char *)malloc (strlen (epars) + strlen (cmdpars) + idx);
       if (progpars == NULL)
          return RC_NOFILE | -ERR_NOMEM;
       strcpy (progpars, cmdpars);
-      if (rc == 2)
+      if (ffrc == 2)
          {
          strcat (progpars, "/c ");
          strcat (progpars, execfn);
@@ -376,11 +395,7 @@ int do_exec (char *exfn, char *epars, int spwn, unsigned needed, char **envp)
          }
 #endif
 
-   /*e Now create a copy of the environment if the user wants it. */
-   /*d Nun eine Kopie der Umgebungsvariablen anlegen wenn angefordert. */
-
-   envlen = 0;
-   envptr = NULL;
+   /* Now create a copy of the environment if the user wants it. */
 
    if (envp != NULL)
       for (env = envp; *env != NULL; env++)
@@ -388,8 +403,7 @@ int do_exec (char *exfn, char *epars, int spwn, unsigned needed, char **envp)
 
    if (envlen)
       {
-      /*e round up to paragraph, and alloc another paragraph leeway */
-      /*d Auf Paragraphengrenze runden, plus einen Paragraphen zur Sicherheit */
+      /* round up to paragraph, and alloc another paragraph leeway */
       envlen = (envlen + 32) & 0xfff0;
       envbuf = (char *)malloc (envlen);
       if (envbuf == NULL)
@@ -398,8 +412,7 @@ int do_exec (char *exfn, char *epars, int spwn, unsigned needed, char **envp)
          goto exit;
          }
 
-      /*e align to paragraph */
-      /*d Auf Paragraphengrenze adjustieren */
+      /* align to paragraph */
       envptr = envbuf;
       if (FP_OFF (envptr) & 0x0f)
          envptr += 16 - (FP_OFF (envptr) & 0x0f);
@@ -416,23 +429,21 @@ int do_exec (char *exfn, char *epars, int spwn, unsigned needed, char **envp)
       swapping = -1;
    else
       {
-      /*e Determine amount of free memory */
-      /*d Freien Speicherbereich feststellen */
+      /* Determine amount of free memory */
 
       regs.x.ax = 0x4800;
       regs.x.bx = 0xffff;
       intdos (&regs, &regs);
       avail = regs.x.bx;
 
-      /*e No swapping if available memory > needed */
-      /*d Keine Auslagerung wenn freier Speicher > ben”tigter */
+      /* No swapping if available memory > needed */
 
       if (needed < avail)
          swapping = 0;
       else
          {
-         /*>e Swapping necessary, use 'TMP' or 'TEMP' environment variable
-           to determine swap file path if defined. <*/
+         /* Swapping necessary, use 'TMP' or 'TEMP' environment variable
+           to determine swap file path if defined. */
 
          swapping = spwn;
          if (spwn & USE_FILE)
@@ -446,8 +457,7 @@ int do_exec (char *exfn, char *epars, int spwn, unsigned needed, char **envp)
                swapping |= CREAT_TEMP;
             else
                {
-               sprintf (e_input, SWAP_FILENAME, line_offset);
-               strcat (swapfn, e_input);
+               strcat (swapfn, SWAP_FILENAME);
                idx = strlen (swapfn) - 1;
                while (exists (swapfn))
                   {
@@ -462,8 +472,7 @@ int do_exec (char *exfn, char *epars, int spwn, unsigned needed, char **envp)
          }
       }
 
-   /*e All set up, ready to go. */
-   /*d Alles vorbereitet, jetzt kann's losgehen. */
+   /* All set up, ready to go. */
 
    if (swapping > 0)
       {
@@ -480,14 +489,18 @@ int do_exec (char *exfn, char *epars, int spwn, unsigned needed, char **envp)
       rc = 0;
 
    if (!rc)
+      {
+      if (spawn_check != NULL)
+         rc = spawn_check (ffrc, swapping, execfn, progpars);
+      if (!rc)
 #if (REDIRECT)
-      rc = do_spawn (swapping, execfn, progpars, envlen, envptr, rstdin, rstdout, rstderr);
+         rc = do_spawn (swapping, execfn, progpars, envlen, envptr, rstdin, rstdout, rstderr);
 #else
-      rc = do_spawn (swapping, execfn, progpars, envlen, envptr);
+         rc = do_spawn (swapping, execfn, progpars, envlen, envptr);
 #endif
+      }
 
-   /*e Free the environment buffer if it was allocated. */
-   /*d Den Umgebungsvariablenblock freigeben falls er alloziert wurde. */
+   /* Free the environment buffer if it was allocated. */
 
 exit:
    free (progpars);
@@ -501,8 +514,6 @@ exit:
 #endif
    if (envlen)
       free (envbuf);
-   if (spwn)
-      unlink (swapfn);
 
    return rc;
 }

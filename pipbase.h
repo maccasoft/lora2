@@ -140,62 +140,6 @@ typedef struct /* structure of each record in DESTPTR.PIP */
                } DESTPTR;
 
 
-typedef struct /* structure of addresses in NODEINFO.CFG */
-               { uint zone,net,node,point;
-                 char domain[20];
-               } NODEADDR;
-
-
-typedef struct /* structure of the unique record NODEINFO.CFG */
-               { NODEADDR address[10]; /* network addresses */
-                 uint fakenet; /* pointnet address, DON'T USE IT IF POSSIBLE */
-                 char logfilename[64], /* Location of log file, NUL for none */
-                      loglevel, /* 0...3, from less to more detailed */
-                      logtype; /* 0: Opus/Binkley; 1: Frodo/D'Bridge */
-                 char pipdir[64]; /* where PIPbase files are located, slash terminated */
-                 uint pipsize; /* how many messages areas will you have? */
-                               /* 256=SMALL, 1024=MEDIUM, 4096=LARGE, 32768=EXTRA-LARGE */
-                 char usernames[8][35]; /* names of the sysops accessing the system */
-                 char inbound[64],outbound[64]; /* inbound and outbound directories */
-                 char packerdir[64],tempdir[64];
-                 char compact; /* remove unuseful kludges */
-                 char packer[13],packerparms[40]; /* default packer */
-                 char attaches[64]; /* where Netmail fileattaches are stored */
-                 char attachstyle; /* 0=Pip!, 1=Frodo/D'B, 2=Bink/TrapDoor */
-                 char pack_matrix; /* 1=pack matrix; 0=dynamic packing */
-                 char addtear[20]; /* add this string to the regular tearline */
-                 char receipt[64]; /* file for return receipt */
-                 char ghost[64];   /* file for Ghost Writer receipt */
-               } NODEINFO;
-
-
-typedef struct /* structure for each record of BASEDESC.PIP */
-               { char descr[40], /* description of the area */
-                      tag[30]; /* echomail tag, #LOCAL or #NETMAIL */
-                 uint nrmsgs,days; /* to perform PURGE */
-                 unsigned char killrcv, /* kill received messages? */
-                      readlevel,readflags[4],writelevel,writeflags[4], /* for Remote Access style access control */
-                      origin, address, /* index for the appropriate table */
-                      note[80], /* whatever you want */
-                      forward_to[32], /* this is a bitmap on FRIENDND.PIP's 256 records */
-                      expansion_box[57]; /* please apply to define this */
-               } AREASTRUCT;
-
-
-typedef struct /* structure for each record in FRIENDND.PIP */
-               { uint zone,net,node,point; /* address */
-                 char packer[13], /* the .exe or .com file to run packer */
-                      packerparms[40], /* parameters to be passed */
-                      pack_pw[25], /* this is appended to Packer and Unpacker commands */
-                      areafix_pw[25]; /* this is for future use */
-                 uint areafix_lev;
-                 uint flags; /* bit 0=uses PipMail; 
-                                bit 1=active(1)/inactive(0);
-                                bit 2=deleted;
-                                bit 3=hold */
-                 char notes[80]; /* whatever you want */
-               } FRIENDND;
-
 #define FRI_SET_PIPMAIL 1
 #define FRI_RESET_PIPMAIL 0xfffe
 #define FRI_SET_ACTIVE 2

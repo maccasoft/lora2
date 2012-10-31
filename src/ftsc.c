@@ -10,14 +10,22 @@
 #include <ctype.h>
 #include <dir.h>
 
-#include "defines.h"
-#include "lora.h"
+#include <cxl\cxlvid.h>
+#include <cxl\cxlwin.h>
+
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 #include "zmodem.h"
 
+extern long elapsed, timeout;
+
 char *n_frproc(char *, int *, int);
-int n_getpassword(int, int, int);
+int n_getpassword(int, int, int, int);
+long get_phone_cost (int, int, int, long);
+void import_sequence (void);
 
 static int recvmdm7(char *);
 int xfermdm7(char *);
@@ -30,6 +38,27 @@ static int req_out(char *,char *);
 static int get_req_str(char *,char *,int *);
 static int gen_req_name(char *,char *,int *);
 
+struct _pkthdr22
+{
+   int  orig_node;         /* originating node               */
+   int  dest_node;         /* destination node               */
+   int  orig_point;        /* originating point              */
+   int  dest_point;        /* Destination point              */
+   byte reserved[8];
+   int  subver;            /* packet subversion              */
+   int  ver;               /* packet version                 */
+   int  orig_net;          /* originating network number     */
+   int  dest_net;          /* destination network number     */
+   char product;           /* product type                   */
+   char serial;            /* serial number (some systems)   */
+   byte password[8];       /* session/pickup password        */
+   int  orig_zone;         /* originating zone               */
+   int  dest_zone;         /* Destination zone               */
+   char orig_domain[8];    /* originating domain name        */
+   char dest_domain[8];    /* destination domain name        */
+   byte filler[4];
+};
+
 /*------------------------------------------------------------------------*/
 /*                 Protocolli Trasferimento Network                       */
 /*------------------------------------------------------------------------*/
@@ -38,10 +67,10 @@ static int gen_req_name(char *,char *,int *);
 
 #define PRODUCT_CODE 0x4E
 #define isLORA       0x4E
-#define MAJVERSION   2
-#define MINVERSION   11
 #define no_zapzed    0
-#define NUM_FLAGS    4
+#define NUM_FLAGS    5
+
+#include "version.h"
 
 #define Z_PUTHEX(i,c) {i=(c);SENDBYTE(hex[((i)&0xF0)>>4]);SENDBYTE(hex[(i)&0xF]);}
 #define ZATTNLEN     32
@@ -52,117 +81,188 @@ static int net_problems;
 int FTSC_sender (wz)
 int wz;
 {
-        int j, i;
-	long t1;
+   int j, wh;
+   char req[120];
+   long t1, t, olc;
 
-        XON_DISABLE ();
-        first_block = 0;
+   XON_DISABLE ();
+   first_block = 0;
 
-        if (!wz) {
-                status_line(msgtxt[M_SEND_FALLBACK]);
-		who_is_he = 0;
-	}
+   if (!wz) {
+      status_line(msgtxt[M_SEND_FALLBACK]);
 
-	FTSC_sendmail ();
-	t1 = timerset (1000);
+      timeout = 0L;
+      filetransfer_system ();
+      update_filesio (0, 0);
 
-        while ((!timeup (t1)) && CARRIER) {
-		if ((j = PEEKBYTE()) >= 0) {
-			switch (j) {
-			case TSYNC:
-				CLEAR_INBOUND();
-				if (FTSC_recvmail())
-					goto get_out;
-				t1 = timerset (1000);
-				break;
+      wh = wopen (12, 0, 24, 79, 0, LGREY|_BLACK, WHITE|_BLACK);
+      wactiv (wh);
+      wtitle ("OUTBOUND CALL STATUS", TLEFT, LCYAN|_BLACK);
+      printc (12, 0, LGREY|_BLACK, 'Ã');
+      printc (12, 52, LGREY|_BLACK, 'Á');
+      printc (12, 79, LGREY|_BLACK, '´');
+      whline (8, 0, 80, 0, LGREY|_BLACK);
 
-			case SYN:
-				CLEAR_INBOUND();
-				SEA_recvreq();
-				t1 = timerset (1000);
-				break;
+      sprintf (req, "%u:%u/%u.%u, %s, %s, %s", remote_zone, remote_net, remote_node, remote_point, nodelist.sysop, nodelist.name, nodelist.city);
+      if (strlen (req) > 78)
+         req[78] = '\0';
+      wcenters (0, LGREY|_BLACK, req);
+      sprintf (req, "Connected at %u baud", rate);
+      wcenters (1, LGREY|_BLACK, req);
+      wcenters (2, LGREY|_BLACK, "AKAs: No aka presented");
 
-			case ENQ:
-				CLEAR_INBOUND();
-				SEA_sendreq();
-				goto get_out;
+      wprints (5, 2, LCYAN|_BLACK, "Files");
+      wprints (6, 2, LCYAN|_BLACK, "Bytes");
 
-			case NAK:
-			case 'C':
-				TIMED_READ(0);
-				TIMED_READ(1);
-				TIMED_READ(1);
-				SENDBYTE(EOT);
-				t1 = timerset (1000);
-				break;
+      wprints (4, 9, LCYAN|_BLACK, " ÚÄÄÄÄMailPKTÄÄÄÄÄÄÄDataÄÄÄÄÄ¿");
+      wprints (5, 9, LCYAN|_BLACK, "úúúúúúúúúúúúúúúúúúúúúúúúúúúúúúú");
+      wprints (6, 9, LCYAN|_BLACK, "úúúúúúúúúúúúúúúúúúúúúúúúúúúúúúú");
+      wprints (7, 9, LCYAN|_BLACK, " ÀÄÄÄÄÄÄINBOUND TRAFFICÄÄÄÄÄÄÙ");
 
-			default:
-				TIMED_READ(0);
-				SENDBYTE(EOT);
-				break;
-			}
-		}
-	}
+      wrjusts (5, 20, YELLOW|_BLACK, "N/A");
+      wrjusts (6, 20, YELLOW|_BLACK, "N/A");
+      wrjusts (5, 31, YELLOW|_BLACK, "N/A");
+      wrjusts (6, 31, YELLOW|_BLACK, "N/A");
 
-        if (!CARRIER) {
-                status_line(msgtxt[M_HE_HUNG_UP]);
-		CLEAR_INBOUND();
-		return FALSE;
-	}
+      wprints (4, 44, LCYAN|_BLACK, " ÚÄÄÄÄMailPKTÄÄÄÄÄÄÄDataÄÄÄÄÄ¿");
+      wprints (5, 44, LCYAN|_BLACK, "úúúúúúúúúúúúúúúúúúúúúúúúúúúúúúú");
+      wprints (6, 44, LCYAN|_BLACK, "úúúúúúúúúúúúúúúúúúúúúúúúúúúúúúú");
+      wprints (7, 44, LCYAN|_BLACK, " ÀÄÄÄÄÄOUTBOUND TRAFFICÄÄÄÄÄÄÙ");
 
-	if (timeup(t1)) {
-		FTSC_recvmail();
-                status_line (msgtxt[M_TOO_LONG]);
-	}
+      sprintf (req, "%d", call_list[next_call].n_mail);
+      wrjusts (5, 55, YELLOW|_BLACK, req);
+      sprintf (req, "%ld", call_list[next_call].b_mail);
+      wrjusts (6, 55, YELLOW|_BLACK, req);
+      sprintf (req, "%d", call_list[next_call].n_data);
+      wrjusts (5, 66, YELLOW|_BLACK, req);
+      sprintf (req, "%ld", call_list[next_call].b_data);
+      wrjusts (6, 66, YELLOW|_BLACK, req);
+
+      prints (7, 65, YELLOW|_BLACK, "FSC-0001");
+      who_is_he = 0;
+   }
+
+   FTSC_sendmail ();
+   t1 = timerset (1000);
+
+   while ((!timeup (t1)) && CARRIER) {
+      if ((j = PEEKBYTE()) >= 0) {
+         switch (j) {
+            case TSYNC:
+               CLEAR_INBOUND();
+               if (FTSC_recvmail())
+                  goto get_out;
+               t1 = timerset (1000);
+               break;
+
+            case SYN:
+               CLEAR_INBOUND();
+               SEA_recvreq();
+               t1 = timerset (1000);
+               break;
+
+            case ENQ:
+               CLEAR_INBOUND();
+               SEA_sendreq();
+               goto get_out;
+
+            case NAK:
+            case 'C':
+               TIMED_READ(0);
+               TIMED_READ(1);
+               TIMED_READ(1);
+               SENDBYTE(EOT);
+               t1 = timerset (1000);
+               break;
+
+            default:
+               TIMED_READ(0);
+               SENDBYTE(EOT);
+               break;
+         }
+      }
+   }
+
+   if (!CARRIER) {
+      status_line(msgtxt[M_HE_HUNG_UP]);
+      CLEAR_INBOUND();
+      if (!wz)
+         wclose ();
+      return FALSE;
+   }
+
+   if (timeup(t1)) {
+      FTSC_recvmail();
+      status_line (msgtxt[M_TOO_LONG]);
+   }
 
 get_out:
    t1 = timerset (100);
    while (!timeup (t1));
 
    if (!wz) {
+      if (cur_event > -1 && (e_ptrs[cur_event]->behavior & MAT_DYNAM)) {
+         e_ptrs[cur_event]->behavior |= MAT_SKIP;
+         write_sched ();
+      }
+
       status_line (msgtxt[M_0001_END]);
       terminating_call();
+      wclose ();
+
+      t = time (NULL) - elapsed + 20L;
+      olc = get_phone_cost (remote_zone, remote_net, remote_node, t);
+      status_line ("*Session with %d:%d/%d.%d Time: %ld:%02ld, Cost: $%ld.%02ld", remote_zone, remote_net, remote_node, remote_point, t / 60L, t % 60L, olc / 100L, olc % 100L);
+
+      HoldAreaNameMunge (call_list[next_call].zone);
+      bad_call (call_list[next_call].net, call_list[next_call].node, -2, 0);
+      sysinfo.today.completed++;
+      sysinfo.week.completed++;
+      sysinfo.month.completed++;
+      sysinfo.year.completed++;
+      sysinfo.today.outconnects += t;
+      sysinfo.week.outconnects += t;
+      sysinfo.month.outconnects += t;
+      sysinfo.year.outconnects += t;
+      sysinfo.today.cost += olc;
+      sysinfo.week.cost += olc;
+      sysinfo.month.cost += olc;
+      sysinfo.year.cost += olc;
 
       if (got_arcmail) {
          if (cur_event > -1 && e_ptrs[cur_event]->errlevel[2])
             aftermail_exit = e_ptrs[cur_event]->errlevel[2];
 
-         if (!aftermail_exit)
-            aftermail_exit = aftercaller_exit;
+         if (aftermail_exit) {
+            status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
+            get_down (aftermail_exit, 3);
+         }
 
-         if (cur_event > -1 && (e_ptrs[cur_event]->echomail & ECHO_IMPORT)) {
+         if (cur_event > -1 && (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL|ECHO_EXPORT))) {
             if (modem_busy != NULL)
                mdm_sendcmd (modem_busy);
 
-            i = 1;
-            if ( (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL)) ) {
-               if (prot_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_PROT))
-                  import_mail (prot_filepath, &i);
-               if (know_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_KNOW))
-                  import_mail (know_filepath, &i);
-               if (norm_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_NORMAL))
-                  import_mail (norm_filepath, &i);
-            }
-            else {
-               if (prot_filepath != NULL)
-                  import_mail (prot_filepath, &i);
-               if (know_filepath != NULL)
-                  import_mail (know_filepath, &i);
-               if (norm_filepath != NULL)
-                  import_mail (norm_filepath, &i);
+            t = time (NULL);
+
+            import_sequence ();
+
+            if (e_ptrs[cur_event]->echomail & ECHO_EXPORT) {
+               if (config->mail_method) {
+                  export_mail (NETMAIL_RSN);
+                  export_mail (ECHOMAIL_RSN);
+               }
+               else
+                  export_mail (NETMAIL_RSN|ECHOMAIL_RSN);
             }
 
-            i = 2;
-            import_mail (".\\", &i);
-            if (e_ptrs[cur_event]->echomail & ECHO_EXPORT)
-               export_mail (NETMAIL_RSN|ECHOMAIL_RSN);
+            sysinfo.today.echoscan += time (NULL) - t;
+            sysinfo.week.echoscan += time (NULL) - t;
+            sysinfo.month.echoscan += time (NULL) - t;
+            sysinfo.year.echoscan += time (NULL) - t;
          }
-
-         status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
-         get_down (aftermail_exit, 3);
       }
 
-      get_down(aftercaller_exit, 2);
+      get_down(0, 2);
    }
 
    return(TRUE);
@@ -171,173 +271,230 @@ get_out:
 int FTSC_receiver (wz)
 int wz;
 {
-        char fname[64], i, *HoldName;
-        int havemail, done, x;
-	unsigned char j;
-	long t1, t2;
-	struct ffblk dt1;
-	struct stat buf;
+   char fname[64], i, *HoldName, req[120];
+   int havemail, done, wh;
+   unsigned char j;
+   long t1, t2, t;
+   struct ffblk dt1;
+   struct stat buf;
 
-        first_block = 0;
-        XON_DISABLE ();
-        HoldName = HoldAreaNameMunge (called_zone);
+   first_block = 0;
+   XON_DISABLE ();
+   HoldName = HoldAreaNameMunge (called_zone);
 
-        if (!wz) {
-                status_line(msgtxt[M_RECV_FALLBACK]);
-		who_is_he = 1;
-	}
+   if (!wz) {
+      status_line(msgtxt[M_RECV_FALLBACK]);
 
-	CLEAR_INBOUND();
+      timeout = 0L;
+      filetransfer_system ();
+      update_filesio (0, 0);
 
-	done = 0;
-	if (FTSC_recvmail ()) {
-		if (!wz)
-                        status_line (msgtxt[M_0001_END]);
-		return 1;
-	}
+      wh = wopen (12, 0, 24, 79, 0, LGREY|_BLACK, WHITE|_BLACK);
+      wactiv (wh);
+      wtitle ("INBOUND CALL STATUS", TLEFT, LCYAN|_BLACK);
+      printc (12, 0, LGREY|_BLACK, 'Ã');
+      printc (12, 52, LGREY|_BLACK, 'Á');
+      printc (12, 79, LGREY|_BLACK, '´');
+      whline (8, 0, 80, 0, LGREY|_BLACK);
 
-	remote_net = called_net;
-	remote_node = called_node;
+      sprintf (req, "Connected at %u baud", rate);
+      wcenters (1, LGREY|_BLACK, req);
 
-        sprintf(fname,"%s%04x%04x.?UT",HoldName,remote_net,remote_node);
-	havemail=findfirst(fname,&dt1,0);
+      wprints (5, 2, LCYAN|_BLACK, "Files");
+      wprints (6, 2, LCYAN|_BLACK, "Bytes");
 
-	if (havemail) {
-                sprintf(fname,"%s%04x%04x.?LO",HoldName,remote_net,remote_node);
-		havemail=findfirst(fname,&dt1,0);
-	}
+      wprints (4, 9, LCYAN|_BLACK, " ÚÄÄÄÄMailPKTÄÄÄÄÄÄÄDataÄÄÄÄÄ¿");
+      wprints (5, 9, LCYAN|_BLACK, "úúúúúúúúúúúúúúúúúúúúúúúúúúúúúúú");
+      wprints (6, 9, LCYAN|_BLACK, "úúúúúúúúúúúúúúúúúúúúúúúúúúúúúúú");
+      wprints (7, 9, LCYAN|_BLACK, " ÀÄÄÄÄÄÄINBOUND TRAFFICÄÄÄÄÄÄÙ");
 
-	if (havemail) {
-                sprintf(fname,"%s%04x%04x.REQ",filepath,alias[assumed].net,alias[assumed].node);
-		havemail=findfirst(fname,&dt1,0);
-	}
+      wrjusts (5, 20, YELLOW|_BLACK, "N/A");
+      wrjusts (6, 20, YELLOW|_BLACK, "N/A");
+      wrjusts (5, 31, YELLOW|_BLACK, "N/A");
+      wrjusts (6, 31, YELLOW|_BLACK, "N/A");
 
-	if (havemail)
-		status_line ("*No mail waiting for %d/%d", remote_net, remote_node);
-	else {
-                status_line (msgtxt[M_GIVING_MAIL], remote_net, remote_node);
-		t1 = timerset(3000);
-		j = 0;
-		done = 0;
-                while (!timeup(t1) && CARRIER && !done) {
-			SENDBYTE(TSYNC);
+      wprints (4, 44, LCYAN|_BLACK, " ÚÄÄÄÄMailPKTÄÄÄÄÄÄÄDataÄÄÄÄÄ¿");
+      wprints (5, 44, LCYAN|_BLACK, "úúúúúúúúúúúúúúúúúúúúúúúúúúúúúúú");
+      wprints (6, 44, LCYAN|_BLACK, "úúúúúúúúúúúúúúúúúúúúúúúúúúúúúúú");
+      wprints (7, 44, LCYAN|_BLACK, " ÀÄÄÄÄÄOUTBOUND TRAFFICÄÄÄÄÄÄÙ");
 
-			t2 = timerset (300);
-                        while (CARRIER && (!timeup(t2)) && !done) {
-				i = TIMED_READ (0);
+      prints (7, 65, YELLOW|_BLACK, "FSC-0001");
+      who_is_he = 1;
+   }
 
-				switch (i) {
-				case 'C':
-				case 0x00:
-				case 0x01:
-					if (j == 'C') {
-						done = 1;
-						FTSC_sendmail ();
-					}
-					break;
+   CLEAR_INBOUND();
 
-				case 0xfe:
-					if (j == 0x01) {
-						done = 1;
-						FTSC_sendmail ();
-					}
-					break;
+   done = 0;
+   if (FTSC_recvmail ()) {
+      if (!wz) {
+         status_line (msgtxt[M_0001_END]);
+         wclose ();
+      }
+      return 1;
+   }
 
-				case 0xff:
-					if (j == 0x00) {
-						done = 1;                                              	
-						FTSC_sendmail ();
-					}
-					break;
+   HoldName = HoldAreaNameMunge (called_zone);
+   sprintf (fname,"%s%04x%04x.?UT",HoldName,called_net,called_node);
+   havemail = findfirst(fname,&dt1,0);
 
-				case NAK:
-					if (j == NAK) {
-						done = 1;
-						FTSC_sendmail ();
-					}
-					break;
-				}
-				if (i != -1)
-					j = i;
-			}
-		}
-	}
+   if (havemail) {
+      sprintf(fname,"%s%04x%04x.?LO",HoldName,called_net,called_node);
+      havemail=findfirst(fname,&dt1,0);
+   }
 
-        sprintf( fname, "%s%04x%04x.REQ",HoldName,remote_net,remote_node);
-	if (!stat(fname,&buf)) {
-		t1 = timerset(3000);
-		done = 0;
-                while (!timeup(t1) && CARRIER && !done) {
-			SENDBYTE(SYN);
+   if (havemail) {
+      sprintf(fname,"%s%04x%04x.REQ",filepath,config->alias[assumed].net,config->alias[assumed].node);
+      havemail=findfirst(fname,&dt1,0);
+   }
 
-			t2 = timerset (300);
-                        while (CARRIER && (!timeup(t2)) && !done) {
-				i = TIMED_READ (0);
+   if (havemail && remote_point) {
+      sprintf (fname,"%s%04x%04x.PNT\\%08x.?UT",HoldName,remote_net,remote_node, remote_point);
+      havemail = findfirst(fname,&dt1,0);
 
-				switch (i) {
-				case ENQ:
-					SEA_sendreq ();
+      if (havemail) {
+         sprintf(fname,"%s%04x%04x.PNT\\%08x.?LO",HoldName,remote_net,remote_node,remote_point);
+         havemail=findfirst(fname,&dt1,0);
+      }
+   }
 
-				case CAN:
-					done = 1;
-					break;
+   if (havemail)
+      status_line ("*No mail waiting for %d:%d/%d.%d", remote_zone, remote_net, remote_node, remote_point);
+   else {
+      status_line (msgtxt[M_GIVING_MAIL], remote_zone, remote_net, remote_node, remote_point);
+      t1 = timerset(3000);
+      j = 0;
+      done = 0;
+      while (!timeup(t1) && CARRIER && !done) {
+         SENDBYTE(TSYNC);
 
-				case 'C':
-				case NAK:
-					SENDBYTE (EOT);
-					break;
-				}
-			}
-		}
-	}
+         t2 = timerset (300);
+         while (CARRIER && (!timeup(t2)) && !done) {
+            i = TIMED_READ (0);
+
+            switch (i) {
+               case 'C':
+               case 0x00:
+               case 0x01:
+                  if (j == 'C') {
+                     done = 1;
+                     FTSC_sendmail ();
+                  }
+                  break;
+
+               case 0xfe:
+                  if (j == 0x01) {
+                     done = 1;
+                     FTSC_sendmail ();
+                  }
+                  break;
+
+               case 0xff:
+                  if (j == 0x00) {
+                     done = 1;
+                     FTSC_sendmail ();
+                  }
+                  break;
+
+               case NAK:
+                  if (j == NAK) {
+                     done = 1;
+                     FTSC_sendmail ();
+                  }
+                  break;
+            }
+            if (i != -1)
+               j = i;
+         }
+      }
+   }
+
+   sprintf( fname, "%s%04x%04x.REQ",HoldName,called_net,called_node);
+   if (!stat(fname,&buf)) {
+      t1 = timerset(3000);
+      done = 0;
+      while (!timeup(t1) && CARRIER && !done) {
+         SENDBYTE(SYN);
+
+         t2 = timerset (300);
+         while (CARRIER && (!timeup(t2)) && !done) {
+            i = TIMED_READ (0);
+
+            switch (i) {
+               case ENQ:
+                  SEA_sendreq ();
+
+               case CAN:
+                  done = 1;
+                  break;
+
+               case 'C':
+               case NAK:
+                  SENDBYTE (EOT);
+                  break;
+            }
+         }
+      }
+   }
 
    if (!no_requests)
       SEA_recvreq ();
 
    if (!wz) {
+      if (cur_event > -1 && (e_ptrs[cur_event]->behavior & MAT_DYNAM)) {
+         e_ptrs[cur_event]->behavior |= MAT_SKIP;
+         write_sched ();
+      }
+
       status_line (msgtxt[M_0001_END]);
       terminating_call();
+      wclose ();
+
+      t = time (NULL) - elapsed;
+      status_line ("*Session with %d:%d/%d.%d Time: %ld:%02ld", remote_zone, remote_net, remote_node, remote_point, t / 60L, t % 60L);
+
+      sysinfo.today.incalls++;
+      sysinfo.week.incalls++;
+      sysinfo.month.incalls++;
+      sysinfo.year.incalls++;
+      sysinfo.today.inconnects += t;
+      sysinfo.week.inconnects += t;
+      sysinfo.month.inconnects += t;
+      sysinfo.year.inconnects += t;
 
       if (got_arcmail) {
          if (cur_event > -1 && e_ptrs[cur_event]->errlevel[2])
             aftermail_exit = e_ptrs[cur_event]->errlevel[2];
 
-         if (!aftermail_exit)
-            aftermail_exit = aftercaller_exit;
+         if (aftermail_exit) {
+            status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
+            get_down (aftermail_exit, 3);
+         }
 
-         if (cur_event > -1 && (e_ptrs[cur_event]->echomail & ECHO_IMPORT)) {
+         if (cur_event > -1 && (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL|ECHO_EXPORT))) {
             if (modem_busy != NULL)
                mdm_sendcmd (modem_busy);
 
-            x = 1;
-            if ( (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL)) ) {
-               if (prot_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_PROT))
-                  import_mail (prot_filepath, &x);
-               if (know_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_KNOW))
-                  import_mail (know_filepath, &x);
-               if (norm_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_NORMAL))
-                  import_mail (norm_filepath, &x);
-            }
-            else {
-               if (prot_filepath != NULL)
-                  import_mail (prot_filepath, &x);
-               if (know_filepath != NULL)
-                  import_mail (know_filepath, &x);
-               if (norm_filepath != NULL)
-                  import_mail (norm_filepath, &x);
+            t = time (NULL);
+
+            import_sequence ();
+
+            if (e_ptrs[cur_event]->echomail & ECHO_EXPORT) {
+               if (config->mail_method) {
+                  export_mail (NETMAIL_RSN);
+                  export_mail (ECHOMAIL_RSN);
+               }
+               else
+                  export_mail (NETMAIL_RSN|ECHOMAIL_RSN);
             }
 
-            x = 2;
-            import_mail (".\\", &x);
-            if (e_ptrs[cur_event]->echomail & ECHO_EXPORT)
-               export_mail (NETMAIL_RSN|ECHOMAIL_RSN);
+            sysinfo.today.echoscan += time (NULL) - t;
+            sysinfo.week.echoscan += time (NULL) - t;
+            sysinfo.month.echoscan += time (NULL) - t;
+            sysinfo.year.echoscan += time (NULL) - t;
          }
-
-         status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
-         get_down (aftermail_exit, 3);
       }
 
-      get_down(aftercaller_exit, 2);
+      get_down(0, 2);
    }
 
    return 1;
@@ -345,317 +502,529 @@ int wz;
 
 static int FTSC_sendmail ()
 {
-	FILE *fp;
-        char fname[80], s[80], *sptr, *password, p, *HoldName;
-        int c, i, j;
-	struct stat buf;
-	struct _pkthdr *tmppkt;
-	long t1;
-	struct tm *tm1;
+   FILE *fp;
+   char fname[80], s[80], *sptr, *password, p, *HoldName;
+   int c, i, j;
+   long t1;
+   struct stat buf;
+   struct _pkthdr2 *pkthdr;
+   struct date datep;
+   struct time timep;
+   long current, last_start;
 
-        long current, last_start;
+   XON_DISABLE ();
+   HoldName = HoldAreaNameMunge (called_zone);
 
-        XON_DISABLE ();
-        HoldName = HoldAreaNameMunge (called_zone);
+   sptr = s;
+   *ext_flags  = 'O';
+   for (c = 0; c < NUM_FLAGS; c++) {
+      if (caller && (ext_flags[c] == 'H'))
+         continue;
 
-	sptr = s;
-	*ext_flags  = 'O';
-	for(c=0; c<NUM_FLAGS; c++) {
-		if (caller && (ext_flags[c] == 'H'))
-			continue;
+      sprintf( fname, "%s%04x%04x.%cUT", HoldName, called_net, called_node, ext_flags[c]);
 
-                sprintf( fname,"%s%04x%04x.%cUT",HoldName,called_net,called_node,ext_flags[c]);
+      if (!stat(fname,&buf))
+         break;
+   }
 
-		if (!stat(fname,&buf))
-			break;
-	}
+   if (c == NUM_FLAGS && remote_point) {
+      sptr = s;
+      *ext_flags  = 'O';
+      for (c = 0; c < NUM_FLAGS; c++) {
+         if (caller && (ext_flags[c] == 'H'))
+            continue;
 
-	invent_pkt_name(s);
+         sprintf( fname, "%s%04x%04x.PNT\\%08x.%cUT", HoldName, remote_net, remote_node, remote_point, ext_flags[c]);
 
-	status_line(" Sending bundle to %d/%d", called_net, called_node);
+         if (!stat(fname,&buf))
+            break;
+      }
+   }
 
-	if (c == NUM_FLAGS) {
-                sprintf( fname,"%s%04x%04x.OUT",HoldName,called_net,called_node);
-		fp = fopen (fname, "wb");
-		if (fp == NULL)
-			return 1;
-		t1 = time (NULL);
-		tm1 = localtime (&t1);
+   invent_pkt_name (s);
+   gettime (&timep);
+   getdate (&datep);
 
-		tmppkt = (struct _pkthdr *) calloc (sizeof (struct _pkthdr), 1);
-		if (tmppkt == NULL) {
-			status_line ("!Mem err in sending");
-			fclose (fp);
-			return 1;
-		}
-                tmppkt->orig_node = alias[assumed].node;
-		tmppkt->dest_node = called_node;
-		tmppkt->year = tm1->tm_year;
-		tmppkt->month = tm1->tm_mon;
-		tmppkt->day = tm1->tm_mday;
-		tmppkt->hour = tm1->tm_hour;
-		tmppkt->minute = tm1->tm_min;
-		tmppkt->second = tm1->tm_sec;
-		tmppkt->rate = 0;
-		tmppkt->ver = PKTVER;
-                tmppkt->orig_net = alias[assumed].net;
-		tmppkt->dest_net = called_net;
-		tmppkt->product = isLORA;
-                if (n_getpassword(0, called_net,called_node)) {
-			if (remote_password != NULL) {
-                                strncpy (tmppkt->password, remote_password, 6);
-                                strupr (tmppkt->password);
-			}
-		}
-		fwrite ((char *) tmppkt, sizeof (struct _pkthdr), 1, fp);
-		free (tmppkt);
-		fwrite ("\0\0", 2, 1, fp);
-		fclose (fp);
-	}
-	else {
-                if (n_getpassword(0, called_net,called_node)) {
-			if (remote_password != NULL) {
-				fp = fopen (fname, "rb+");
-				if (fp == NULL)
-					return 1;
-				tmppkt = (struct _pkthdr *) calloc (sizeof (struct _pkthdr), 1);
-				if (tmppkt == NULL) {
-					status_line ("!Mem err in sending");
-					return 1;
-				}
-				fread (tmppkt, 1, sizeof (struct _pkthdr), fp);
-                                strncpy (tmppkt->password, remote_password, 6);
-                                strupr (tmppkt->password);
+   status_line(" Sending bundle to %d:%d/%d", called_zone, called_net, called_node);
 
-				fseek (fp, 0L, SEEK_SET);
-				fwrite (tmppkt, 1, sizeof (struct _pkthdr), fp);
-				fclose (fp);
-				free (tmppkt);
-			}
-		}
-	}
+   if (c == NUM_FLAGS) {
+      sprintf (fname, "%s%04x%04x.OUT", HoldName, called_net, called_node);
+      fp = fopen (fname, "wb");
+      if (fp == NULL)
+         return 1;
 
-        net_problems = send (fname, 'B');
-	if ((net_problems == TSYNC) || (net_problems == 0)) {
-		if (c == NUM_FLAGS)
-			unlink (fname);
-		return (net_problems);
-	}
+      pkthdr = (struct _pkthdr2 *) calloc (sizeof (struct _pkthdr2), 1);
+      if (pkthdr == NULL) {
+         status_line ("!Mem err in sending");
+         fclose (fp);
+         return 1;
+      }
 
-	unlink (fname);
+      memset ((char *)pkthdr, 0, sizeof (struct _pkthdr2));
 
+      pkthdr->hour = timep.ti_hour;
+      pkthdr->minute = timep.ti_min;
+      pkthdr->second = timep.ti_sec;
+      pkthdr->year = datep.da_year;
+      pkthdr->month = datep.da_mon - 1;
+      pkthdr->day = datep.da_day;
+      pkthdr->ver = PKTVER;
+      pkthdr->product = 0x4E;
+      pkthdr->serial = 2 * 16 + 10;
+      pkthdr->capability = 1;
+      pkthdr->cwvalidation = 256;
+      if (config->alias[assumed].point && config->alias[assumed].fakenet) {
+         pkthdr->orig_node = config->alias[assumed].point;
+         pkthdr->orig_net = config->alias[assumed].fakenet;
+         pkthdr->orig_point = 0;
+      }
+      else {
+         pkthdr->orig_node = config->alias[assumed].node;
+         pkthdr->orig_net = config->alias[assumed].net;
+         pkthdr->orig_point = config->alias[assumed].point;
+      }
+      pkthdr->orig_zone = config->alias[assumed].zone;
+      pkthdr->orig_zone2 = config->alias[assumed].zone;
+      pkthdr->dest_point = remote_point;
+      pkthdr->dest_node = called_node;
+      pkthdr->dest_net = called_net;
+      pkthdr->dest_zone = called_zone;
+      pkthdr->dest_zone2 = called_zone;
 
-	*ext_flags  = 'F';
-	status_line (" Outbound file attaches");
-	for(c=0; c<NUM_FLAGS+1; c++) {
-		if (caller && (ext_flags[c] == 'H'))
-			continue;
+      if (get_bbs_record (called_zone, called_net, called_node, remote_point)) {
+         strcpy (remote_password, nodelist.password);
+         if (remote_password[0]) {
+            strncpy (pkthdr->password, strupr (remote_password), 8);
+         }
+      }
+      fwrite ((char *) pkthdr, sizeof (struct _pkthdr2), 1, fp);
+      free (pkthdr);
+      fwrite ("\0\0", 2, 1, fp);
+      fclose (fp);
+   }
+   else {
+      if (get_bbs_record (called_zone, called_net, called_node, remote_point)) {
+         strcpy (remote_password, nodelist.password);
+         fp = fopen (fname, "rb+");
+         if (fp == NULL)
+            return 1;
+         pkthdr = (struct _pkthdr2 *) calloc (sizeof (struct _pkthdr2), 1);
+         if (pkthdr == NULL) {
+            status_line ("!Mem err in sending");
+            return 1;
+         }
+         fread (pkthdr, 1, sizeof (struct _pkthdr2), fp);
+         pkthdr->hour = timep.ti_hour;
+         pkthdr->minute = timep.ti_min;
+         pkthdr->second = timep.ti_sec;
+         pkthdr->year = datep.da_year;
+         pkthdr->month = datep.da_mon - 1;
+         pkthdr->day = datep.da_day;
+         if (remote_password[0])
+            strncpy (pkthdr->password, strupr (remote_password), 8);
 
-		if (c < NUM_FLAGS)
-                        sprintf( fname, "%s%04x%04x.%cLO",HoldName,called_net,called_node,ext_flags[c]);
-		else
-                        sprintf( fname, "%s%04x%04x.REQ",filepath,alias[assumed].net, alias[assumed].node);
+         fseek (fp, 0L, SEEK_SET);
+         fwrite (pkthdr, 1, sizeof (struct _pkthdr), fp);
+         fclose (fp);
+         free (pkthdr);
+      }
+   }
 
-		if (!stat(fname,&buf)) {
+   net_problems = send (fname, 'B');
+   if ((net_problems == TSYNC) || (net_problems == 0)) {
+      if (c == NUM_FLAGS)
+         unlink (fname);
+      return (net_problems);
+   }
 
-			fp = fopen( fname, "rb+" );
-			if (fp == NULL)
-				continue;
+   unlink (fname);
 
-			current  = 0L;
-			while(!feof(fp)) {
-				s[0] = 0;
-				last_start = current;
-				fgets(s,79,fp);
+   *ext_flags  = 'F';
+   status_line (" Outbound file attaches");
+   for(c=0; c<NUM_FLAGS+1; c++) {
+      if (caller && (ext_flags[c] == 'H'))
+         continue;
 
-				sptr = s;
-				password = NULL;
+      if (c < NUM_FLAGS)
+         sprintf( fname, "%s%04x%04x.%cLO",HoldName,called_net,called_node,ext_flags[c]);
+      else
+         sprintf( fname, "%s%04x%04x.REQ",filepath,config->alias[assumed].net, config->alias[assumed].node);
 
-				for(i=0; sptr[i]; i++)
-					if (sptr[i]=='!')
-						password = sptr+i+1;
+      if (!stat(fname,&buf)) {
+         fp = fopen( fname, "rb+" );
+         if (fp == NULL)
+            continue;
 
-				if (password) {
-					password = sptr+i+1;
-					for(i=0; password[i]; i++)
-						if (password[i]<=' ')
-							password[i]=0;
-					if (strcmp(strupr(password),strupr(remote_password))) {
-						status_line("!RemotePwdErr %s %s",password,remote_password);
-						continue;
-					}
-				}
+         current  = 0L;
+         while(!feof(fp)) {
+            s[0] = 0;
+            last_start = current;
+            fgets(s,79,fp);
 
-				for(i=0; sptr[i]; i++)
-					if (sptr[i]<=' ')
-						sptr[i]=0;
+            sptr = s;
+            password = NULL;
 
-				current = ftell(fp);
+            for(i=0; sptr[i]; i++)
+               if (sptr[i]=='!')
+                  password = sptr+i+1;
 
-				if (sptr[0]=='#') {
-					sptr++;
-					i = TRUNC_AFTER;
-				}
-				else
-					i = NOTHING_AFTER;
+            if (password) {
+               password = sptr+i+1;
+               for(i=0; password[i]; i++)
+                  if (password[i]<=' ')
+                     password[i]=0;
+               if (strcmp(strupr(password),strupr(remote_password))) {
+                  status_line("!RemotePwdErr %s %s",password,remote_password);
+                  continue;
+               }
+            }
 
-				if (!sptr[0])
-					continue;
+            for(i=0; sptr[i]; i++)
+               if (sptr[i]<=' ')
+                  sptr[i]=0;
 
+            current = ftell(fp);
 
-				if (sptr[0] != '~') {
+            if (sptr[0] == '#') {
+               sptr++;
+               i = TRUNC_AFTER;
+            }
+            else if (sptr[0] == '^') {
+               sptr++;
+               i = DELETE_AFTER;
+            }
+            else
+               i = NOTHING_AFTER;
 
-					if (stat(sptr,&buf))
-						continue;
-					else
-					    if (!buf.st_size)
-						continue;
+            if (!sptr[0])
+               continue;
 
-                                        j = xfermdm7 (sptr);
+            if (sptr[0] != '~') {
+               if (stat(sptr,&buf))
+                       continue;
+               else
+                   if (!buf.st_size)
+                       continue;
 
-                                        p = 'B';
-                                        if (j == 0) {
-                                                net_problems = 1;
-                                                return FALSE;
-                                        }
-                                        else if (j == 2)
-                                                p = 'F';
+               j = xfermdm7 (sptr);
 
-                                        if (!send (sptr, p)) {
-						fclose(fp);
-						net_problems   = 1;
-						return FALSE;
-					}
+               p = 'B';
+               if (j == 0) {
+                  net_problems = 1;
+                  return FALSE;
+               }
+               else if (j == 2)
+                  p = 'F';
 
-					fseek( fp, last_start, SEEK_SET );
-					putc('~',fp);
-					fflush (fp);
-					rewind(fp);
-					fseek( fp, current, SEEK_SET );
+               if (!send (sptr, p)) {
+                  fclose(fp);
+                  net_problems   = 1;
+                  return FALSE;
+               }
 
-					if (i == TRUNC_AFTER) {
-                                                i = cshopen(sptr,O_TRUNC,S_IWRITE);
-						close(i);
-					}
+               fseek( fp, last_start, SEEK_SET );
+               putc('~',fp);
+               fflush (fp);
+               rewind(fp);
+               fseek( fp, current, SEEK_SET );
 
-				}
+               if (i == TRUNC_AFTER) {
+                  i = cshopen(sptr,O_TRUNC,S_IWRITE);
+                  close(i);
+               }
+               else if (i == DELETE_AFTER)
+                  unlink (sptr);
+            }
+         }
 
-			}
+         fclose(fp);
+         unlink(fname);
+      }
+   }
 
-			fclose(fp);
-			unlink(fname);
+   if (remote_point) {
+      *ext_flags  = 'F';
+      for (c = 0; c < NUM_FLAGS; c++) {
+         if (caller && (ext_flags[c] == 'H'))
+            continue;
 
-		}
+         sprintf (fname, "%s%04x%04x.PNT\\%08x.%cLO", HoldName, remote_net, remote_node, remote_point, ext_flags[c]);
 
-	}
+         if (!stat(fname,&buf)) {
+            fp = fopen( fname, "rb+" );
+            if (fp == NULL)
+               continue;
 
-	*sptr = 0;
-	status_line (" End of outbound file attaches");
-	t1 = timerset (100);
-        while (CARRIER && !timeup(t1)) {
-		j = TIMED_READ(0);
-		if ((j == 'C') || (j == NAK)) {
-			SENDBYTE (EOT);
-			t1 = timerset (100);
-		}
-	}
-	return TRUE;
+            current  = 0L;
+            while(!feof(fp)) {
+               s[0] = 0;
+               last_start = current;
+               fgets(s,79,fp);
+
+               sptr = s;
+               password = NULL;
+
+               for(i=0; sptr[i]; i++)
+                  if (sptr[i]=='!')
+                     password = sptr+i+1;
+
+               if (password) {
+                  password = sptr+i+1;
+                  for(i=0; password[i]; i++)
+                     if (password[i]<=' ')
+                        password[i]=0;
+                  if (strcmp(strupr(password),strupr(remote_password))) {
+                     status_line("!RemotePwdErr %s %s",password,remote_password);
+                     continue;
+                  }
+               }
+
+               for(i=0; sptr[i]; i++)
+                  if (sptr[i]<=' ')
+                     sptr[i]=0;
+
+               current = ftell(fp);
+
+               if (sptr[0]=='#') {
+                  sptr++;
+                  i = TRUNC_AFTER;
+               }
+               else if (sptr[0] == '^') {
+                  sptr++;
+                  i = DELETE_AFTER;
+               }
+               else
+                  i = NOTHING_AFTER;
+
+               if (!sptr[0])
+                  continue;
+
+               if (sptr[0] != '~') {
+                  if (stat(sptr,&buf))
+                     continue;
+                  else
+                     if (!buf.st_size)
+                        continue;
+
+                  j = xfermdm7 (sptr);
+
+                  p = 'B';
+                  if (j == 0) {
+                     net_problems = 1;
+                     return FALSE;
+                  }
+                  else if (j == 2)
+                     p = 'F';
+
+                  if (!send (sptr, p)) {
+                     fclose(fp);
+                     net_problems   = 1;
+                     return FALSE;
+                  }
+
+                  fseek( fp, last_start, SEEK_SET );
+                  putc('~',fp);
+                  fflush (fp);
+                  rewind(fp);
+                  fseek( fp, current, SEEK_SET );
+
+                  if (i == TRUNC_AFTER) {
+                     i = cshopen(sptr,O_TRUNC,S_IWRITE);
+                     close(i);
+                  }
+                  else if (i == DELETE_AFTER)
+                     unlink (sptr);
+               }
+            }
+
+            fclose(fp);
+            unlink(fname);
+         }
+      }
+   }
+
+   *sptr = 0;
+   status_line (" End of outbound file attaches");
+   t1 = timerset (100);
+   while (CARRIER && !timeup(t1)) {
+      j = TIMED_READ(0);
+      if ((j == 'C') || (j == NAK)) {
+         SENDBYTE (EOT);
+         t1 = timerset (100);
+      }
+   }
+   return TRUE;
 }
 
 static int FTSC_recvmail ()
 {
-	char fname[80], fname1[80];
-	struct _pkthdr tmppkt;
-	FILE *fp;
-	char done, i;
-	int j;
+   char fname[80], fname1[80], req[120], *p;
+   struct _pkthdr2 pkthdr;
+   struct _pkthdr22 *pkthdr22;
+   FILE *fp;
+   char done, i;
+   int j;
 
-        status_line (msgtxt[M_RECV_MAIL]);
+   status_line (msgtxt[M_RECV_MAIL]);
 
-        if (!CARRIER) {
-                status_line(msgtxt[M_HE_HUNG_UP]);
-		CLEAR_INBOUND();
-		return (1);
-	}
+   if (!CARRIER) {
+      status_line(msgtxt[M_HE_HUNG_UP]);
+      CLEAR_INBOUND();
+      return (1);
+   }
 
-        XON_DISABLE ();
+   XON_DISABLE ();
 
-	status_line (" Inbound bundle");
-        invent_pkt_name (fname1);
+   status_line (" Inbound bundle");
+   invent_pkt_name (fname1);
 
-	CLEAR_INBOUND();
-	SENDBYTE ('C');
-	SENDBYTE (0x01);
-	SENDBYTE (0xfe);
-        if (receive (filepath, fname1, 'B') != 0)
-                got_arcmail = 1;
+   CLEAR_INBOUND();
+   SENDBYTE ('C');
+   SENDBYTE (0x01);
+   SENDBYTE (0xfe);
+   if ((p = receive (filepath, fname1, 'B')) == NULL)
+      return (1);
 
-        if (!remote_capabilities) {
-                sprintf (fname, "%s%s",filepath,fname1);
-                fp = fopen (fname, "r");
-                if (fp == NULL) {
-                        status_line ("!Password Error assumed (%s)", fname1);
-                        return (1);
-                }
-                fread (&tmppkt, 1, sizeof (struct _pkthdr), fp);
-                fclose (fp);
-                remote_password[7] = '\0';
-                tmppkt.password[7] = '\0';
-                remote_node = called_node = tmppkt.orig_node;
-                remote_net = called_net = tmppkt.orig_net;
-                remote_zone = called_zone = tmppkt.orig_zone;
-                if (get_bbs_record(remote_zone,remote_net,remote_node, remote_point))
-                        status_line("%s: %s (%u:%u/%u)",msgtxt[M_REMOTE_SYSTEM],nodelist.name,remote_zone,remote_net,remote_node);
-                else
-                        status_line("%s: %s (%u:%u/%u)",msgtxt[M_REMOTE_SYSTEM],msgtxt[M_UNKNOWN_MAILER],remote_zone,remote_net,remote_node);
-                if (tmppkt.rate == 2) {
-                        /* This is a special type 2.2 packet! */
-                        remote_point = (unsigned) tmppkt.year;
-                }
-                if (remote_password[0] && stricmp (remote_password, tmppkt.password)) {
-                        status_line ("!Password Error: expected '%s' got '%s'",remote_password, tmppkt.password);
-                        strcpy (fname1, fname);
-                        j = strlen (fname) - 3;
-                        strcpy (&(fname[j]), "Bad");
-                        if (rename (fname1, fname))
-                                status_line (msgtxt[M_CANT_RENAME_MAIL], fname1);
-                        else
-                                status_line (msgtxt[M_MAIL_PACKET_RENAMED], fname);
-                        return (1);
-                }
-        }
+   if (!remote_capabilities) {
+      sprintf (fname, "%s%s", filepath, p);
+      fp = fopen (fname, "rb");
+      if (fp == NULL) {
+         status_line (msgtxt[M_PWD_ERR_ASSUMED]);
+         return (1);
+      }
+      fread (&pkthdr, 1, sizeof (struct _pkthdr2), fp);
+      fclose (fp);
 
-	called_net = remote_net;
-	called_node = remote_node;
+      if (pkthdr.rate == 2) {
+         pkthdr22 = (struct _pkthdr22 *)&pkthdr;
+         remote_net = pkthdr22->orig_net;
+         remote_node = pkthdr22->orig_node;
+         remote_zone = pkthdr22->orig_zone;
+         remote_point = pkthdr22->orig_point;
+      }
+      else {
+         swab ((char *)&pkthdr.cwvalidation, (char *)&i, 2);
+         pkthdr.cwvalidation = i;
+         if (pkthdr.capability != pkthdr.cwvalidation || !(pkthdr.capability & 0x0001)) {
+            remote_net = pkthdr.orig_net;
+            remote_node = pkthdr.orig_node;
+            remote_zone = pkthdr.orig_zone;
+            remote_point = 0;
+            if (!remote_zone) {
+               for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
+                  if (config->alias[i].net == remote_net)
+                     break;
+               }
 
-	done = 0;
-	status_line (" Inbound file attaches");
-	do {
-		if ((i = try_sealink ()) == 0) {
-			if (!recvmdm7 (fname))
-				done = 1;
-			else {
-                                if (!receive (filepath, fname, 'T'))
-					done = 1;
-				else
-                                        got_arcmail = 1;
-			}
-		}
-		else {
-			if (i == 1) {
-                                if (!receive (filepath, NULL, 'F'))
-					done = 1;
-				else
-                                        got_arcmail = 1;
-			}
-			else
-			    done = 1;
-		}
-        } while (!done && CARRIER);
+               if (i < MAX_ALIAS && config->alias[i].net) {
+                  remote_zone = config->alias[i].zone;
+                  assumed = i;
+               }
+               else
+                  remote_zone = config->alias[0].zone;
+            }
+            else
+               for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
+                  if (config->alias[i].zone == remote_zone) {
+                     assumed = i;
+                     break;
+                  }
+               }
+         }
+         else {
+            remote_net = pkthdr.orig_net;
+            remote_node = pkthdr.orig_node;
+            remote_zone = pkthdr.orig_zone2;
+            remote_point = pkthdr.orig_point;
+         }
+      }
 
-	status_line (" End of inbound file attaches");
-	CLEAR_INBOUND();
-	return (0);
+      if (get_bbs_record (remote_zone, remote_net, remote_node, remote_point)) {
+         strcpy (remote_password, nodelist.password);
+         sprintf (req, "%u:%u/%u.%u, %s, %s, %s", remote_zone, remote_net, remote_node, remote_point, nodelist.sysop, nodelist.name, nodelist.city);
+         if (strlen (req) > 78)
+            req[78] = '\0';
+         wcenters (0, LGREY|_BLACK, req);
+         wcenters (2, LGREY|_BLACK, "AKAs: No aka presented");
+         status_line("%s: %s (%u:%u/%u)",msgtxt[M_REMOTE_SYSTEM],nodelist.name,remote_zone,remote_net,remote_node);
+         if (config->know_filepath[0])
+            filepath = config->know_filepath;
+         if (config->know_okfile[0])
+            request_list = config->know_okfile;
+         max_requests = config->know_max_requests;
+         max_kbytes = config->know_max_kbytes;
+      }
+      else {
+         remote_password[0] = '\0';
+         sprintf (req, "%u:%u/%u.%u, %s", remote_zone, remote_net, remote_node, remote_point, msgtxt[M_UNKNOWN_MAILER]);
+         if (strlen (req) > 78)
+            req[78] = '\0';
+         wcenters (0, LGREY|_BLACK, req);
+         wcenters (2, LGREY|_BLACK, "AKAs: No aka presented");
+         status_line("%s: %s (%u:%u/%u)",msgtxt[M_REMOTE_SYSTEM],msgtxt[M_UNKNOWN_MAILER],remote_zone,remote_net,remote_node);
+      }
+      sprintf (req, "Connected at %u baud with %s", rate, prodcode[pkthdr.product]);
+      wcenters (1, LGREY|_BLACK, req);
+      if (remote_password[0] && stricmp (remote_password, pkthdr.password)) {
+         status_line ("!Password Error: expected '%s' got '%s'",remote_password, pkthdr.password);
+         strcpy (fname1, fname);
+         j = strlen (fname) - 3;
+         strcpy (&(fname[j]), "Bad");
+         if (rename (fname1, fname))
+            status_line (msgtxt[M_CANT_RENAME_MAIL], fname1);
+         else
+            status_line (msgtxt[M_MAIL_PACKET_RENAMED], fname);
+         return (1);
+      }
+      else {
+         status_line (msgtxt[M_PROTECTED_SESSION]);
+         if (config->prot_filepath[0])
+            filepath = config->prot_filepath;
+         if (config->prot_okfile[0])
+            request_list = config->prot_okfile;
+         max_requests = config->prot_max_requests;
+         max_kbytes = config->prot_max_kbytes;
+      }
+   }
+
+   called_zone = remote_zone;
+   if (remote_point) {
+      called_net = config->alias[assumed].fakenet;
+      called_node = remote_point;
+   }
+   else {
+      called_net = remote_net;
+      called_node = remote_node;
+   }
+
+   done = 0;
+   status_line (" Inbound file attaches");
+   do {
+      if ((i = try_sealink ()) == 0) {
+         if (!recvmdm7 (fname))
+            done = 1;
+         else {
+            if (!receive (filepath, fname, 'T'))
+               done = 1;
+            else
+               got_arcmail = 1;
+         }
+      }
+      else {
+         if (i == 1) {
+            if (!receive (filepath, NULL, 'F'))
+               done = 1;
+            else
+               got_arcmail = 1;
+         }
+         else
+            done = 1;
+      }
+   } while (!done && CARRIER);
+
+   status_line (" End of inbound file attaches");
+   CLEAR_INBOUND();
+   return (0);
 }
 
 static int SEA_sendreq ()
@@ -766,7 +1135,7 @@ static int SEA_sendreq ()
 static int SEA_recvreq ()
 {
 	int done, i, j, recno, retval, nfiles, nfiles1, w_event;
-        char p, reqs[64], req[64], *n_frproc();
+        char p, reqs[64], req[64];
 	long t1;
 
 	w_event = -1;
@@ -956,7 +1325,6 @@ int *recno;
 {
 	char *q, *q1;
 	struct stat  st;
-	char *n_frproc();
 	char buf[32];
         char *rqname;
 	long fsecs;
@@ -988,7 +1356,7 @@ int *recno;
 	}
 
 	for(;;) {
-		if((rqname = n_frproc(buf,recno,(fsecs == 0)?0:1)) != NULL) {
+                if ((rqname = n_frproc (buf, recno, (fsecs == 0) ? 0 : 1)) != NULL) {
 			if(!stat(rqname,&st)) {
 				if(st.st_atime - timezone <= fsecs)
 					continue;

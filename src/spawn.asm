@@ -1,5 +1,5 @@
 ;
-;	--- Version 3.1 91-08-19 17:48 ---
+;	--- Version 3.2 91-09-05 14:47 ---
 ;
 ;	SPAWN.ASM - Main function for memory swapping spawn call.
 ;
@@ -10,7 +10,7 @@
 ;		D-1000 Berlin 21
 ;		Germany
 ;
-;>e
+;
 ; Assemble with
 ;
 ; tasm  /DPASCAL spawn,spawnp  		- Turbo Pascal (Tasm only), near
@@ -114,7 +114,7 @@
 ;	A negative integer on failure:
 ;		-1 - Couldn't allocate swap space
 ;		-2 - The spawn module is located too low in memory
-;<
+;
 ;
 	IFDEF	PASCAL
 	.model	tpascal
@@ -143,8 +143,11 @@ ptrsize	=	@DataSize
 ;
 	public	do_spawn
 	public	prep_swap
+	IFNDEF	PASCAL
+	public	swap_prep
+	ENDIF
 ;
-;>e
+;
 ;	Set NO_INHERIT to 0 if you don't want do_exec to mess with
 ;	the handle table in the PSP, and/or you do want the child process
 ;	to inherit all open files.
@@ -154,41 +157,29 @@ ptrsize	=	@DataSize
 ;	messing with any open handles.
 ;
 ;	Set REDIRECT to 0 if you do not want do_spawn to support redirection.
-;<
+;
 ;
 NO_INHERIT	=	1
-REDIRECT	=	1
+REDIRECT        =       0
 ;
 ;
-stacklen	=	256		;e local stack
-					;d Lokaler Stack
+stacklen        =       512             ; local stack
 ;
-;e	"ems_size" is the EMS block size: 16k.
-;d	"ems_size" ist die EMS-Blockgrî·e: 16k.
+;	"ems_size" is the EMS block size: 16k.
 ;
-ems_size	=	16 * 1024	;e EMS block size
-					;d EMS-Seiten-Grî·e
-ems_parasize	=	ems_size / 16	;e same in paragraphs
-					;d desgleichen in Paragraphen
-ems_shift	=	10		;e shift factor for paragraphs
-					;d Schiebefaktor fÅr Paragraphen
-ems_paramask	=	ems_parasize-1	;e block mask
-					;d Maske fÅr Paragraphen
+ems_size	=	16 * 1024	; EMS block size
+ems_parasize	=	ems_size / 16	; same in paragraphs
+ems_shift	=	10		; shift factor for paragraphs
+ems_paramask	=	ems_parasize-1	; block mask
 ;
-;e	"xms_size" is the unit of measurement for XMS: 1k
-;d	"xms_size" ist die Blockgrî·e fÅr XMS: 1k
+;	"xms_size" is the unit of measurement for XMS: 1k
 ;
-xms_size	=	1024		;e XMS block size
-					;d XMS-Block-Grî·e
-xms_parasize	=	xms_size / 16	;e same in paragraphs
-					;d desgleichen in Paragraphen
-xms_shift	=	6		;e shift factor for paragraphs
-					;d Schiebefaktor fÅr Paragraphen
-xms_paramask	=	xms_parasize-1	;e block mask
-					;d Maske fÅr Paragraphen
+xms_size	=	1024		; XMS block size
+xms_parasize	=	xms_size / 16	; same in paragraphs
+xms_shift	=	6		; shift factor for paragraphs
+xms_paramask	=	xms_parasize-1	; block mask
 ;
-;e	Method flags
-;d	Auslagerungsmethoden-Flags
+;	Method flags
 ;
 USE_EMS		=	01h
 USE_XMS		=	02h
@@ -200,8 +191,7 @@ NO_PREALLOC	=	100h
 CHECK_NET	=	200h
 DONT_SWAP_ENV	=	4000h
 ;
-;e	Return codes
-;d	Resultatcodes
+;	Return codes
 ;
 RC_TOOLOW	=	0102h
 RC_BADPREP	=	0500h
@@ -211,100 +201,70 @@ RC_REDIRFAIL	=	0600h
 ;
 EMM_INT		=	67h
 ;
-;e	The EXEC function parameter block
-;d	Der Parameterblock fÅr die EXEC-Funktion
+;	The EXEC function parameter block
 ;
 exec_block	struc
-envseg	dw	?		;e environment segment
-				;d Segmentadresse Umgebungsvariablenblock
-ppar	dw	?		;e program parameter string offset
-				;d Programmparameterstring Offset
-pparseg	dw	?		;e program parameter string segment
-				;d Programmparameterstring Segment
+envseg	dw	?		; environment segment
+ppar	dw	?		; program parameter string offset
+pparseg	dw	?		; program parameter string segment
 fcb1	dw	?		; FCB offset
 fcb1seg	dw	?		; FCB segment
 fcb2	dw	?		; FCB offset
 fcb2seg	dw	?		; FCB segment
 exec_block	ends
 ;
-;e	Structure of an XMS move control block
-;d	Struktur eines XMS move Kontrollblocks
+;	Structure of an XMS move control block
 ;
 xms_control	struc
-lenlo		dw	?	;e length to move (doubleword)
-				;d LÑnge fÅr Move (Doppelwort)
+lenlo		dw	?	; length to move (doubleword)
 lenhi		dw	?
-srchnd		dw	?	;e source handle (0 for standard memory)
-				;d Quell-Handle (0 fÅr Standardspeicher)
-srclo		dw	?	;e source address (doubleword or seg:off)
-				;d Quell-Adresse (Doppelwort oder seg:off)
+srchnd		dw	?	; source handle (0 for standard memory)
+srclo		dw	?	; source address (doubleword or seg:off)
 srchi		dw	?
-desthnd		dw	?	;e destination handle (0 for standard memory)
-				;d Ziel-Handle (0 fÅr Standardspeicher)
-destlo		dw	?	;e destination address (doubleword or seg:off)
-				;d Ziel-Adresse (Doppelwort oder seg:off)
+desthnd		dw	?	; destination handle (0 for standard memory)
+destlo		dw	?	; destination address (doubleword or seg:off)
 desthi		dw	?
 xms_control	ends
 ;
-;e	The structure of the start of an MCB (memory control block)
-;d	Die Struktur des Beginns eines MCB (Speicher-Kontrollblock)
+;	The structure of the start of an MCB (memory control block)
 ;
 mcb		struc
 id		db	?
 owner		dw	?
 paras		dw	?
 mcb		ends
-;>e
+;
 ;	The structure of an internal MCB descriptor.
 ;	CAUTION: This structure is assumed to be no larger than 16 bytes
 ;	in several places in the code, and to be exactly 16 bytes when
 ;	swapping in from file. Be careful when changing this structure.
-;<
+;
 mcbdesc		struc
-addr		dw	?	;e paragraph address of the MCB
-				;d Paragraph-Adresse des MCB
-msize		dw	?	;e size in paragraphs (excluding header)
-				;d Grî·e in Paragraphen (Ausschlie·lich Header)
-swoffset	dw	?	;e swap offset (0 in all blocks except first)
-				;d Auslagerungs-Offset (0 in allen Blîcken 
-				;d au·er dem ersten)
-swsize		dw	?	;e swap size (= msize + 1 except in first)
-				;d Auslagerungsgrî·e (= msize + 1 au·er
-				;d im ersten Block)
-num_follow	dw	?	;e number of following MCBs
-				;d Zahl der folgenden MCBs
-		dw	3 dup(?) ;e pad to paragraph (16 bytes)
-				 ;d AuffÅllen auf Paragraphen (16 Bytes)
+addr		dw	?	; paragraph address of the MCB
+msize		dw	?	; size in paragraphs (excluding header)
+swoffset	dw	?	; swap offset (0 in all blocks except first)
+swsize		dw	?	; swap size (= msize + 1 except in first)
+num_follow	dw	?	; number of following MCBs
+		dw	3 dup(?) ; pad to paragraph (16 bytes)
 mcbdesc		ends
 ;
-;e	The variable block set up by prep_swap
-;d	Der Variablenblock der durch prep_swap initialisiert wird
+;	The variable block set up by prep_swap
 ;
 prep_block	struc
-xmm		dd	?		;e XMM entry address
-					;d Einsprungadresse XMM
-first_mcb	dw	?		;e Segment of first MCB
-					;d Segment des ersten MCB
-psp_mcb		dw	?		;e Segment of MCB of our PSP
-					;d Segment des MCB unseres PSP
-env_mcb		dw	?		;e MCB of Environment segment
-					;d MCB des Umgebungsvariablenblocks
-noswap_mcb	dw	?		;e MCB that may not be swapped
-					;d MCB der nicht Ausgelagert wird
-ems_pageframe	dw	?		;e EMS page frame address
-					;d EMS-Seiten-Adresse
-handle		dw	?		;e EMS/XMS/File handle
-					;d Handle fÅr EMS/XMS/Datei
-total_mcbs	dw	?		;e Total number of MCBs
-					;d Gesamtzahl MCBs
-swapmethod	db	?		;e Method for swapping
-					;d Auslagerungsmethode
-swapfilename	db	81 dup(?)	;e Swap file name if swapping to file
-					;d Auslagerungsdateiname
+xmm		dd	?		; XMM entry address
+first_mcb	dw	?		; Segment of first MCB
+psp_mcb		dw	?		; Segment of MCB of our PSP
+env_mcb		dw	?		; MCB of Environment segment
+noswap_mcb	dw	?		; MCB that may not be swapped
+ems_pageframe	dw	?		; EMS page frame address
+handle		dw	?		; EMS/XMS/File handle
+total_mcbs	dw	?		; Total number of MCBs
+swapmethod	db	?		; Method for swapping
+swapfilename	db	81 dup(?)	; Swap file name if swapping to file
 prep_block	ends
 ;
 ;----------------------------------------------------------------------
-;>e
+;
 ;	Since we'll be moving code and data around in memory,
 ;	we can't address locations in the resident block with
 ;	normal address expressions. MASM does not support
@@ -317,12 +277,12 @@ prep_block	ends
 ;	are made through DS, so we define a text macro "lmem" that 
 ;	expands to "ds:". When setting up low core from the normal
 ;	code, ES is used to address low memory, so this can't be used.
-;<
+;
 lmem	equ	<ds:>
-;>e
+;
 ;	The memory structure for the shrunk-down code, excluding the
 ;	code itself. The code follows this block.
-;<
+;
 parseg		struc
 		db	18h dup(?)
 psp_handletab	db	20 dup(?)
@@ -331,56 +291,37 @@ psp_envptr	dw	?
 psp_handlenum	dw	?
 psp_handleptro	dw	?
 psp_handleptrs	dw	?
-		db	5ch-38h dup(?)	;e start after PSP
-					;d Start nach PSP
+		db	5ch-38h dup(?)	; start after PSP
 ;
-save_ss		dw	?		;e 5C - saved global ss
-					;d 5C - Sicherung globales SS
-save_sp		dw	?		;e 5E - saved global sp
-					;d 5E - Sicherung globaler SP
-xfcb1		db	16 dup(?)	;e 60..6F - default FCB
-					;d 60..6F - Standard-FCB
-xfcb2		db	16 dup(?)	;e 70..7F - default FCB
-					;d 70..7f - Standard-FCB
-zero		dw	?		;e 80 Zero command tail length (dummy)
-					;d 80 Null-Kommandozeile (Dummy)
+save_ss		dw	?		; 5C - saved global ss
+save_sp		dw	?		; 5E - saved global sp
+xfcb1		db	16 dup(?)	; 60..6F - default FCB
+xfcb2		db	16 dup(?)	; 70..7F - default FCB
+zero		dw	?		; 80 Zero command tail length (dummy)
 ;
 expar		db	TYPE exec_block dup (?) ; exec-parameter-block
-spx		dw	?		;e saved local sp
-					;d Sicherung lokaler SP
-div0_off	dw	?		;e divide by zero vector save
-					;d Sicherung divide-by-zero Vektor
+spx		dw	?		; saved local sp
+div0_off	dw	?		; divide by zero vector save
 div0_seg	dw	?
 		IF	NO_INHERIT
-lhandlesave	db	26 dup(?)	;e saved handle table and pointer
-					;d Sicherung Handle-Tabelle und Pointer
+lhandlesave	db	26 dup(?)	; saved handle table and pointer
 		IF	REDIRECT
-lredirsav	db	6 dup(?)	;e saved redirection handles
-					;d Sicherung Umleitungs-Handles
+lredirsav	db	6 dup(?)	; saved redirection handles
 		ENDIF
 		ENDIF
 		IF	REDIRECT
-lstdinsav	dw	3 dup(?)	;e duped redirection handles
-					;d Umleitungs-Handles aus 'dup'
+lstdinsav	dw	3 dup(?)	; duped redirection handles
 		ENDIF
-filename	db	82 dup(?)	;e exec filename
-					;d EXEC-Dateiname
-progpars	db	128 dup(?)	;e command tail
-					;d Kommandozeile
-		db	stacklen dup(?)	;e local stack space
-					;d Lokaler Stackbereich
+filename	db	82 dup(?)	; exec filename
+progpars	db	128 dup(?)	; command tail
+		db	stacklen dup(?)	; local stack space
 mystack		db	?
-lprep		db	TYPE prep_block dup(?)	;e the swapping variables
-						;d die Auslagerungsvariablen
-lcurrdesc	db	TYPE mcbdesc dup(?)	;e the current MCB descriptor
-						;d Descriptor aktueller MCB
+lprep		db	TYPE prep_block dup(?)	; the swapping variables
+lcurrdesc	db	TYPE mcbdesc dup(?)	; the current MCB descriptor
 lxmsctl		db	TYPE xms_control dup(?)
-eretcode	dw	?		;e EXEC return code
-					;d Resultatcode EXEC
-retflags	dw	?		;e EXEC return flags
-					;d Resultatflags EXEC
-cgetmcb		dw	?		;e address of get_mcb
-					;d Adresse von get_mcb
+eretcode	dw	?		; EXEC return code
+retflags	dw	?		; EXEC return flags
+cgetmcb		dw	?		; address of get_mcb
 ;
 parseg	ends
 ;
@@ -392,7 +333,7 @@ codebeg		=	param_len
 ;------------------------------------------------------------------------
 ;
 lowcode_begin:
-;>e
+;
 ;       The following parts of the program code will be moved to
 ;	low core and executed there, so there must be no absolute 
 ;	memory references.
@@ -411,7 +352,7 @@ lowcode_begin:
 ;
 ;	Uses 	AX, BX, CX, ES
 ;	Modifies lprep.first_mcb
-;<
+;
 get_mcb	proc	near
 ;
 	mov	ax,lmem lprep.first_mcb
@@ -420,149 +361,105 @@ get_mcb	proc	near
 getmcb_loop:
 	mov	es,ax
 	cmp	ax,bx
-	ja	gmcb_abort		;e halt if MCB > wanted
-					;d Abbrechen wenn MCB > gewÅnschtem
-	je	mcb_found		;e jump if same addr as wanted
-					;d jump wenn Adresse gleich gewÅnschter
-	add	ax,es:paras		;e last addr
-					;d Letze Adresse
+	ja	gmcb_abort		; halt if MCB > wanted
+	je	mcb_found		; jump if same addr as wanted
+	add	ax,es:paras		; last addr
 	inc	ax			; next mcb
 	cmp	ax,bx
-	jbe	getmcb_loop		;e Loop if next <= wanted
-					;d Nochmal wenn nÑchster <= gewÅnschter
+	jbe	getmcb_loop		; Loop if next <= wanted
 ;
-;>e
+;
 ;	The wanted MCB starts within the current MCB. We now have to
 ;	create a new MCB at the wanted position, which is initially
 ;	free, and shorten the current MCB to reflect the reduced size.
-;<
+;
 	cmp	es:owner,0
-	jne	gmcb_abort		;e halt if not free
-					;d Abbruch wenn nicht frei
-	mov	bx,es			;e current
-					;d laufender
-	inc	bx			;e + 1 (header doesn't count)
-					;d + 1 (Header zÑhlt nicht)
+	jne	gmcb_abort		; halt if not free
+	mov	bx,es			; current
+	inc	bx			; + 1 (header doesn't count)
 	mov	ax,lmem lcurrdesc.addr
-	sub	ax,bx			;e paragraphs between MCB and wanted
-					;d Paragraphen zwischen MCB 
-					;d und gewÅnschtem
-	mov	bx,es:paras		;e paras in current MCB
-					;d Paragraphen in laufendem MCB
-	sub	bx,ax			;e remaining paras
-					;d Restliche Paragraphen
-	dec	bx			;e -1 for header
-					;d -1 fÅr Header
-	mov	es:paras,ax		;e set new size for current
-					;d neue Grî·e fÅr laufenden Setzen
-	mov	cl,es:id		;e old id
-					;d Alte ID
-	mov	es:id,4dh		;e set id: there is a next
-					;d Setze ID: es gibt einen nÑchsten
+	sub	ax,bx			; paragraphs between MCB and wanted
+	mov	bx,es:paras		; paras in current MCB
+	sub	bx,ax			; remaining paras
+	dec	bx			; -1 for header
+	mov	es:paras,ax		; set new size for current
+	mov	cl,es:id		; old id
+	mov	es:id,4dh		; set id: there is a next
 	mov	ax,lmem lcurrdesc.addr
 	mov	es,ax
-	mov	es:id,cl		;e and init to free
-					;d und initialisiere auf Frei
+	mov	es:id,cl		; and init to free
 	mov	es:owner,0
 	mov	es:paras,bx
-;>e
+;
 ;	We have found an MCB at the right address. If it's not free,
 ;	abort. Else check the size. If the size is ok, we're done 
 ;	(more or less).
-;<
+;
 mcb_found:
 	mov	es,ax
 	cmp	es:owner,0
-	je	mcb_check		;e continue if free
-					;d weiter wenn Frei
+	je	mcb_check		; continue if free
 ;
 gmcb_abort:
 	stc
 	ret
 ;
 mcb_check:
-	mov	ax,es:paras		;e size
-					;d Grî·e
-	cmp	ax,lmem lcurrdesc.msize	;e needed size
-					;d gewÅnschte Grî·e
-	jae	mcb_ok			;e ok if enough space
-					;d OK wenn genug Platz
-;>e
+	mov	ax,es:paras		; size
+	cmp	ax,lmem lcurrdesc.msize	; needed size
+	jae	mcb_ok			; ok if enough space
+;
 ;	If there's not enough room in this MCB, check if the next
 ;	MCB is free, too. If so, coalesce both MCB's and check again.
-;<
+;
 	cmp	es:id,4dh
-	jnz	gmcb_abort		;e halt if no next
-					;d Abbruch wenn kein nÑchster
-	push	es			;e save current
-					;d Laufenden sichern
+	jnz	gmcb_abort		; halt if no next
+	push	es			; save current
 	mov	bx,es
 	add	ax,bx
-	inc	ax			;e next MCB
-					;d nÑchter MCB
+	inc	ax			; next MCB
 	mov	es,ax
-	cmp	es:owner,0		;e next free ?
-					;d ist der nÑchste frei?
-	jne	gmcb_abort		;e halt if not
-					;d Abbruch wenn nein
-	mov	ax,es:paras		;e else load size
-					;d sonst Grî·e laden
-	inc	ax			;e + 1 for header
-					;d + 1 fÅr Header
-	mov	cl,es:id		;e and load ID
-					;d und ID laden
-	pop	es			;e back to last MCB
-					;d zurÅck zum letzten MCB
-	add	es:paras,ax		;e increase size
-					;d Grî·e erhîhen
-	mov	es:id,cl		;e and store ID
-					;d und ID abspeichern
-	jmp	mcb_check		;e now try again
-					;d nochmal versuchen
-;>e
+	cmp	es:owner,0		; next free ?
+	jne	gmcb_abort		; halt if not
+	mov	ax,es:paras		; else load size
+	inc	ax			; + 1 for header
+	mov	cl,es:id		; and load ID
+	pop	es			; back to last MCB
+	add	es:paras,ax		; increase size
+	mov	es:id,cl		; and store ID
+	jmp	mcb_check		; now try again
+;
 ;	The MCB is free and large enough. If it's larger than the
 ;	wanted size, create another MCB after the wanted.
-;<
+;
 mcb_ok:
 	mov	bx,es:paras
 	sub	bx,lmem lcurrdesc.msize
-	jz	mcb_no_next		;e ok, no next to create
-					;d OK, kein neuer einzurichten
+	jz	mcb_no_next		; ok, no next to create
 	push	es
-	dec	bx			;e size of next block
-					;d Grî·e des nÑchsten Blocks
+	dec	bx			; size of next block
 	mov	ax,es
 	add	ax,lmem lcurrdesc.msize
-	inc	ax			;e next MCB addr
-					;d Adresse des nÑchsten MCB
-	mov	cl,es:id		;e id of this block
-					;d ID dieses Blocks
-	mov	es,ax			;e address next
-					;d nÑchsten adressieren
-	mov	es:id,cl		;e store id
-					;d ID abspeichern
-	mov	es:paras,bx		;e store size
-					;d Grî·e abspeichern
-	mov	es:owner,0		;e and mark as free
-					;d und als frei markieren
-	pop	es			;e back to old MCB
-					;d zurÅck zum alten MCB
-	mov	es:id,4dh		;e mark next block present
-					;d markieren da· weiterer existiert
-	mov	ax,lmem lcurrdesc.msize	;e and set size to wanted
-					;d und Grî·e auf gewÅnschte setzen
+	inc	ax			; next MCB addr
+	mov	cl,es:id		; id of this block
+	mov	es,ax			; address next
+	mov	es:id,cl		; store id
+	mov	es:paras,bx		; store size
+	mov	es:owner,0		; and mark as free
+	pop	es			; back to old MCB
+	mov	es:id,4dh		; mark next block present
+	mov	ax,lmem lcurrdesc.msize	; and set size to wanted
 	mov	es:paras,ax
 ;
 mcb_no_next:
-	mov	es:owner,cx		;e set owner to current PSP
-					;d owner auf laufenden PSP setzen
-;>e
+	mov	es:owner,cx		; set owner to current PSP
+;
 ;	Set the 'first_mcb' pointer to the current one, so we don't
 ;	walk through all the previous blocks the next time.
 ;	Also, check if the block we just allocated is the environment
 ;	segment of the program. If so, restore the environment pointer
 ;	in the PSP.
-;<
+;
 	mov	ax,es
 	mov	lmem lprep.first_mcb,ax
 	cmp	lmem lprep.env_mcb,ax
@@ -572,8 +469,7 @@ mcb_no_next:
 ;
 getmcb_finis:
 	clc
-	ret				;e all finished (whew!)
-					;d endlich geschafft
+	ret				; all finished (whew!)
 ;
 get_mcb	endp
 ;
@@ -581,7 +477,7 @@ get_mcb	endp
 ireti:
 	iret
 ;
-;>e
+;
 ;	The actual EXEC call.
 ;	Registers on entry:
 ;		BX	= paragraphs to keep (0 if no swap)
@@ -592,7 +488,7 @@ ireti:
 ;
 ;
 ;	copy environment buffer down if present
-;<
+;
 doexec:
 	jcxz	noenvcpy
 	rep movsw
@@ -603,15 +499,14 @@ noenvcpy:
 	or	bx,bx
 	jz	no_shrink
 ;
-;e	first, shrink the base memory block down.
-;d	Zuerst den Basisblock reduzieren.
+;	first, shrink the base memory block down.
 ;
         mov	ah,04ah
 	int     21h                     ; resize memory block
-;>e
+;
 ;	Again walk all MCBs. This time, all blocks owned by the 
 ;	current process are released.
-;<
+;
 	mov	si,lmem lprep.first_mcb
 	or	si,si
 	jz	no_shrink
@@ -622,39 +517,29 @@ noenvcpy:
 ;
 free_loop:
 	cmp	si,dx
-	je	free_next		;e don't free base block
-					;d Basisblock nicht freigeben
+	je	free_next		; don't free base block
 	cmp	si,di
 	je	free_next
 	mov	es,si
-	cmp	bx,es:owner		;e our process?
-					;d unser Proze·?
-	jne	free_next		;e next if not
-					;d nÑchsten wenn nein
-	cmp	si,lmem lprep.env_mcb	;e is this the environment block?
-					;d ist dies der Umgebungsvariablenblock?
+	cmp	bx,es:owner		; our process?
+	jne	free_next		; next if not
+	cmp	si,lmem lprep.env_mcb	; is this the environment block?
 	jne	free_noenv
-	mov	ds:psp_envptr,0		;e else clear PSP pointer
-					;d sonst PSP-pointer lîschen
+	mov	ds:psp_envptr,0		; else clear PSP pointer
 ;
 free_noenv:
 	inc	si
 	mov	es,si
 	dec	si
-	mov	ah,049h			;e free memory block
-					;d Speicher freigeben
+	mov	ah,049h			; free memory block
 	int	21h
 ;
 free_next:
 	mov	es,si
-	cmp	es:id,4dh		;e normal block?
-					;d Normaler Block?
-	jne	free_ready		;e ready if end of chain
-					;d Fertig wenn Ende der Kette
-	add	si,es:paras		;e start + length
-					;d Beginn + LÑnge
-	inc	si			;e next MCB
-					;d NÑchster MCB
+	cmp	es:id,4dh		; normal block?
+	jne	free_ready		; ready if end of chain
+	add	si,es:paras		; start + length
+	inc	si			; next MCB
 	jmp	free_loop
 ;
 free_ready:
@@ -662,30 +547,28 @@ free_ready:
 	mov	es,ax
 ;
 no_shrink:
-	mov	dx,filename		;e params for exec
-					;d Parameter fÅr EXEC
+	mov	dx,filename		; params for exec
 	mov	bx,expar
 	mov	ax,04b00h
 	int	21h			; exec
-;>e
+;
 ;	Return from EXEC system call. Don't count on any register except
 ;	CS to be restored (DOS 2.11 and previous versions killed all regs).
-;<
+;
 	mov	bx,cs
 	mov	ds,bx
 	mov	es,bx
+	cli
 	mov	ss,bx
 	mov	sp,lmem spx
+	sti
 	cld
-	mov	lmem eretcode,ax	;e save return code
-					;d Resultatcode sichern
+	mov	lmem eretcode,ax	; save return code
 	pushf
 	pop	bx
-	mov	lmem retflags,bx	;e and returned flags
-					;d und die gelieferten Flags
+	mov	lmem retflags,bx	; and returned flags
 ;
-;e	Cancel Redirection
-;d	Dateiumleitung aufheben
+;	Cancel Redirection
 ;
 	IF	REDIRECT
 	IF	NO_INHERIT
@@ -711,8 +594,7 @@ lredclosenext:
 	jb	lredirclose
 	ENDIF
 ;
-;e	restore handle table and pointer
-;d	Wiederherstellen Handle-Tabelle und Pointer
+;	restore handle table and pointer
 ;
 	IF	NO_INHERIT
 	mov	si,lhandlesave
@@ -732,10 +614,8 @@ lredclosenext:
 ;	Terminate.
 ;
 	test	lmem retflags,1		; carry?
-	jnz	exec_term		;e use EXEc retcode if set
-					;d Resultat von EXEC liefern wenn ja
-	mov	ah,4dh			;e else get program return code
-					;d Sonst Resultat von Programm holen
+	jnz	exec_term		; use EXEc retcode if set
+	mov	ah,4dh			; else get program return code
 	int	21h
 ;
 exec_term:
@@ -749,18 +629,15 @@ exec_expand:
 	int	21h
 	jnc	exec_memok
 	mov	ax,4cffh
-	int	21h			;e terminate on error
-					;d Abbrechen bei Fehler
+	int	21h			; terminate on error
 ;
-;e	Swap memory back
-;d	ZurÅcklesen Speicher
+;	Swap memory back
 ;
 	nop
 ;
 exec_memok:
 ;
-;e	FALL THROUGH to the appropriate swap-in routine
-;d	Weiter in der passenden Einlagerungsroutine
+;	FALL THROUGH to the appropriate swap-in routine
 ;
 ;
 getmcboff	=	offset get_mcb - offset lowcode_begin
@@ -769,7 +646,7 @@ doexec_entry	=	offset doexec - offset lowcode_begin
 base_length	=	offset $ - offset lowcode_begin
 ;
 ;-----------------------------------------------------------------------
-;>e
+;
 ;	The various swap in routines follow. Only one of the routines
 ;	is copied to low memory.
 ;	Note that the routines are never actually called, the EXEC return
@@ -781,7 +658,7 @@ base_length	=	offset $ - offset lowcode_begin
 ;
 ;
 ;	swapin_ems:	swap in from EMS.
-;<
+;
 swapin_ems	proc	far
 ;
 	xor	bx,bx
@@ -790,88 +667,60 @@ swapin_ems	proc	far
 ;
 swinems_main:
 	push	ds
-	mov	cx,lmem lcurrdesc.swsize	;e block length in paras
-						;d BlocklÑnge in Paragraphen
-	mov	di,lmem lcurrdesc.swoffset	;e swap offset
-						;d Lese-Offset
-	mov	es,lmem lcurrdesc.addr		;e segment to swap
-						;d Lese-Segment
+	mov	cx,lmem lcurrdesc.swsize	; block length in paras
+	mov	di,lmem lcurrdesc.swoffset	; swap offset
+	mov	es,lmem lcurrdesc.addr		; segment to swap
 	mov	ds,lmem lprep.ems_pageframe	; page frame address
 ;
-	mov	ax,ems_parasize		;e max length
-					;d Maximale LÑnge
-	sub	ax,si			;e minus current offset
-					;d Minus laufender Offset
-	jnz	swinems_ok		;e go copy if nonzero
-					;d Kopieren wenn nicht 0
+	mov	ax,ems_parasize		; max length
+	sub	ax,si			; minus current offset
+	jnz	swinems_ok		; go copy if nonzero
 ;
 swinems_loop:
-	mov	ax,4400h		;e map in next page
-					;d NÑchste EMS-Page einmappen
+	mov	ax,4400h		; map in next page
 	int	EMM_INT
 	or	ah,ah
 	jnz	swinems_error
-	mov	si,0			;e reset offset
-					;d Offset zurÅcksetzen
-	inc	bx			;e bump up page number
-					;d Seitennummer erhîhen
-	mov	ax,ems_parasize		;e max length to copy
-					;d Maximale LÑnge
+	mov	si,0			; reset offset
+	inc	bx			; bump up page number
+	mov	ax,ems_parasize		; max length to copy
 ;
 swinems_ok:
-	cmp	ax,cx			;e length to copy
-					;d zu kopierende LÑnge
-	jbe	swinems_doit		;e go do it if <= total length
-					;d kopieren wenn <= GesamtlÑnge
-	mov	ax,cx			;e else use total length
-					;d sonst GesamtlÑnge kopieren
+	cmp	ax,cx			; length to copy
+	jbe	swinems_doit		; go do it if <= total length
+	mov	ax,cx			; else use total length
 ;
 swinems_doit:
-	sub	cx,ax			;e subtract copy length from total
-					;d GesamtlÑnge -= kopierte LÑnge
-	push	cx			;e and save
-					;d sichern
-	push	ax			;e save the copy length in paras
-					;d Sichern KopierlÑnge in Paragraphen
+	sub	cx,ax			; subtract copy length from total
+	push	cx			; and save
+	push	ax			; save the copy length in paras
 	push	si
 	push	di
 	mov	cl,3
-	shl	ax,cl			;e convert to number of words (!)
-					;d Konvertieren in Anzahl Worte (!)
+	shl	ax,cl			; convert to number of words (!)
 	inc	cl
-	shl	si,cl			;e convert to byte address
-					;d In Byte-Adresse konvertieren
+	shl	si,cl			; convert to byte address
 	mov	cx,ax
 	rep movsw
 	pop	di
 	pop	si
-	pop	cx			;e copy length in paras
-					;d KopierlÑnge in Paragraphen
+	pop	cx			; copy length in paras
 	mov	ax,es
-	add	ax,cx			;e add copy length to dest segment
-					;d KopierlÑnge auf Zielsegment
-	add	si,cx			;e and EMS page offset
-					;d und EMS-Seiten-Offset addieren
+	add	ax,cx			; add copy length to dest segment
+	add	si,cx			; and EMS page offset
 	mov	es,ax
-	pop	cx			;e remaining length
-					;d RestlÑnge
-	or	cx,cx			;e did we copy everything?
-					;d Alles kopiert?
-	jnz	swinems_loop		;e go loop if not
-					;d Nochmal wenn nein
+	pop	cx			; remaining length
+	or	cx,cx			; did we copy everything?
+	jnz	swinems_loop		; go loop if not
 ;
 	pop	ds
-	cmp	lmem lcurrdesc.num_follow,0	;e another MCB?
-						;d noch ein MCB?
-	je	swinems_complete	;e exit if not
-					;d Fertig wenn nein
+	cmp	lmem lcurrdesc.num_follow,0	; another MCB?
+	je	swinems_complete	; exit if not
 ;
-;e	Another MCB follows, read next mcb descriptor into currdesc
-;d	Ein weiterer MCB folgt, lesen MCB Deskriptor nach currdesc
+;	Another MCB follows, read next mcb descriptor into currdesc
 ;
 	cmp	si,ems_parasize
-	jb	swinems_nonewpage	;e no new block needed
-					;d kein neuer Block nîtig
+	jb	swinems_nonewpage	; no new block needed
 	mov	ax,4400h		; map page, phys = 0
 	int	EMM_INT
 	or	ah,ah
@@ -886,15 +735,13 @@ swinems_nonewpage:
 	mov	es,ax
 	mov	ds,lmem lprep.ems_pageframe	; page frame address
 	mov	cl,4
-	shl	si,cl			;e convert to byte address
-					;d in Byte-Adresse konvertieren
+	shl	si,cl			; convert to byte address
 	mov	cx,TYPE mcbdesc
 	mov	di,lcurrdesc
 	rep movsb
 	pop	ds
 	pop	si
-	inc	si			;e one paragraph
-					;d Einen Paragraphen
+	inc	si			; one paragraph
 ;
 	push	bx
 	call	lmem cgetmcb
@@ -903,16 +750,14 @@ swinems_nonewpage:
 	jmp	swinems_main
 ;
 swinems_complete:
-	mov	ah,45h			;e release EMS pages
-					;d Freigeben EMS-Speicher
+	mov	ah,45h			; release EMS pages
 	int	EMM_INT
 	ret
 ;
 swinems_error:
 	pop	ds
 swinems_error1:
-	mov	ah,45h			;e release EMS pages on error
-					;d Bei Fehler EMS freigeben
+	mov	ah,45h			; release EMS pages on error
 	int	EMM_INT
 	mov	ax,4cffh
 	int	21h			; terminate
@@ -922,51 +767,40 @@ swapin_ems	endp
 swinems_length	= offset $ - offset swapin_ems
 ;
 ;
-;e	swapin_xms:	swap in from XMS.
-;d	swapin_xms:	Wiederherstellen von XMS.
+;	swapin_xms:	swap in from XMS.
 ;
 swapin_xms	proc	far
 ;
 	mov	ax,lmem lprep.handle	; XMS handle
-	mov	lmem lxmsctl.srchnd,ax 	;e source is XMS
-					;d Quelle ist XMS
-	mov	lmem lxmsctl.desthnd,0 	;e dest is normal memory
-					;d Ziel ist Standardspeicher
+	mov	lmem lxmsctl.srchnd,ax 	; source is XMS
+	mov	lmem lxmsctl.desthnd,0 	; dest is normal memory
 	mov	lmem lxmsctl.srclo,0
 	mov	lmem lxmsctl.srchi,0
 ;
 swinxms_main:
-	mov	ax,lmem lcurrdesc.swsize ;e size in paragraphs
-					 ;d Grî·e in Paragraphen
+	mov	ax,lmem lcurrdesc.swsize ; size in paragraphs
 	mov	cl,4
-	rol	ax,cl			;e size in bytes + high nibble
-					;d Grî·e in Bytes + high nibble
+	rol	ax,cl			; size in bytes + high nibble
 	mov	dx,ax
 	and	ax,0fff0h		; low word
 	and	dx,0000fh		; high word
-	mov	lmem lxmsctl.lenlo,ax	;e into control block
-					;d in den Kontrollblock
+	mov	lmem lxmsctl.lenlo,ax	; into control block
 	mov	lmem lxmsctl.lenhi,dx
-	mov	ax,lmem lcurrdesc.swoffset	;e swap offset
-						;d Lese-Offset
-	mov	lmem lxmsctl.destlo,ax 		;e into control block
-						;d in den Kontrollblock
-	mov	ax,lmem lcurrdesc.addr		;e segment to swap
-						;d Lese-Segment
+	mov	ax,lmem lcurrdesc.swoffset	; swap offset
+	mov	lmem lxmsctl.destlo,ax 		; into control block
+	mov	ax,lmem lcurrdesc.addr		; segment to swap
 	mov	lmem lxmsctl.desthi,ax
 	mov	si,lxmsctl
 	mov	ah,0bh
 	call	lmem lprep.xmm		; move it
 	or	ax,ax
 	jz	swinxms_error
-	mov	ax,lmem lxmsctl.lenlo	;e adjust source addr
-					;d Quelladresse adjustieren
+	mov	ax,lmem lxmsctl.lenlo	; adjust source addr
 	add	lmem lxmsctl.srclo,ax
 	mov	ax,lmem lxmsctl.lenhi
 	adc	lmem lxmsctl.srchi,ax
 ;
-	cmp	lmem lcurrdesc.num_follow,0	;e another MCB?
-						;d noch ein MCB?
+	cmp	lmem lcurrdesc.num_follow,0	; another MCB?
 	je	swinxms_complete
 ;
 	mov	lmem lxmsctl.lenlo,TYPE mcbdesc
@@ -986,15 +820,13 @@ swinxms_main:
 	jmp	swinxms_main
 ;
 swinxms_complete:
-	mov	ah,0ah			;e release XMS frame
-					;d Freigeben XMS-Speicher
+	mov	ah,0ah			; release XMS frame
 	mov	dx,lmem lprep.handle   	; XMS handle
 	call	lmem lprep.xmm
 	ret
 ;
 swinxms_error:
-	mov	ah,0ah			;e release XMS frame on error
-					;d Bei Fehler XMS-Speicher freigeben
+	mov	ah,0ah			; release XMS frame on error
 	call	lmem lprep.xmm
 	mov	ax,4c00h
 	int	21h
@@ -1004,8 +836,7 @@ swapin_xms	endp
 swinxms_length	= offset $ - offset swapin_xms
 ;
 ;
-;e	swapin_file:	swap in from file.
-;d	swapin_file:	Wiederherstellen von Datei.
+;	swapin_file:	swap in from file.
 ;
 swapin_file	proc	far
 ;
@@ -1017,56 +848,40 @@ swapin_file	proc	far
 ;
 swinfile_main:
 	push	ds
-	mov	cx,lmem lcurrdesc.swsize	;e size in paragraphs
-						;d BlocklÑnge in Paragraphen
+	mov	cx,lmem lcurrdesc.swsize	; size in paragraphs
 	mov	dx,lmem lcurrdesc.swoffset	; swap offset
 	mov	ds,lmem lcurrdesc.addr		; segment to swap
 ;
 swinfile_loop:
 	mov	ax,cx
-	cmp	ah,8h			;e above 32k?
-					;d mehr als 32k?
-	jbe	swinfile_ok		;e go read if not
-					;d lesen wenn nein
-	mov	ax,800h			;e else read 32k
-					;d sonst 32k lesen
+	cmp	ah,8h			; above 32k?
+	jbe	swinfile_ok		; go read if not
+	mov	ax,800h			; else read 32k
 ;
 swinfile_ok:
-	sub	cx,ax			;e remaining length
-					;d RestlÑnge
-	push	cx			;e save it
-					;d sichern
-	push	ax			;e and save paras to read
-					;d Sichern LÑnge in Paragraphen
+	sub	cx,ax			; remaining length
+	push	cx			; save it
+	push	ax			; and save paras to read
 	mov	cl,4
-	shl	ax,cl			;e convert to bytes
-					;d Konvertieren in Anzahl Bytes
+	shl	ax,cl			; convert to bytes
 	mov	cx,ax
 	mov	ah,3fh			; read
 	int	21h
 	jc	swinfile_error
 	cmp	ax,cx
 	jne	swinfile_error
-	pop	cx			;e paras read
-					;d Gelesene Paragraphen
+	pop	cx			; paras read
 	mov	ax,ds
-	add	ax,cx			;e bump up dest segment
-					;d Add. KopierlÑnge auf Zielsegment
+	add	ax,cx			; bump up dest segment
 	mov	ds,ax
-	pop	cx			;e remaining length
-					;d RestlÑnge
-	or	cx,cx			;e anything left?
-					;d Noch etwas Åbrig?
-	jnz	swinfile_loop		;e go loop if yes
-					;d Nochmal wenn ja
+	pop	cx			; remaining length
+	or	cx,cx			; anything left?
+	jnz	swinfile_loop		; go loop if yes
 ;
 	pop	ds
 	cmp	lmem lcurrdesc.num_follow,0	; another MCB?
-						;d noch ein MCB?
-	je	swinfile_complete	;e ready if not
-					;d Fertig wenn nein
-	mov	cx,16			;e read one paragraph
-					;d einen Paragraphen lesen
+	je	swinfile_complete	; ready if not
+	mov	cx,16			; read one paragraph
 	mov	dx,lcurrdesc
 	mov	ah,3fh
 	int	21h
@@ -1108,8 +923,7 @@ swapin_file	endp
 swinfile_length	= offset $ - offset swapin_file
 ;
 ;
-;e	swapin_none:	no swap, return immediately.
-;d	swapin_none:	Kein Wiederherstellen, nur RÅckkehr.
+;	swapin_none:	no swap, return immediately.
 ;
 swapin_none	proc	far
 ;
@@ -1130,18 +944,16 @@ swcodelen	=	swinfile_length
 swap_codelen	=	((swcodelen + 1) / 2) * 2
 ;
 codelen		=	base_length + swap_codelen
-reslen		=	codebeg + codelen
-keep_paras	=	(reslen + 15) shr 4	;e paragraphs to keep
-						;d Residente Paragraphen
-swapbeg		=	keep_paras shl 4	;e start of swap space
-						;d Beginn Auslagerungsbereich
-savespace	=	swapbeg - 5ch	;e length of overwritten area
-					;d LÑnge Åberschriebener Bereich
+reslen          =       codebeg + codelen
+keep_paras	=	(reslen + 15) shr 4	; paragraphs to keep
+swapbeg		=	keep_paras shl 4	; start of swap space
+savespace	=	swapbeg - 5ch	; length of overwritten area
 ;
 ;--------------------------------------------------------------------
 ;
 	IFDEF	PASCAL
 	.data
+	extrn	swap_prep: prep_block
 	ELSE
 	IFDEF	TC_HUGE
 	.fardata?	my_data
@@ -1150,28 +962,28 @@ savespace	=	swapbeg - 5ch	;e length of overwritten area
 	ENDIF
 	ENDIF
 ;
-;>e
+;
 ;	Space for saving the part of the memory image below the
 ;	swap area that is overwritten by our code.
-;<
+;
 save_dat	db	savespace dup(?)
-;>e
+;
 ;	Variables used while swapping out.
-;	The "prep" structure is initialized by prep_swap.
-;<
-prep		prep_block	<>
+;	The "swap_prep" structure is initialized by prep_swap.
+;
+	IFNDEF	PASCAL
+swap_prep	prep_block	<>
+	ENDIF
 nextmcb		mcbdesc		<>
 currdesc	mcbdesc		<>
 xmsctl		xms_control	<>
-ems_curpage	dw		?	;e current EMS page number
-					;d Laufende Nummer EMS-Seite
-ems_curoff	dw		?	;e current EMS offset (paragraph)
-					;d Laufender EMS Offset (Paragraph)
+ems_curpage	dw		?	; current EMS page number
+ems_curoff	dw		?	; current EMS offset (paragraph)
 ;
 ;--------------------------------------------------------------------
 ;       
 	.code
-;>e
+;
 ;	swapout_ems:	swap out an MCB block to EMS.
 ;
 ;	Entry:	"currdesc" 	contains description of block to swap
@@ -1181,95 +993,67 @@ ems_curoff	dw		?	;e current EMS offset (paragraph)
 ;	Exit:	0 if OK, != 0 if error, Zero-flag set accordingly.
 ;
 ;	Uses:	All regs excpt DS
-;<
+;
 swapout_ems	proc	near
 ;
 	push	ds
-	mov	cx,currdesc.swsize	;e block length in paras
-					;d BlocklÑnge in Paragraphen
+	mov	cx,currdesc.swsize	; block length in paras
 	mov	si,currdesc.swoffset	; swap offset
-	mov	dx,prep.handle		; EMS handle
-	mov	bx,ems_curpage		;e current EMS page
-					;d laufende EMS Seite
-	mov	di,ems_curoff		;e current EMS page offset (paras)
-					;d laufender EMS Offset (Paragraph)
-	mov	es,prep.ems_pageframe	; page frame address
+	mov	dx,swap_prep.handle	; EMS handle
+	mov	bx,ems_curpage		; current EMS page
+	mov	di,ems_curoff		; current EMS page offset (paras)
+	mov	es,swap_prep.ems_pageframe	; page frame address
 	mov	ds,currdesc.addr	; segment to swap
 ;
-	mov	ax,ems_parasize		;e max length
-					;d Maximale LÑnge
-	sub	ax,di			;e minus current offset
-					;d Minus laufender Offset
-	jnz	swems_ok		;e go copy if there's room
-					;d Kopieren wenn noch Platz ist
+	mov	ax,ems_parasize		; max length
+	sub	ax,di			; minus current offset
+	jnz	swems_ok		; go copy if there's room
 ;
 swems_loop:
-	mov	ax,4400h		;e map in next page
-					;d NÑchste EMS-Page einmappen
+	mov	ax,4400h		; map in next page
 	int	EMM_INT
 	or	ah,ah
 	jnz	swems_error
-	mov	di,0			;e reset offset
-					;d Offset zurÅcksetzen
-	inc	bx			;e bump up page number
-					;d Seitennummer erhîhen
-	mov	ax,ems_parasize		;e max length to copy
-					;d Maximale LÑnge
+	mov	di,0			; reset offset
+	inc	bx			; bump up page number
+	mov	ax,ems_parasize		; max length to copy
 ;
 swems_ok:
-	cmp	ax,cx			;e length to copy
-					;d zu kopierende LÑnge
-	jbe	swems_doit		;e go do it if <= total length
-					;d kopieren wenn <= GesamtlÑnge
-	mov	ax,cx			;e else use total length
-					;d sonst GesamtlÑnge kopieren
+	cmp	ax,cx			; length to copy
+	jbe	swems_doit		; go do it if <= total length
+	mov	ax,cx			; else use total length
 ;
 swems_doit:
-	sub	cx,ax			;e subtract copy length from total
-					;d GesamtlÑnge -= kopierte LÑnge
-	push	cx			;e and save
-					;d sichern
-	push	ax			;e save the copy length in paras
-					;d Sichern KopierlÑnge in Paragraphen
+	sub	cx,ax			; subtract copy length from total
+	push	cx			; and save
+	push	ax			; save the copy length in paras
 	push	si
 	push	di
 	mov	cl,3
-	shl	ax,cl			;e convert to number of words (!)
-					;d Konvertieren in Anzahl Worte (!)
+	shl	ax,cl			; convert to number of words (!)
 	inc	cl
-	shl	di,cl			;e convert to byte address
-					;d In Byte-Adresse konvertieren
+	shl	di,cl			; convert to byte address
 	mov	cx,ax
 	rep movsw
 	pop	di
 	pop	si
-	pop	cx			;e copy length in paras
-					;d KopierlÑnge in Paragraphen
+	pop	cx			; copy length in paras
 	mov	ax,ds
-	add	ax,cx			;e add copy length to source segment
-					;d KopierlÑnge auf Zielsegment
-	add	di,cx			;e and EMS page offset
-					;d und EMS-Seiten-Offset addieren
+	add	ax,cx			; add copy length to source segment
+	add	di,cx			; and EMS page offset
 	mov	ds,ax
-	pop	cx			;e remaining length
-					;d RestlÑnge
-	or	cx,cx			;e did we copy everything?
-					;d Alles kopiert?
-	jnz	swems_loop		;e go loop if not
-					;d Nochmal wenn nein
+	pop	cx			; remaining length
+	or	cx,cx			; did we copy everything?
+	jnz	swems_loop		; go loop if not
 ;
 	pop	ds
-	cmp	currdesc.num_follow,0	;e another MCB?
-					;d noch ein MCB?
-	je	swems_complete		;e exit if not
-					;d Fertig wenn nein
+	cmp	currdesc.num_follow,0	; another MCB?
+	je	swems_complete		; exit if not
 ;
-;e	Another MCB follows, append nextmcb to save block.
-;d	Ein weiterer MCB folgt, nextmcb an Block anfÅgen.
+;	Another MCB follows, append nextmcb to save block.
 ;
 	cmp	di,ems_parasize
-	jb	swems_nonewpage		;e no new block needed
-					;d kein neuer Block nîtig
+	jb	swems_nonewpage		; no new block needed
 	mov	ax,4400h		; map page, phys = 0
 	int	EMM_INT
 	or	ah,ah
@@ -1280,14 +1064,12 @@ swems_doit:
 swems_nonewpage:
 	push	di
 	mov	cl,4
-	shl	di,cl			;e convert to byte address
-					;d in Byte-Adresse konvertieren
+	shl	di,cl			; convert to byte address
 	mov	cx,TYPE mcbdesc
 	mov	si,offset nextmcb
 	rep movsb
 	pop	di
-	inc	di			;e one paragraph
-					;d Einen Paragraphen
+	inc	di			; one paragraph
 ;
 swems_complete:
 	mov	ems_curpage,bx
@@ -1298,8 +1080,7 @@ swems_complete:
 swems_error:
 	pop	ds
 swems_error1:
-	mov	ah,45h			;e release EMS pages on error
-					;d Bei Fehler EMS freigeben
+	mov	ah,45h			; release EMS pages on error
 	int	EMM_INT
 	mov	ax,RC_SWAPERROR
 	or	ax,ax
@@ -1307,7 +1088,7 @@ swems_error1:
 ;
 swapout_ems	endp
 ;
-;>e
+;
 ;	swapout_xms:	swap out an MCB block to XMS.
 ;
 ;	Entry:	"currdesc" 	contains description of block to swap
@@ -1317,40 +1098,37 @@ swapout_ems	endp
 ;	Exit:	0 if OK, -1 if error, Zero-flag set accordingly.
 ;
 ;	Uses:	All regs excpt DS
-;<
+;
 swapout_xms	proc	near
 ;
-	mov	ax,currdesc.swsize	;e size in paragraphs
-					;d Grî·e in Paragraphen
+	push	ds
+	pop	es
+	mov	ax,currdesc.swsize	; size in paragraphs
 	mov	cl,4
-	rol	ax,cl			;e size in bytes + high nibble
-					;d Grî·e in Bytes + high nibble
+	rol	ax,cl			; size in bytes + high nibble
 	mov	dx,ax
 	and	ax,0fff0h		; low word
 	and	dx,0000fh		; high word
 	mov	xmsctl.lenlo,ax		; into control block
 	mov	xmsctl.lenhi,dx
-	mov	xmsctl.srchnd,0		;e source is normal memory
-					;d Quelle ist Standardspeicher
+	mov	xmsctl.srchnd,0		; source is normal memory
 	mov	ax,currdesc.swoffset	; swap offset
 	mov	xmsctl.srclo,ax		; into control block
 	mov	ax,currdesc.addr	; segment to swap
 	mov	xmsctl.srchi,ax
-	mov	ax,prep.handle		; XMS handle
+	mov	ax,swap_prep.handle	; XMS handle
 	mov	xmsctl.desthnd,ax
 	mov	si,offset xmsctl
 	mov	ah,0bh
-	call	prep.xmm		; move it
+	call	swap_prep.xmm		; move it
 	or	ax,ax
 	jz	swxms_error
-	mov	ax,xmsctl.lenlo		;e adjust destination addr
-					;d Zieladresse adjustieren
+	mov	ax,xmsctl.lenlo		; adjust destination addr
 	add	xmsctl.destlo,ax
 	mov	ax,xmsctl.lenhi
 	adc	xmsctl.desthi,ax
 ;
-	cmp	currdesc.num_follow,0	;e another MCB?
-					;d noch ein MCB?
+	cmp	currdesc.num_follow,0	; another MCB?
 	je	swxms_complete
 ;
 	mov	xmsctl.lenlo,TYPE mcbdesc
@@ -1359,7 +1137,7 @@ swapout_xms	proc	near
 	mov	xmsctl.srclo,offset nextmcb
 	mov	si,offset xmsctl
 	mov	ah,0bh
-	call	prep.xmm		; move it
+	call	swap_prep.xmm		; move it
 	or	ax,ax
 	jz	swxms_error
 	add	xmsctl.destlo,16	; one paragraph
@@ -1370,17 +1148,16 @@ swxms_complete:
 	ret
 ;
 swxms_error:
-	mov	ah,0ah			;e release XMS frame on error
-					;d Bei Fehler XMS-Speicher freigeben
-	mov	dx,prep.handle		; XMS handle
-	call	prep.xmm
+	mov	ah,0ah			; release XMS frame on error
+	mov	dx,swap_prep.handle	; XMS handle
+	call	swap_prep.xmm
 	mov	ax,RC_SWAPERROR
 	or	ax,ax
 	ret
 ;
 swapout_xms	endp
 ;
-;>e
+;
 ;	swapout_file:	swap out an MCB block to file.
 ;
 ;	Entry:	"currdesc" 	contains description of block to swap
@@ -1390,61 +1167,45 @@ swapout_xms	endp
 ;	Exit:	0 if OK, -1 if error, Zero-flag set accordingly.
 ;
 ;	Uses:	All regs excpt DS
-;<
+;
 swapout_file	proc	near
 ;
 	push	ds
-	mov	cx,currdesc.swsize	;e size in paragraphs
-					;d BlocklÑnge in Paragraphen
-	mov	bx,prep.handle		; file handle
+	mov	cx,currdesc.swsize	; size in paragraphs
+	mov	bx,swap_prep.handle	; file handle
 	mov	dx,currdesc.swoffset	; swap offset
 	mov	ds,currdesc.addr	; segment to swap
 ;
 swfile_loop:
 	mov	ax,cx
-	cmp	ah,8h			;e above 32k?
-					;d mehr als 32k?
-	jbe	swfile_ok		;e go write if not
-					;d schreiben wenn nein
-	mov	ax,800h			;e else write 32k
-					;d sonst 32k schreiben
+	cmp	ah,8h			; above 32k?
+	jbe	swfile_ok		; go write if not
+	mov	ax,800h			; else write 32k
 ;
 swfile_ok:
-	sub	cx,ax			;e remaining length
-					;d RestlÑnge
-	push	cx			;e save it
-					;d sichern
-	push	ax			;e and save paras to write
-					;d Sichern LÑnge in Paragraphen
+	sub	cx,ax			; remaining length
+	push	cx			; save it
+	push	ax			; and save paras to write
 	mov	cl,4
-	shl	ax,cl			;e convert to bytes
-					;d Konvertieren in Anzahl Bytes
+	shl	ax,cl			; convert to bytes
 	mov	cx,ax
 	mov	ah,40h			; write
 	int	21h
 	jc	swfile_error
 	cmp	ax,cx
 	jne	swfile_error
-	pop	cx			;e paras written
-					;d Geschriebene Paragraphen
+	pop	cx			; paras written
 	mov	ax,ds
-	add	ax,cx			;e bump up source segment
-					;d Add. KopierlÑnge auf Quellsegment
+	add	ax,cx			; bump up source segment
 	mov	ds,ax
-	pop	cx			;e remaining length
-					;d RestlÑnge
-	or	cx,cx			;e anything left?
-					;d Noch etwas Åbrig?
-	jnz	swfile_loop		;e go loop if yes
-					;d Nochmal wenn ja
+	pop	cx			; remaining length
+	or	cx,cx			; anything left?
+	jnz	swfile_loop		; go loop if yes
 ;
 	pop	ds
-	cmp	currdesc.num_follow,0	;e another MCB?
-					;d noch ein MCB?
-	je	swfile_complete		;e ready if not
-					;d Fertig wenn nein
-	mov	cx,16			;e write one paragraph
-					;d einen Paragraphen schreiben
+	cmp	currdesc.num_follow,0	; another MCB?
+	je	swfile_complete		; ready if not
+	mov	cx,16			; write one paragraph
 	mov	dx,offset nextmcb
 	mov	ah,40h
 	int	21h
@@ -1463,7 +1224,7 @@ swfile_error:
 swfile_error1:
 	mov	ah,3eh			; close file
 	int	21h
-	mov	dx,offset prep.swapfilename
+	mov	dx,offset swap_prep.swapfilename
 	mov	ah,41h			; delete file
 	int	21h
 	mov	ax,RC_SWAPERROR
@@ -1475,7 +1236,7 @@ swapout_file	endp
 ;--------------------------------------------------------------------------
 ;
 	IF	REDIRECT
-;>e
+;
 ;	@redirect: Redirect a file.
 ;
 ;	Entry:	DS:SI = Filename pointer
@@ -1487,7 +1248,7 @@ swapout_file	endp
 ;		ES:DI updated
 ;
 ;	Uses:	AX,BX,DX,SI
-;<
+;
 @redirect	proc	near
 		local	doserr
 ;
@@ -1503,8 +1264,7 @@ no_redirect:
 ;
 do_redirect:
 	IFDEF	PASCAL
-	inc	si			;e skip length byte
-					;d LÑngenbyte Åberspringen
+	inc	si			; skip length byte
 	ENDIF
 	or	cx,cx
 	jnz	redir_write
@@ -1529,6 +1289,9 @@ redir_ok:
 	pop	ax
 	jc	redir_failed_force
 	stosw
+	mov	ah,3eh		; close file
+	int	21h
+	clc
 	ret
 ;
 redir_failed_force:
@@ -1602,8 +1365,7 @@ do_spawn	PROC	uses si di,swapping: word, execfname:ptr byte,params:ptr byte,envl
 	mov	ds,ax
 	ENDIF
 ;
-	mov	datseg,ds		;e save default DS
-					;d Default-DS sichern
+	mov	datseg,ds		; save default DS
 ;
 	IFDEF	PASCAL
 	cld
@@ -1620,22 +1382,17 @@ do_spawn	PROC	uses si di,swapping: word, execfname:ptr byte,params:ptr byte,envl
 	mov	pspseg,bx
 ;
 ;
-;e	Check if spawn is too low in memory
-;d	PrÅfen ob dieses Modul zu weit unten im Speicher liegt
+;	Check if spawn is too low in memory
 ;
 	mov	ax,cs
 	mov	dx,offset lowcode_begin
 	mov	cl,4
 	shr	dx,cl
-	add	ax,dx			;e normalized start of this code
-					;d Normalisierter Beginn des Codes
-	mov	dx,keep_paras		;e the end of the modified area
-					;d Ende des modifizierten Bereichs
-	add	dx,bx			;e plus PSP = end paragraph
-					;d plus PSP = letzer Paragraph
+	add	ax,dx			; normalized start of this code
+	mov	dx,keep_paras		; the end of the modified area
+	add	dx,bx			; plus PSP = end paragraph
 	cmp	ax,dx
-	ja	doswap_ok	;e ok if start of code > end of low mem
-				;d OK wenn Code-Beginn > Ende residenter Teil
+	ja	doswap_ok	; ok if start of code > end of low mem
 	mov	ax,RC_TOOLOW
 	ret
 ;
@@ -1643,11 +1400,9 @@ doswap_ok:
 	cmp	swapping,0
 	jle	method_ok
 ;
-;e	check the swap method, to make sure prep_swap has been called
-;d	PrÅfen Auslagerungsmethode um sicherzustellen da· prep_swap
-;d	aufgerufen wurde.
+;	check the swap method, to make sure prep_swap has been called
 ;
-	mov	al,prep.swapmethod
+	mov	al,swap_prep.swapmethod
 	cmp	al,USE_EMS
 	je	method_ok
 	cmp	al,USE_XMS
@@ -1656,7 +1411,7 @@ doswap_ok:
 	je	method_ok
 	mov	ax,RC_BADPREP
 	ret
-;>e
+;
 ;	Save the memory below the swap space.
 ;	We must do this before swapping, so the saved memory is
 ;	in the swapped out image.
@@ -1667,15 +1422,13 @@ doswap_ok:
 ;	Note that the memory save is done even when not swapping,
 ;	because we use some of the variables in low core for
 ;	simplicity.
-;<
+;
 method_ok:
 	mov	es,datseg
-	mov	ds,pspseg		;e DS points to PSP
-					;d DS zeigt auf PSP
+	mov	ds,pspseg		; DS points to PSP
 	mov	si,5ch
 	mov	di,offset save_dat
-	mov	cx,savespace / 2	;e NOTE: savespace is always even
-					;d HINWEIS: savespace ist stets gerade
+	mov	cx,savespace / 2	; NOTE: savespace is always even
 	rep movsw
 ;
 ;
@@ -1683,25 +1436,25 @@ method_ok:
 	mov	ax,swapping
 	cmp	ax,0
 	jg	begin_swap
-;>e
+;
 ;	not swapping, prep_swap wasn't called. Init those variables in
-;  	the 'prep' block we need in any case.
-;<
-	mov	prep.swapmethod,al
+;  	the 'swap_prep' block we need in any case.
+;
+	mov	swap_prep.swapmethod,al
 	je	no_reduce
 ;
 	mov	ax,pspseg
 	dec	ax
-	mov	prep.psp_mcb,ax
-	mov	prep.first_mcb,ax
+	mov	swap_prep.psp_mcb,ax
+	mov	swap_prep.first_mcb,ax
 	inc	ax
 	mov	es,ax
 	mov	bx,es:psp_envptr
-	mov	prep.env_mcb,bx
-	mov	prep.noswap_mcb,0
+	mov	swap_prep.env_mcb,bx
+	mov	swap_prep.noswap_mcb,0
 	cmp	envlen,0
 	jne	swp_can_swap_env
-	mov	prep.noswap_mcb,bx
+	mov	swap_prep.noswap_mcb,bx
 ;
 swp_can_swap_env:
 	xor	bx,bx
@@ -1714,58 +1467,52 @@ swp_can_swap_env:
 	mov	es,es:[bx-2]		; first MCB
 	cmp	es:id,4dh		; normal ID?
 	jne	no_reduce
-	mov	prep.first_mcb,es
+	mov	swap_prep.first_mcb,es
 ;
 no_reduce:
 	jmp	no_swap1
 ;
-;e	set up first block descriptor
-;d	Ersten Block-Deskriptor aufsetzen
+;	set up first block descriptor
 ;
 begin_swap:
-	mov	ax,prep.first_mcb
+	mov	ax,swap_prep.first_mcb
 	mov	currmcb,ax
-	mov	es,prep.psp_mcb		;e let ES point to base MCB
-					;d ES zeigt auf Basis-MCB
+	mov	es,swap_prep.psp_mcb	; let ES point to base MCB
 	mov	ax,es:paras
 	mov	currdesc.msize,ax
 	sub	ax,keep_paras
 	mov	currdesc.swsize,ax
 	mov	currdesc.addr,es
 	mov	currdesc.swoffset,swapbeg + 16
-;e		NOTE: swapbeg is 1 para higher when seen from MCB
-;d		HINWEIS: swapbeg ist 1 Paragraph hîher vom MCB aus gesehen
-	mov	ax,prep.total_mcbs
+;		NOTE: swapbeg is 1 para higher when seen from MCB
+	mov	ax,swap_prep.total_mcbs
 	mov	currdesc.num_follow,ax
 ;
-;e	init other vars
-;d	andere Variablen initialisieren
+;	init other vars
 ;
 	mov	xmsctl.destlo,0
 	mov	xmsctl.desthi,0
 	mov	ems_curpage,0
 	mov	ems_curoff,ems_parasize
-;>e
+;
 ;	Do the swapping. Each MCB block (except the last) has an 
 ;	"mcbdesc" structure appended that gives location and size 
 ;	of the next MCB.
-;<
+;
 swapout_main:
-	cmp	currdesc.num_follow,0	;e next block?
-					;d Gibt es einen nÑchsten?
-	je	swapout_no_next		;e ok if not
-					;d OK wenn nein
-;>e
+	cmp	currdesc.num_follow,0	; next block?
+	je	swapout_no_next		; ok if not
+;
 ;	There is another MCB block to be saved. So we don't have
 ;	to do two calls to the save routine with complicated
 ;	parameters, we set up the next MCB descriptor beforehand.
 ;	Walk the MCB chain starting at the current MCB to find
 ;	the next one belonging to this process.
-;<
+;
 	mov	ax,currmcb
 	mov	bx,pspseg
-	mov	cx,prep.psp_mcb
-	mov	dx,prep.noswap_mcb
+	mov	cx,swap_prep.psp_mcb
+	mov	dx,swap_prep.noswap_mcb
 ;
 swm_mcb_walk:
 	mov	es,ax
@@ -1774,29 +1521,22 @@ swm_mcb_walk:
 	cmp	ax,dx
 	je	swm_next_mcb
 ;
-	cmp	bx,es:owner		;e our process?
-					;d Dieser Proze·?
-	je	swm_mcb_found		;e found it if yes
-					;d gefunden wenn ja
+	cmp	bx,es:owner		; our process?
+	je	swm_mcb_found		; found it if yes
 ;
 swm_next_mcb:
-	cmp	es:id,4dh		;e normal block?
-					;d Normaler Block?
-	jne	swm_mcb_error		;e error if end of chain
-					;d Fehler wenn Ende der Kette
+	cmp	es:id,4dh		; normal block?
+	jne	swm_mcb_error		; error if end of chain
 	add	ax,es:paras		; start + length
 	inc	ax			; next MCB
 	jmp	swm_mcb_walk
 ;
-;e	MCB found, set up an mcbdesc in the "nextmcb" structure
-;d	MCB gefunden, aufsetzen mcbdesc in der "nextmcb" Struktur
+;	MCB found, set up an mcbdesc in the "nextmcb" structure
 ;
 swm_mcb_found:
 	mov	nextmcb.addr,es
-	mov	ax,es:paras		;e get number of paragraphs
-					;d Anzahl Paragraphen
-	mov	nextmcb.msize,ax	;e and save
-					;d sichern
+	mov	ax,es:paras		; get number of paragraphs
+	mov	nextmcb.msize,ax	; and save
 	inc	ax
 	mov	nextmcb.swsize,ax
 	mov	bx,es
@@ -1808,9 +1548,9 @@ swm_mcb_found:
 	mov	nextmcb.num_follow,ax
 ;
 swapout_no_next:
-	cmp	prep.swapmethod,USE_EMS
+	cmp	swap_prep.swapmethod,USE_EMS
 	je	swm_ems
-	cmp	prep.swapmethod,USE_XMS
+	cmp	swap_prep.swapmethod,USE_XMS
 	je	swm_xms
 	call	swapout_file
 	jmp	short swm_next
@@ -1826,10 +1566,10 @@ swm_next:
 	jnz	swapout_error
 	cmp	currdesc.num_follow,0
 	je	swapout_complete
-;>e
+;
 ;	next MCB exists, copy the "nextmcb" descriptor into
 ;	currdesc, and loop.
-;<
+;
 	mov	es,datseg
 	mov	si,offset nextmcb
 	mov	di,offset currdesc
@@ -1845,34 +1585,32 @@ swapout_kill:
 	cmp	swapping,0
 	jl	swapout_error
 	push	ax
-	cmp	prep.swapmethod,USE_FILE
+	cmp	swap_prep.swapmethod,USE_FILE
 	je	swm_mcberr_file
-	cmp	prep.swapmethod,USE_EMS
+	cmp	swap_prep.swapmethod,USE_EMS
 	je	swm_mcberr_ems
 ;
-	mov	ah,0ah			;e release XMS frame on error
-					;d Bei Fehler XMS-Block freigeben
-	mov	dx,prep.handle		; XMS handle
-	call	prep.xmm
+	mov	ah,0ah			; release XMS frame on error
+	mov	dx,swap_prep.handle	; XMS handle
+	call	swap_prep.xmm
 	pop	ax
 	jmp	short swapout_error
 ;
 swm_mcberr_ems:
-	mov	dx,prep.handle		; EMS handle
-	mov	ah,45h			;e release EMS pages on error
-					;d Bei Fehler EMS freigeben
+	mov	dx,swap_prep.handle	; EMS handle
+	mov	ah,45h			; release EMS pages on error
 	int	EMM_INT
 	pop	ax
 	jmp	short swapout_error
 ;
 swm_mcberr_file:
-	mov	bx,prep.handle
+	mov	bx,swap_prep.handle
 	cmp	bx,-1
 	je	swm_noclose
 	mov	ah,3eh			; close file
 	int	21h
 swm_noclose:
-	mov	dx,offset prep.swapfilename
+	mov	dx,offset swap_prep.swapfilename
 	mov	ah,41h			; delete file
 	int	21h
 	pop	ax
@@ -1880,19 +1618,18 @@ swm_noclose:
 swapout_error:
 	ret
 ;
-;>e
+;
 ;	Swapout complete. Close the handle (EMS/file only),
 ;	then set up low memory.
-;<
+;
 swapout_complete:
-	cmp	prep.swapmethod,USE_FILE
+	cmp	swap_prep.swapmethod,USE_FILE
 	jne	swoc_nofile
 ;
-;e	File swap: Close the swap file to make the handle available
-;d	Auslagerung auf Datei: Datei schlie·en um den Handle freizumachen
+;	File swap: Close the swap file to make the handle available
 ;
-	mov	bx,prep.handle
-	mov	prep.handle,-1
+	mov	bx,swap_prep.handle
+	mov	swap_prep.handle,-1
 	mov	ah,3eh
 	int	21h			; close file
 	mov	si,offset swapin_file
@@ -1901,15 +1638,14 @@ swapout_complete:
 	jmp	swapout_kill
 ;
 swoc_nofile:
-	cmp	prep.swapmethod,USE_EMS
+	cmp	swap_prep.swapmethod,USE_EMS
 	jne	swoc_xms
 ;
-;e	EMS: Unmap page
-;d	EMS: Seite unzugÑnglich machen
+;	EMS: Unmap page
 ;
 	mov	ax,4400h
 	mov	bx,-1
-	mov	dx,prep.handle
+	mov	dx,swap_prep.handle
 	int	EMM_INT
 	mov	si,offset swapin_ems
 	jmp	short swoc_ready
@@ -1921,9 +1657,7 @@ swoc_xms:
 no_swap1:
 	mov	si,offset swapin_none
 ;	
-;e	Copy the appropriate swap-in routine to low memory.
-;d	Kopieren der der Auslagerungsmethode entsprechenden Routine
-;d	in den residenten Teil.
+;	Copy the appropriate swap-in routine to low memory.
 ;
 swoc_ready:
 	mov	es,pspseg
@@ -1933,10 +1667,10 @@ swoc_ready:
 	mov	ax,cs
 	mov	ds,ax
 	rep movsw
-;>e
+;
 ;	And while we're at it, copy the MCB allocation routine (which
 ;	also includes the initial MCB release and exec call) down.
-;<
+;
 	mov	cx,base_length / 2
 	mov	di,param_len
 	mov	si,offset lowcode_begin
@@ -1945,29 +1679,27 @@ swoc_ready:
 	pop	ds
 	mov	bx,es
 	dec	bx
-	mov	es,bx		;e let ES point to base MCB
-				;d ES zeigt jetzt auf den Basisblock
-;>e
+	mov	es,bx		; let ES point to base MCB
+;
 ;	Again set up the base MCB descriptor, and copy it as well as
 ;	the variables set up by prep_swap to low memory.
 ;	This isn't too useful if we're not swapping, but it doesn't
 ;	hurt, either. The only variable used when not swapping is
 ;	lprep.swapmethod.
-;<
+;
 	mov	ax,es:paras
 	mov	currdesc.msize,ax
 	sub	ax,keep_paras
 	mov	currdesc.swsize,ax
 	mov	currdesc.addr,es
 	mov	currdesc.swoffset,swapbeg + 16
-	mov	ax,prep.total_mcbs
+	mov	ax,swap_prep.total_mcbs
 	mov	currdesc.num_follow,ax
 ;
-	mov	es,pspseg		;e ES points to PSP again
-					;d ES zeigt wieder auf PSP
+	mov	es,pspseg		; ES points to PSP again
 ;
 	mov	cx,TYPE prep_block
-	mov	si,offset prep
+	mov	si,offset swap_prep
 	mov	di,lprep
 	rep movsb
 	mov	cx,TYPE mcbdesc
@@ -1975,31 +1707,27 @@ swoc_ready:
 	mov	di,lcurrdesc
 	rep movsb
 ;
-;e	now set up other variables in low core
-;d	Nun werden die weiteren Variablen im residenten Tail initialisiert.
+;	now set up other variables in low core
 ;
 	mov	ds,pspseg
 	mov	ds:cgetmcb,getmcboff + codebeg
 	mov	ds:eretcode,0
 	mov	ds:retflags,0
-;>e
+;
 ;	If 'NO_INHERIT' is nonzero, save the entries of the 
 ;	handle table, and set the last 15 to 0ffh (unused).
-;<
+;
 	IF	NO_INHERIT
 	mov	si,psp_handletab
 	mov	di,lhandlesave
 	mov	cx,10
 	rep movsw
-	mov	si,psp_handlenum	;e Length of handle table
-					;d LÑnge Handle-Tabelle
+	mov	si,psp_handlenum	; Length of handle table
 	mov	ax,[si]
 	stosw
-	mov	word ptr [si],20	;e set to default to be safe
-					;d Auf Standardwert setzten
+	mov	word ptr [si],20	; set to default to be safe
 	add	si,2
-	lodsw				;e Handle table pointer
-					;d Zeiger auf Handle-Tabelle
+	lodsw				; Handle table pointer
 	mov	bx,ax
 	stosw
 	lodsw
@@ -2008,11 +1736,11 @@ swoc_ready:
 	jne	copy_handles
 	cmp	bx,psp_handletab
 	je	no_handlecopy
-;>e
+;
 ;	if the handle table pointer in the PSP does not point to
 ;	the default PSP location, copy the first five entries from
 ;	this table into the PSP - but only if we have DOS >= 3.0.
-;<
+;
 copy_handles:
 	mov	ds,ax
 	mov	si,bx
@@ -2036,8 +1764,7 @@ no_handlecopy:
 ;
 	ENDIF
 ;
-;e	Handle Redirection
-;d	Dateiumleitung behandeln
+;	Handle Redirection
 ;
 	IF	REDIRECT
 	mov	es,pspseg
@@ -2085,8 +1812,7 @@ no_handlecopy:
 failed_redir:
 	push	ax
 ;
-;e	restore handle table and pointer
-;d	Wiederherstellen Handle-Tabelle und Pointer
+;	restore handle table and pointer
 ;
 	mov	ds,pspseg
 	mov	si,lstdinsav
@@ -2118,8 +1844,7 @@ redclosenext:
 	movsw
 	ENDIF
 ;
-;e	Restore overwritten part of program
-;d	Den Åberschriebenen Teil des Programms wiederherstellen
+;	Restore overwritten part of program
 ;
 	mov	ds,datseg
 	mov	es,pspseg
@@ -2147,24 +1872,21 @@ redir_complete:
 	ENDIF
 	ENDIF
 ;
-;e	Prepare exec parameter block
-;d	Parameterblock fÅr EXEC-Aufruf vorbereiten
+;	Prepare exec parameter block
 ;
 	mov	ax,es
 	mov	es:expar.fcb1seg,ax
 	mov	es:expar.fcb2seg,ax
 	mov	es:expar.pparseg,ax
 	mov	es:expar.envseg,0
-;>e
+;
 ;	The 'zero' word is located at 80h in the PSP, the start of
 ;	the command line. So as not to confuse MCB walking programs,
 ;	a command line length of zero is inserted here.
-;<
-	mov	es:zero,0d00h		;e 00h,0dh = empty command line
-					;d 00h,0dh = Leere Kommandozeile
 ;
-;e	Init default fcb's by parsing parameter string
-;d	Default FCB-Blîcke aus dem Parameter-String fÅllen
+	mov	es:zero,0d00h		; 00h,0dh = empty command line
+;
+;	Init default fcb's by parsing parameter string
 ;
 	IF	ptrsize
 	lds	si,params
@@ -2173,8 +1895,7 @@ redir_complete:
 	mov	ds,datseg
 	ENDIF
 	IFDEF	PASCAL
-	inc	si			;e skip length byte
-					;d LÑngenbyte Åberspringen
+	inc	si			; skip length byte
 	ENDIF
 	push	si
 	mov	di,xfcb1
@@ -2182,8 +1903,7 @@ redir_complete:
 	push	di
 	mov	cx,16
 	xor	ax,ax
-	rep stosw			;e init both fcb's to 0
-					;d Beide FCBs mit 0 vorbesetzen
+	rep stosw			; init both fcb's to 0
 	pop	di
 	mov	ax,2901h
 	int	21h
@@ -2193,8 +1913,7 @@ redir_complete:
 	int	21h
 	pop	si
 ;
-;e	move command tail string into low core
-;d	Kommandozeile in residenten Teil transferieren
+;	move command tail string into low core
 ;
 	mov	di,progpars
 	mov	es:expar.ppar,di
@@ -2213,8 +1932,7 @@ cmdcpy_end:
 	stosb
 	mov	es:progpars,cl
 ;
-;e	move filename string into low core
-;d	Dateinamen in residenten Teil transferieren
+;	move filename string into low core
 ;
 	IF	ptrsize
 	lds	si,execfname
@@ -2231,21 +1949,17 @@ fncpy:
 	or	al,al
 	jnz	fncpy
 ;
-;e	Setup environment copy
-;d	Umgebungsvariablenblock-Kopie aufsetzen
+;	Setup environment copy
 ;
-	mov	bx,keep_paras		;e paras to keep
-					;d Residente Paragraphen
-	mov	cx,envlen		;e environment size
-					;d Grî·e Umgebungsvariablen
-	jcxz	no_environ		;e go jump if no environment
-					;d Fertig wenn keine Umgebung
+	mov	bx,keep_paras		; paras to keep
+	mov	cx,envlen		; environment size
+	jcxz	no_environ		; go jump if no environment
 	cmp	swapping,0
 	jne	do_envcopy
-;>e
+;
 ;	Not swapping, use the environment pointer directly.
 ;	Note that the environment copy must be paragraph aligned.
-;<
+;
 	IF	ptrsize
 	mov	ax,word ptr (envp)+2
 	mov	bx,word ptr (envp)
@@ -2253,51 +1967,39 @@ fncpy:
 	mov	ax,ds
 	mov	bx,envp
 	ENDIF
-	add	bx,15			;e make sure it's paragraph aligned
-					;d auf Paragraphengrenze bringen
+	add	bx,15			; make sure it's paragraph aligned
 	mov	cl,4
-	shr	bx,cl			;e and convert to segment addr
-					;d in Segment-Adresse konvertieren
+	shr	bx,cl			; and convert to segment addr
 	add	ax,bx
-	mov	es:expar.envseg,ax	;e new environment segment
-					;d Neues Umgebungs-Segment
-	xor	cx,cx			;e mark no copy
-					;d Markieren da· keine Kopie nîtig
-	xor	bx,bx			;e and no shrink
-					;d und keine Speicherreduzierung
+	mov	es:expar.envseg,ax	; new environment segment
+	xor	cx,cx			; mark no copy
+	xor	bx,bx			; and no shrink
 	jmp	short no_environ
-;>e
+;
 ;	Swapping or EXECing without return. Set up the pointers for
 ;	an environment copy (we can't do the copy yet, it might overwrite
 ;	this code).
-;<
+;
 do_envcopy:
 	inc	cx
-	shr	cx,1			;e words to copy
-					;d Zu kopierende Worte
-	mov	ax,cx			;e convert envsize to paras
-					;d in Paragraphen konvertieren
+	shr	cx,1			; words to copy
+	mov	ax,cx			; convert envsize to paras
 	add	ax,7
 	shr	ax,1
 	shr	ax,1
 	shr	ax,1
-	add	bx,ax			;e add envsize to paras to keep
-					;d Grî·e zu residenter addieren
+	add	bx,ax			; add envsize to paras to keep
 	IF	ptrsize
 	lds	si,envp
 	ELSE
 	mov	si,envp
 	ENDIF
 ;
-	mov	ax,es			;e low core segment
-					;d Segmentadresse residenter Teil
-	add	ax,keep_paras		;e plus fixed paras
-					;d plus residente Paragraphen
-	mov	es:expar.envseg,ax	;e = new environment segment
-					;d = neues Umgebungs-Segment
+	mov	ax,es			; low core segment
+	add	ax,keep_paras		; plus fixed paras
+	mov	es:expar.envseg,ax	; = new environment segment
 ;
-;e	Save stack regs, switch to local stack
-;d	Sichern Stack-Register, Umschalten auf lokalen Stack
+;	Save stack regs, switch to local stack
 ;
 no_environ:
 	mov	es:save_ss,ss
@@ -2310,8 +2012,7 @@ no_environ:
 	push	si			; save env pointer
 	push	ds			; save env segment
 ;
-;e	save and patch INT0 (division by zero) vector
-;d	Sichern und Åberschreiben INT0 (division by zero) Vektor
+;	save and patch INT0 (division by zero) vector
 ;
 	xor	ax,ax
 	mov	ds,ax
@@ -2325,47 +2026,35 @@ no_environ:
 	pop	ds			; pop environment segment
 	pop	si			; pop environment offset
 	pop	cx			; pop environment length
-	mov	di,swapbeg		;e environment destination
-					;d Zieladresse Umgebungsblock
+	mov	di,swapbeg		; environment destination
 ;
-;e	Push return address on local stack
-;d	RÅckkehradresse auf lokalen Stack bringen
+;	Push return address on local stack
 ;
-	push	cs			;e push return segment
-					;d RÅckkehr-Segment pushen
+	push	cs			; push return segment
 	mov	ax,offset exec_cont
-	push	ax			;e push return offset
-					;d RÅckkehr-Offset pushen
-	mov	es:spx,sp		;e save stack pointer
-					;d Stack-Zeiger sichern
+	push	ax			; push return offset
+	mov	es:spx,sp		; save stack pointer
 ;
-;e	Goto low core code
-;d	In den residenten Teil springen
+;	Goto low core code
 ;
-	push	es			;e push entry segment
-					;d Einsprungssegment pushen
+	push	es			; push entry segment
         mov	ax,codebeg + doexec_entry
-        push	ax			;e push entry offset
-					;d Einsprungsoffset pushen
-;e	ret	far			; can't use RET here because
-;d	ret	far			; RET kann hier wegen der .model-
-	db	0cbh			;e of .model
-					;d Direktive nicht verwendet werden
+        push	ax			; push entry offset
+;	ret	far			; can't use RET here because
+	db	0cbh			; of .model
 ;
 ;----------------------------------------------------------------
-;>e
+;
 ;	Low core code will return to this location, with DS set to
 ;	the PSP segment.
-;<
+;
 exec_cont:
 	push	ds
 	pop	es
-	mov	ss,ds:save_ss		;e reload stack
-					;d Stack zurÅckladen
+	mov	ss,ds:save_ss		; reload stack
 	mov	sp,ds:save_sp
 ;
-;e	restore INT0 (division by zero) vector
-;d	INT0 (division by zero) Vektor wiederherstellen
+;	restore INT0 (division by zero) vector
 ;
 	xor	cx,cx
 	mov	ds,cx
@@ -2378,26 +2067,21 @@ exec_cont:
 	mov	bx,es:retflags
 	mov	ds,datseg
 ;
-;e	Restore overwritten part of program
-;d	Den Åberschriebenen Teil des Programms wiederherstellen
+;	Restore overwritten part of program
 ;
 	mov	si,offset save_dat
 	mov	di,5ch
 	mov	cx,savespace
 	rep movsb
 ;
-	test	bx,1			;e carry set?
-					;d Carry-Flag gesetzt?
-	jnz	exec_fault		;e return EXEC error code if fault
-					;d EXEC Fehler-code liefern wenn ja
-	mov	ah,4dh			;e else get program return code
-					;d Sonst Programm-RÅckgabewert holen
+	test	bx,1			; carry set?
+	jnz	exec_fault		; return EXEC error code if fault
+	mov	ah,4dh			; else get program return code
 	int	21h
 	ret
 ;
 exec_fault:
-	mov	ah,3			;e return error as 03xx
-					;d EXEC-Fehler als 03xx liefern
+	mov	ah,3			; return error as 03xx
 	ret
 ;	
 do_spawn	ENDP
@@ -2406,7 +2090,7 @@ do_spawn	ENDP
 ;----------------------------------------------------------------------------
 ;
 emm_name	db	'EMMXXXX0'
-;>e
+;
 ;	prep_swap - prepare for swapping.
 ;
 ;	This routine checks all parameters necessary for swapping,
@@ -2439,7 +2123,7 @@ emm_name	db	'EMMXXXX0'
 ;		If the file can be written, the routine returns success (4).
 ;
 ;	     6) Return an error code (-1).
-;<
+;
 	IFDEF	PASCAL
 	IFDEF	FARCALL
 prep_swap	PROC	far pmethod: word, swapfname: dword
@@ -2470,50 +2154,43 @@ prep_swap	PROC	uses si di,pmethod:word,swapfname:ptr byte
 	ENDIF
 ;
 	dec	ax
-	mov	prep.psp_mcb,ax
-	mov	prep.first_mcb,ax	;e init first MCB to PSP
-					;d ersten MCB auf PSP initialisieren
+	mov	swap_prep.psp_mcb,ax
+	mov	swap_prep.first_mcb,ax	; init first MCB to PSP
 ;
-;e	Make a copy of the environment pointer in the PSP
-;d	Eine Kopie vom Umgebungsvariablenblock-Pointer des PSP sichern
+;	Make a copy of the environment pointer in the PSP
 ;
 	inc	ax
 	mov	es,ax
 	mov	bx,es:psp_envptr
 	dec	bx
-	mov	prep.env_mcb,bx
-	mov	prep.noswap_mcb,0
+	mov	swap_prep.env_mcb,bx
+	mov	swap_prep.noswap_mcb,0
 	test	pmethod,DONT_SWAP_ENV
 	jz	can_swap_env
-	mov	prep.noswap_mcb,bx
+	mov	swap_prep.noswap_mcb,bx
 ;
-;e	Check if spawn is too low in memory
-;d	PrÅfen ob dieses Modul zu weit unten im Speicher liegt
+;	Check if spawn is too low in memory
 ;
 can_swap_env:
 	mov	bx,cs
 	mov	dx,offset lowcode_begin
 	mov	cl,4
 	shr	dx,cl
-	add	bx,dx			;e normalized start of this code
-					;d Normalisierter Beginn des Codes
-	mov	dx,keep_paras		;e the end of the modified area
-					;d Ende des modifizierten Bereichs
-	add	dx,ax			;e plus PSP = end paragraph
-					;d plus PSP = letzer Paragraph
+	add	bx,dx			; normalized start of this code
+	mov	dx,keep_paras		; the end of the modified area
+	add	dx,ax			; plus PSP = end paragraph
 	cmp	bx,dx
-	ja	prepswap_ok	;e ok if start of code > end of low mem
-				;d OK wenn Code-Beginn > Ende residenter Teil
+	ja	prepswap_ok	; ok if start of code > end of low mem
 	mov	ax,-2
-	mov	prep.swapmethod,al
+	mov	swap_prep.swapmethod,al
 	ret
-;>e
+;
 ;	Walk the chain of memory blocks, adding up the paragraphs
 ;	in all blocks belonging to this process.
 ;	We try to find the first MCB by getting DOS's "list of lists",
 ;	and fetching the word at offset -2 of the returned address.
 ;	If this fails, we use our PSP as the starting point.
-;<
+;
 prepswap_ok:
 	xor	bx,bx
 	mov	es,bx
@@ -2525,54 +2202,39 @@ prepswap_ok:
 	mov	es,es:[bx-2]		; first MCB
 	cmp	es:id,4dh		; normal ID?
 	jne	prep_no_first
-	mov	prep.first_mcb,es
+	mov	swap_prep.first_mcb,es
 ;
 prep_no_first:
-	mov	es,prep.psp_mcb		;e ES points to base MCB
-					;d ES zeigt auf Basis-Block
-	mov	cx,es			;e save this value
-					;d diesen Wert sichern
-	mov	bx,es:owner		;e the current process
-					;d Der aktuelle Proze·
-	mov	dx,es:paras		;e memory size in the base block
-					;d Speichergrî·e des Basisblocks
-	sub	dx,keep_paras		;e minus resident paragraphs
-					;d AbzÅglich residente Paragraphen
-	mov	si,0			;e number of MCBs except base
-					;d ZÑhler fÅr MCBs au·er Basis
-	mov	di,prep.noswap_mcb
-	mov	ax,prep.first_mcb
-	mov	prep.first_mcb,0
+	mov	es,swap_prep.psp_mcb	; ES points to base MCB
+	mov	cx,es			; save this value
+	mov	bx,es:owner		; the current process
+	mov	dx,es:paras		; memory size in the base block
+	sub	dx,keep_paras		; minus resident paragraphs
+	mov	si,0			; number of MCBs except base
+	mov	di,swap_prep.noswap_mcb
+	mov	ax,swap_prep.first_mcb
+	mov	swap_prep.first_mcb,0
 ;
 prep_mcb_walk:
 	mov	es,ax
-	cmp	ax,cx			;e base block?
-					;d Basisblock?
-	je	prep_walk_next		;e then don't count again
-					;d dann nicht nochmal zÑhlen
-	cmp	ax,di			;e Non-swap MCB?
-	je	prep_walk_next		;e then don't count
-					;d dann nicht zÑhlen
+	cmp	ax,cx			; base block?
+	je	prep_walk_next		; then don't count again
+	cmp	ax,di			; Non-swap MCB?
+	je	prep_walk_next		; then don't count
 ;
-	cmp	bx,es:owner		;e our process?
-					;d aktueller Proze·?
-	jne	prep_walk_next		;e next if not
-					;d nÑchsten wenn nein
+	cmp	bx,es:owner		; our process?
+	jne	prep_walk_next		; next if not
 	inc	si
-	mov	ax,es:paras		;e else get number of paragraphs
-					;d sonst Grî·e in Paragraphen laden
+	mov	ax,es:paras		; else get number of paragraphs
 	add	ax,2			; + 1 for descriptor + 1 for MCB
-	add	dx,ax			;e total number of paras
-					;d Gesamtzahl Paragraphen
-	cmp	prep.first_mcb,0
+	add	dx,ax			; total number of paras
+	cmp	swap_prep.first_mcb,0
 	jne	prep_walk_next
-	mov	prep.first_mcb,es
+	mov	swap_prep.first_mcb,es
 ;
 prep_walk_next:
-	cmp	es:id,4dh		;e normal block?
-					;d normaler Block?
-	jne	prep_mcb_ready		;e ready if end of chain
-					;d Fertig wenn ende der Kette
+	cmp	es:id,4dh		; normal block?
+	jne	prep_mcb_ready		; ready if end of chain
 	mov	ax,es
 	add	ax,es:paras		; start + length
 	inc	ax			; next MCB
@@ -2580,13 +2242,12 @@ prep_walk_next:
 ;
 prep_mcb_ready:
 	mov	totparas,dx
-	mov	prep.total_mcbs,si
+	mov	swap_prep.total_mcbs,si
 ;
 	test	pmethod,XMS_FIRST
 	jnz	check_xms
 ;
-;e	Check for EMS swap
-;d	EMS-auslagerung prÅfen
+;	Check for EMS swap
 ;
 check_ems:
 	test	pmethod,USE_EMS
@@ -2595,26 +2256,22 @@ check_ems:
 	push	ds
 	mov	al,EMM_INT
 	mov	ah,35h
-	int	21h			;e get EMM int vector
-					;d EMM-Interrupt Vektor laden
+	int	21h			; get EMM int vector
 	mov	ax,cs
 	mov	ds,ax
 	mov	si,offset emm_name
 	mov	di,10
 	mov	cx,8
-	repz cmpsb			;e EMM name present?
-					;d ist der EMM-Name vorhanden?
+	repz cmpsb			; EMM name present?
 	pop	ds
 	jnz	prep_no_ems
 ;
-	mov	ah,40h			;e get EMS status
-					;d EMS-Status abfragen
+	mov	ah,40h			; get EMS status
 	int	EMM_INT
 	or	ah,ah			; EMS ok?
 	jnz	prep_no_ems
 ;
-	mov	ah,46h			;e get EMS version
-					;d EMS-Version abfragen
+	mov	ah,46h			; get EMS version
 	int	EMM_INT
 	or	ah,ah			; AH must be 0
 	jnz	prep_no_ems
@@ -2622,81 +2279,66 @@ check_ems:
 	cmp	al,30h			; >= version 3.0?
 	jb	prep_no_ems
 ;
-	mov	ah,41h			;e Get page frame address
-					;d EMS-Frame-Adresse holen
+	mov	ah,41h			; Get page frame address
 	int	EMM_INT
 	or	ah,ah
 	jnz	prep_no_ems
 ;
-;e	EMS present, try to allocate pages
-;d	EMS vorhanden, versuche Seiten zu allozieren
+;	EMS present, try to allocate pages
 ;
-	mov	prep.ems_pageframe,bx
+	mov	swap_prep.ems_pageframe,bx
 	mov	bx,totparas
 	add	bx,ems_paramask
 	mov	cl,ems_shift
 	shr	bx,cl
 	mov	ah,43h			; allocate handle and pages
 	int	EMM_INT
-	or	ah,ah			;e success?
-					;d erfolgreich?
+	or	ah,ah			; success?
 	jnz	prep_no_ems
 ;
-;e	EMS pages allocated, swap to EMS
-;d	EMS-Seiten alloziert, auslagern auf EMS
+;	EMS pages allocated, swap to EMS
 ;
-	mov	prep.handle,dx
+	mov	swap_prep.handle,dx
 	mov	ax,USE_EMS
-	mov	prep.swapmethod,al
+	mov	swap_prep.swapmethod,al
 	ret
 ;
-;e	No EMS allowed, or EMS not present/full. Try XMS.
-;d	EMS nicht erlaubt, oder EMS nicht vorhanden/voll. XMS versuchen.
+;	No EMS allowed, or EMS not present/full. Try XMS.
 ;
 prep_no_ems:
 	test	pmethod,XMS_FIRST
-	jnz	check_file		;e don't try again
-					;d nicht nochmal versuchen
+	jnz	check_file		; don't try again
 ;
 check_xms:
 	test	pmethod,USE_XMS
 	jz	prep_no_xms
 ;
-	mov	ax,4300h		;e check if XMM driver present
-					;d prÅfen ob XMM-Treiber vorhanden
+	mov	ax,4300h		; check if XMM driver present
 	int	2fh
-	cmp	al,80h			;e is XMM installed?
-					;d ist XMM installiert?
+	cmp	al,80h			; is XMM installed?
 	jne	prep_no_xms
-	mov	ax,4310h		;e get XMM entrypoint
-					;d XMM-Einsprungadresse holen
+	mov	ax,4310h		; get XMM entrypoint
 	int	2fh
-	mov	word ptr prep.xmm,bx	;e save entry address
-					;d Einsprungadresse sichern
-	mov	word ptr prep.xmm+2,es
+	mov	word ptr swap_prep.xmm,bx	; save entry address
+	mov	word ptr swap_prep.xmm+2,es
 ;
 	mov	dx,totparas
-	add	dx,xms_paramask		;e round to nearest multiple of 1k
-					;d Auf volle 1k aufrunden
+	add	dx,xms_paramask		; round to nearest multiple of 1k
 	mov	cl,xms_shift
-	shr	dx,cl			;e convert to k
-					;d konvertiern in k
-	mov	ah,9			;e allocate extended memory block
-					;d Extended memory block allozieren
-	call	prep.xmm
+	shr	dx,cl			; convert to k
+	mov	ah,9			; allocate extended memory block
+	call	swap_prep.xmm
 	or	ax,ax
 	jz	prep_no_xms
 ;
-;e	XMS block allocated, swap to XMS
-;d	XMS-Block alloziert, Auslagern auf XMS.
+;	XMS block allocated, swap to XMS
 ;
-	mov	prep.handle,dx
+	mov	swap_prep.handle,dx
 	mov	ax,USE_XMS
-	mov	prep.swapmethod,al
+	mov	swap_prep.swapmethod,al
 	ret
 ;
-;e	No XMS allowed, or XMS not present/full. Try File swap.
-;d	XMS nicht erlaubt, oder XMS nicht vorhanden/voll. Datei versuchen.
+;	No XMS allowed, or XMS not present/full. Try File swap.
 ;
 prep_no_xms:
 	test	pmethod,XMS_FIRST
@@ -2716,8 +2358,7 @@ prep_do_file:
 	mov	dx,swapfname
 	ENDIF
 	IFDEF	PASCAL
-	inc	dx			;e skip length byte
-					;d LÑngenbyte Åberspringen
+	inc	dx			; skip length byte
 	ENDIF
 	mov	cx,2			; hidden attribute
 	test	pmethod,HIDE_FILE
@@ -2738,42 +2379,34 @@ prep_no_temp:
 prep_got_file:
 	mov	bx,ax			; handle
 ;
-;e	save the file name
-;d	Dateinamen sichern
+;	save the file name
 ;
 	pop	es
 	push	es
-	mov	di,offset prep.swapfilename
+	mov	di,offset swap_prep.swapfilename
 	mov	cx,81
 	mov	si,dx
 	rep movsb
 ;
 	pop	ds
-	mov	prep.handle,bx
+	mov	swap_prep.handle,bx
 ;
-;e	preallocate the file
-;d	Datei-Speicherplatz prÑ-allozieren
+;	preallocate the file
 ;
 	test	pmethod,NO_PREALLOC
 	jnz	prep_noprealloc
 	test	pmethod,CHECK_NET
 	jz	prep_nonetcheck
 ;
-;e	check whether file is on a network drive, and don't preallocate
-;e	if so. preallocation can slow down swapping significantly when
-;e	running on certain networks (Novell)
-;d	PrÅfen ob Datei auf einem Netwerk-Laufwerk liegt, und nicht
-;d	prÑallozieren wenn ja. Ein PrÑallozieren kann den Swap-Vorgang
-;d	erheblich verlangsamen wenn es auf Novell-Drives ausgefÅhrt wird.
+;	check whether file is on a network drive, and don't preallocate
+;	if so. preallocation can slow down swapping significantly when
+;	running on certain networks (Novell)
 ;
 	mov	ax,440ah	; check if handle is remote
 	int	21h
-	jc	prep_nonetcheck	;e assume not remote if function fails
-				;d kein Netz wenn Funktion Fehler liefert
-	test	dh,80h		;e DX bit 15 set ?
-				;d Ist Bit 15 von DX gesetzt?
-	jnz	prep_noprealloc	;e remote if yes
-				;d Netzwerk-Datei wenn ja
+	jc	prep_nonetcheck	; assume not remote if function fails
+	test	dh,80h		; DX bit 15 set ?
+	jnz	prep_noprealloc	; remote if yes
 ;
 prep_nonetcheck:
 	mov	dx,totparas
@@ -2792,8 +2425,7 @@ prep_nonetcheck:
 	jne	prep_file_err
 	cmp	ax,si
 	jne	prep_file_err
-	mov	cx,1			;e write 1 byte
-					;d 1 Byte schreiben
+	mov	cx,1			; write 1 byte
 	mov	ah,40h
 	int	21h
 	jc	prep_file_err
@@ -2802,26 +2434,25 @@ prep_nonetcheck:
 ;
 	mov	ax,4200h		; move file pointer, absolute
 	xor	dx,dx
-	xor	cx,cx			;e rewind to beginning
-					;d Auf Anfang zurÅckpositionieren
+	xor	cx,cx			; rewind to beginning
 	int	21h
 	jc	prep_file_err
 ;
 prep_noprealloc:
 	mov	ax,USE_FILE
-	mov	prep.swapmethod,al
+	mov	swap_prep.swapmethod,al
 	ret
 ;
 prep_file_err:
 	mov	ah,3eh			; close file
 	int	21h
-	mov	dx,offset prep.swapfilename
+	mov	dx,offset swap_prep.swapfilename
 	mov	ah,41h			; delete file
 	int	21h
 ;
 prep_no_file:
 	mov	ax,-1
-	mov	prep.swapmethod,al
+	mov	swap_prep.swapmethod,al
 	ret
 ;
 prep_swap	endp

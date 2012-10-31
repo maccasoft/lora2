@@ -1,5 +1,5 @@
 ;
-;	--- Version 3.1 91-08-16 16:32 ---
+;	--- Version 3.2 91-09-05 13:00 ---
 ;
 ;	CHECKPAT.ASM - Utility function to check a given file/path,
 ;			and to resolve an incomplete path.
@@ -12,7 +12,7 @@
 ;		D-1000 Berlin 21
 ;		Germany
 ;
-;>e
+;
 ; Assemble with
 ;
 ; tasm  /DPASCAL checkpat,checkpap  	     - Turbo Pascal (Tasm only), near
@@ -107,95 +107,7 @@
 ;			0x2000 - Archive
 ;			0x4000 - Device
 ;
-;<
-;>d
-; Assemblierung mit
 ;
-; tasm  /DPASCAL checkpat,checkpatp	      - Turbo Pascal (nur Tasm), near
-; tasm  /DPASCAL /DFARCALL checkpat,checkpatp - Turbo Pascal (nur Tasm), far
-; ?asm  checkpat;		  	      - C, default model (small)
-; ?asm  /DMODL=large checkpat  		      - C, large model
-;
-;	HINWEIS: FÅr C kînnen Sie entweder die folgende 'model'-Direktive
-;		Ihrem Speichermodell entsprechend Ñndern, oder beim
-;		Assemblieren MODL=xxx in der Kommandozeile definieren.
-;
-;		FÅr Turbo C Huge model mÅssen Sie /DTC_HUGE beim Assemblieren
-;		angeben, oder das Symbol in dieser Quelle definieren.
-;
-;   Diese Routine erwartet einen Dateinamen und/oder Pfad, prÅft ihn
-;   und lîst den Pfad auf, und teilt den Namen in seine Komponenten.
-;
-;   Ein relativer Pfad, oder eine fehlende Pfadangabe, wird in eine
-;   absolute Pfadangabe konvertiert. Ein ungÅltiger Laufwerksbuchstabe
-;   fÅhrt nicht zum Abbruch.
-;
-;   PASCAL:
-;	function checkpath (name    : string,
-;	                    drive   : string,
-;	                    dir     : string,
-;	                    fname   : string,
-;	                    ext     : string,
-;	                    fullpath: string)
-;			    : integer;
-;   C:
-;	int checkpath (char *name,     
-;	               char *drive,      
-;	               char *dir,        
-;	               char *fname,      
-;	               char *ext,        
-;	               char *fullpath);  
-;
-;   Parameter:
-;
-;	name	 - Input:  Filename und/oder Pfad
-;	drive	 - Output: Laufwerksbuchstabe, mit abschlie·endem Doppelpunkt
-;	dir	 - Output: Directory, mit fÅhrendem und abschlie·endem '\'
-;	fname	 - Output: Filename
-;	ext	 - Output: File extension, mit fÅhrendem Punkt
-;	fullpath - Output: Kombinierter Pfad
-;
-;   Liefert:
-;
-;	Einen negativen Wert bei Fehler:
-;
-;		ERR_DRIVE       -1    UngÅltiges Laufwerk
-;		ERR_PATH        -2    UngÅltiger Pfad
-;		ERR_FNAME       -3    Fehlerhafter Dateiname
-;		ERR_DRIVECHAR   -4    Illegaler Laufwerksbuchstabe
-;		ERR_PATHLEN     -5    Pfad zu lang
-;		ERR_CRITICAL    -6    Critical error (Illegales Laufwerk,
-;				      Laufwerk nicht bereit)
-;
-;	Bei Fehler sind alle Ausgabestrings au·er 'drive' leer.
-;
-;	Wenn kein Fehler auftrat einen positiven Wert der aus dem
-;	bitweisen OR der folgenden Flags besteht:
-;
-;		HAS_WILD        1     Filename/ext enthÑlt Wildcard-Zeichen
-;		HAS_EXT         2     Extension angegeben
-;		HAS_FNAME       4     Filename angegeben
-;		HAS_PATH        8     Pfad angegeben
-;		HAS_DRIVE       0x10  Laufwerk angegeben
-;
-;			Diese Flags sind nur gesetzt wenn die entsprechende 
-;			Komponente im Eingabestring enthalten war. Die 
-;			'drive' und 'dir' Ausgabestrings enthalten stets 
-;			den aufgelîsten Laufwerks- und Pfadstring.
-;
-;		FILE_EXISTS     0x20  Datei existiert, Attribute im oberen Byte
-;		IS_DIR        0x1000  Directory, Attribute im oberen Byte
-;
-;		Die Dateiattribute die geliefert werden wenn FILE_EXISTS 
-;		oder IS_DIR gesetzt ist sind:
-;
-;			0x0100 - Read only
-;			0x0200 - Hidden
-;			0x0400 - System
-;			0x2000 - Archive
-;			0x4000 - Device
-;
-;<
 ;
 	IFDEF	PASCAL
 	.model	tpascal
@@ -498,8 +410,6 @@ cpath_good:
 	cmp	byte ptr es:[di-1],al	; root dir?
 	je	drive_ok		; then no second backslash
 	stosb				; else append backslash
-	xor	al,al
-	stosb				; and zero
 ;
 ;
 ;------ Drive checked, is valid. Now separate path and filename.
@@ -507,10 +417,12 @@ cpath_good:
 drive_ok:
 	pop	si
 	pop	ds
+	push	si
+	push	di
+	push	es
 	mov	di,si
 	mov	ax,ds
 	mov	es,ax
-	push	si
 ;
 ;	find the end of the string
 ;
@@ -518,19 +430,18 @@ drive_ok:
 	mov	cx,-1
 	repne scasb
 	mov	si,di
+	pop	es
+	pop	di
 	not	cx
 	dec	cx
 	jnz	has_fnp		; continue if there's more in the string
 	add	sp,2
+	stosb			; terminate path string
 	jmp	check_fname	; exit if no path or filename
 ;
 ;	search from the end for slash/backslash
 ;
 has_fnp:
-	ldes	di,path
-	IFDEF	PASCAL
-	inc	di
-	ENDIF
 	sub	si,2		; last char of string
 	mov	bx,5c2fh	; the two slashes
 	std			; backwards scan
@@ -562,6 +473,10 @@ pfound:
 	cmp	cx,MAXPATH
 	ja	longpath
 	or	flags,HAS_PATH		; we have a path
+	ldes	di,path
+	IFDEF	PASCAL
+	inc	di
+	ENDIF
 	push	cx
 	rep movsb
 	pop	cx
@@ -981,8 +896,7 @@ no_error:
 checkpath endp
 ;
 ;
-;e Returns TRUE if a file with name 'fname' exists.
-;d Liefert TRUE wenn eine Datei mit dem Namen 'fname' existiert.
+; Returns TRUE if a file with name 'fname' exists.
 ;
 	IFDEF	PASCAL
 	IFDEF	FARCALL
@@ -1004,8 +918,8 @@ exists	PROC	uses ds, fname: ptr byte
 ; for pascal, zero-terminate input string
 	lodsb
 	mov	bl,al
-	xor	ah,ah
-	mov	[si+bx],ah
+	xor	bh,bh
+	mov	[si+bx],bh
 	mov	dx,si
 	ELSE
 	ldds	dx,fname

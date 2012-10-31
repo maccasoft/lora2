@@ -1,21 +1,39 @@
-#pragma inline
-
 #include <dos.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdlib.h>
+
+#ifdef __OS2__
+#define INCL_DOS
+#define INCL_DOSDEVICES
+#define INCL_DOSDEVIOCTL
+#define INCL_DOSSEMAPHORES
+#define INCL_NOPMAPI
+#include <os2.h>
+#endif
 
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
 
-#define CLEAN_MODULE
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 
 static void empty_delay (void);
-extern int blanked;
+extern int blanked, to_row;
+extern long timeout;
+
+void initialize_modem (void)
+{
+   mdm_sendcmd (init);
+   if (init == config->init) {
+      mdm_sendcmd (config->init2);
+      mdm_sendcmd (config->init3);
+   }
+}
 
 int wait_for_connect(to)
 int to;
@@ -24,42 +42,62 @@ int to;
    unsigned int brate;
    long t1;
 
-   t1 = timerset(6000);
+   if (config->modem_timeout)
+      t1 = timerset (config->modem_timeout * 100);
+   else
+      t1 = timerset (6000);
+   if (!to) {
+      timeout = t1;
+      to_row = 8;
+   }
    brate = 0;
 
    do {
       if (!to && local_kbd == ' ') {
          local_kbd = -1;
-         return (0);
+         if (!to) {
+            timeout = 0L;
+            return (ABORTED);
+         }
+         else
+            return (0);
       }
 
-      if (!to && local_kbd == 0x1B)
-         return (0);
+      if (!to && local_kbd != -1) {
+         if (local_kbd == 0x1B) {
+            timeout = 0L;
+            local_kbd = -1;
+            return (ABORTED);
+         }
 
-      if ((i=modem_response()) <= 0) {
+         local_kbd = -1;
+      }
+
+      if ((i = modem_response()) <= 0) {
          time_release();
+         release_timeslice ();
          if (to)
             return (-1);
       }
       else {
          switch(i) {
          case 1:
-            brate=300;
+            brate = 300;
             break;
          case 5:
-            brate=1200;
+            brate = 1200;
             break;
          case 11:
-            brate=2400;
+            brate = 2400;
             break;
          case 18:
-            brate=4800;
+            brate = 4800;
             break;
          case 16:
             brate = 7200;
             break;
          case 12:
-            brate=9600;
+            brate = 9600;
             break;
          case 17:
             brate = 12000;
@@ -76,21 +114,57 @@ int to;
          case 14:
             brate = 38400U;
             break;
+         case 20:
+            brate = 57600U;
+            break;
+         case 21:
+            brate = 21600;
+            break;
+         case 22:
+            brate = 28800;
+            break;
+         case 23:
+            brate = 38000U;
+            break;
+         case 24:
+            brate = 56000U;
+            break;
+         case 25:
+            brate = 64000U;
+            break;
+         case 40:
+            brate = config->speed;
+            break;
+         case 50:
+            brate = 65535U;
+            break;
          }
 
          if (brate) {
             rate = brate;
-            if (!lock_baud)
-               com_baud(brate);
-            MNP_Filter();
+            if (brate != 65535U) {
+               if (!lock_baud)
+                  com_baud(brate);
+               MNP_Filter();
+            }
+            timeout = 0L;
             return (1);
+         }
+         else if (!to) {
+            timeout = 0L;
+            return (-i);
          }
          else
             return (0);
       }
    } while (!timeup(t1));
 
-   return (0);
+   timeout = 0L;
+
+   if (!to)
+      return (TIMEDOUT);
+   else
+      return (0);
 }
 
 int modem_response()
@@ -99,48 +173,51 @@ int modem_response()
    int c, i=0;
    static char stringa[MODEM_STRING_LEN];
    long t1;
+   int hours, mins, spcount = 0;
 
    mdm_flags = NULL;
-
-   if(PEEKBYTE() == -1)
+   if (!CHAR_AVAIL ())
       return(-1);
 
    if (terminal)
       return (terminal_response ());
 
    for (;;) {
-      if(PEEKBYTE() != -1)
+      if (CHAR_AVAIL ())
          c = MODEM_IN();
       else {
-         t1 = timerset(100);
-
-         while(PEEKBYTE() == -1)
-            if(timeup(t1))
+         t1 = timerset (100);
+         while (!CHAR_AVAIL ())
+            if (timeup (t1))
                return (-1);
-
-         if(PEEKBYTE() != -1)
-            c = MODEM_IN();
+         c = MODEM_IN();
       }
 
-
-      if(c == 0x0D)
+      if (c == 0x0D)
          break;
 
-      if(c < 0x20)
+      if (c < 0x20)
          continue;
 
-      if (c == '/' && mdm_flags == NULL) {
+      if (c == ' ' && i > 0 && stringa[i - 1] != ' ')
+         spcount++;
+
+      if ((c == '/' || c == '\\') && mdm_flags == NULL) {
+         c = '\0';
+         mdm_flags = (char *)&stringa[i+1];
+      }
+      else if (c == ' ' && spcount >= 2 && mdm_flags == NULL) {
          c = '\0';
          mdm_flags = (char *)&stringa[i+1];
       }
 
-      stringa[i++]=c;
+      stringa[i++] = c;
 
       if (i >= MODEM_STRING_LEN)
          break;
    }
 
-   stringa[i]='\0';
+   stringa[i] = '\0';
    if (i < 2)
       return (-1);
 
@@ -150,48 +227,74 @@ int modem_response()
    if (!blanked || !strnicmp (stringa, "CONNECT", 7) || !strnicmp(stringa,"RING",4)) {
       resume_blanked_screen ();
 
-      c = stringa[12];
-      stringa[12] = '\0';
-      wscrollbox (4, 0, 6, 14, 1, D_UP);
-      wprints (6, 2, LCYAN|_BLUE, strupr (stringa));
-      stringa[12] = c;
+      if (emulator) {
+         c = stringa[46];
+         stringa[46] = '\0';
+         scrollbox (15, 11, 18, 69, 1, D_UP);
+         prints (18, 12, CYAN|_BLACK, strupr (stringa));
+         stringa[46] = c;
+      }
+      else {
+         c = stringa[26];
+         stringa[26] = '\0';
+         scrollbox (13, 53, 21, 78, 1, D_UP);
+         prints (21, 53 + ((26 - strlen (stringa)) / 2), CYAN|_BLACK, strupr (stringa));
+         stringa[26] = c;
+      }
    }
 
-   if(!strnicmp(stringa,"CONNECT", 7)) {
-      if(!stricmp(&stringa[7]," 300"))
-         return(1);
-      else if(!stricmp(&stringa[7]," 1200"))
-         return(5);
-      else if(!stricmp(&stringa[7]," 1275"))
-         return(10);
-      else if(!stricmp(&stringa[7]," 2400"))
-         return(11);
-      else if(!stricmp(&stringa[7]," 9600"))
-         return(12);
-      else if(!stricmp(&stringa[7]," FAST"))
-         return(12);
-      else if(!stricmp(&stringa[7]," 7200"))
-         return(16);
-      else if(!stricmp(&stringa[7]," 4800"))
-         return(18);
-      else if(!stricmp(&stringa[7]," 12000"))
-         return(17);
-      else if(!stricmp(&stringa[7]," 14400"))
-         return(15);
-      else if(!stricmp(&stringa[7]," 16800"))
-         return(19);
-      else if(!stricmp(&stringa[7]," 19200"))
-         return(13);
-      else if(!stricmp(&stringa[7]," 38400"))
-         return(14);
-      else
+   if (config->fax_response[0] && !strnicmp (stringa, config->fax_response, strlen (config->fax_response)))
+      return (50);
+
+   if (!strnicmp (stringa, "CONNECT", 7) || !strnicmp (stringa, "CARRIER", 7)) {
+      if(!stricmp (&stringa[7]," 300"))
          return (1);
+      else if(!stricmp (&stringa[7]," 1200"))
+         return (5);
+      else if(!stricmp (&stringa[7]," 1275"))
+         return (10);
+      else if(!stricmp (&stringa[7]," 2400"))
+         return (11);
+      else if(!stricmp (&stringa[7]," 9600"))
+         return (12);
+      else if(!stricmp (&stringa[7]," FAST"))
+         return (12);
+      else if(!stricmp (&stringa[7]," 7200"))
+         return (16);
+      else if(!stricmp (&stringa[7]," 4800"))
+         return (18);
+      else if(!stricmp (&stringa[7]," 12000"))
+         return (17);
+      else if(!stricmp (&stringa[7]," 14400"))
+         return (15);
+      else if(!stricmp (&stringa[7]," 16800"))
+         return (19);
+      else if(!stricmp (&stringa[7]," 19200"))
+         return (13);
+      else if(!stricmp (&stringa[7]," 21600"))
+         return (21);
+      else if(!stricmp (&stringa[7]," 28800"))
+         return (22);
+      else if(!stricmp (&stringa[7]," 38000"))
+         return (23);
+      else if(!stricmp (&stringa[7]," 56000"))
+         return (24);
+      else if(!stricmp (&stringa[7]," 64000"))
+         return (25);
+      else if(!stricmp(&stringa[7]," 38400"))
+         return (14);
+      else if(!stricmp(&stringa[7]," 57600"))
+         return (20);
+      else if(!stricmp(&stringa[7]," FAX"))
+         return (50);
+      else
+         return (40);
    }
    else if(!stricmp(stringa,"OK"))
       return(0);
    else if(!stricmp(stringa,"NO CARRIER")) {
       status_line(":%s", fancy_str(stringa));
-      answer_flag=0;
+      answer_flag = 0;
       return(3);
    }
    else if(!stricmp(stringa,"NO DIALTONE"))
@@ -211,14 +314,26 @@ int modem_response()
       return(9);
    }
    else if(!strnicmp(stringa,"RING",4)) {
-      if (!answer_flag && registered == 1) {
+//      if (config->manual_answer && !answer_flag && registered != 2) {
+      if (config->manual_answer && !answer_flag) {
          status_line(":%s", fancy_str(stringa));
-
-         local_status("Answering the phone");
-
-         mdm_sendcmd( (answer == NULL) ? "ATA|" : answer);
+         if (config->limited_hours) {
+            dostime (&hours, &mins, &i, &i);
+            i = hours * 60 + mins;
+            if (config->start_time > config->end_time) {
+               if (i > config->end_time && i < config->start_time)
+                  return (-1);
+            }
+            else {
+               if (i < config->start_time || i > config->end_time)
+                  return (-1);
+            }
+         }
+         mdm_sendcmd( (config->answer[0] == '\0') ? "ATA|" : config->answer);
          answer_flag=1;
       }
+      else
+         status_line(":%s", fancy_str(stringa));
       return(-1);
    }
 
@@ -287,120 +402,59 @@ char *value;
    register int i;
    long t;
 
-   DTR_ON();
+   SET_DTR_ON ();
    if (value == NULL)
       return;
 
-   for(i=0;value[i];i++)
-      switch(value[i]) {
-      case '|':
-         SENDBYTE('\r');
-         timer(5);
-         break;
-      case '~':                               /* Long delay                */
-         empty_delay ();                      /* wait for buffer to clear  */
-         timer(10);                           /* then wait 1 second        */
-         break;
-      case 'v':                               /* Lower DTR                 */
-         empty_delay ();                      /* wait for buffer to clear, */
-         DTR_OFF();                           /* Turn off DTR              */
-         t=timerset(400);
-         while(!timeup(t) && CARRIER)         /* Wait for carrier drop     */
-            DTR_OFF();
-         break;
-      case '^':                               /* Raise DTR                 */
-         empty_delay ();                      /* wait for buffer to clear  */
-         DTR_ON();                            /* Turn on DTR               */
-         timer(5);
-         break;
-      case '`':                               /* Short delay               */
-         timer (1);                           /* short pause, .1 second    */
-         break;
-      default:
-         SENDBYTE(value[i]);
-         break;
+   for (i = 0; value[i]; i++)
+      switch (value[i]) {
+         case '|':
+            SENDBYTE ('\r');
+            timer (5);
+            break;
+         case '~':                           /* Long delay                */
+            empty_delay ();                  /* wait for buffer to clear  */
+            timer (10);                      /* then wait 1 second        */
+            break;
+         case 'v':                           /* Lower DTR                 */
+            empty_delay ();                  /* wait for buffer to clear, */
+            SET_DTR_OFF ();                  /* Turn off DTR              */
+            timer (5);
+            break;
+         case '^':                           /* Raise DTR                 */
+            empty_delay ();                  /* wait for buffer to clear  */
+            SET_DTR_ON ();                   /* Turn on DTR               */
+            timer (5);
+            break;
+         case '`':                           /* Short delay               */
+            timer (1);                       /* short pause, .1 second    */
+            break;
+         default:
+            if (config->stripdash && value[i] == '-')
+               break;
+            SENDBYTE (value[i]);
+            break;
       }
 }
 
 void modem_hangup()
 {
-   long set;
-
    if (local_mode)
       return;
 
-   DTR_OFF();
+   SET_DTR_OFF();
    timer (5);
+   SET_DTR_ON();
 
-   set = timerset(500);
-   while (CARRIER && !timeup(set) && !local_mode)
-   {
-      DTR_OFF();
-      time_release();
-   }
+   mdm_sendcmd (config->hangup_string);
 
-   if (CARRIER && !local_mode)
+   if (CARRIER)
       status_line("!Unable to drop carrier");
 
    CLEAR_INBOUND();
-   DTR_ON();
    timer (5);
 
    answer_flag = 0;
-   mdm_sendcmd(init);
-}
-
-void com_baud(b)
-int b;
-{
-        int i;
-        union REGS inregs, outregs;
-
-        if (b == 0)
-                return;
-
-        switch( (unsigned)b ) {
-        case 300:
-                i=BAUD_300;
-                break;
-        case 1200:
-                i=BAUD_1200;
-                break;
-        case 2400:
-                i=BAUD_2400;
-                break;
-        case 4800:
-                i=BAUD_4800;
-                break;
-        case 7200:
-                i=BAUD_7200;
-                break;
-        case 9600:
-                i=BAUD_9600;
-                break;
-        case 12000:
-                i=BAUD_12000;
-                break;
-        case 14400:
-                i=BAUD_14400;
-                break;
-        case 16800:
-                i=BAUD_16800;
-                break;
-        case 19200:
-                i=BAUD_19200;
-                break;
-        case 38400U:
-                i=BAUD_38400;
-                break;
-        default:
-                status_line("!Invalid baud rate");
-        }
-
-        inregs.h.ah=0x00;
-        inregs.h.al=i|NO_PARITY|STOP_1|BITS_8;
-        inregs.x.dx=com_port;
-        int86(0x14,&inregs,&outregs);
 }
 
 int TIMED_READ(t)
@@ -409,39 +463,25 @@ int t;
    long t1;
    extern long timerset ();
 
-   if (!CHAR_AVAIL ())
-      {
+   if (!CHAR_AVAIL ()) {
       t1 = timerset ((unsigned int) (t * 100));
-      while (!CHAR_AVAIL ())
-         {
+      while (!CHAR_AVAIL ()) {
          if (timeup (t1))
-            {
-            return (EOF);
-            }
-
+            return (-1);
          if (!CARRIER)
-            {
-            return (EOF);
-            }
+            return (-1);
          time_release ();
-         }
       }
+   }
    return ((unsigned int)(MODEM_IN ()) & 0x00ff);
 }
 
-int com_install(com_port)
-int com_port;
+int com_install (int com_port)
 {
-   if (ComInit( (byte)com_port ) != 0x1954)
-   {
+   if (ComInit( (byte)com_port ) != 0x1954) {
       MDM_DISABLE ();
       if (ComInit( (byte)com_port ) != 0x1954)
-      {
-         printf(msgtxt[M_DRIVER_DEAD_1]);
-         printf(msgtxt[M_DRIVER_DEAD_2]);
-         printf(msgtxt[M_DRIVER_DEAD_3]);
          return (0);
-      }
    }
 
    Com_(0x0f,0);
@@ -494,6 +534,7 @@ void FLUSH_OUTPUT ()
    if (local_mode)
       return;
 
+   UNBUFFER_BYTES ();
    while (CARRIER && !OUT_EMPTY())
       time_release();
 }
@@ -503,8 +544,1153 @@ static void empty_delay ()
    if (local_mode)
       return;
 
-   while (!OUT_EMPTY())
+   while (CARRIER && !OUT_EMPTY()) {
       time_release();
+      release_timeslice ();
+   }
 }
 
+#ifdef __OS2__
+HFILE hfComHandle = -1;
+
+/* transmitter stuff */
+#define TSIZE 512
+static unsigned char tBuff[TSIZE];
+static int tpos = 0;
+
+/* receiver stuff */
+#define RSIZE 1024
+static unsigned char rbuf[RSIZE];
+static USHORT rpos = 0;
+static USHORT Rbytes = 0;
+
+#define DevIOCtl DosDevIOCtl32
+
+USHORT DosDevIOCtl32(PVOID pData, USHORT cbData, PVOID pParms, USHORT cbParms,
+                     USHORT usFunction, USHORT usCategory, HFILE hDevice)
+{
+   ULONG ulParmLengthInOut = cbParms, ulDataLengthInOut = cbData;
+   return (USHORT)DosDevIOCtl(hDevice, usCategory, usFunction,
+                              pParms, cbParms, &ulParmLengthInOut,
+                              pData, cbData, &ulDataLengthInOut);
+}
+
+unsigned int ComInit (unsigned char port)
+{
+   char str[30];
+   ULONG action;
+   MODEMSTATUS ms;
+   UINT data;
+   DCBINFO dcbCom;
+
+   sprintf (str, "COM%d", port + 1);
+
+   if (hfComHandle == -1) {
+      if (DosOpen ((PSZ) str, &hfComHandle, &action, 0L, FILE_NORMAL, FILE_OPEN, OPEN_ACCESS_READWRITE|OPEN_SHARE_DENYNONE, 0L))
+         return (0);
+   }
+
+   XON_DISABLE ();
+   if (DevIOCtl(&dcbCom,sizeof(DCBINFO),NULL,0,ASYNC_GETDCBINFO, IOCTL_ASYNC, hfComHandle))
+      return (0);
+
+   /* turn off IDSR, ODSR */
+/* dcbCom.fbCtlHndShake &= ~(MODE_DSR_HANDSHAKE | MODE_DSR_SENSITIVITY); */
+
+   /* raise DTR, CTS output flow control */
+   dcbCom.fbCtlHndShake |= (MODE_DTR_CONTROL | MODE_CTS_HANDSHAKE);
+
+   /* turn off XON/XOFF flow control, error replacement off, null
+    * stripping off, break replacement off */
+   dcbCom.fbFlowReplace &= ~(MODE_AUTO_TRANSMIT | MODE_AUTO_RECEIVE |
+                             MODE_ERROR_CHAR | MODE_NULL_STRIPPING |
+                             MODE_BREAK_CHAR);
+
+   /* RTS enable */
+/* dcbCom.fbFlowReplace |= MODE_RTS_CONTROL; */
+
+/* dcbCom.fbTimeout |= (MODE_NO_WRITE_TIMEOUT | MODE_NOWAIT_READ_TIMEOUT); */
+   dcbCom.fbTimeout |= (MODE_NOWAIT_READ_TIMEOUT);
+   dcbCom.fbTimeout &= ~(MODE_NO_WRITE_TIMEOUT);
+
+   dcbCom.usReadTimeout = 1000;
+   dcbCom.usWriteTimeout = 1000;
+   
+   if (DevIOCtl (NULL, 0, &dcbCom, sizeof (DCBINFO), ASYNC_SETDCBINFO, IOCTL_ASYNC, hfComHandle))
+      return (0);
+
+   ms.fbModemOn = RTS_ON;
+   ms.fbModemOff = 255;
+
+   if (DevIOCtl (&data, sizeof(data), &ms, sizeof(ms), ASYNC_SETMODEMCTRL, IOCTL_ASYNC, hfComHandle))
+      return (0);
+
+   return (0x1954);
+}
+
+void com_kick(void)
+{
+   if (hfComHandle == -1)
+       return;
+
+   DevIOCtl (NULL, 0L, NULL, 0L, ASYNC_STARTTRANSMIT, IOCTL_ASYNC, hfComHandle);
+}
+
+void MDM_ENABLE (unsigned rate)
+{
+   com_kick ();
+}
+
+void MDM_DISABLE (void)
+{
+   MODEMSTATUS ms;
+   UINT data;
+
+   if (hfComHandle != -1) {
+      ms.fbModemOn = RTS_ON|DTR_ON;
+      ms.fbModemOff = 0;
+   
+      DevIOCtl (&data, sizeof(data), &ms, sizeof(ms), ASYNC_SETMODEMCTRL, IOCTL_ASYNC, hfComHandle);
+
+      DosClose (hfComHandle);
+      hfComHandle = -1;
+   }
+}
+
+int com_out_empty (void)
+{
+   RXQUEUE q;
+
+   DevIOCtl (&q, sizeof (RXQUEUE), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle);
+
+   if (q.cch == 0)
+      return (1);
+   else
+      return (0);
+}
+
+void UNBUFFER_BYTES (void)
+{
+   ULONG written, pos;
+
+   if (hfComHandle == -1)
+      return;
+
+   if (tpos) {
+      pos = 0;
+//      do {
+         DosWrite (hfComHandle, (PVOID)&tBuff[pos], (long)tpos, &written);
+//         pos += written;
+//         tpos -= written;
+//         if (!CARRIER)
+//            break;
+//      } while (tpos > 0);
+      tpos = 0;
+   }
+}
+
+void BUFFER_BYTE (unsigned char ch)
+{
+   if (hfComHandle == -1)
+      return;
+
+   if (tpos >= TSIZE)
+      UNBUFFER_BYTES ();
+
+   tBuff[tpos++] = ch;
+}
+
+void do_break (int a)
+{
+}
+
+int PEEKBYTE (void)
+{
+   ULONG bytesRead;
+   RXQUEUE q;
+
+   if (hfComHandle == -1)
+      return (-1);
+
+   UNBUFFER_BYTES ();
+
+   if (rpos >= Rbytes) {
+      rpos = Rbytes = 0;
+
+      if (DevIOCtl (&q, sizeof (RXQUEUE), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
+         return (-1);
+
+      // if there is a byte or more waiting, then read one.
+      if (q.cch > 0) {
+         if (q.cch > RSIZE)
+            q.cch = RSIZE;
+         DosRead (hfComHandle, (PVOID)rbuf, (long)q.cch, &bytesRead);
+         Rbytes += bytesRead;
+      }
+   }
+
+   if (rpos < Rbytes)
+      return ((unsigned int)rbuf[rpos]);
+   else
+      return (-1);
+}                    
+
+static int check_byte_in (void)
+{
+   ULONG bytesRead;
+   RXQUEUE q;
+
+   if (hfComHandle == -1)
+      return (-1);
+
+   if (rpos >= Rbytes) {
+      rpos = Rbytes = 0;
+
+      if (DevIOCtl (&q, sizeof (RXQUEUE), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
+         return (-1);
+
+      // if there is a byte or more waiting, then read one.
+      if (q.cch > 0) {
+         if (q.cch > RSIZE)
+            q.cch = RSIZE;
+         DosRead (hfComHandle, (PVOID)rbuf, (long)q.cch, &bytesRead);
+         Rbytes += bytesRead;
+      }
+   }
+
+   if (rpos < Rbytes)
+      return ((unsigned int)rbuf[rpos]);
+   else
+      return (-1);
+}                    
+
+void CLEAR_OUTBOUND (void)
+{
+   UINT data;
+   char parm = 0;
+   
+   if (hfComHandle == -1)
+      return;
+
+   DevIOCtl (&data, sizeof (data), &parm, sizeof (parm), DEV_FLUSHOUTPUT, IOCTL_GENERAL, hfComHandle);
+   tpos = 0;
+}
+
+void CLEAR_INBOUND (void)
+{
+   UINT data;
+   char parm = 0;
+   
+   if (hfComHandle == -1)
+      return;
+
+   DevIOCtl (&data, sizeof (data), &parm, sizeof (parm), DEV_FLUSHINPUT, IOCTL_GENERAL, hfComHandle);
+   rpos = Rbytes = 0;
+}
+
+void SENDBYTE (unsigned char c)
+{
+   ULONG written;
+
+   if (hfComHandle == -1)
+      return;
+
+   UNBUFFER_BYTES ();
+//   do {
+      DosWrite (hfComHandle, (PVOID)&c, 1L, &written);
+//      if (written < 1 && CARRIER) {
+//         com_kick ();
+//      }
+//   } while (written < 1);
+}
+
+int MODEM_STATUS (void)
+{
+   UINT result = 0;
+   UCHAR data = 0;
+
+   if (hfComHandle == -1)
+      return (0);
+
+   DevIOCtl (&data, sizeof (UCHAR), NULL, 0, ASYNC_GETMODEMINPUT, IOCTL_ASYNC, hfComHandle);
+   result = data;
+
+   if (check_byte_in () >= 0)
+      result |= DATA_READY;
+
+   return (result);
+}
+
+int MODEM_IN (void)
+{
+   ULONG bytesRead;
+   UINT data = 0;
+
+   if (hfComHandle == -1)
+      return (-1);
+
+   UNBUFFER_BYTES ();
+
+   if (rpos >= Rbytes)
+      for (;;) {
+         rpos = Rbytes = 0;
+
+         if (DevIOCtl (&data, sizeof (UINT), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
+            return (-1);
+
+         // if there is a byte or more waiting, then read one.
+         if (data > 0) {
+            if (data > RSIZE)
+               data = RSIZE;
+            DosRead (hfComHandle, (PVOID)rbuf, (long)data, &bytesRead);
+            Rbytes += bytesRead;
+            break;
+         }
+         if (!CARRIER)
+            break;
+      }
+
+   if (rpos < Rbytes)
+      return ((unsigned int)rbuf[rpos++]);
+   else
+      return (-1);
+}
+
+void SET_DTR_OFF (void)
+{
+   MODEMSTATUS ms;
+   UINT data;
+
+   if (hfComHandle == -1)
+      return;
+
+   ms.fbModemOn = RTS_ON;
+   ms.fbModemOff = DTR_OFF;
+   
+   DevIOCtl (&data, sizeof(data), &ms, sizeof(ms), ASYNC_SETMODEMCTRL, IOCTL_ASYNC, hfComHandle);
+}                    
+
+void SET_DTR_ON (void)
+{
+   MODEMSTATUS ms;
+   UINT data;
+
+   if (hfComHandle == -1)
+      return;
+
+   ms.fbModemOn = RTS_ON|DTR_ON;
+   ms.fbModemOff = 255;
+   
+   DevIOCtl (&data, sizeof(data), &ms, sizeof(ms), ASYNC_SETMODEMCTRL, IOCTL_ASYNC, hfComHandle);
+}                    
+
+unsigned Com_ (char c, ...)
+{
+   UINT result = 0;
+   UCHAR data = 0;
+
+   if (hfComHandle == -1)
+      return (0);
+
+   switch (c) {
+      case 0x03:
+         DevIOCtl (&data, sizeof (UCHAR), NULL, 0, ASYNC_GETMODEMINPUT, IOCTL_ASYNC, hfComHandle);
+         result = data;
+
+//         if (com_out_empty ())
+         if (!tpos)
+            result |= TX_SHIFT_EMPTY;
+
+         if (check_byte_in () >= 0)
+            result |= DATA_READY;
+
+         return (result);
+   }
+
+   return (0);
+}
+
+void XON_ENABLE (void)
+{
+   DCBINFO dcbCom;
+
+   if (hfComHandle == -1)
+      return;
+
+   if (DevIOCtl(&dcbCom,sizeof(DCBINFO),NULL,0,ASYNC_GETDCBINFO, IOCTL_ASYNC, hfComHandle)) {
+      dcbCom.fbFlowReplace |= (MODE_AUTO_TRANSMIT);
+      DevIOCtl (NULL, 0, &dcbCom, sizeof (DCBINFO), ASYNC_SETDCBINFO, IOCTL_ASYNC, hfComHandle);
+   }
+}
+
+void XON_DISABLE (void)
+{
+   DCBINFO dcbCom;
+
+   if (hfComHandle == -1)
+      return;
+
+   if (DevIOCtl(&dcbCom,sizeof(DCBINFO),NULL,0,ASYNC_GETDCBINFO, IOCTL_ASYNC, hfComHandle)) {
+      dcbCom.fbFlowReplace &= ~(MODE_AUTO_TRANSMIT | MODE_AUTO_RECEIVE);
+      DevIOCtl (NULL, 0, &dcbCom, sizeof (DCBINFO), ASYNC_SETDCBINFO, IOCTL_ASYNC, hfComHandle);
+   }
+   com_kick ();
+}
+
+void delay (unsigned int t)
+{
+   long t1;
+
+   t1 = timerset (t / 10);
+   while (!timeup (t1))
+      DosSleep (10L);
+}
+
+void com_baud (int b)
+{
+   ULONG dataWords = (unsigned long)b;
+   LINECONTROL lc;
+
+   if (hfComHandle == -1)
+      return;
+
+   DevIOCtl (NULL, 0, &dataWords, sizeof (ULONG), ASYNC_SETBAUDRATE, IOCTL_ASYNC, hfComHandle);
+
+   lc.bDataBits = 8;
+   lc.bStopBits = 0;
+   lc.bParity = 0;
+
+   DevIOCtl (NULL, 0, &lc, sizeof (LINECONTROL), ASYNC_SETLINECTRL, IOCTL_ASYNC, hfComHandle);
+}
+
+void set_prior (int pclass)
+{
+   char *s;
+   static USHORT regular = 0;
+   static USHORT janus = 0;
+   static USHORT modem = 0;
+   USHORT priority;
+
+   switch (pclass) {
+      case 2:
+         if (regular)
+            priority = regular;
+         else {
+            s = getenv ("REGULARPRIORITY");
+            if (s)
+               priority = regular = atoi (s);
+            else
+               priority = regular = 2;
+         }
+         break;
+
+      case 3:
+         if (janus)
+            priority = janus;
+         else {
+            s = getenv ("JANUSPRIORITY");
+            if (s)
+               priority = janus = atoi (s);
+            else
+               priority = janus = 3;
+         }
+         break;
+
+      case 4:
+         if (modem)
+            priority = modem;
+         else {
+            s = getenv ("MODEMPRIORITY");
+            if (s)
+               priority = modem = atoi (s);
+            else
+               priority = modem = 4;
+         }
+         break;
+
+      default:
+         priority = 2;
+         break;
+   }
+
+   DosSetPrty ((USHORT) 1, priority, (SHORT) 31, (USHORT) 0);
+}
+
+#else
+#ifdef __NOFOSSIL__
+
+/*
+ *	QUEUE routines to allocate - enqueue - dequeue elements to a queue
+ */
+
+typedef struct {
+   int size;
+   int head;
+   int tail;
+   int avail;
+   char *buf;
+} QUEUE;
+
+#define queue_empty(qp) (qp)->head==(qp)->tail
+#define queue_avail(qp) (qp)->avail
+
+QUEUE *alloc_queue (int size)
+{
+   QUEUE  *tmp;
+
+   if ((tmp = (QUEUE *) malloc (sizeof (QUEUE) + size)) != (QUEUE *) 0) {
+      tmp->size = size;
+      tmp->head = 0;
+      tmp->tail = 0;
+      tmp->avail = size;
+      tmp->buf = ((char *) tmp) + sizeof (QUEUE);
+   }
+
+   return (tmp);
+}
+
+int en_queue (QUEUE *qp, char ch)
+{
+   int head = qp->head;
+
+   if (qp->avail == 0)
+      return (-1);
+
+   *(qp->buf + head) = ch;
+   if (++head == qp->size)
+      head = 0;
+
+   qp->head = head;
+   --(qp->avail);
+
+   return (qp->avail);
+}
+
+int de_queue (QUEUE *qp)
+{
+   int tail = qp->tail, ch;
+
+   if (qp->avail == qp->size)
+      return (-1);
+
+   ch = *(qp->buf + tail);
+   if (++tail == qp->size)
+      tail = 0;
+
+   qp->tail = tail;
+   qp->avail++;
+
+   return (ch & 0xFF);
+}
+
+int first_queue (QUEUE *qp)
+{
+   int tail = qp->tail, ch;
+
+   if (qp->avail == qp->size)
+      return (-1);
+
+   ch = *(qp->buf + tail);
+   return (ch & 0xFF);
+}
+
+#define inbyte(address)          inp(address)
+#define outbyte(address, value)  outp(address, value)
+#define peekmem(seg,offset, var) var=peek(seg,offset)
+
+#if (!defined (TRUE))
+#define TRUE  (1)
+#define FALSE (0)
+#endif
+
+/*
+ *	Intel 8259a interrupt controller addresses and constants
+ */
+
+#define INT_cntrl        0x20
+#define INT_mask         0x21
+#define INT_port_enable  0xEF
+#define EOI_word         0x20
+
+/*
+ *	Constants used to enable and disable interrupts from the
+ *	8250 - they are stored in PORT_command 
+ */
+
+#define RX_enable        0x0D /* Enable Rcv & RLS Interrupt       */
+#define TX_enable        0x0E /* Enable Xmit & RLS Interrupt      */
+#define RX_TX_enable     0x0F /* Enable Rcv, Xmit & RLS Interrupt */
+#define ERROR_reset      0xF1
+#define LCR_DLAB         0x80
+
+/*
+ *	8250 register offsets - should be added to value in PORT_address
+ */
+
+#define IER              1  /* interrupt enable offset */
+#define IIR              2  /* interupt identification register */
+#define FCR              2  /* FIFO control register */
+#define LCR              3  /* line control register */
+#define MCR              4  /* modem control register */
+#define LSR              5  /* line status register */
+#define MSR              6  /* modem status register */
+
+/*
+ *	The following constants are primarily for documentaiton purposes
+ *	to show what the values sent to the 8250 Control Registers do to
+ *	the chip.
+ *
+ *
+ *                     INTERRUPT ENABLE REGISTER
+ */
+
+#define IER_Received_Data      1
+#define IER_Xmt_Hld_Reg_Empty  (1<<1)
+#define IER_Recv_Line_Status   (1<<2)
+#define IER_Modem_Status       (1<<3)
+#define IER_Not_Used           0xF0
+
+/*
+ *                 INTERRUPT IDENTIFICATION REGISTER
+ */
+
+#define IIR_receive      4
+#define IIR_transmit     2
+#define IIR_mstatus      0
+#define IIR_rls          6
+#define IIR_complete     1
+#define IIR_Not_Used     0xF8
+
+/*
+ *                       LINE CONTROL REGISTER
+ */
+
+#define LCR_Word_Length_Mask     3
+#define LCR_Stop_Bits            (1<<2)
+#define LCR_Parity_Enable        (1<<3)
+#define LCR_Even_Parity          (1<<4)
+#define LCR_Stick_Parity         (1<<5)
+#define LCR_Set_Break            (1<<6)
+#define LCR_Divisor_Latch_Access (1<<7) /* Divisor Latch - must be set to 1
+                                          * to get to the divisor latches of 
+                                          * the baud rate generator - must
+                                          * be set to 0 to access the
+                                          * Receiver Buffer Register and
+                                          * the Transmit Holding Register
+                                          */
+
+/*
+ *                    	MODEM CONTROL REGISTER
+ */
+
+#define MCR_dtr          1
+#define MCR_rts          (1<<1)
+#define MCR_Out_1        (1<<2)
+#define MCR_Out_2        (1<<3) /* MUST BE ASSERTED TO ENABLE INTERRRUPTS */
+#define MCR_Loop_Back    (1<<4)
+#define MCR_Not_Used     (7<<1)
+
+/*
+ *                        LINE STATUS REGISTER
+ */
+
+#define LSR_Data_Ready      1
+#define LSR_Overrun_Error   (1<<1)
+#define LSR_Parity_Error    (1<<2)
+#define LSR_Framing_Error   (1<<3)
+#define LSR_Break_Interrupt (1<<4)
+#define LSR_THR_Empty       (1<<5)  /* Transmitter Holding Register */
+#define LSR_TSR_Empty       (1<<6)  /* Transmitter Shift Register */
+#define LSR_Not_Used        (1<<7)
+
+/*
+ *                       MODEM STATUS REGISTER
+ */
+
+#define MSR_Delta_CTS       1
+#define MSR_Delta_DSR       (1<<1)
+#define MSR_TERD            (1<<2)  /* Trailing Edge Ring Detect   */
+#define MSR_Delta_RLSD      (1<<3)  /* Received Line Signal Detect */
+#define MSR_CTS             (1<<4)  /* Clear to Send               */
+#define MSR_DSR             (1<<5)  /* Data Set Ready              */
+#define MSR_RD              (1<<6)  /* Ring Detect                 */
+#define MSR_RLSD            (1<<7)  /* Received Line Signal Detect */
+
+#define FCR_Reset_FIFO      0x00
+#define FCR_FIFO_Enable     0xCF
+
+unsigned DTR_PORT_channel;      /* Either 1 or 2 for COM1 or COM2       */
+char    dtr8250_SAVE_int_mask,  /* saved interrupt controller mask word */
+        dtr8250_IER_save = 0,   /* Saved off Interrupt Enable Register  */
+        dtr8250_LCR_save = 0,   /* Saved off Line Control Register      */
+        dtr8250_MCR_save = 0,   /* Saved off Modem Control Register     */
+        dtr8250_DL_lsb = 0,     /* Saved off Baud Rate LSB              */
+        dtr8250_DL_msb = 0;     /* Saved off Baud Rate MSB              */
+
+volatile unsigned DTR_PORT_addr, xmit = 1;
+volatile int DTR_PORT_status, RCV_disabled = FALSE, XMIT_disabled = TRUE, dtr8250_MSR_reg = 0, xon_enabled = 0;
+volatile QUEUE *dtr8250_inqueue = NULL;
+volatile QUEUE *dtr8250_outqueue = NULL;
+
+#define DISABLE_xmit outbyte (DTR_PORT_addr+IER, RX_enable)
+#define ENABLE_xmit  outbyte (DTR_PORT_addr+IER, RX_TX_enable)
+#define DROPPED_cts  ((dtr8250_MSR_reg&0x10)==0)
+#define DROPPED_dsr  ((dtr8250_MSR_reg&0x20)==0)
+#define DROPPED_dtr  ((dtr8250_MSR_reg&0x30)!=0x30)
+#define ASSERT_dtr   outbyte (DTR_PORT_addr+MCR, inbyte (DTR_PORT_addr+MCR)|9)
+#define DROP_dtr     outbyte (DTR_PORT_addr+MCR, inbyte (DTR_PORT_addr+MCR)&0x0A)
+#define ASSERT_rts   outbyte (DTR_PORT_addr+MCR, inbyte (DTR_PORT_addr+MCR)|0x0A)
+#define DROP_rts     outbyte (DTR_PORT_addr+MCR, inbyte (DTR_PORT_addr+MCR)&9)
+#define TSRE_bit     0x40
+
+void (interrupt far * dtr_save_vec) (void);
+
+void interrupt far dtr8250_isr (void)
+{
+   int ch, count;
+   char test_status;
+
+   enable ();
+   test_status = inbyte ((DTR_PORT_addr + IIR));
+
+   do {
+      switch (test_status) {
+         case IIR_rls:
+            DTR_PORT_status |= inbyte (DTR_PORT_addr + LSR);
+            break;
+
+         case IIR_receive:
+            count = 0;
+            do {
+               ch = inbyte (DTR_PORT_addr);
+               if (!RCV_disabled) {
+                  if ((en_queue ((QUEUE *)dtr8250_inqueue, ch) < 10)) {
+                     RCV_disabled = TRUE;
+                     DROP_rts;
+                  }
+               }
+               else if (queue_avail (dtr8250_inqueue) > 20) {
+                  RCV_disabled = FALSE;
+                  ASSERT_rts;
+                  en_queue ((QUEUE *)dtr8250_inqueue, ch);
+               }
+               if (count++ > 14)
+                  break;
+            } while (inbyte (DTR_PORT_addr + LSR) & LSR_Data_Ready);
+            break;
+
+         case IIR_transmit:
+            dtr8250_MSR_reg = inbyte ((DTR_PORT_addr + MSR));
+            if (dtr8250_MSR_reg & MSR_CTS) {
+               if ((ch = de_queue ((QUEUE *)dtr8250_outqueue)) != -1)
+                  outbyte (DTR_PORT_addr, ch);
+               else {
+                  DISABLE_xmit;
+                  xmit = 0;
+               }
+            }
+            break;
+
+         case IIR_mstatus:
+            dtr8250_MSR_reg = inbyte (DTR_PORT_addr + MSR);
+            if (RCV_disabled && (queue_avail (dtr8250_inqueue) > 20)) {
+               RCV_disabled = FALSE;
+               ASSERT_rts;
+            }
+            break;
+      }
+   } while ((test_status = inbyte (DTR_PORT_addr + IIR)) != IIR_complete);
+
+   disable ();
+   outbyte (INT_cntrl, EOI_word);
+}
+
+#define DTR8250_STACK_SIZE 1024
+
+int dtr8250_intno;
+
+static int dtr_intmask [] = { 0xef, 0xf7, 0xef, 0xf7 };
+static int dtr_intno   [] = { 12, 11, 12, 11 };
+static int port_addr   [] = { 0x3F8, 0x2F8, 0x3E8, 0x2E8 };
+
+/*
+#define UNKNOWN  0
+#define U8250    1
+#define U16450   2
+#define U16550   3
+#define U16550A  4
+
+int uart_type (void)
+{
+   int temp, p2, p7;
+   unsigned char xbyte2, xbyte3;
+
+   p2 = DTR_PORT_addr + 2;
+   p7 = DTR_PORT_addr + 7;
+   xbyte2 = inportb (p2);
+   outportb (p2, 0xC1);
+   for (temp = 0; temp < 2; temp++);
+   xbyte3 = inportb (p2);
+   outportb (p2, xbyte2);
+
+   switch ((xbyte3 & 0xC0) >> 6) {
+      case 0:
+         xbyte2 = inportb (p7);
+         outportb (p7, 0xFA);
+         for (temp = 0; temp < 2; temp++);
+         if (inportb (p7) == 0xFA) {
+            outportb (p7, 0xAF);
+            for (temp = 0; temp < 2; temp++);
+            if (inportb (p7) == 0xAF) {
+               outportb (p7, xbyte2);
+               return (U16450);
+            }
+            else
+               return (U8250);
+         }
+         else
+            return (U8250);
+
+      case 1:
+         return (UNKNOWN);
+
+      case 2:
+         return (U16550);
+
+      case 3:
+         return (U16550A);
+   }
+
+   return (UNKNOWN);
+}
+*/
+
+unsigned int ComInit (unsigned char port)
+{
+   int mask, i;
+
+   DTR_PORT_channel = port + 1;
+   dtr8250_inqueue = alloc_queue (4096);
+   dtr8250_outqueue = alloc_queue (1024);
+
+   DTR_PORT_addr = port_addr[DTR_PORT_channel - 1];
+   mask = dtr_intmask [DTR_PORT_channel - 1];
+   dtr8250_SAVE_int_mask = inbyte (INT_mask);
+   mask &= dtr8250_SAVE_int_mask;
+
+   dtr8250_intno = dtr_intno [DTR_PORT_channel-1];
+   dtr8250_LCR_save = inbyte (DTR_PORT_addr + LCR);
+
+   disable ();
+
+   outbyte (DTR_PORT_addr + LCR, dtr8250_LCR_save | LCR_DLAB);
+   dtr8250_MCR_save = inbyte (DTR_PORT_addr + MCR);
+   dtr8250_DL_lsb = inbyte (DTR_PORT_addr);
+   dtr8250_DL_msb = inbyte (DTR_PORT_addr + 1);
+   outbyte (DTR_PORT_addr + LCR, dtr8250_LCR_save & 0x7F);
+   dtr8250_IER_save = inbyte (DTR_PORT_addr + IER);
+
+/*
+   i = uart_type ();
+   if (i == U16550 || i == U16550A) {
+      outbyte (DTR_PORT_addr + FCR, FCR_Reset_FIFO);
+      for (i = 0; i < 2; i++);
+      outbyte (DTR_PORT_addr + FCR, FCR_FIFO_Enable);
+   }
+*/
+
+   enable ();
+
+   dtr_save_vec = _dos_getvect (dtr8250_intno);
+   _dos_setvect (dtr8250_intno, dtr8250_isr);
+
+   outbyte (INT_mask, mask);
+
+   return (0x1954);
+}
+
+void dtr8250_write (char ch)
+{
+   while ((inbyte (DTR_PORT_addr + LSR) & TSRE_bit) == 0)
+      ;
+
+   dtr8250_MSR_reg = inbyte ((DTR_PORT_addr + MSR));
+   outbyte (DTR_PORT_addr, ch);
+
+   if (RCV_disabled && (queue_avail (dtr8250_inqueue) > 20)) {
+      RCV_disabled = FALSE;
+      ASSERT_rts;
+   }
+}
+
+void MDM_ENABLE (unsigned rate)
+{
+   disable ();
+
+   outbyte (DTR_PORT_addr + IER, RX_TX_enable);
+   outbyte (DTR_PORT_addr + MCR, 0x0B);
+
+   inbyte (DTR_PORT_addr + LSR);
+   dtr8250_MSR_reg = inbyte ((DTR_PORT_addr + MSR));
+   inbyte (DTR_PORT_addr);
+
+   enable ();
+
+   com_baud (rate);
+}
+
+void MDM_DISABLE (void)
+{
+   disable ();
+   outbyte (INT_mask, dtr8250_SAVE_int_mask);
+
+   outbyte (DTR_PORT_addr + LCR, LCR_DLAB);
+   outbyte (DTR_PORT_addr, dtr8250_DL_lsb);
+   outbyte (DTR_PORT_addr + 1, dtr8250_DL_msb);
+   outbyte (DTR_PORT_addr + MCR, dtr8250_MCR_save);
+   outbyte (DTR_PORT_addr + LCR, 0x7F);
+   outbyte (DTR_PORT_addr + IER, dtr8250_IER_save);
+   outbyte (DTR_PORT_addr + LCR, dtr8250_LCR_save);
+
+   _dos_setvect (dtr8250_intno, dtr_save_vec);
+}
+
+void UNBUFFER_BYTES (void)
+{
+   disable ();
+   ENABLE_xmit;
+   xmit = 1;
+   enable ();
+
+   while (xmit && CARRIER) {
+      if (esc_pressed ())
+         break;
+   }
+}
+
+void BUFFER_BYTE (unsigned char ch)
+{
+   if (en_queue ((QUEUE *)dtr8250_outqueue, ch) < 10)
+      UNBUFFER_BYTES ();
+}
+
+void do_break (int a)
+{
+}
+
+int PEEKBYTE (void)
+{
+   return (first_queue ((QUEUE *)dtr8250_inqueue));
+}                    
+
+void CLEAR_OUTBOUND (void)
+{
+   disable ();
+   while (de_queue ((QUEUE *)dtr8250_outqueue) != -1)
+      ;
+   enable ();
+}
+
+void CLEAR_INBOUND (void)
+{
+   disable ();
+   while (de_queue ((QUEUE *)dtr8250_inqueue) != -1)
+      ;
+   enable ();
+}
+
+void SENDBYTE (unsigned char c)
+{
+   BUFFER_BYTE (c);
+
+   disable ();
+   ENABLE_xmit;
+   xmit = 1;
+   enable ();
+}
+
+int MODEM_STATUS (void)
+{
+   int result;
+
+   dtr8250_MSR_reg = inbyte (DTR_PORT_addr + MSR);
+   result = dtr8250_MSR_reg;
+   result &= 0xFF;
+
+   if (queue_empty (dtr8250_outqueue))
+      result |= TX_SHIFT_EMPTY;
+   if (first_queue ((QUEUE *)dtr8250_inqueue) != -1)
+      result |= DATA_READY;
+
+   return (result);
+}
+
+int MODEM_IN (void)
+{
+   int ch;
+
+   while (queue_empty ((QUEUE *)dtr8250_inqueue) && CARRIER)
+      time_release ();
+
+   disable ();
+   ch = de_queue ((QUEUE *)dtr8250_inqueue);
+   enable ();
+
+   if (RCV_disabled && (queue_avail (dtr8250_inqueue) > 20)) {
+      RCV_disabled = FALSE;
+      ASSERT_rts;
+   }
+
+   return (ch);
+}
+
+void SET_DTR_OFF (void)
+{
+   DROP_dtr;
+}                    
+
+void SET_DTR_ON (void)
+{
+   ASSERT_dtr;
+}                    
+
+unsigned Com_ (char c, ...)
+{
+   unsigned f, result;
+
+   switch (c) {
+      case 0x03:
+         dtr8250_MSR_reg = inbyte (DTR_PORT_addr + MSR);
+         result = dtr8250_MSR_reg;
+         result &= 0xFF;
+         if (queue_empty (dtr8250_outqueue))
+            result |= TX_SHIFT_EMPTY;
+         if (first_queue ((QUEUE *)dtr8250_inqueue) != -1)
+            result |= DATA_READY;
+         return (result);
+
+      case 0x06:
+         if (f)
+            ASSERT_dtr;
+         else
+            DROP_dtr;
+         break;
+   }
+
+   return (0);
+}
+
+void XON_ENABLE (void)
+{
+   xon_enabled = 1;
+}
+
+void XON_DISABLE (void)
+{
+   xon_enabled = 0;
+}
+
+void com_baud (int b)
+{
+   unsigned baud, data, mode_word, parity, stop;
+
+   baud = b;
+   data = 8;
+   parity = 0;   // E=3, O=1, N=0
+   stop = 1;
+
+   stop = (--stop & 1);
+   stop <<= 2;
+
+   if (baud != 11520)
+      baud /= 10;
+   baud = 11520 / baud;
+
+   parity <<= 3;
+   parity &= 0x018;
+
+   data -= 5;
+   data &= 3;
+
+   mode_word = data | stop | parity;
+
+   disable ();
+
+   outbyte (DTR_PORT_addr + LCR, inbyte (DTR_PORT_addr + LCR) | LCR_DLAB);
+   outbyte (DTR_PORT_addr, baud % 256);
+   outbyte (DTR_PORT_addr + 1, baud / 256);
+   outbyte (DTR_PORT_addr + LCR, mode_word & 0x7F);
+   outbyte (DTR_PORT_addr + IER, RX_enable);
+   outbyte (DTR_PORT_addr + MCR, 0x0B);
+
+   inbyte (DTR_PORT_addr + LSR);
+   dtr8250_MSR_reg = inbyte ((DTR_PORT_addr + MSR));
+   inbyte (DTR_PORT_addr);
+
+   enable ();
+}
+
+#else
+
+void com_baud (int b)
+{
+   int i;
+   union REGS inregs, outregs;
+
+   if (b == 0 || local_mode)
+      return;
+
+   switch( (unsigned)b ) {
+      case 300:
+         i = BAUD_300;
+         break;
+      case 1200:
+         i = BAUD_1200;
+         break;
+      case 2400:
+         i = BAUD_2400;
+         break;
+      case 4800:
+         i = BAUD_4800;
+         break;
+      case 7200:
+         i = BAUD_7200;
+         break;
+      case 9600:
+         i = BAUD_9600;
+         break;
+      case 12000:
+         i = BAUD_12000;
+         break;
+      case 14400:
+         i = BAUD_14400;
+         break;
+      case 16800:
+         i = BAUD_16800;
+         break;
+      case 19200:
+         i = BAUD_19200;
+         break;
+      case 38400U:
+         i = BAUD_38400;
+         break;
+      case 57600U:
+         return;
+      default:
+         status_line ("!Invalid baud rate");
+   }
+
+   inregs.h.ah = 0x00;
+   inregs.h.al = i|NO_PARITY|STOP_1|BITS_8;
+   inregs.x.dx = com_port;
+   int86 (0x14, &inregs, &outregs);
+}
+
+void set_prior (int pclass)
+{
+    if (pclass);
+}
+
+#endif
+#endif
 

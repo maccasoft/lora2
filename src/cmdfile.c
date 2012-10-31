@@ -2,30 +2,53 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
+#include <io.h>
+#include <fcntl.h>
+#include <share.h>
 #include <dos.h>
 #include <dir.h>
 #include <stdarg.h>
 #include <alloc.h>
 #include <stdlib.h>
+#include <sys\stat.h>
+
+#ifdef __OS2__
+#define INCL_DOSPROCESS
+#define INCL_NOPMAPI
+#include <os2.h>
+#endif
 
 #include <cxl\cxlwin.h>
+#include <cxl\cxlstr.h>
 
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
+
+extern int msg_parent, msg_child;
+extern char usr_rip;
+
+#ifdef __OS2__
+void VioUpdate (void);
+#endif
+int check_hotkey (char c);
+int process_menu_option(int, char *);
+int get_user_age (void);
+void rpnInit (void);
+char *rpnProcessString (char *p);
+FILE *get_system_file (char *);
 
 static void raise_priv (void);
 static void lower_priv (void);
 static int set_priv (char);
 static void big_char (char);
 static void big_string (int, char *, ...);
-static FILE *get_system_file (char *);
 static void build_flags (char *, long);
-char *translate_ansi (char *);
 
-static int ansi_attr = 7;
-static char vx = 1, vy = 1;
+int ansi_attr = 7;
+char vx = 1, vy = 1, stop_hotkey = 0, isrip = 0;
 
 void read_hourly_files ()
 {
@@ -54,8 +77,8 @@ void read_hourly_files ()
       }
    } while (!findnext (&blk));
 
-   if (glob_text_path != NULL) {
-      sprintf (filename, "%s????.*", glob_text_path);
+   if (config->glob_text_path[0]) {
+      sprintf (filename, "%s????.*", config->glob_text_path);
       if (findfirst (filename, &blk, 0))
          return;
 
@@ -67,7 +90,7 @@ void read_hourly_files ()
                continue;
 
             blk.ff_name[4] = '\0';
-            sprintf (filename, "%s%s", glob_text_path, blk.ff_name);
+            sprintf (filename, "%s%s", config->glob_text_path, blk.ff_name);
             read_system_file (blk.ff_name);
             return;
          }
@@ -75,49 +98,98 @@ void read_hourly_files ()
    }
 }
 
-int read_system_file(name)
-char *name;
+int naplps_read_file (char *name)
 {
-        int i;
-        char filename[128];
+   FILE *fp;
+   char linea[130], *p;
 
-        strcpy(filename, text_path);
-        strcat(filename, name);
+   XON_ENABLE();
+   _BRK_ENABLE();
 
-        if ((i = read_file(filename)) == 0 && glob_text_path != NULL) {
-                strcpy(filename, glob_text_path);
-                strcat(filename, name);
+   if (!name || !(*name))
+      return (-1);
 
-                i = read_file(filename);
-        }
+   if ((p = strchr (name,'/')) != NULL)
+      *(p - 1) = '\0';
 
-        return (i);
+   fp = get_system_file (name);
+
+   if (p != NULL)
+      *(p - 1) = ' ';
+
+   if (fp == NULL)
+      return (-1);
+
+   while (fgets (linea, 128, fp) != NULL) {
+      while (strstr (linea, "\r\n") != NULL)
+         strsrep (linea, "\r\n", "\n");
+
+      m_print ("%s", linea);
+   }
+
+   fclose (fp);
+
+   UNBUFFER_BYTES ();
+   FLUSH_OUTPUT();
+
+   return (1);
 }
 
-static FILE *get_system_file (name)
-char *name;
+int read_system_file (char *name)
+{
+   int i;
+   char filename[128];
+
+   strcpy (filename, text_path);
+   strcat (filename, name);
+
+   if (stristr (name, "/P") == NULL)
+      i = read_file (filename);
+   else
+      i = naplps_read_file (filename);
+
+   if (i == 0 && config->glob_text_path[0]) {
+      strcpy (filename, config->glob_text_path);
+      strcat (filename, name);
+
+      if (stristr (name, "/P") == NULL)
+         i = read_file (filename);
+      else
+         i = naplps_read_file (filename);
+   }
+
+   return (i == -1 ? 0 : i);
+}
+
+FILE *get_system_file (char *name)
 {
    FILE *fp;
    char linea[80];
 
-   fp = fopen(name,"rb");
-   if (fp == NULL && !usr.ansi && !usr.avatar)
-   {
+   isrip = 0;
+
+   fp = fopen (name, "rb");
+   if (fp == NULL && usr_rip) {
+      sprintf (linea, "%s.RIP", name);
+      fp = fopen (linea, "rb");
+      if (fp != NULL) {
+         isrip = 1;
+         return (fp);
+      }
+   }
+   if (fp == NULL && !usr.ansi && !usr.avatar) {
       sprintf(linea,"%s.ASC",name);
       fp = fopen(linea,"rb");
    }
-   if (fp == NULL && usr.ansi)
-   {
+   if (fp == NULL && usr.ansi) {
       sprintf(linea,"%s.ANS",name);
       fp = fopen(linea,"rb");
    }
-   if (fp == NULL && usr.avatar)
-   {
+   if (fp == NULL && usr.avatar) {
       sprintf(linea,"%s.AVT",name);
       fp = fopen(linea,"rb");
    }
-   if (fp == NULL)
-   {
+   if (fp == NULL) {
       sprintf(linea,"%s.BBS",name);
       fp = fopen(linea,"rb");
    }
@@ -125,13 +197,12 @@ char *name;
    return (fp);
 }
 
-int read_file(name)
-char *name;
+int read_file (char *name)
 {
    FILE *fp, *answer, *fpc;
    char linea[260], stringa[80], parola[80], *p, lastresp[80];
-   char chain[40], onexit[40], resp, c;
-   int line, required, more, m, a, day, mont, year, bignum;
+   char onexit[40], resp, c;
+   int line, required, more, m, a, day, mont, year, bignum, fd;
    word search;
    long tempo;
    struct ffblk blk;
@@ -160,7 +231,10 @@ char *name;
    nopause = bignum = required = 0;
    fpc = answer = NULL;
    resp = ' ';
-   chain[0] = onexit[0] = '\0';
+   onexit[0] = '\0';
+
+   if (!isrip)
+      rpnInit ();
 
 loop:
    change_attr(LGREY|_BLACK);
@@ -180,832 +254,973 @@ loop:
                fclose (fp);
                if (answer)
                   fclose (answer);
-               return (0);
+#ifdef __OS2__
+               VioUpdate ();
+#endif
+               return (line);
+            }
+
+            if (stop_hotkey && CHAR_AVAIL ()) {
+               c = (char)PEEKBYTE ();
+               if (check_hotkey (c)) {
+                  CLEAR_OUTBOUND();
+
+                  fclose (fp);
+                  if (answer)
+                     fclose (answer);
+#ifdef __OS2__
+                  VioUpdate ();
+#endif
+                  return (line);
+               }
+               else
+                  TIMED_READ (1);
             }
          }
 
+         if (isrip && !local_mode) {
+            BUFFER_BYTE (*p);
+            continue;
+         }
+
          switch (*p) {
-         case CTRLA:
-            if (*(p + 1) == CTRLA) {
-               big_string (bignum, bbstxt[B_PRESS_ENTER]);
-               p++;
-            }
-            input (stringa, 0);
-            line = 1;
-            break;
-         case CTRLD:
-            _BRK_ENABLE ();
-            more=1;
-            break;
-         case CTRLE:
-            _BRK_DISABLE ();
-            more=0;
-            break;
-         case CTRLF:
-            p++;
-            switch(toupper(*p)) {
-            case 'C':
-               big_string (bignum, "%ld", cps);
-               break;
-            case 'D':
-               big_string (bignum, "%s",usr.dataphone);
-               break;
-            case 'E':
-               big_string (bignum, "%s",usr.voicephone);
-               break;
-            case 'F':
-               usr.ldate[9] = '\0';
-               big_string (bignum, "%s", usr.ldate);
-               usr.ldate[9] = ' ';
-               break;
-            case 'G':
-               big_string (bignum, "%s",&usr.ldate[11]);
-               break;
-            case 'H':
-               big_string (bignum, "%ld", (cps * 100) / (rate / 10));
-               break;
-            case 'L':
-               big_string (bignum, "%d", usr.credit);
-               break;
-            case 'M':
-               big_string (bignum, "%d", last_mail);
-               break;
-            case 'N':
-               big_string (bignum, "%d", lastread);
-               break;
-            case 'O':
-               big_string (bignum, "%s", get_priv_text(usr.priv));
-               break;
-            case 'Q':
-               big_string (bignum, "%u", usr.n_upld);
-               break;
-            case 'R':
-               big_string (bignum, "%lu", usr.upld);
-               break;
-            case 'S':
-               big_string (bignum, "%u", usr.n_dnld);
-               break;
-            case 'T':
-               big_string (bignum, "%lu", usr.dnld);
-               break;
-            case 'V':
-               big_string (bignum, "%d", usr.len);
-               break;
-            case 'X':
-               big_string (bignum, "%s",usr.ansi ? bbstxt[B_YES] : bbstxt[B_NO]);
-               break;
-            case 'Y':
-               big_string (bignum, "%s",usr.more ? bbstxt[B_YES] : bbstxt[B_NO]);
-               break;
-            case 'Z':
-               big_string (bignum, "%s",usr.formfeed ? bbstxt[B_YES] : bbstxt[B_NO]);
-               break;
-            case '0':
-            case '1':
-               big_string (bignum, "%s",usr.use_lore ? bbstxt[B_NO] : bbstxt[B_YES]);
-               break;
-            case '2':
-               big_string (bignum, "%s",usr.hotkey ? bbstxt[B_YES] : bbstxt[B_NO]);
-               break;
-            case '3':
-               big_string (bignum, "%s",usr.handle);
-               break;
-            case '4':
-               big_string (bignum, "%s",usr.firstdate);
-               break;
-            case '5':
-               big_string (bignum, "%s",usr.birthdate);
-               break;
-            case '6':
-               big_string (bignum, "%s",usr.subscrdate);
-               break;
-            case '8':
-               big_string (bignum, "%s",usr.avatar ? bbstxt[B_YES] : bbstxt[B_NO]);
-               break;
-            case '!':
-               big_string (bignum, "%s",usr.color ? bbstxt[B_YES] : bbstxt[B_NO]);
-               break;
             case CTRLA:
-               show_quote();
-               break;
-            case 'A':
-            case CTRLB:
-               big_string (bignum, "%s", usr.name);
-               break;
-            case 'B':
-            case CTRLC:
-               big_string (bignum, "%s", usr.city);
+               if (*(p + 1) == CTRLA) {
+                  big_string (bignum, bbstxt[B_PRESS_ENTER]);
+                  p++;
+               }
+#ifdef __OS2__
+               VioUpdate ();
+#endif
+               input (stringa, 0);
+               line = 1;
                break;
             case CTRLD:
-               data(stringa);
-               stringa[9] = '\0';
-               big_string (bignum, "%s",stringa);
+               _BRK_ENABLE ();
+               more=1;
                break;
-            case 'P':
             case CTRLE:
-               big_string (bignum, "%ld",usr.times);
-               break;
-            case 'W':
-            case CTRLF:
-               strcpy(stringa,usr.name);
-               get_fancy_string(stringa, parola);
-               big_string (bignum, parola);
-               break;
-            case CTRLG:
-               timer(10);
-               break;
-            case CTRLK:
-               m = (int)((time(NULL)-start_time)/60);
-               m += usr.time;
-               big_string (bignum, "%d",m);
-               break;
-            case 'U':
-            case CTRLL:
-               m = (int)((time(0)-start_time)/60);
-               big_string (bignum, "%d",m);
-               break;
-            case CTRLN:
-               modem_hangup();
-               return (0);
-            case CTRLO:
-               big_string (bignum, "%d",time_remain());
-               break;
-            case CTRLP:
-               big_string (bignum, "%s",ctime(&start_time));
-               break;
-            case CTRLQ:
-               big_string (bignum, "%lu",sysinfo.total_calls);
-               break;
-            case CTRLR:
-               big_string (bignum, "%lu",usr.dnld-usr.upld);
-               break;
-            case CTRLT:
-               data(stringa);
-               big_string (bignum, &stringa[10]);
-               break;
-            case CTRLU:
-               required=1;
-               break;
-            case CTRLV:
-               required=0;
-               break;
-            case CTRLW:
-               big_string (bignum, "%lu", usr.upld);
-               break;
-            case CTRLX:
-               big_string (bignum, "%lu",usr.dnld);
-               break;
-            case '9':
-               if(usr.n_upld == 0)
-                  big_string (bignum, "0:%u", usr.n_dnld);
-               else {
-                   m = (unsigned int)(usr.n_dnld / usr.n_upld);
-                   big_string (bignum, "1:%u", m);
-               }
-               break;
-            case CTRLY:
-            case ':':
-               if (usr.upld == 0)
-                  big_string (bignum, "0:%lu", usr.dnld);
-               else {
-                  m = (unsigned int)(usr.dnld / usr.upld);
-                     big_string (bignum, "1:%u", m);
-               }
-               break;
-            case ';':
-            case '"':
-               big_string (bignum, "%s",usr.full_read ? bbstxt[B_YES] : bbstxt[B_NO]);
-               break;
-            case '[':
-               big_string (bignum, "%lu", class[usr_class].max_dl - usr.dnldl);
-               break;
-            case '\\':
-               big_string (bignum, "%s", lang_descr[usr.language]);
-               break;
-            case ']':
-               big_string (bignum, "%s", usr.comment);
-               break;
-            }
-            break;
-         case CR:
-            break;
-         case LF:
-            if (!local_mode) {
-               BUFFER_BYTE('\r');
-               BUFFER_BYTE('\n');
-            }
-            if (snooping)
-               wputs("\n");
-
-            if (!(line++ < (usr.len-1)) && usr.len != 0) {
-               if (!more)
-                  continue;
-               if (!(line = more_question (line))) {
-                   fclose(fp);
-                   fp = NULL;
-               }
-            }
-            break;
-         case CTRLK:
-            p++;
-            switch(toupper(*p)) {
-            case 'A':
-               big_string (bignum, "%lu",sysinfo.total_calls);
-               break;
-            case 'B':
-               big_string (bignum, "%s",lastcall.name);
-               break;
-            case 'D':
-               big_string (bignum, "%d",first_msg);
-               break;
-            case 'E':
-               big_string (bignum, "%d",last_msg);
-               break;
-            case 'F':
-               p++;
-               sscanf(usr.ldate, "%2d %3s %2d", &day, parola, &year);
-               parola[3] = '\0';
-               for (mont = 0; mont < 12; mont++) {
-                  if ((!stricmp(mtext[mont], parola)) || (!stricmp(mesi[mont], parola)))
-                     break;
-               }
-               search=(year-80)*512+(mont+1)*32+day;
-               translate_filenames (p, resp, lastresp);
-               if (findfirst(p,&blk,0) || blk.ff_fdate < search)
-                  p = strchr(linea,'\0') - 1;
-               break;
-            case 'G':
-               tempo = time(0);
-               tim = localtime(&tempo);
-               big_string (bignum, "%s", bbstxt[B_SUNDAY + tim->tm_wday]);
-               break;
-            case 'I':
-               data(stringa);
-               big_string (bignum, &stringa[10]);
-               break;
-            case 'J':
-               data(stringa);
-               stringa[9] = '\0';
-               big_string (bignum, "%s",stringa);
-               break;
-            case 'K':
-               m = (int)((time(NULL)-start_time)/60);
-               big_string (bignum, "%d",m);
-               break;
-            case 'M':
-               big_string (bignum, "%d",max_priv_mail);
-               break;
-            case 'O':
-               big_string (bignum, "%d",time_remain());
-               break;
-            case 'Q':
-               big_string (bignum, "%d",class[usr_class].max_call);
-               break;
-            case 'R':
-               big_string (bignum, "%d", local_mode ? 0 : rate);
-               break;
-            case 'T':
-               big_string (bignum, "%d",class[usr_class].max_dl);
-               break;
-            case 'U':
-               big_string (bignum, "%d", time_to_next (1));
-               break;
-            case 'W':
-               big_string (bignum, "%d", line_offset);
-               break;
-            case 'X':
-               terminating_call ();
-               return (0);
-            case 'Y':
-               big_string (bignum, "%s",sys.msg_name);
-               break;
-            case 'Z':
-               big_string (bignum, "%s",sys.file_name);
-               break;
-            case '0':
-            case '9':
-               big_string (bignum, "%d",num_msg);
-               break;
-            case '1':
-               big_string (bignum, "%d",usr.msg);
-               break;
-            case '2':
-               big_string (bignum, "%d",usr.files);
-               break;
-            case '5':
-               big_string (bignum, "%s", sys.msg_name);
-               break;
-            case '7':
-               big_string (bignum, "%u",usr.account);
-               break;
-            case '8':
-               big_string (bignum, "%u",usr.f_account);
-               break;
-            case '[':
-               big_string (bignum, "%d", class[usr_class].max_dl - usr.dnldl);
-               break;
-            case '\\':
-               del_line ();
-               break;
-            default:
-               p--;
                _BRK_DISABLE ();
-               more = 0;
-               break;
-            }
-            break;
-         case CTRLL:
-            cls();
-            vx = vy = 1;
-            line=1;
-            break;
-         case CTRLO:
-            p++;
-            switch(toupper(*p)) {
-            case 'C':
-               p++;
-               translate_filenames (p, resp, lastresp);
-               open_outside_door (p);
-               break;
-            case 'D':
-               p++;
-               strcpy(chain,p);
-               break;
-            case 'E':
-               if (!usr.ansi && !usr.avatar)
-                  p = strchr(linea,'\0') - 1;
-               break;
-            case 'F':
-               p++;
-               strcpy(onexit,p);
-               p = strchr(linea,'\0') - 1;
-               break;
-            case 'M':
-               if(answer) {
-                  p++;
-                  fprintf(answer,"%s %c\r\n",p,resp);
-               }
-
-               p = strchr(linea,'\0') - 1;
-               break;
-            case 'N':
-               while (CARRIER && time_remain() > 0) {
-                  input(stringa,usr.width-1);
-                  if(strlen(stringa))
-                     break;
-                  if(!required)
-                     break;
-                  big_string (bignum, bbstxt[B_TRY_AGAIN]);
-               }
-
-               strcpy (lastresp, stringa);
-
-               if(answer) {
-                  putc(' ',answer);
-                  putc(' ',answer);
-                  p++;
-                  fprintf(answer,"%s",p);
-                  putc(':',answer);
-                  putc(' ',answer);
-                  fprintf(answer,"%s\r\n",stringa);
-               }
-
-               p = strchr(linea,'\0') - 1;
-               break;
-            case 'O':
-               if(answer)
-                  fclose(answer);
-               p++;
-               p[strlen(p)-2] = '\0';
-               translate_filenames (p, resp, lastresp);
-               answer = fopen (p, "ab");
-               if(answer == NULL)
-                  status_line(msgtxt[M_UNABLE_TO_OPEN],p);
-
-               p = strchr(linea,'\0') - 1;
-               break;
-            case 'P':
-               if(answer) {
-                  fprintf(answer,"\r\n");
-                  usr.ptrquestion = ftell(answer);
-                  fprintf(answer,"* %s\t%s\t%s\r\n",usr.name,usr.city,data(parola));
-               }
-               break;
-            case 'Q':
-               if (fp != NULL)
-                  fclose(fp);
-
-               UNBUFFER_BYTES ();
-               FLUSH_OUTPUT ();
-
-               if (fpc == NULL) {
-                  fp = fopen(onexit,"rb");
-                  if (fp == NULL) {
-                     if (answer)
-                        fclose (answer);
-                     return (line);
-                  }
-               }
-               else {
-                  fp = fpc;
-                  fpc = NULL;
-                  p[1] = '\0';
-               }
-
-               p = strchr(p,'\0') - 1;
-               break;
-            case 'R':
-               line=1;
-               p++;
-               while (CARRIER && time_remain() > 0) {
-                  input (stringa, 1);
-                  c = toupper(stringa[0]);
-                  if(c == '\0')
-                     c = 0x7C;
-                  if(strchr(strupr(p),c) != NULL)
-                     break;
-                  big_string (bignum, bbstxt[B_TRY_AGAIN]);
-               }
-
-               p = strchr(linea,'\0') - 1;
-               resp = c;
-               big_string (bignum, "\n");
-               break;
-            case 'S':
-               p++;
-               fclose(fp);
-               fp = fopen(p,"rb");
-               if(fp == NULL)
-               {
-                  fp = fopen(onexit,"rb");
-                  onexit[0]='\0';
-                  if (fp == NULL)
-                     return(line);
-               }
-
-               p = strchr(linea,'\0') - 1;
-               break;
-            case 'T':
-               rewind(fp);
-               break;
-            case 'U':
-               p++;
-               if(toupper(*p) != resp)
-                  p = strchr(linea,'\0') - 1;
-               break;
-            case 'V':
-               p++;
-               fseek (fp, atol (p), SEEK_SET);
-               if(toupper(*p) != resp)
-                  p = strchr(linea,'\0') - 1;
-               break;
-            }
-            break;
-         case CTRLP:
-            p++;
-            if ( *p == 'B' )
-            {
-               p++;
-               a = set_priv ( *p );
-               if (usr.priv > a)
-                  p = strchr(linea,'\0') - 1;
-            }
-            else if ( *p == 'L' )
-            {
-               p++;
-               a = set_priv ( *p );
-               if (usr.priv < a)
-                  p = strchr(linea,'\0') - 1;
-            }
-            else if ( *p == 'Q' )
-            {
-               p++;
-               a = set_priv ( *p );
-               if (a != usr.priv)
-                  p = strchr(linea,'\0') - 1;
-            }
-            else if ( *p == 'X' )
-            {
-               p++;
-               a = set_priv ( *p );
-               if (usr.priv == a)
-                  p = strchr(linea,'\0') - 1;
-            }
-            else
-            {
-               a = set_priv ( *p );
-               if (usr.priv < a)
-                  fseek (fp, 0L, SEEK_END);
-            }
-            break;
-         case CTRLV:
-            p++;
-            switch(*p) {
-            case CTRLA:
-               p++;
-               if(*p == CTRLP)
-               {
-                  p++;
-                  *p &= 0x7F;
-               }
-
-               if (!*p)
-                  change_attr(13);
-               else
-                  change_attr(*p);
-               break;
-            case CTRLC:
-               cup (1);
-               line--;
-               break;
-            case CTRLD:
-               cdo (1);
-               line++;
-               break;
-            case CTRLE:
-               cle (1);
+               more=0;
                break;
             case CTRLF:
-               cri (1);
-               break;
-            case CTRLG:
-               del_line();
-               break;
-            case CTRLH:
-               cpos ( *(p+1), *(p+2) );
-               line = *(p+1);
-               p+=2;
-               break;
-            case CTRLY:
                p++;
-               strncpy (stringa, &p[1], *p);
-               stringa[*p] = '\0';
-               p += *p + 1;
-               for (m = 0; m < *p; m++)
-                  m_print (stringa);
-               break;
-            }
-            break;
-         case CTRLW:
-            p++;
-            switch(*p) {
-            case 'A':
-               p++;
-               p[strlen(p)-2] = '\0';
-               translate_filenames (p, resp, lastresp);
-               status_line (p);
-               p = strchr(linea,'\0') - 1;
-               break;
-            case 'a':
-               p++;
-               p[strlen(p)-2] = '\0';
-               translate_filenames (p, resp, lastresp);
-               broadcast_message (p);
-               p = strchr(linea,'\0') - 1;
-               break;
-            case CTRLA:
-               usr.ldate[9] = '\0';
-               big_string (bignum, "%s",usr.ldate);
-               usr.ldate[9] = ' ';
-               break;
-            case 'B':
-               bignum = bignum ? 0 : 1;
-               break;
-            case 'c':
-               p++;
-               if ( *p == 'A' && !local_mode)
-                  p = strchr(linea,'\0') - 1;
-               else if ( *p == 'R' && local_mode)
-                  p = strchr(linea,'\0') - 1;
-               break;
-            case CTRLB:
-               p++;
-               if ( (*p == '1' && rate >= 1200) ||
-                    (*p == '2' && rate >= 2400) ||
-                    (*p == '9' && rate >= 9600)
-                  )
+               switch(toupper(*p)) {
+               case '"':
+                  if (usr.archiver == bbstxt[B_ZIP][0])
+                     big_string (bignum, "%s", &bbstxt[B_ZIP][1]);
+                  else if (usr.archiver == bbstxt[B_ARJ][0])
+                     big_string (bignum, "%s", &bbstxt[B_ARJ][1]);
+                  else if (usr.archiver == bbstxt[B_LHA][0])
+                     big_string (bignum, "%s", &bbstxt[B_LHA][1]);
+                  else
+                     big_string (bignum, "%s", &bbstxt[B_NONE][1]);
                   break;
-               p = strchr(linea,'\0') - 1;
-               break;
-            case CTRLC:
-               big_string (bignum, system_name);
-               break;
-            case CTRLD:
-               big_string (bignum, sysop);
-               break;
-            case CTRLE:
-               big_string (bignum, lastresp);
-               break;
-            case CTRLG:
-               sound (1000);
-               timer (3);
-               nosound ();
+               case '%':
+                  if (usr.protocol == protocols[0][0])
+                     big_string (bignum, "%s", &protocols[0][1]);
+                  else if (usr.protocol == protocols[1][0])
+                     big_string (bignum, "%s", &protocols[1][1]);
+                  else if (usr.protocol == protocols[2][0])
+                     big_string (bignum, "%s", &protocols[2][1]);
+                  else if (usr.protocol == protocols[5][0])
+                     big_string (bignum, "%s", &protocols[5][1]);
+                  else if (config->hslink && usr.protocol == protocols[3][0])
+                     big_string (bignum, "%s", &protocols[3][1]);
+                  else if (config->puma && usr.protocol == protocols[4][0])
+                     big_string (bignum, "%s", &protocols[4][1]);
+                  else {
+                     PROTOCOL prot;
+
+                     sprintf (stringa, "%sPROTOCOL.DAT", config->sys_path);
+                     fd = sh_open (stringa, O_RDONLY|O_BINARY, SH_DENYWR, S_IREAD|S_IWRITE);
+                     if (fd != -1) {
+                        while (read (fd, &prot, sizeof (PROTOCOL)) == sizeof (PROTOCOL)) {
+                           if (prot.active && prot.hotkey == usr.protocol) {
+                              big_string (bignum, "%s", prot.name);
+                              break;
+                           }
+                        }
+                        close (fd);
+                     }
+                     if (fd != -1 || !prot.active || prot.hotkey != usr.protocol)
+                        big_string (bignum, "%s", &bbstxt[B_NONE][1]);
+                  }
+                  break;
+               case 'C':
+                  big_string (bignum, "%ld", cps);
+                  break;
+               case 'D':
+                  big_string (bignum, "%s",usr.dataphone);
+                  break;
+               case 'E':
+                  big_string (bignum, "%s",usr.voicephone);
+                  break;
+               case 'F':
+                  usr.ldate[9] = '\0';
+                  big_string (bignum, "%s", usr.ldate);
+                  usr.ldate[9] = ' ';
+                  break;
+               case 'G':
+                  big_string (bignum, "%s",&usr.ldate[11]);
+                  break;
+               case 'H':
+                  big_string (bignum, "%ld", (cps * 100) / (rate / 10));
+                  break;
+               case 'I':
+                  big_string (bignum, "%s",usr.ibmset ? bbstxt[B_YES] : bbstxt[B_NO]);
+                  break;
+               case 'L':
+                  big_string (bignum, "%d", usr.credit);
+                  break;
+               case 'M':
+                  big_string (bignum, "%d", last_mail);
+                  break;
+               case 'N':
+                  big_string (bignum, "%d", lastread);
+                  break;
+               case 'O':
+                  big_string (bignum, "%s", get_priv_text(usr.priv));
+                  break;
+               case 'Q':
+                  big_string (bignum, "%u", usr.n_upld);
+                  break;
+               case 'R':
+                  big_string (bignum, "%lu", usr.upld);
+                  break;
+               case 'S':
+                  big_string (bignum, "%u", usr.n_dnld);
+                  break;
+               case 'T':
+                  big_string (bignum, "%lu", usr.dnld);
+                  break;
+               case 'V':
+                  big_string (bignum, "%d", usr.len);
+                  break;
+               case 'X':
+                  big_string (bignum, "%s",usr.ansi ? bbstxt[B_YES] : bbstxt[B_NO]);
+                  break;
+               case 'Y':
+                  big_string (bignum, "%s",usr.more ? bbstxt[B_YES] : bbstxt[B_NO]);
+                  break;
+               case 'Z':
+                  big_string (bignum, "%s",usr.formfeed ? bbstxt[B_YES] : bbstxt[B_NO]);
+                  break;
+               case '0':
+                  big_string (bignum, "%s",usr.use_lore ? bbstxt[B_NO] : bbstxt[B_YES]);
+                  break;
+               case '2':
+                  big_string (bignum, "%d", get_user_age ());
+                  break;
+               case '3':
+                  big_string (bignum, "%s",usr.hotkey ? bbstxt[B_YES] : bbstxt[B_NO]);
+                  break;
+               case '4':
+                  big_string (bignum, "%s",usr.firstdate);
+                  break;
+               case '5':
+                  big_string (bignum, "%s",usr.birthdate);
+                  break;
+               case '6':
+                  big_string (bignum, "%s",usr.scanmail ? bbstxt[B_YES] : bbstxt[B_NO]);
+                  break;
+               case '7':
+                  big_string (bignum, "%s",usr.subscrdate);
+                  break;
+               case '8':
+                  big_string (bignum, "%s",usr.avatar ? bbstxt[B_YES] : bbstxt[B_NO]);
+                  break;
+               case '1':
+                  m = check_subscription ();
+                  if (m != -1)
+                     big_string (bignum, "%d", m);
+                  break;
+               case '!':
+                  big_string (bignum, "%s",usr.color ? bbstxt[B_YES] : bbstxt[B_NO]);
+                  break;
+               case CTRLA:
+                  show_quote();
+                  break;
+               case 'A':
+               case CTRLB:
+                  big_string (bignum, "%s", usr.name);
+                  break;
+               case 'B':
+               case CTRLC:
+                  big_string (bignum, "%s", usr.city);
+                  break;
+               case CTRLD:
+                  data(stringa);
+                  stringa[9] = '\0';
+                  big_string (bignum, "%s",stringa);
+                  break;
+               case 'P':
+               case CTRLE:
+                  big_string (bignum, "%ld",usr.times);
+                  break;
+               case 'W':
+               case CTRLF:
+                  strcpy(stringa,usr.name);
+                  get_fancy_string(stringa, parola);
+                  big_string (bignum, parola);
+                  break;
+               case CTRLG:
+                  timer(10);
+                  break;
+               case CTRLK:
+                  m = (int)((time(NULL)-start_time)/60);
+                  m += usr.time;
+                  big_string (bignum, "%d",m);
+                  break;
+               case 'U':
+               case CTRLL:
+                  m = (int)((time(0)-start_time)/60);
+                  big_string (bignum, "%d",m);
+                  break;
+               case CTRLN:
+#ifdef __OS2__
+                  VioUpdate ();
+#endif
+                  modem_hangup();
+                  return (line);
+               case CTRLO:
+                  big_string (bignum, "%d",time_remain());
+                  break;
+               case CTRLP:
+                  big_string (bignum, "%s",ctime(&start_time));
+                  break;
+               case CTRLQ:
+                  big_string (bignum, "%lu",sysinfo.total_calls);
+                  break;
+               case CTRLR:
+                  big_string (bignum, "%lu",usr.dnld-usr.upld);
+                  break;
+               case CTRLS:
+                  big_string (bignum, "%s",usr.signature);
+                  break;
+               case CTRLT:
+                  data(stringa);
+                  big_string (bignum, &stringa[10]);
+                  break;
+               case CTRLU:
+                  required=1;
+                  break;
+               case CTRLV:
+                  required=0;
+                  break;
+               case CTRLW:
+                  big_string (bignum, "%lu", usr.upld);
+                  break;
+               case CTRLX:
+                  big_string (bignum, "%lu",usr.dnld);
+                  break;
+               case '9':
+                  if(usr.n_upld == 0)
+                     big_string (bignum, "0:%u", usr.n_dnld);
+                  else {
+                      m = (unsigned int)(usr.n_dnld / usr.n_upld);
+                      big_string (bignum, "1:%u", m);
+                  }
+                  break;
+               case CTRLY:
+               case ':':
+                  if (usr.upld == 0)
+                     big_string (bignum, "0:%lu", usr.dnld);
+                  else {
+                     m = (unsigned int)(usr.dnld / usr.upld);
+                        big_string (bignum, "1:%u", m);
+                  }
+                  break;
+               case ';':
+                  big_string (bignum, "%s",usr.full_read ? bbstxt[B_YES] : bbstxt[B_NO]);
+                  break;
+               case '[':
+                  big_string (bignum, "%lu", config->class[usr_class].max_dl - usr.dnldl);
+                  break;
+               case '\\':
+                  big_string (bignum, "%s", &config->language[usr.language].descr[1]);
+                  break;
+               case ']':
+                  big_string (bignum, "%s", usr.comment);
+                  break;
+               }
                break;
             case CR:
-               p++;
-               if ( *p == 'A')
-                  big_string (bignum, "%d", usr.msg);
-               if ( *p == 'L')
-                  big_string (bignum, "%d",lastread);
-               else if ( *p == 'N')
-                  big_string (bignum, "%s",sys.msg_name);
-               else if ( *p == 'H')
-                  big_string (bignum, "%d",last_msg);
-               else if ( *p == '#')
-                  big_string (bignum, "%d",first_msg - last_msg + 1);
                break;
-            case CTRLN:
-               p++;
-               if ( *p == 'B' || *p == 'C' )
-                  big_string (bignum, "%d", usr.credit);
-               else if ( *p == 'D' )
-                  SENDBYTE ('0');
-               break;
-            case '8':
-               if (usr.len < 79)
-                  p = strchr(linea,'\0') - 1;
-               break;
-            case 'D':
-               p++;
-               p[strlen(p)-2] = '\0';
-               translate_filenames (p, resp, lastresp);
-               unlink (p);
-               p = strchr(linea,'\0') - 1;
-               break;
-            case CTRLF:
-            case 'G':
-               p++;
-               if ( *p == 'A')
-                  big_string (bignum, "%d", usr.files);
-               else if ( *p == 'N')
-                  big_string (bignum, "%s",sys.file_name);
-               break;
-            case 'I':
-               p++;
-               if ( *p == 'L' && !local_mode)
-                  p = strchr(linea,'\0') - 1;
-               else if ( *p == 'R' && local_mode)
-                  p = strchr(linea,'\0') - 1;
-               break;
-            case 'k':
-               p++;
-               if ( *p == 'D' ) {
-                  build_flags (parola, usr.flags);
-                  big_string (bignum, parola);
+            case LF:
+               if (!local_mode) {
+                  BUFFER_BYTE('\r');
+                  BUFFER_BYTE('\n');
                }
-               else if ( *p == 'F' ) {
-                  p++;
-                  usr.flags &= ~get_flags (p);
-                  while (*p != ' ' && *p != '\0')
-                     p++;
+               if (snooping) {
+                  wputc (CR);
+                  wputc (LF);
                }
-               else if ( *p == 'I' ) {
-                  p++;
-                  if ((usr.flags & get_flags (p)) != get_flags (p))
-                     p = strchr(linea,'\0') - 1;
-                  else
-                  {
-                     while (*p != ' ' && *p != '\0')
-                        p++;
+
+               if (!(line++ < (usr.len-1)) && usr.len != 0) {
+                  if (!more)
+                     continue;
+                  if (!(line = more_question (line))) {
+                      fclose(fp);
+                      fp = NULL;
                   }
                }
-               else if ( *p == 'O' ) {
+               break;
+            case CTRLK:
+               p++;
+               switch(toupper(*p)) {
+               case 'A':
+                  big_string (bignum, "%lu",sysinfo.total_calls);
+                  break;
+               case 'B':
+                  big_string (bignum, "%s",lastcall.name);
+                  break;
+               case 'C':
+                  big_string (bignum, "%d", msg_child);
+                  break;
+               case 'D':
+                  big_string (bignum, "%d",first_msg);
+                  break;
+               case 'E':
+                  big_string (bignum, "%d",last_msg);
+                  break;
+               case 'F':
                   p++;
-                  usr.flags |= get_flags (p);
-                  while (*p != ' ' && *p != '\0')
-                     p++;
-               }
-               else if ( *p == 'T' ) {
-                  p++;
-                  usr.flags ^= get_flags (p);
-                  while (*p != ' ' && *p != '\0')
-                     p++;
-               }
-               break;
-            case 'L':
-               p++;
-               fpc = fp;
-               p[strlen(p)-2] = '\0';
-               fp = fopen (p, "rb");
-               if (fp == NULL && usr.ansi) {
-                  sprintf(stringa,"%s.ANS",p);
-                  fp = fopen(stringa,"rb");
-               }
-               if (fp == NULL) {
-                  sprintf(stringa,"%s.AVT",p);
-                  fp = fopen(stringa,"rb");
-               }
-               if (fp == NULL) {
-                  sprintf(stringa,"%s.BBS",p);
-                  fp = fopen(stringa,"rb");
-               }
-               if (fp == NULL) {
-                  sprintf(stringa,"%s.ASC",p);
-                  fp = fopen(stringa,"rb");
-               }
-               if (fp == NULL) {
-                  fp = fpc;
-                  fpc = NULL;
-               }
-               p = strchr(p,'\0') - 1;
-               break;
-            case 'p':
-               p++;
-               if ( *p == 'D' )
-                  lower_priv ();
-               else if ( *p == 'U' )
-                  raise_priv ();
-               break;
-            case 'P':
-               big_string (bignum, "%s", usr.voicephone);
-               break;
-            case 'R':
-               big_string (bignum, "%s", usr.handle);
-               break;
-            case 's':
-               p++;
-               usr.priv = set_priv ( *p );
-               usr_class = get_class(usr.priv);
-               break;
-            case 'W':
-               p++;
-               if(answer) {
+                  sscanf(usr.ldate, "%2d %3s %2d", &day, parola, &year);
+                  parola[3] = '\0';
+                  for (mont = 0; mont < 12; mont++) {
+                     if ((!stricmp(mtext[mont], parola)) || (!stricmp(mesi[mont], parola)))
+                        break;
+                  }
+                  search=(year-80)*512+(mont+1)*32+day;
                   translate_filenames (p, resp, lastresp);
-                  fprintf(answer, "%s", p);
+                  if (findfirst(p,&blk,0) || blk.ff_fdate < search)
+                     p = strchr(linea,'\0') - 1;
+                  break;
+               case 'G':
+                  tempo = time(0);
+                  tim = localtime(&tempo);
+                  big_string (bignum, "%s", bbstxt[B_SUNDAY + tim->tm_wday]);
+                  break;
+               case 'I':
+                  data(stringa);
+                  big_string (bignum, &stringa[10]);
+                  break;
+               case 'J':
+                  data(stringa);
+                  stringa[9] = '\0';
+                  big_string (bignum, "%s",stringa);
+                  break;
+               case 'K':
+                  m = (int)((time(NULL)-start_time)/60);
+                  big_string (bignum, "%d",m);
+                  break;
+               case 'M':
+                  big_string (bignum, "%d",max_priv_mail);
+                  break;
+               case 'O':
+                  big_string (bignum, "%d",time_remain());
+                  break;
+               case 'P':
+                  big_string (bignum, "%d", msg_parent);
+                  break;
+               case 'Q':
+                  big_string (bignum, "%d",config->class[usr_class].max_call);
+                  break;
+               case 'R':
+                  big_string (bignum, "%u", local_mode ? 0 : rate);
+                  break;
+               case 'T':
+                  big_string (bignum, "%d",config->class[usr_class].max_dl);
+                  break;
+               case 'U':
+                  big_string (bignum, "%d", time_to_next (1));
+                  break;
+               case 'W':
+                  big_string (bignum, "%d", line_offset);
+                  break;
+               case 'X':
+#ifdef __OS2__
+                  VioUpdate ();
+#endif
+                  terminating_call ();
+                  return (line);
+               case 'Y':
+                  big_string (bignum, "%s",sys.msg_name);
+                  break;
+               case 'Z':
+                  big_string (bignum, "%s",sys.file_name);
+                  break;
+               case '0':
+               case '9':
+                  big_string (bignum, "%d",num_msg);
+                  break;
+               case '1':
+                  big_string (bignum, "%d",usr.msg);
+                  break;
+               case '2':
+                  big_string (bignum, "%d",usr.files);
+                  break;
+               case '5':
+                  big_string (bignum, "%s", sys.msg_name);
+                  break;
+               case '7':
+                  big_string (bignum, "%u",usr.account);
+                  break;
+               case '8':
+                  big_string (bignum, "%u",usr.f_account);
+                  break;
+               case '[':
+                  big_string (bignum, "%d", config->class[usr_class].max_dl - usr.dnldl);
+                  break;
+               case '\\':
+                  del_line ();
+                  break;
+               default:
+                  p--;
+                  _BRK_DISABLE ();
+                  more = 0;
+                  break;
                }
-               p = strchr(p,'\0') - 1;
                break;
-            case 'w':
-               online_users (1);
+            case CTRLL:
+               cls();
+               vx = vy = 1;
+               line=1;
                break;
-            case 'X':
+            case CTRLO:
                p++;
-               if ( *p == 'D' || *p == 'R' ) {
+               switch(toupper(*p)) {
+               case 'C':
                   p++;
+                  while (p[strlen (p) - 1] == '\r' || p[strlen (p) - 1] == '\n')
+                     p[strlen (p) - 1] = '\0';
                   translate_filenames (p, resp, lastresp);
                   open_outside_door (p);
+                  p = strchr(linea,'\0') - 1;
+                  break;
+               case 'E':
+                  if (!usr.ansi && !usr.avatar)
+                     p = strchr(linea,'\0') - 1;
+                  break;
+               case 'F':
+                  p++;
+                  strcpy(onexit,p);
+                  p = strchr(linea,'\0') - 1;
+                  break;
+               case 'M':
+                  if(answer) {
+                     p++;
+                     fprintf(answer,"%s %c\r\n",p,resp);
+                  }
+
+                  p = strchr(linea,'\0') - 1;
+                  break;
+               case 'N':
+                  while (CARRIER && time_remain() > 0) {
+                     input(stringa,usr.width-1);
+                     if(strlen(stringa))
+                        break;
+                     if(!required)
+                        break;
+                     big_string (bignum, bbstxt[B_TRY_AGAIN]);
+                  }
+
+                  strcpy (lastresp, stringa);
+
+                  if(answer) {
+                     putc(' ',answer);
+                     putc(' ',answer);
+                     p++;
+                     fprintf(answer,"%s",p);
+                     putc(':',answer);
+                     putc(' ',answer);
+                     fprintf(answer,"%s\r\n",stringa);
+                  }
+
+                  p = strchr(linea,'\0') - 1;
+                  break;
+               case 'O':
+                  if(answer)
+                     fclose(answer);
+                  p++;
+                  p[strlen(p)-2] = '\0';
+                  translate_filenames (p, resp, lastresp);
+                  answer = fopen (p, "ab");
+                  if(answer == NULL)
+                     status_line(msgtxt[M_UNABLE_TO_OPEN],p);
+
+                  p = strchr(linea,'\0') - 1;
+                  break;
+               case 'P':
+                  if(answer) {
+                     fprintf(answer,"\r\n");
+                     usr.ptrquestion = ftell(answer);
+                     fprintf(answer,"* %s\t%s\t%s\r\n",usr.name,usr.city,data(parola));
+                  }
+                  break;
+               case 'Q':
+                  if (fp != NULL)
+                     fclose(fp);
+
+                  UNBUFFER_BYTES ();
+                  FLUSH_OUTPUT ();
+
+                  if (fpc == NULL) {
+                     fp = fopen(onexit,"rb");
+                     if (fp == NULL) {
+                        if (answer)
+                           fclose (answer);
+#ifdef __OS2__
+                        VioUpdate ();
+#endif
+                        return (line);
+                     }
+                  }
+                  else {
+                     fp = fpc;
+                     fpc = NULL;
+                     p[1] = '\0';
+                  }
+
                   p = strchr(p,'\0') - 1;
+                  break;
+               case 'R':
+                  line=1;
+                  p++;
+                  while (CARRIER && time_remain() > 0) {
+                     input (stringa, 1);
+                     c = toupper(stringa[0]);
+                     if(c == '\0')
+                        c = 0x7C;
+                     if(strchr(strupr(p),c) != NULL)
+                        break;
+                     big_string (bignum, bbstxt[B_TRY_AGAIN]);
+                  }
+
+                  p = strchr(linea,'\0') - 1;
+                  resp = c;
+                  big_string (bignum, "\n");
+                  break;
+               case 'S':
+                  p++;
+                  fclose (fp);
+                  fp = get_system_file (p);
+                  if (fp == NULL) {
+                     fp = get_system_file (onexit);
+                     onexit[0] = '\0';
+                     if (fp == NULL) {
+#ifdef __OS2__
+                        VioUpdate ();
+#endif
+                        return (line);
+                     }
+                  }
+
+                  p = strchr (linea, '\0') - 1;
+                  break;
+               case 'T':
+                  rewind (fp);
+                  break;
+               case 'U':
+                  p++;
+                  if(toupper(*p) != resp)
+                     p = strchr(linea,'\0') - 1;
+                  break;
+               case 'V':
+                  p++;
+                  fseek (fp, atol (p), SEEK_SET);
+                  if(toupper(*p) != resp)
+                     p = strchr(linea,'\0') - 1;
+                  break;
                }
                break;
-            default:
-               p--;
-               timer(5);
+            case CTRLP:
+               p++;
+               if ( *p == 'B' )
+               {
+                  p++;
+                  a = set_priv ( *p );
+                  if (usr.priv > a)
+                     p = strchr(linea,'\0') - 1;
+               }
+               else if ( *p == 'L' )
+               {
+                  p++;
+                  a = set_priv ( *p );
+                  if (usr.priv < a)
+                     p = strchr(linea,'\0') - 1;
+               }
+               else if ( *p == 'Q' )
+               {
+                  p++;
+                  a = set_priv ( *p );
+                  if (a != usr.priv)
+                     p = strchr(linea,'\0') - 1;
+               }
+               else if ( *p == 'X' )
+               {
+                  p++;
+                  a = set_priv ( *p );
+                  if (usr.priv == a)
+                     p = strchr(linea,'\0') - 1;
+               }
+               else
+               {
+                  a = set_priv ( *p );
+                  if (usr.priv < a)
+                     fseek (fp, 0L, SEEK_END);
+               }
                break;
-            }
-            break;
-         case CTRLX:
-            p++;
-            translate_filenames (p, resp, lastresp);
-            open_outside_door(p);
-            *p = '\0';
-            p--;
-            break;
-         case CTRLY:
-            c = *(++p);
-            if (!usr.ibmset && (unsigned char)c >= 128)
-               c = bbstxt[B_ASCII_CONV][(unsigned char)c - 128];
-            a = *(++p);
-            vx += a;
-            if (vx > 80) {
-               vx -= 80;
-               if (vy < 25)
-                  vy++;
-            }
-            if(usr.avatar && !local_mode) {
-               BUFFER_BYTE(CTRLY);
-               BUFFER_BYTE(c);
-               BUFFER_BYTE(a);
-            }
-            else if (!local_mode)
-               for(m=0;m<a;m++)
-                  BUFFER_BYTE(c);
-            if (snooping)
-               wdupc (c, a);
-            break;
-         case CTRLZ:
-            break;
-         case 0x1B:
-            p = translate_ansi (p);
-            break;
-         default:
-            c = *p;
-            if (!usr.ibmset && (unsigned char)c >= 128)
-               c = bbstxt[B_ASCII_CONV][(unsigned char)c - 128];
-            if (!bignum || (!usr.ansi && !usr.avatar)) {
-               if (!local_mode)
-                  BUFFER_BYTE(c);
-               if (snooping)
-                  wputc(c);
-               vx++;
+            case CTRLV:
+               p++;
+               switch (*p) {
+               case CTRLA:
+                  p++;
+                  if (*p == CTRLP) {
+                     p++;
+                     *p &= 0x7F;
+                  }
+
+                  if (!*p) {
+                     change_attr(13);
+                     ansi_attr = 13;
+                  }
+                  else {
+                     change_attr(*p);
+                     ansi_attr = *p;
+                  }
+                  break;
+               case CTRLC:
+                  cup (1);
+                  line--;
+                  if (vy > 0)
+                     vy++;
+                  break;
+               case CTRLD:
+                  cdo (1);
+                  line++;
+                  if (vy < usr.len - 1)
+                     vy++;
+                  break;
+               case CTRLE:
+                  cle (1);
+                  if (vx > 0)
+                     vx--;
+                  break;
+               case CTRLF:
+                  cri (1);
+                  if (vx < 79)
+                     vx++;
+                  break;
+               case CTRLG:
+                  del_line();
+                  break;
+               case CTRLH:
+                  cpos ( *(p + 1), *(p + 2) );
+                  vy = line = *(p + 1);
+                  vx = *(p + 2);
+                  p += 2;
+                  break;
+               case CTRLY:
+                  p++;
+                  strncpy (stringa, &p[1], *p);
+                  stringa[*p] = '\0';
+                  p += *p + 1;
+                  for (m = 0; m < *p; m++) {
+                     m_print (stringa);
+                     vx += strlen (stringa);
+                     if (vx >= 80) {
+                        vx -= 80;
+                        if (vy < usr.len - 1)
+                           vy++;
+                     }
+                  }
+                  break;
+               }
+               break;
+            case CTRLR:
+               p++;
+               p = rpnProcessString (p);
+               break;
+            case CTRLW:
+               p++;
+               switch(*p) {
+               case 'A':
+                  p++;
+                  p[strlen(p)-2] = '\0';
+                  translate_filenames (p, resp, lastresp);
+                  status_line (p);
+                  p = strchr(linea,'\0') - 1;
+                  break;
+               case 'a':
+                  p++;
+                  p[strlen(p)-2] = '\0';
+                  translate_filenames (p, resp, lastresp);
+                  broadcast_message (p);
+                  p = strchr(linea,'\0') - 1;
+                  break;
+               case CTRLA:
+                  usr.ldate[9] = '\0';
+                  big_string (bignum, "%s",usr.ldate);
+                  usr.ldate[9] = ' ';
+                  break;
+               case 'B':
+                  bignum = bignum ? 0 : 1;
+                  break;
+               case 'c':
+                  p++;
+                  if ( *p == 'A' && !local_mode)
+                     p = strchr(linea,'\0') - 1;
+                  else if ( *p == 'R' && local_mode)
+                     p = strchr(linea,'\0') - 1;
+                  break;
+               case CTRLB:
+                  p++;
+                  if ( (*p == '1' && rate >= 1200) ||
+                       (*p == '2' && rate >= 2400) ||
+                       (*p == '9' && rate >= 9600)
+                     )
+                     break;
+                  p = strchr(linea,'\0') - 1;
+                  break;
+               case CTRLC:
+                  big_string (bignum, system_name);
+                  break;
+               case CTRLD:
+                  big_string (bignum, sysop);
+                  break;
+               case CTRLE:
+                  big_string (bignum, lastresp);
+                  break;
+               case CTRLG:
+#ifdef __OS2__
+                  DosBeep (1000, 30);
+#else
+                  sound (1000);
+                  timer (3);
+                  nosound ();
+#endif
+                  break;
+               case CR:
+                  p++;
+                  if ( *p == 'A')
+                     big_string (bignum, "%d", usr.msg);
+                  if ( *p == 'L')
+                     big_string (bignum, "%d",lastread);
+                  else if ( *p == 'N')
+                     big_string (bignum, "%s",sys.msg_name);
+                  else if ( *p == 'H')
+                     big_string (bignum, "%d",last_msg);
+                  else if ( *p == '#')
+                     big_string (bignum, "%d",first_msg - last_msg + 1);
+                  break;
+               case CTRLN:
+                  p++;
+                  if ( *p == 'B' || *p == 'C' )
+                     big_string (bignum, "%d", usr.credit);
+                  else if ( *p == 'D' )
+                     SENDBYTE ('0');
+                  break;
+               case '8':
+                  if (usr.len < 79)
+                     p = strchr(linea,'\0') - 1;
+                  break;
+               case 'D':
+                  p++;
+                  p[strlen(p)-2] = '\0';
+                  translate_filenames (p, resp, lastresp);
+                  unlink (p);
+                  p = strchr(linea,'\0') - 1;
+                  break;
+               case CTRLF:
+               case 'G':
+                  p++;
+                  if ( *p == 'A')
+                     big_string (bignum, "%d", usr.files);
+                  else if ( *p == 'N')
+                     big_string (bignum, "%s",sys.file_name);
+                  break;
+               case 'I':
+                  p++;
+                  if ( *p == 'L' && !local_mode)
+                     p = strchr(linea,'\0') - 1;
+                  else if ( *p == 'R' && local_mode)
+                     p = strchr(linea,'\0') - 1;
+                  break;
+               case 'k':
+                  p++;
+                  if ( *p == 'D' ) {
+                     build_flags (parola, usr.flags);
+                     big_string (bignum, parola);
+                  }
+                  else if ( *p == 'F' ) {
+                     p++;
+                     usr.flags &= ~get_flags (p);
+                     while (*p != ' ' && *p != '\0')
+                        p++;
+                     if (*p == '\0')
+                        p--;
+                  }
+                  else if ( *p == 'I' ) {
+                     p++;
+                     if ((usr.flags & get_flags (p)) != get_flags (p))
+                        p = strchr(linea,'\0') - 1;
+                     else {
+                        while (*p != ' ' && *p != '\0')
+                           p++;
+                        if (*p == '\0')
+                           p--;
+                     }
+                  }
+                  else if ( *p == 'N' ) {
+                     p++;
+                     if ((usr.flags & get_flags (p)) == 0)
+                        p = strchr(linea,'\0') - 1;
+                     else {
+                        while (*p != ' ' && *p != '\0')
+                           p++;
+                        if (*p == '\0')
+                           p--;
+                     }
+                  }
+                  else if ( *p == 'O' ) {
+                     p++;
+                     usr.flags |= get_flags (p);
+                     while (*p != ' ' && *p != '\0')
+                        p++;
+                     if (*p == '\0')
+                        p--;
+                  }
+                  else if ( *p == 'T' ) {
+                     p++;
+                     usr.flags ^= get_flags (p);
+                     while (*p != ' ' && *p != '\0')
+                        p++;
+                     if (*p == '\0')
+                        p--;
+                  }
+                  break;
+               case 'L':
+                  p++;
+                  fpc = fp;
+                  p[strlen (p) - 2] = '\0';
+                  fp = get_system_file (p);
+                  if (fp == NULL) {
+                     fp = fpc;
+                     fpc = NULL;
+                  }
+                  p = strchr(p,'\0') - 1;
+                  break;
+               case 'M':
+                  p++;
+                  if (*p == CTRLP) {
+                     p++;
+                     *p &= 0x7F;
+                  }
+                  process_menu_option (*p, p + 1);
+                  p = strchr(p,'\0') - 1;
+                  break;
+               case 'p':
+                  p++;
+                  if ( *p == 'D' )
+                     lower_priv ();
+                  else if ( *p == 'U' )
+                     raise_priv ();
+                  break;
+               case 'P':
+                  big_string (bignum, "%s", usr.voicephone);
+                  break;
+               case 'R':
+                  big_string (bignum, "%s", usr.handle);
+                  break;
+               case 'S':
+                  big_string (bignum, "%s", usr.signature);
+                  break;
+               case 's':
+                  p++;
+                  usr.priv = set_priv ( *p );
+                  usr_class = get_class(usr.priv);
+                  break;
+               case 'W':
+                  p++;
+                  if(answer) {
+                     translate_filenames (p, resp, lastresp);
+                     fprintf(answer, "%s", p);
+                  }
+                  p = strchr(p,'\0') - 1;
+                  break;
+               case 'w':
+                  online_users (1);
+                  break;
+               case 'X':
+                  p++;
+                  if ( *p == 'D' || *p == 'R' ) {
+                     p++;
+                     translate_filenames (p, resp, lastresp);
+                     open_outside_door (p);
+                     p = strchr(p,'\0') - 1;
+                  }
+                  break;
+               default:
+                  p--;
+                  timer(5);
+                  break;
+               }
+               break;
+            case CTRLX:
+               p++;
+               translate_filenames (p, resp, lastresp);
+               open_outside_door(p);
+               *p = '\0';
+               p--;
+               break;
+            case CTRLY:
+               c = *(++p);
+               if (!usr.ibmset && (unsigned char)c >= 128)
+                  c = bbstxt[B_ASCII_CONV][(unsigned char)c - 128];
+               a = *(++p);
+               vx += a;
                if (vx > 80) {
                   vx -= 80;
                   if (vy < 25)
                      vy++;
                }
-            }
-            else
-               big_char (c);
-            break;
+               if(usr.avatar && !local_mode) {
+                  BUFFER_BYTE(CTRLY);
+                  BUFFER_BYTE(c);
+                  BUFFER_BYTE(a);
+               }
+               else if (!local_mode)
+                  for(m=0;m<a;m++)
+                     BUFFER_BYTE(c);
+               if (snooping)
+                  wdupc (c, a);
+               break;
+            case CTRLZ:
+               break;
+            case 0x1B:
+               p = translate_ansi (p);
+               break;
+            default:
+               c = *p;
+               if (!usr.ibmset && (unsigned char)c >= 128)
+                  c = bbstxt[B_ASCII_CONV][(unsigned char)c - 128];
+               if (!bignum || (!usr.ansi && !usr.avatar)) {
+                  if (!local_mode)
+                     BUFFER_BYTE(c);
+                  if (snooping)
+                     wputc(c);
+                  vx++;
+                  if (vx > 80) {
+                     vx -= 80;
+                     if (vy < 25)
+                        vy++;
+                  }
+               }
+               else
+                  big_char (c);
+               break;
          }
 
          if (fp == NULL)
@@ -1033,7 +1248,12 @@ loop:
       }
    }
 
-   fclose(fp);
+   if (fp != NULL)
+      fclose(fp);
+
+#ifdef __OS2__
+   VioUpdate ();
+#endif
 
    if (fpc == NULL) {
       fp = fopen(onexit,"rb");
@@ -1056,7 +1276,7 @@ loop:
       FLUSH_OUTPUT();
    }
 
-   return(line);
+   return (line ? line : -1);
 }
 
 void show_quote()
@@ -1067,21 +1287,23 @@ void show_quote()
    strcpy(linea, text_path);
    strcat(linea, "QUOTES.BBS");
 
-   quote = fopen(linea,"rt");
-   if(quote == NULL)
-      return;
+   quote = fopen (linea, "rt");
+   if (quote == NULL) {
+      strcpy (linea, config->glob_text_path);
+      strcat (linea, "QUOTES.BBS");
+      if (quote == NULL)
+         return;
+   }
+
    fseek(quote,sysinfo.quote_position,0);
 
-   for (;;)
-   {
-      if ((fgets(linea,128,quote) == NULL) || linea[0] == CTRLZ)
-      {
+   for (;;) {
+      if ((fgets(linea,128,quote) == NULL) || linea[0] == CTRLZ) {
          rewind(quote);
          continue;
       }
 
-      if(linea[0] == '\n')
-      {
+      if(linea[0] == '\n') {
          sysinfo.quote_position = ftell(quote);
          break;
       }
@@ -1089,9 +1311,9 @@ void show_quote()
       m_print( "%s", linea);
    }
 
-   fclose(quote);
+   fclose (quote);
 
-   write_sysinfo();
+   write_sysinfo ();
 }
 
 char far macro_bitmap[95][5]=
@@ -1244,8 +1466,15 @@ static void big_string (int big, char *format, ...)
    vsprintf(string,format,var_args);
    va_end(var_args);
 
-   if (!big || (!usr.ansi && !usr.avatar))
+   if (!big || (!usr.ansi && !usr.avatar)) {
       m_print (string);
+      vx += strlen (string);
+      if (vx > 80) {
+         vx -= 80;
+         if (vy < 25)
+            vy++;
+      }
+   }
    else
       for (s = string; *s; s++)
          big_char (*s);
@@ -1459,12 +1688,16 @@ char *pf;
                /* (CUP) set cursor position  */
                case 'H':
                case 'F':
+               case 'h':
+               case 'f':
                   vy = Pn[0] ? Pn[0] : 1;
                   vx = Pn[1] ? Pn[1] : 1;
                   cpos (vy, vx);
                   return (pf);
                   /* (CUU) cursor up   */
                case 'A':
+                  if (!Pn[0])
+                     Pn[0]++;
                   vy -= Pn[0];
                   if (vy < 1)
                      vy = 1;
@@ -1472,6 +1705,8 @@ char *pf;
                   return (pf);
                   /* (CUD) cursor down */
                case 'B':
+                  if (!Pn[0])
+                     Pn[0]++;
                   vy += Pn[0];
                   if (vy > 25)
                      vy = 25;
@@ -1479,6 +1714,8 @@ char *pf;
                   return (pf);
                   /* (CUF) cursor forward */
                case 'C':
+                  if (!Pn[0])
+                     Pn[0]++;
                   vx += Pn[0];
                   if (vx > 80)
                      vx = 80;
@@ -1486,6 +1723,8 @@ char *pf;
                   return (pf);
                   /* (CUB) cursor backward   */
                case 'D':
+                  if (!Pn[0])
+                     Pn[0]++;
                   vx -= Pn[0];
                   if (vx < 1)
                      vx = 1;
@@ -1610,3 +1849,40 @@ char *pf;
       }
    }
 }
+
+int exist_system_file (char *name)
+{
+   char linea[80], tmpstr[80], *p;
+
+   strcpy (tmpstr, name);
+   if ((p = strchr (tmpstr, '/')) != NULL)
+      *(p - 1) = '\0';
+
+   strtrim (tmpstr);
+
+   if (dexists (tmpstr))
+      return (-1);
+
+   sprintf (linea, "%s.ASC", tmpstr);
+   if (dexists (linea))
+      return (-1);
+
+   if (usr.ansi) {
+      sprintf (linea, "%s.ANS", tmpstr);
+      if (dexists (linea))
+         return (-1);
+   }
+
+   if (usr.avatar) {
+      sprintf (linea, "%s.AVT", tmpstr);
+      if (dexists (linea))
+         return (-1);
+   }
+
+   sprintf (linea, "%s.BBS", tmpstr);
+   if (dexists (linea))
+      return (-1);
+
+   return (0);
+}
+

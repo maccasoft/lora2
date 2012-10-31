@@ -21,7 +21,8 @@ int      READBYTE ();
                            /* Service 3: GET STATUS                         */
                            /*-----------------------------------------------*/
 /*#define MODEM_STATUS()     (Com_(0x03))*/
-#define CARRIER            (local_mode || (Com_(0x03)&0x80))
+//#define CARRIER            (local_mode || (Com_(0x03)&0x80))
+#define CARRIER            com_online()
 #define CHAR_AVAIL()       (MODEM_STATUS()&DATA_READY)
 #define OUT_EMPTY()        (Com_(0x03)&TX_SHIFT_EMPTY)
 #define OUT_FULL()         (!(Com_(0x03)&TX_HOLD_EMPTY))
@@ -38,8 +39,10 @@ int      READBYTE ();
                            /*-----------------------------------------------*/
                            /* Service 6: SET DTR                            */
                            /*-----------------------------------------------*/
-#define DTR_OFF()          ((void) Com_(0x06,0))
-#define DTR_ON()           ((void) Com_(0x06,1))
+#ifndef __NOFOSSIL__
+#define SET_DTR_OFF()      ((void) Com_(0x06,0))
+#define SET_DTR_ON()       ((void) Com_(0x06,1))
+#endif
 
                            /*-----------------------------------------------*/
                            /* Service 7: GET TIMER TICK PARMS               */
@@ -86,8 +89,10 @@ int      READBYTE ();
                            /*-----------------------------------------------*/
                            /* Service f: SET/GET FLOW CONTROL STATUS        */
                            /*-----------------------------------------------*/
+#ifndef __NOFOSSIL__
 #define XON_ENABLE()       ((void) Com_(0x0f,handshake_mask))
 #define XON_DISABLE()      ((void) Com_(0x0f,(handshake_mask&(~USE_XON))))
+#endif
 #define IN_XON_ENABLE()    ((void) Com_(0x0f,handshake_mask|OTHER_XON))
 #define IN_XON_DISABLE()   ((void) Com_(0x0f,(handshake_mask&(~OTHER_XON))))
 

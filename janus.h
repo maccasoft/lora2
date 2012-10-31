@@ -43,7 +43,7 @@
 
 /* Misc. Constants */
 #define BUFMAX 2048          /* Max packet contents length                   */
-#define NUM_FLAGS 4          /* Number of mail-type flag characters (O,D,C,H)*/
+#define NUM_FLAGS 5          /* Number of mail-type flag characters (O,D,C,H)*/
 #define JANUS_EFFICIENCY 95  /* Estimate Janus xfers at 95% throughput       */
 
 /* Positions of transfer status line fields */

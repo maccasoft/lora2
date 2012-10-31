@@ -1,11 +1,12 @@
 #include <stdio.h>
-#include <io.h>
+#include <string.h>
 
 #include <cxl\cxlwin.h>
 
 #include "zmodem.h"
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 
@@ -32,20 +33,31 @@ unsigned int w;
 {
    char j[100];
 
-   wgotoxy (1, 37);
    sprintf (j, "Ofs=%ld Retries=%d        ", l, w);
-   wputs (j);
+
+   if (caller || emulator) {
+      wgotoxy (1, 37);
+      wputs (j);
+   }
+   else
+      wprints (10, 37, WHITE|_BLACK, j);
 }
 
 void z_message (s)
 char *s;
 {
-   if (s)
-      {
-      wgotoxy (1, 27);
-      wputs (s);
-      }
-   wputs ("              ");
+   if (caller || emulator) {
+      if (s)
+         {
+         wgotoxy (1, 27);
+         wputs (s);
+         }
+      wputs ("              ");
+   }
+   else {
+      wprints (10, 27, WHITE|_BLACK, s);
+      wprints (10, 27 + strlen (s), WHITE|_BLACK, "              ");
+   }
 }
 
 int Z_GetByte (tenths)
@@ -66,10 +78,13 @@ int tenths;
       if (!(MODEM_STATUS () & carrier_mask))
          return RCDO;
 
-//      if (got_ESC ())
-//         return -1;
+      if (local_kbd == 0x1B)
+         {
+         local_kbd = -1;
+         return -1;
+         }
 
-//      time_release ();
+      time_release ();
       }
    while (!timeup (timeout));
 
@@ -167,7 +182,7 @@ void Z_UncorkTransmitter ()
       t = timerset (5 * Rxtimeout);              /* Wait for silence */
       while (!timeup (t) && !OUT_EMPTY () && CARRIER)
          time_release ();                        /* Give up slice while */
-                                                  /* waiting  */
+                                                 /* waiting  */
       }
    XON_DISABLE ();                               /* Uncork the transmitter */
    XON_ENABLE ();
@@ -198,12 +213,13 @@ byte *hdr;
 
 Again:
 
-//   if (got_ESC ())
-//      {
-//      send_can ();
-//      z_log (msgtxt[M_KBD_MSG]);
-//      return ZCAN;
-//      }
+   if (local_kbd == 0x1B)
+      {
+      local_kbd = -1;
+      send_can ();
+      status_line (msgtxt[M_KBD_MSG]);
+      return ZCAN;
+      }
 
    Rxframeind = Rxtype = 0;
 

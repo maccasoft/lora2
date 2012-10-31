@@ -1,5 +1,5 @@
 /*
-	--- Version 3.1 91-08-17 23:07 ---
+	--- Version 3.2 91-09-03 21:44 ---
 
    CHECKPAT.H: Path check function header file.
 
@@ -12,12 +12,17 @@
         Germany
 */
 
-int checkpath (char *string,
-           char *drive,
-           char *dir,
-           char *fname,
-           char *ext,
-           char *fullpath);
+#ifdef __cplusplus
+extern "C" int
+#else
+extern int _cdecl
+#endif
+checkpath (char *string,     /* Input file name string */
+           char *drive,      /* Drive letter and colon */
+           char *dir,        /* \directory\ */
+           char *fname,      /* file name */
+           char *ext,        /* .extension */
+           char *fullpath);  /* combined path */
 
 /*
    This routine accepts a file name and path, checks and resolves the

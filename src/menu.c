@@ -13,22 +13,34 @@
 #include <cxl\cxlvid.h>
 #include <cxl\cxlstr.h>
 
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 
-#define MENU_LENGTH 14
-#define MENU_STACK  10
-#define MAX_ITEMS   50
+int process_menu_option(int, char *);
+int get_user_age (void);
+void ask_default_protocol (void);
+void ask_default_archiver (void);
+void tag_files (int);
+void ask_birthdate (void);
+void list_tagged_files (int remove);
+int naplps_read_file (char *name);
+
+#define MENU_LENGTH  14
+#define MENU_STACK   10
+#define MAX_ITEMS   100
+
+extern int msg_parent, msg_child;
+extern char stop_hotkey, num_hotkey;
 
 static int i;
 static char mnu_name[MENU_LENGTH], *st, max_menu, active, old_activ;
 static char menu_stack[MENU_STACK][MENU_LENGTH], filename[50], first_time;
-static char menu_sp, readed;
+static char menu_sp, readed, file_stack[MENU_STACK][MENU_LENGTH], *mnu_file;
 static struct _cmd *cmd = NULL;
 
-static int process_menu_option(int, char *);
 static int get_menu_password (char *);
 static void return_menu(void);
 static void gosub_menu(char *);
@@ -36,11 +48,34 @@ static void process_user_display (char *, int);
 static void get_buffer_keystrokes (char *);
 static int ok_counter (char *);
 static int get_sig (char *);
+static int user_age_ok (char *arg);
 
 struct _menu_header {
    char name[14];
-   int  n_elem;
+   short  n_elem;
 };
+
+int check_hotkey (char c)
+{
+   int m = 0, i;
+
+   for (i = 0; i < max_menu; i++) {
+      if (usr.priv < cmd[i].priv || cmd[i].priv == HIDDEN)
+         continue;
+      if ((usr.flags & cmd[i].flags) != cmd[i].flags)
+         continue;
+      if (!cmd[i].flag_type || cmd[i].automatic)
+         continue;
+      if (cmd[i].first_time && !first_time)
+         continue;
+      if (cmd[i].hotkey == toupper (c) || (cmd[i].hotkey == '|' && !c)) {
+         m = 1;
+         break;
+      }
+   }
+
+   return (m);
+}
 
 void menu_dispatcher(start)
 char *start;
@@ -52,6 +87,7 @@ char *start;
 
    st = start;
    strcpy(mnu_name, (start == NULL) ? "MAIN" : start);
+   mnu_file = NULL;
 
    max_menu = 0;
    err = 0;
@@ -61,6 +97,9 @@ char *start;
    active = (start == NULL) ? 0 : 4;
    allow_reply = (active == 4) ? 1 : 0;
    cmd = NULL;
+
+   if (start == NULL)
+      cls ();
 
    i = 0;
 //   cmd[i].nocls = 0;
@@ -73,17 +112,30 @@ char *start;
       _BRK_ENABLE();
 
       if (!readed) {
-         if (i != -1 && max_menu)
-            cls();
+         num_hotkey = 0;
 
-         sprintf(filename,"%s%s.MNU",menu_bbs,lang_name[usr.language]);
-         fd=fopen(filename,"rb");
+         if (mnu_file == NULL)
+            sprintf (filename, "%s%s.MNU", config->menu_path, config->language[usr.language].basename);
+         else
+            sprintf (filename, "%s%s.MNU", config->menu_path, mnu_file);
+         fd = fopen (filename, "rb");
          if (fd == NULL || filelength (fileno(fd)) < sizeof (struct _menu_header)) {
-            sprintf(filename,"%s%s.MNU",menu_bbs,lang_name[0]);
-            fd=fopen(filename,"rb");
-            if (fd == NULL) {
-               status_line("!Can't open `%s'",filename);
-               return;
+            if (mnu_file != NULL) {
+               mnu_file = NULL;
+               sprintf (filename, "%s%s.MNU", config->menu_path, config->language[usr.language].basename);
+               if (fd != NULL)
+                  fclose (fd);
+               fd = fopen (filename, "rb");
+            }
+            if (fd == NULL || filelength (fileno(fd)) < sizeof (struct _menu_header)) {
+               if (fd != NULL)
+                  fclose (fd);
+               sprintf (filename,"%s%s.MNU", config->menu_path, config->language[0].basename);
+               fd = fopen (filename, "rb");
+               if (fd == NULL) {
+                  status_line ("!Can't open `%s'", filename);
+                  return;
+               }
             }
          }
 
@@ -95,6 +147,8 @@ char *start;
                strcpy (mnu_name, "MAIN");
                fseek (fd, 0, SEEK_SET);
                err = 1;
+               menu_sp = 0;
+               mnu_file = NULL;
             }
             else {
                if (!stricmp(m_header.name, mnu_name))
@@ -144,7 +198,20 @@ char *start;
          if (cmd[m].first_time && !first_time)
             continue;
 
+         if (!user_age_ok (cmd[m].argument))
+            continue;
+
+         if (cmd[m].flag_type == _MSG_INDIVIDUAL || cmd[m].flag_type == _MAIL_INDIVIDUAL)
+            num_hotkey = 1;
+
          if(cmd[m].flag_type == _F_DNLD || cmd[m].flag_type == _F_GLOBAL_DNLD) {
+            if (usr.priv < sys.download_priv || sys.download_priv == HIDDEN)
+               continue;
+            if((usr.flags & sys.download_flags) != sys.download_flags)
+               continue;
+         }
+
+         if(cmd[m].flag_type == _F_TAG) {
             if (usr.priv < sys.download_priv || sys.download_priv == HIDDEN)
                continue;
             if((usr.flags & sys.download_flags) != sys.download_flags)
@@ -158,12 +225,14 @@ char *start;
                continue;
          }
 
+/*
          if(cmd[m].flag_type == _F_TITLES) {
             if (usr.priv < sys.list_priv || sys.list_priv == HIDDEN)
                continue;
             if((usr.flags & sys.list_flags) != sys.list_flags)
                continue;
          }
+*/
 
          if((cmd[m].flag_type == _MSG_EDIT_NEW) || (cmd[m].flag_type == _MSG_EDIT_REPLY))
             if (strstr (cmd[m].argument, "/A=") == NULL) {
@@ -172,6 +241,9 @@ char *start;
                if((usr.flags & sys.write_flags) != sys.write_flags)
                   continue;
             }
+
+         if ((cmd[m].flag_type == _MSG_CHILD && !msg_child) || (cmd[m].flag_type == _MSG_PARENT && !msg_parent))
+            continue;
 
          if (cmd[m].automatic && cmd[m].flag_type) {
             if (cmd_string[0] && (cmd[m].flag_type == _SHOW ||
@@ -184,17 +256,20 @@ char *start;
 
             get_buffer_keystrokes (cmd[m].argument);
             i = m;
+            stop_hotkey = 1;
             if (process_menu_option(cmd[m].flag_type, cmd[m].argument)) {
+               stop_hotkey = 0;
                if (cmd != NULL)
                   free (cmd);
                return;
             }
+            stop_hotkey = 0;
             if (!readed)
                break;
             continue;
          }
 
-         if (!cmd_string[0] && !cmd[m].no_display)
+         if (!cmd_string[0] && !cmd[m].no_display && cmd[m].name[0])
             process_user_display (cmd[m].name, m);
       }
 
@@ -213,7 +288,32 @@ char *start;
          }
 
          if (usr.hotkey) {
-            cmd_input (cmd_string, MAX_CMDLEN - 1);
+            do {
+               cmd_input (cmd_string, MAX_CMDLEN - 1);
+               if (!cmd_string[0] && cmd_string[1] == 5)
+                  break;
+               m = 0;
+               for (i = 0; i < max_menu; i++) {
+                  if (usr.priv < cmd[i].priv || cmd[i].priv == HIDDEN)
+                     continue;
+                  if ((usr.flags & cmd[i].flags) != cmd[i].flags)
+                     continue;
+                  if (!cmd[i].flag_type || cmd[i].automatic)
+                     continue;
+                  if (cmd[i].first_time && !first_time)
+                     continue;
+                  if (cmd[i].hotkey == toupper (cmd_string[0]) || (cmd[i].hotkey == '|' && !cmd_string[0])) {
+                     m = 1;
+                     break;
+                  }
+               }
+               if (!cmd_string[0])
+                  m_print (" ");
+
+               if (m == 0)
+                  m_print ("\b \b");
+            } while (m == 0 && CARRIER && time_remain() > 0);
+
             m_print (bbstxt[B_ONE_CR]);
          }
          else
@@ -228,8 +328,7 @@ char *start;
       last_command = '\0';
       processed = 0;
 
-      for (i = 0; i < max_menu && i >= 0; i++)
-      {
+      for (i = 0; i < max_menu && i >= 0; i++) {
          if(usr.priv < cmd[i].priv || cmd[i].priv == HIDDEN)
             continue;
          if((usr.flags & cmd[i].flags) != cmd[i].flags)
@@ -238,27 +337,36 @@ char *start;
             continue;
          if (cmd[i].first_time && !first_time)
             continue;
-         if(cmd[i].flag_type == _F_DNLD || cmd[m].flag_type == _F_GLOBAL_DNLD)
-         {
+
+         if (!user_age_ok (cmd[i].argument))
+            continue;
+
+         if(cmd[i].flag_type == _F_DNLD || cmd[m].flag_type == _F_GLOBAL_DNLD) {
             if (usr.priv < sys.download_priv || sys.download_priv == HIDDEN)
                continue;
             if((usr.flags & sys.download_flags) != sys.download_flags)
                continue;
          }
-         if(cmd[i].flag_type == _F_UPLD)
-         {
+         if(cmd[i].flag_type == _F_TAG) {
+            if (usr.priv < sys.download_priv || sys.download_priv == HIDDEN)
+               continue;
+            if((usr.flags & sys.download_flags) != sys.download_flags)
+               continue;
+         }
+         if(cmd[i].flag_type == _F_UPLD) {
             if (usr.priv < sys.upload_priv || sys.upload_priv == HIDDEN)
                continue;
             if((usr.flags & sys.upload_flags) != sys.upload_flags)
                continue;
          }
-         if(cmd[i].flag_type == _F_TITLES)
-         {
+/*
+         if(cmd[i].flag_type == _F_TITLES) {
             if (usr.priv < sys.list_priv || sys.list_priv == HIDDEN)
                continue;
             if((usr.flags & sys.list_flags) != sys.list_flags)
                continue;
          }
+*/
          if((cmd[i].flag_type == _MSG_EDIT_NEW) || (cmd[i].flag_type == _MSG_EDIT_REPLY))
             if (strstr (cmd[i].argument, "/A=") == NULL) {
                if (usr.priv < sys.write_priv || sys.write_priv == HIDDEN)
@@ -266,6 +374,9 @@ char *start;
                if((usr.flags & sys.write_flags) != sys.write_flags)
                   continue;
             }
+
+         if ((cmd[i].flag_type == _MSG_CHILD && !msg_child) || (cmd[i].flag_type == _MSG_PARENT && !msg_parent))
+            continue;
 
          if ((cmd[i].hotkey == toupper(cmd_string[0]) && !processed) ||
              (cmd[i].hotkey == '|' && !cmd_string[0] && !processed) ||
@@ -290,8 +401,7 @@ char *start;
          }
       }
 
-      if (!processed && cmd_string[0])
-      {
+      if (!processed && cmd_string[0]) {
          m_print (bbstxt[B_UNKNOW_CMD], toupper (cmd_string[0]));
          cmd_string[0] = '\0';
       }
@@ -302,171 +412,27 @@ char *start;
 }
 
 
-static int process_menu_option(flag_type, argument)
-int flag_type;
-char *argument;
+int process_menu_option (int flag_type, char *argument)
 {
    static int s, v, gg, lo;
    int xp;
-   char *p = NULL;
+   char *p = NULL, buf[80];
 
    switch (flag_type) {
-   case _MESSAGE:
-      if (!get_menu_password (argument))
-         break;
-      active = 1;
-      xp = get_sig (argument);
-      if ((p=strstr(argument, "/A=")) != NULL)
-         usr.msg = atoi(p + 3);
-      if (!read_system(usr.msg, active)) {
-         if (strstr (argument, "/2") != NULL)
-            display_area_list(active, 1, xp);
-         else if (strstr (argument, "/3") != NULL)
-            display_area_list(active, 3, xp);
-         else
-            display_area_list(active, 2, xp);
-      }
-      else
-         status_line(msgtxt[M_BBS_EXIT], usr.msg, sys.msg_name);
-      if (sys.quick_board)
-         quick_scan_message_base (sys.quick_board, usr.msg, 1);
-      else if (sys.pip_board)
-         pip_scan_message_base (usr.msg, 1);
-      else if (sys.squish)
-         squish_scan_message_base (usr.msg, sys.msg_path, 1);
-      else
-         scan_message_base(usr.msg, 1);
-      allow_reply = 0;
-      gosub_menu(argument);
-      break;
-   case _FILE:
-      if (!get_menu_password (cmd[i].argument))
-         break;
-      active = 2;
-      xp = get_sig (argument);
-      if ((p=strstr(argument, "/A=")) != NULL)
-         usr.files = atoi(p + 3);
-      if (!read_system (usr.files, active)) {
-         if (strstr (argument, "/2") != NULL)
-            display_area_list(active, 1, xp);
-         else if (strstr (argument, "/3") != NULL)
-            display_area_list(active, 3, xp);
-         else
-            display_area_list(active, 2, xp);
-      }
-      else
-         status_line(msgtxt[M_BBS_SPAWN], usr.files, sys.file_name);
-      gosub_menu (argument);
-      break;
-   case _GOODBYE:
-      if (logoff_procedure())
-         return (1);
-      break;
-   case _SHOW:
-      if (!cmd[i].nocls)
-         cls ();
-      read_file(argument);
-      if (strstr (argument, "/R") != NULL)
-         press_enter ();
-      break;
-   case _YELL:
-      if (!lorainfo.wants_chat)
-         status_line (":User request chat"),
-      lorainfo.wants_chat = 1;
-      lorainfo.yelling++;
-      if (function_active == 1)
-         f1_status();
-      m_print(bbstxt[B_YELLING]);
-      yelling_at_sysop (atoi(argument));
-      break;
-   case _CONFIG:
-      user_configuration();
-      if (strstr (argument, "/R") != NULL)
-         press_enter ();
-      break;
-   case _USERLIST:
-      user_list(argument);
-      break;
-   case _BULLETIN_MENU:
-      bulletin_menu (argument);
-      break;
-   case _OUTSIDE:
-      open_outside_door(argument);
-      break;
-   case _VERSION:
-      software_version();
-      break;
-   case _QUOTES:
-      read_system_file ("APHORISM");
-      show_quote();
-      break;
-   case _CLEAR_GOTO:
-      menu_sp = 0;
-      if ((p=strchr (argument, ' ')) != NULL)
-         *p = '\0';
-      strcpy(mnu_name, argument);
-      readed = 0;
-      break;
-   case _CLEAR_GOSUB:
-      menu_sp = 0;
-      if (!get_menu_password (cmd[i].argument))
-         break;
-      gosub_menu (argument);
-      break;
-   case _MAIN:
-      if (!get_menu_password (cmd[i].argument))
-         break;
-      strcpy(mnu_name, "MAIN");
-      readed = 0;
-      active = 0;
-      show_quote();
-      break;
-   case _CHG_AREA:
-      xp = get_sig (argument);
-      do {
-         if (strstr (argument, "/2") != NULL)
-            display_area_list(active, 1, xp);
-         else if (strstr (argument, "/3") != NULL)
-            display_area_list(active, 3, xp);
-         else
-            display_area_list(active, 2, xp);
-         if (!CARRIER || time_remain() <= 0)
+      case _MESSAGE:
+         if (!get_menu_password (argument))
             break;
-
-         s = 0;
-         if (active == 1)
-            s = read_system(usr.msg, active);
-         else if (active == 2)
-            s = read_system(usr.files, active);
-      } while (!s);
-      if (active == 1) {
-         if (sys.quick_board)
-            quick_scan_message_base (sys.quick_board, usr.msg, 1);
-         else if (sys.pip_board)
-            pip_scan_message_base (usr.msg, 1);
-         else if (sys.squish)
-            squish_scan_message_base (usr.msg, sys.msg_path, 1);
-         else
-            scan_message_base(usr.msg, 1);
-         allow_reply = 0;
-      }
-      first_time = 1;
-      break;
-   case _MSG_KILL:
-      msg_kill();
-      break;
-   case _GOTO_MENU:
-      xp = get_sig (argument);
-      if ((p=strstr(argument, "/M")) != NULL)
-      {
          active = 1;
-         if (p[2] == '=')
+         xp = get_sig (argument);
+         if ((p=strstr(argument, "/A=")) != NULL)
             usr.msg = atoi(p + 3);
          if (!read_system(usr.msg, active)) {
             if (strstr (argument, "/2") != NULL)
                display_area_list(active, 1, xp);
             else if (strstr (argument, "/3") != NULL)
                display_area_list(active, 3, xp);
+            else if (strstr (argument, "/4") != NULL)
+               display_area_list(active, 4, xp);
             else
                display_area_list(active, 2, xp);
          }
@@ -481,341 +447,145 @@ char *argument;
          else
             scan_message_base(usr.msg, 1);
          allow_reply = 0;
-      }
-      if ((p=strstr(argument, "/F")) != NULL)
-      {
+         if (strstr (argument, "/NS") == NULL)
+            cls ();
+         gosub_menu (argument);
+         break;
+      case _FILE:
+         if (!get_menu_password (cmd[i].argument))
+            break;
          active = 2;
-         if (p[2] == '=')
+         xp = get_sig (argument);
+         if ((p=strstr(argument, "/A=")) != NULL)
             usr.files = atoi(p + 3);
          if (!read_system (usr.files, active)) {
             if (strstr (argument, "/2") != NULL)
                display_area_list(active, 1, xp);
             else if (strstr (argument, "/3") != NULL)
                display_area_list(active, 3, xp);
+            else if (strstr (argument, "/4") != NULL)
+               display_area_list(active, 4, xp);
             else
                display_area_list(active, 2, xp);
          }
          else
             status_line(msgtxt[M_BBS_SPAWN], usr.files, sys.file_name);
-      }
-      if ((p=strchr(argument, ' ')) != NULL)
-         *p = '\0';
-      strcpy(mnu_name, argument);
-      readed = 0;
-      break;
-   case _F_TITLES:
-      if (active == 2)
-         file_list(sys.filepath, sys.filelist);
-      break;
-   case _F_DNLD:
-      set_useron_record(UPLDNLD, 0, 0);
-      if (strlen(argument))
-      {
-         translate_filenames (argument, 0, NULL);
-         download_file(argument, 0);
-      }
-      else
-         download_file(sys.filepath, 0);
-      break;
-   case _F_DISPL:
-      file_display();
-      break;
-   case _F_RAWDIR:
-      raw_dir();
-      break;
-   case _F_KILL:
-      file_kill ();
-      break;
-   case _SET_PWD:
-      password_change();
-      break;
-   case _SET_HELP:
-      if (cmd != NULL) {
-         free (cmd);
-         cmd = NULL;
-      }
-      v = select_language ();
-      if (v != -1) {
-         usr.language = (byte) v;
-         free (bbstxt);
-         if (!load_language (usr.language)) {
-            usr.language = 0;
-            load_language (usr.language);
-         }
-         if (lang_txtpath[usr.language] != NULL)
-            text_path = lang_txtpath[usr.language];
-         else
-            text_path = lang_txtpath[0];
-      }
-      readed = 0;
-      break;
-   case _SET_NULLS:
-      nulls_change();
-      break;
-   case _SET_LEN:
-      screen_change();
-      break;
-   case _SET_TABS:
-      tabs_change();
-      break;
-   case _SET_MORE:
-      more_change();
-      break;
-   case _SET_CLS:
-      formfeed_change();
-      break;
-   case _SET_EDIT:
-      fullscreen_change();
-      break;
-   case _SET_CITY:
-      city_change();
-      break;
-   case _SET_SCANMAIL:
-      scanmail_change ();
-      break;
-   case _SET_AVATAR:
-      avatar_change();
-      break;
-   case _SET_ANSI:
-      ansi_change();
-      break;
-   case _SET_COLOR:
-      color_change();
-      break;
-   case _MSG_EDIT_NEW:
-      s = active;
-      active = 1;
-      lo = 0;
-      if (strstr (argument, "/L"))
-         lo = 1;
-      set_useron_record(READWRITE, 0, 0);
-      if ((gg=get_message_data(0, argument)) == 1) {
-         if (usr.use_lore) {
-            line_editor(0);
-            gosub_menu(argument);
-         }
-         else {
-            if (external_editor (0))
-               if (lo) {
-                  logoff_procedure ();
-                  return (1);
-               }
-            active = s;
-         }
-      }
-      else {
-         if (gg == 0)
-            m_print(bbstxt[B_LORE_MSG3]);
-
-         active = s;
-      }
-      break;
-   case _MSG_EDIT_REPLY:
-      if (!allow_reply)
+         if (strstr (argument, "/NS") == NULL)
+            cls ();
+         gosub_menu (argument);
          break;
-
-      s = active;
-      active = 1;
-      set_useron_record(READWRITE, 0, 0);
-
-      if ((gg=get_message_data(lastread, argument)) == 1) {
-         if (usr.use_lore) {
-            line_editor(0);
-            gosub_menu (argument);
+      case _GOODBYE:
+         if (logoff_procedure())
+            return (1);
+         break;
+      case _SHOW:
+         if (stristr (argument, "/NS") == NULL)
+            cls ();
+         if (stristr (argument, "/P") == NULL)
+            read_file (argument);
+         else
+            naplps_read_file (argument);
+         if (stristr (argument, "/R") != NULL)
+            press_enter ();
+         break;
+      case _YELL:
+         if (stristr (argument, "/NL") == NULL) {
+            if (!lorainfo.wants_chat)
+               status_line (":User request chat"),
+            lorainfo.wants_chat = 1;
+            lorainfo.yelling++;
+            if (function_active == 1)
+               f1_status();
          }
-         else {
-            external_editor (1);
-            active = s;
-         }
-      }
-      else {
-         if (gg == 0)
-            m_print(bbstxt[B_LORE_MSG3]);
-
-         active = s;
-      }
-      break;
-   case _ED_SAVE:
-      if (sys.quick_board)
-         quick_save_message(NULL);
-      else if (sys.pip_board)
-         pip_save_message(NULL);
-      else if (sys.squish)
-         squish_save_message(NULL);
-      else
-         save_message(NULL);
-
-      usr.msgposted++;
-
-      if (lo) {
-         free_message_array();
-         logoff_procedure ();
-         return (1);
-      }
-
-      if (strstr(argument, "/RET")) {
-         active = s;
-         free_message_array();
-         return_menu();
-      }
-      break;
-   case _ED_ABORT:
-      change_attr (LRED|_BLACK);
-      m_print(bbstxt[B_LORE_MSG3]);
-      free_message_array();
-      active = s;
-      return_menu();
-      break;
-   case _ED_LIST:
-      edit_list();
-      break;
-   case _ED_CHG:
-      edit_line();
-      break;
-   case _ED_INSERT:
-      edit_insert();
-      break;
-   case _ED_DEL:
-      edit_delete();
-      break;
-   case _ED_CONT:
-      edit_continue();
-      break;
-   case _ED_TO:
-      edit_change_to();
-      break;
-   case _ED_SUBJ:
-      edit_change_subject();
-      break;
-   case _PRESS_ENTER:
-      if (argument[0]) {
-         m_print (argument);
-         input(filename,2);
-      }
-      else
-         press_enter ();
-      break;
-   case _CHG_AREA_NAME:
-      xp = get_sig (argument);
-      do {
-         display_area_list(active, 3, xp);
-         if (!CARRIER || time_remain() <= 0)
+         yelling_at_sysop (argument);
+         break;
+      case _CONFIG:
+         user_configuration();
+         if (strstr (argument, "/R") != NULL)
+            press_enter ();
+         break;
+      case _USERLIST:
+         user_list(argument);
+         break;
+      case _BULLETIN_MENU:
+         bulletin_menu (argument);
+         break;
+      case _OUTSIDE:
+         open_outside_door(argument);
+         break;
+      case _VERSION:
+         software_version (argument);
+         break;
+      case _QUOTES:
+         if (strstr (argument, "/NS") == NULL)
+            cls ();
+         read_system_file ("APHORISM");
+         show_quote();
+         if (strstr (argument, "/P") != NULL)
+            press_enter ();
+         break;
+      case _CLEAR_GOTO:
+         menu_sp = 0;
+         mnu_file = NULL;
+         if ((p=strchr (argument, ' ')) != NULL)
+            *p = '\0';
+         strcpy(mnu_name, argument);
+         readed = 0;
+         if (strstr (argument, "/NS") == NULL)
+            cls ();
+         break;
+      case _CLEAR_GOSUB:
+         menu_sp = 0;
+         mnu_file = NULL;
+         if (!get_menu_password (cmd[i].argument))
             break;
-
-         s = 0;
-         if (active == 1)
-            s = read_system( usr.msg, active);
-         else if (active == 2)
-            s = read_system(usr.files, active);
-      } while (!s);
-      if (active == 1) {
-         if (sys.quick_board)
-            quick_scan_message_base (sys.quick_board, usr.msg, 1);
-         else if (sys.pip_board)
-            pip_scan_message_base (usr.msg, 1);
-         else if (sys.squish)
-            squish_scan_message_base (usr.msg, sys.msg_path, 1);
-         else
-            scan_message_base(usr.msg, 1);
-         allow_reply = 0;
-      }
-      first_time = 1;
-      break;
-   case _MSG_LIST:
-      list_headers (0);
-      break;
-   case _MSG_VERBOSE:
-      list_headers (1);
-      break;
-   case _MSG_NEXT:
-      read_forward(lastread,0);
-      break;
-   case _MSG_PRIOR:
-      read_backward(lastread);
-      break;
-   case _MSG_NONSTOP:
-      read_nonstop();
-      break;
-   case _MSG_PARENT:
-      read_parent();
-      break;
-   case _MSG_CHILD:
-      read_reply();
-      break;
-   case _MSG_SCAN:
-      if (scan_mailbox())
-      {
-         v = active;
-         active = 4;
-         i = -1;
-         mail_read_forward (0);
-         allow_reply = 1;
-         gosub_menu ("READMAIL");
-      }
-      break;
-   case _MSG_INQ:
-      message_inquire ();
-      break;
-   case _GOSUB_MENU:
-      if (!get_menu_password (cmd[i].argument))
+         if (strstr (argument, "/NS") == NULL)
+            cls ();
+         gosub_menu (argument);
          break;
-      xp = get_sig (argument);
-      if ((p=strstr(argument, "/M")) != NULL) {
-         active = 1;
-         if (p[2] == '=')
-            usr.msg = atoi(p + 3);
-         if (!read_system(usr.msg, active))
-            display_area_list(active, 1, xp);
-         else
-            status_line(msgtxt[M_BBS_EXIT], usr.msg, sys.msg_name);
-         if (sys.quick_board)
-            quick_scan_message_base (sys.quick_board, usr.msg, 1);
-         else if (sys.pip_board)
-            pip_scan_message_base (usr.msg, 1);
-         else if (sys.squish)
-            squish_scan_message_base (usr.msg, sys.msg_path, 1);
-         else
-            scan_message_base(usr.msg, 1);
-         allow_reply = 0;
-      }
-      if ((p=strstr(argument, "/F")) != NULL) {
-         active = 2;
-         if (p[2] == '=')
-            usr.files = atoi(p + 3);
-         if (!read_system (usr.files, active))
-            display_area_list(active, 1, xp);
-         else
-            status_line(msgtxt[M_BBS_SPAWN], usr.files, sys.file_name);
-      }
-      gosub_menu (argument);
-      break;
-   case _FILE_HURL:
-      hurl ();
-      break;
-   case _MSG_INDIVIDUAL:
-      if ((p = strchr (cmd_string, ' ')) != NULL)
-         *p = '\0';
-      read_forward(atoi(cmd_string) - 1, 0);
-      if (p != NULL)
-      {
-         *p = ' ';
-         strcpy (cmd_string, p);
-      }
-      else
-         cmd_string[0] = '\0';
-      break;
-   case _RETURN_MENU:
-      if (st != NULL)
-         return (1);
+      case _MAIN:
+         if (!get_menu_password (cmd[i].argument))
+            break;
+         strcpy(mnu_name, "MAIN");
+         readed = 0;
+         active = 0;
+         if (strstr (argument, "/NS") == NULL)
+            cls ();
+         show_quote();
+         break;
+      case _CHG_AREA:
+         xp = get_sig (argument);
+         do {
+            if (strstr (argument, "/R") != NULL) {
+               if (strstr (argument, "/2") != NULL)
+                  display_area_list(active, 0x81, xp);
+               else if (strstr (argument, "/3") != NULL)
+                  display_area_list(active, 0x83, xp);
+               else if (strstr (argument, "/4") != NULL)
+                  display_area_list(active, 0x84, xp);
+               else
+                  display_area_list(active, 0x82, xp);
+            }
+            else {
+               if (strstr (argument, "/2") != NULL)
+                  display_area_list(active, 1, xp);
+               else if (strstr (argument, "/3") != NULL)
+                  display_area_list(active, 3, xp);
+               else if (strstr (argument, "/4") != NULL)
+                  display_area_list(active, 4, xp);
+               else
+                  display_area_list(active, 2, xp);
+            }
+            if (!CARRIER || time_remain() <= 0)
+               break;
 
-      return_menu();
-
-      if (active == 4)
-      {
-         active = v;
-
+            s = 0;
+            if (active == 1)
+               s = read_system(usr.msg, active);
+            else if (active == 2)
+               s = read_system(usr.files, active);
+         } while (!s);
          if (active == 1) {
-            read_system(usr.msg, active);
             if (sys.quick_board)
                quick_scan_message_base (sys.quick_board, usr.msg, 1);
             else if (sys.pip_board)
@@ -826,81 +596,678 @@ char *argument;
                scan_message_base(usr.msg, 1);
             allow_reply = 0;
          }
-      }
-      break;
-   case _MENU_CLEAR:
-      menu_sp = 0;
-      break;
-   case _F_LOCATE:
-      if (strstr (argument, "/F"))
-         locate_files (1);
-      else
-         locate_files (0);
-      break;
-   case _F_UPLD:
-      set_useron_record(UPLDNLD, 0, 0);
-      if (strlen(argument))
-         upload_file(argument,0);
-      else
-         upload_file(sys.uppath,0);
-      break;
-   case _SET_SIGN:
-      signature_change();
-      break;
-   case _MAKE_LOG:
-      status_line (argument);
-      break;
-   case _F_OVERRIDE:
-      override_path ();
-      break;
-   case _F_NEW:
-      if (strstr (argument, "/F"))
-         new_file_list (1);
-      else
-         new_file_list (0);
-      break;
-   case _MAIL_NEXT:
-      mail_read_forward(0);
-      break;
-   case _MAIL_PRIOR:
-      mail_read_backward(0);
-      break;
-   case _MAIL_NONSTOP:
-      mail_read_nonstop ();
-      break;
-   case _SET_FULLREAD:
-      fullread_change();
-      break;
-   case _ONLINE_MESSAGE:
-      send_online_message();
-      break;
-   case _MAIL_END:
-      if (st != NULL)
-         return (1);
+         first_time = 1;
+         break;
+      case _MSG_KILL:
+         msg_kill();
+         break;
+      case _GOTO_MENU:
+         xp = get_sig (argument);
+         if ((p=strstr(argument, "/M")) != NULL) {
+            active = 1;
+            if (p[2] == '=')
+               usr.msg = atoi(p + 3);
+            if (!read_system(usr.msg, active)) {
+               if (strstr (argument, "/2") != NULL)
+                  display_area_list(active, 1, xp);
+               else if (strstr (argument, "/3") != NULL)
+                  display_area_list(active, 3, xp);
+               else if (strstr (argument, "/4") != NULL)
+                  display_area_list(active, 4, xp);
+               else
+                  display_area_list(active, 2, xp);
+            }
+            else
+               status_line(msgtxt[M_BBS_EXIT], usr.msg, sys.msg_name);
+            if (sys.quick_board)
+               quick_scan_message_base (sys.quick_board, usr.msg, 1);
+            else if (sys.pip_board)
+               pip_scan_message_base (usr.msg, 1);
+            else if (sys.squish)
+               squish_scan_message_base (usr.msg, sys.msg_path, 1);
+            else
+               scan_message_base(usr.msg, 1);
+            allow_reply = 0;
+         }
+         if ((p=strstr(argument, "/F")) != NULL) {
+            active = 2;
+            if (p[2] == '=')
+               usr.files = atoi(p + 3);
+            if (!read_system (usr.files, active)) {
+               if (strstr (argument, "/2") != NULL)
+                  display_area_list(active, 1, xp);
+               else if (strstr (argument, "/3") != NULL)
+                  display_area_list(active, 3, xp);
+               else if (strstr (argument, "/4") != NULL)
+                  display_area_list(active, 4, xp);
+               else
+                  display_area_list(active, 2, xp);
+            }
+            else
+               status_line(msgtxt[M_BBS_SPAWN], usr.files, sys.file_name);
+         }
+         if ((p=strchr(argument, ' ')) != NULL)
+            *p = '\0';
+         strcpy(mnu_name, argument);
+         readed = 0;
+         if (strstr (argument, "/NS") == NULL)
+            cls ();
+         break;
+      case _F_TITLES:
+         if (argument[0] != '\0') {
+            if ((p = strstr (argument, " ")) != NULL) {
+               while (*p == ' ')
+                  p++;
+               *(p - 1) = '\0';
+               file_list (argument, p);
+               *(p - 1) = ' ';
+            }
+            else
+               file_list (argument, NULL);
+         }
+         else if (active == 2)
+            file_list(sys.filepath, sys.filelist);
+         break;
+      case _F_DNLD:
+         set_useron_record(UPLDNLD, 0, 0);
+         v = 0;
+         if (stristr (argument, "/NOREM"))
+            v = -2;
+         if ((p = stristr (argument, "/F=")) != NULL) {
+            strcpy (buf, &p[3]);
+            p = strtok (buf, " ");
+            translate_filenames (p, 0, NULL);
+         }
+         else
+            p = sys.filepath;
+         download_file (p, v);
+         break;
+      case _F_DISPL:
+         file_display();
+         break;
+      case _F_RAWDIR:
+         raw_dir();
+         break;
+      case _F_KILL:
+         file_kill (0, NULL);
+         break;
+      case _SET_PWD:
+         password_change();
+         break;
+      case _SET_HELP:
+         v = select_language ();
+         if (v != -1) {
+#ifndef __OS2__
+            if (cmd != NULL) {
+               free (cmd);
+               cmd = NULL;
+            }
+#endif
+            usr.language = (byte) v;
+            free (bbstxt);
+            if (!load_language (usr.language)) {
+               usr.language = 0;
+               load_language (usr.language);
+            }
+            if (config->language[usr.language].txt_path[0])
+               text_path = config->language[usr.language].txt_path;
+            else
+               text_path = config->language[0].txt_path;
+            readed = 0;
+         }
+         break;
+      case _SET_NULLS:
+         nulls_change();
+         break;
+      case _SET_LEN:
+         screen_change();
+         break;
+      case _SET_TABS:
+         tabs_change();
+         break;
+      case _SET_MORE:
+         more_change();
+         break;
+      case _SET_CLS:
+         formfeed_change();
+         break;
+      case _SET_EDIT:
+         fullscreen_change();
+         break;
+      case _SET_CITY:
+         city_change();
+         break;
+      case _SET_SCANMAIL:
+         scanmail_change ();
+         break;
+      case _SET_AVATAR:
+         avatar_change();
+         break;
+      case _SET_ANSI:
+         ansi_change();
+         break;
+      case _SET_COLOR:
+         color_change();
+         break;
+      case _MSG_EDIT_NEW:
+         s = active;
+         active = 1;
+         lo = 0;
+         if (strstr (argument, "/L"))
+            lo = 1;
+         set_useron_record(READWRITE, 0, 0);
+         if ((gg=get_message_data(0, argument)) == 1) {
+            if (usr.use_lore) {
+               line_editor(0);
+               gosub_menu(argument);
+            }
+            else {
+               if (external_editor (0))
+                  if (lo) {
+                     logoff_procedure ();
+                     return (1);
+                  }
+               active = s;
+            }
+         }
+         else {
+            if (gg == 0)
+               m_print(bbstxt[B_LORE_MSG3]);
 
-      return_menu();
-
-      if (old_activ) {
-         active = old_activ;
-         if (active == 1)
-            read_system(usr.msg, active);
-         old_activ = 0;
-      }
-      break;
-   case _CHG_AREA_LONG:
-      xp = get_sig (argument);
-      do {
-         display_area_list(active, 2, xp);
-         if (!CARRIER || time_remain() <= 0)
+            active = s;
+         }
+         break;
+      case _MSG_EDIT_REPLY:
+         if (!allow_reply)
             break;
 
-         s = 0;
-         if (active == 1)
-            s = read_system( usr.msg, active);
-         else if (active == 2)
-            s = read_system(usr.files, active);
-      } while (!s);
-      if (active == 1) {
+         s = active;
+         active = 1;
+         set_useron_record(READWRITE, 0, 0);
+
+         if ((gg=get_message_data(lastread, argument)) == 1) {
+            if (usr.use_lore) {
+               line_editor(0);
+               gosub_menu (argument);
+            }
+            else {
+               external_editor (1);
+               active = s;
+            }
+         }
+         else {
+            if (gg == 0)
+               m_print(bbstxt[B_LORE_MSG3]);
+
+            active = s;
+         }
+         break;
+      case _ED_SAVE:
+         if (sys.quick_board)
+            quick_save_message(NULL);
+         else if (sys.pip_board)
+            pip_save_message(NULL);
+         else if (sys.squish)
+            squish_save_message(NULL);
+         else
+            save_message(NULL);
+
+         usr.msgposted++;
+
+         if (lo) {
+            free_message_array();
+            logoff_procedure ();
+            return (1);
+         }
+
+         if (strstr(argument, "/RET")) {
+            active = s;
+            free_message_array();
+            return_menu();
+         }
+         break;
+      case _ED_ABORT:
+         change_attr (LRED|_BLACK);
+         m_print(bbstxt[B_LORE_MSG3]);
+         free_message_array();
+         active = s;
+         return_menu();
+         break;
+      case _ED_LIST:
+         edit_list();
+         break;
+      case _ED_CHG:
+         edit_line();
+         break;
+      case _ED_INSERT:
+         edit_insert();
+         break;
+      case _ED_DEL:
+         edit_delete();
+         break;
+      case _ED_CONT:
+         edit_continue();
+         break;
+      case _ED_TO:
+         edit_change_to();
+         break;
+      case _ED_SUBJ:
+         edit_change_subject();
+         break;
+      case _PRESS_ENTER:
+         if (argument[0]) {
+            m_print (argument);
+            input(filename,2);
+         }
+         else
+            press_enter ();
+         break;
+      case _CHG_AREA_NAME:
+         xp = get_sig (argument);
+         do {
+            display_area_list(active, 3, xp);
+            if (!CARRIER || time_remain() <= 0)
+               break;
+
+            s = 0;
+            if (active == 1)
+               s = read_system( usr.msg, active);
+            else if (active == 2)
+               s = read_system(usr.files, active);
+         } while (!s);
+         if (active == 1) {
+            if (sys.quick_board)
+               quick_scan_message_base (sys.quick_board, usr.msg, 1);
+            else if (sys.pip_board)
+               pip_scan_message_base (usr.msg, 1);
+            else if (sys.squish)
+               squish_scan_message_base (usr.msg, sys.msg_path, 1);
+            else
+               scan_message_base(usr.msg, 1);
+            allow_reply = 0;
+         }
+         first_time = 1;
+         break;
+      case _MSG_LIST:
+         list_headers (0);
+         break;
+      case _MSG_VERBOSE:
+         list_headers (1);
+         break;
+      case _MSG_NEXT:
+         read_forward(lastread,0);
+         break;
+      case _MSG_PRIOR:
+         read_backward(lastread);
+         break;
+      case _MSG_NONSTOP:
+         read_nonstop();
+         break;
+      case _MSG_PARENT:
+         read_parent ();
+         break;
+      case _MSG_CHILD:
+         read_reply ();
+         break;
+      case _MSG_SCAN:
+         if (scan_mailbox())
+         {
+            v = active;
+            active = 4;
+            i = -1;
+            mail_read_forward (0);
+            allow_reply = 1;
+            gosub_menu ("READMAIL");
+         }
+         break;
+      case _MSG_INQ:
+         message_inquire ();
+         break;
+      case _GOSUB_MENU:
+         if (!get_menu_password (cmd[i].argument))
+            break;
+         xp = get_sig (argument);
+         if ((p=strstr(argument, "/M")) != NULL) {
+            active = 1;
+            if (p[2] == '=')
+               usr.msg = atoi(p + 3);
+            if (!read_system(usr.msg, active))
+               display_area_list(active, 1, xp);
+            else
+               status_line(msgtxt[M_BBS_EXIT], usr.msg, sys.msg_name);
+            if (sys.quick_board)
+               quick_scan_message_base (sys.quick_board, usr.msg, 1);
+            else if (sys.pip_board)
+               pip_scan_message_base (usr.msg, 1);
+            else if (sys.squish)
+               squish_scan_message_base (usr.msg, sys.msg_path, 1);
+            else
+               scan_message_base(usr.msg, 1);
+            allow_reply = 0;
+         }
+         if ((p=strstr(argument, "/F")) != NULL) {
+            active = 2;
+            if (p[2] == '=')
+               usr.files = atoi(p + 3);
+            if (!read_system (usr.files, active))
+               display_area_list(active, 1, xp);
+            else
+               status_line(msgtxt[M_BBS_SPAWN], usr.files, sys.file_name);
+         }
+         if (strstr (argument, "/NS") == NULL)
+            cls ();
+         gosub_menu (argument);
+         break;
+      case _FILE_HURL:
+         hurl ();
+         break;
+      case _MSG_INDIVIDUAL:
+         if ((p = strchr (cmd_string, ' ')) != NULL)
+            *p = '\0';
+         read_forward(atoi(cmd_string) - 1, 0);
+         if (p != NULL)
+         {
+            *p = ' ';
+            strcpy (cmd_string, p);
+         }
+         else
+            cmd_string[0] = '\0';
+         break;
+      case _F_TAG:
+         tag_files (0);
+         break;
+      case _RETURN_MENU:
+         if (st != NULL)
+            return (1);
+
+         return_menu();
+
+         if (active == 4)
+         {
+            active = v;
+
+            if (active == 1) {
+               read_system(usr.msg, active);
+               if (sys.quick_board)
+                  quick_scan_message_base (sys.quick_board, usr.msg, 1);
+               else if (sys.pip_board)
+                  pip_scan_message_base (usr.msg, 1);
+               else if (sys.squish)
+                  squish_scan_message_base (usr.msg, sys.msg_path, 1);
+               else
+                  scan_message_base(usr.msg, 1);
+               allow_reply = 0;
+            }
+         }
+         if (strstr (argument, "/NS") == NULL)
+            cls ();
+         break;
+      case _MENU_CLEAR:
+         menu_sp = 0;
+         mnu_file = 0;
+         break;
+      case _F_LOCATE:
+         if (strstr (argument, "/F"))
+            locate_files (1);
+         else
+            locate_files (0);
+         break;
+      case _F_UPLD:
+         set_useron_record(UPLDNLD, 0, 0);
+         if (strlen(argument))
+            upload_file(argument,0);
+         else
+            upload_file(sys.uppath,0);
+         break;
+      case _SET_SIGN:
+         signature_change();
+         break;
+      case _MAKE_LOG:
+         status_line (argument);
+         break;
+      case _F_OVERRIDE:
+         override_path ();
+         break;
+      case _F_NEW:
+         if (strstr (argument, "/F"))
+            new_file_list (1);
+         else
+            new_file_list (0);
+         break;
+      case _MAIL_NEXT:
+         mail_read_forward(0);
+         break;
+      case _MAIL_PRIOR:
+         mail_read_backward(0);
+         break;
+      case _MAIL_NONSTOP:
+         mail_read_nonstop ();
+         break;
+      case _SET_FULLREAD:
+         fullread_change();
+         break;
+      case _ONLINE_MESSAGE:
+         send_online_message();
+         break;
+      case _MAIL_END:
+         if (st != NULL)
+            return (1);
+
+         return_menu();
+
+         if (old_activ) {
+            active = old_activ;
+            if (active == 1)
+               read_system(usr.msg, active);
+            old_activ = 0;
+         }
+         break;
+      case _CHG_AREA_LONG:
+         xp = get_sig (argument);
+         do {
+            display_area_list(active, 2, xp);
+            if (!CARRIER || time_remain() <= 0)
+               break;
+
+            s = 0;
+            if (active == 1)
+               s = read_system( usr.msg, active);
+            else if (active == 2)
+               s = read_system(usr.files, active);
+         } while (!s);
+         if (active == 1) {
+            if (sys.quick_board)
+               quick_scan_message_base (sys.quick_board, usr.msg, 1);
+            else if (sys.pip_board)
+               pip_scan_message_base (usr.msg, 1);
+            else if (sys.squish)
+               squish_scan_message_base (usr.msg, sys.msg_path, 1);
+            else
+               scan_message_base(usr.msg, 1);
+            allow_reply = 0;
+         }
+         first_time = 1;
+         break;
+      case _ONLINE_USERS:
+         online_users(1);
+         break;
+      case _MAIL_LIST:
+         if (active == 4)
+            mail_list ();
+         break;
+      case _WRITE_NEXT_CALLER:
+         message_to_next_caller ();
+         break;
+      case _F_GLOBAL_DNLD:
+         set_useron_record(UPLDNLD, 0, 0);
+         v = 1;
+         if (stristr (argument, "/NOREM"))
+            v = -3;
+         if ((p = stristr (argument, "/F=")) != NULL) {
+            strcpy (buf, &p[3]);
+            p = strtok (buf, " ");
+            translate_filenames (p, 0, NULL);
+         }
+         else
+            p = sys.filepath;
+         download_file (p, v);
+         break;
+      case _MAIL_INDIVIDUAL:
+         if ((p = strchr (cmd_string, ' ')) != NULL)
+            *p = '\0';
+         last_mail = atoi(cmd_string) - 1;
+         mail_read_forward(0);
+         if (p != NULL)
+         {
+            *p = ' ';
+            strcpy (cmd_string, p);
+         }
+         else
+            cmd_string[0] = '\0';
+         break;
+      case _DRAW_WINDOW:
+         time_statistics ();
+         break;
+      case _CHAT_WHOIS:
+         cb_who_is_where (1);
+         break;
+      case _CB_CHAT:
+         cb_chat();
+         break;
+      case _SHOW_TEXT:
+         if (stristr (argument, "/NS") == NULL)
+            cls ();
+         read_system_file (argument);
+         if (stristr (argument, "/R") != NULL)
+            press_enter ();
+         break;
+      case _LASTCALLERS:
+         show_lastcallers(argument);
+         break;
+      case _SET_HANDLE:
+         handle_change ();
+         break;
+      case _SET_VOICE:
+         voice_phone_change ();
+         break;
+      case _SET_DATA:
+         data_phone_change ();
+         break;
+      case _F_CONTENTS:
+         display_contents ();
+         break;
+      case _COUNTER:
+         if ((p=strstr(argument, "/C=")) != NULL)
+         {
+            gg = atoi(p + 3);
+            if (gg < 0 || gg >= MAXCOUNTER)
+               break;
+            if ((p=strstr(argument, "/I=")) != NULL)
+               usr.counter[gg] += atoi (p + 3);
+            if ((p=strstr(argument, "/D=")) != NULL)
+               usr.counter[gg] -= atoi (p + 3);
+            if ((p=strstr(argument, "/R=")) != NULL)
+               usr.counter[gg] = atoi (p + 3);
+         }
+         break;
+      case _MSG_TAG:
+         xp = get_sig (argument);
+
+         if (strstr (argument, "/2") != NULL)
+            tag_area_list (1, xp);
+         else if (strstr (argument, "/3") != NULL)
+            tag_area_list (3, xp);
+         else if (strstr (argument, "/4") != NULL)
+            tag_area_list (4, xp);
+         else
+            tag_area_list (2, xp);
+         break;
+      case _ASCII_DOWNLOAD:
+         pack_tagged_areas ();
+         break;
+      case _RESUME_DOWNLOAD:
+         resume_transmission ();
+         break;
+      case _USAGE:
+         display_usage ();
+         break;
+      case _BANK_ACCOUNT:
+         show_account ();
+         break;
+      case _BANK_DEPOSIT:
+         deposit_time ();
+         break;
+      case _BANK_WITHDRAW:
+         withdraw_time ();
+         break;
+      case _BANK_KDEPOSIT:
+         deposit_kbytes ();
+         break;
+      case _BANK_KWITHDRAW:
+         withdraw_kbytes ();
+         break;
+      case _SET_HOTKEY:
+         hotkey_change ();
+         break;
+      case _BBSLIST_ADD:
+         if ((p = strstr (argument, "/L=")) != NULL)
+            bbs_add_list (atoi (&p[3]));
+         else
+            bbs_add_list (0);
+         break;
+      case _BBSLIST_SHORT:
+         if ((p = strstr (argument, "/L=")) != NULL)
+            bbs_short_list (atoi (&p[3]));
+         else
+            bbs_short_list (0);
+         break;
+      case _BBSLIST_LONG:
+         if ((p = strstr (argument, "/L=")) != NULL)
+            bbs_long_list (atoi (&p[3]));
+         else
+            bbs_long_list (0);
+         break;
+      case _BBSLIST_CHANGE:
+         if (strstr (argument, "/R") != NULL)
+            xp = 1;
+         else
+            xp = 0;
+         if ((p = strstr (argument, "/L=")) != NULL)
+            bbs_change (atoi (&p[3]), xp);
+         else
+            bbs_change (0, xp);
+         break;
+      case _BBSLIST_REMOVE:
+         if (strstr (argument, "/R") != NULL)
+            xp = 1;
+         else
+            xp = 0;
+         if ((p = strstr (argument, "/L=")) != NULL)
+            bbs_remove (atoi (&p[3]), xp);
+         else
+            bbs_remove (0, xp);
+         break;
+      case _QWK_DOWNLOAD:
+         qwk_pack_tagged_areas ();
+         break;
+      case _QWK_UPLOAD:
+         getrep ();
+         break;
+//      case _VOTE_USER:
+//         if ((p=strstr(argument, "/V=")) != NULL) {
+//            xp = atoi(p + 3);
+//            if (xp != 0)
+//               vote_user (xp);
+//         }
+//         break;
+      case 117:
+         ibmset_change ();
+         break;
+      case 118:
+         if (!get_menu_password (argument))
+            break;
+         xp = get_sig (argument);
+         display_new_area_list (xp);
          if (sys.quick_board)
             quick_scan_message_base (sys.quick_board, usr.msg, 1);
          else if (sys.pip_board)
@@ -910,232 +1277,113 @@ char *argument;
          else
             scan_message_base(usr.msg, 1);
          allow_reply = 0;
-      }
-      first_time = 1;
-      break;
-   case _ONLINE_USERS:
-      online_users(1);
-      break;
-   case _MAIL_LIST:
-      if (active == 4)
-         mail_list ();
-      break;
-   case _WRITE_NEXT_CALLER:
-      message_to_next_caller ();
-      break;
-   case _F_GLOBAL_DNLD:
-      set_useron_record(UPLDNLD, 0, 0);
-      if (strlen(argument))
-         download_file(argument, 1);
-      else
-         download_file(sys.filepath, 1);
-      break;
-   case _MAIL_INDIVIDUAL:
-      if ((p = strchr (cmd_string, ' ')) != NULL)
-         *p = '\0';
-      last_mail = atoi(cmd_string) - 1;
-      mail_read_forward(0);
-      if (p != NULL)
-      {
-         *p = ' ';
-         strcpy (cmd_string, p);
-      }
-      else
-         cmd_string[0] = '\0';
-      break;
-   case _DRAW_WINDOW:
-      time_statistics ();
-      break;
-   case _CHAT_WHOIS:
-      cb_who_is_where (1);
-      break;
-   case _CB_CHAT:
-      cb_chat();
-      break;
-   case _SHOW_TEXT:
-      if (!cmd[i].nocls)
-         cls ();
-      read_system_file(argument);
-      if (strstr (argument, "/R") != NULL)
-         press_enter ();
-      break;
-   case _LASTCALLERS:
-      show_lastcallers(argument);
-      break;
-   case _SET_HANDLE:
-      handle_change ();
-      break;
-   case _SET_VOICE:
-      voice_phone_change ();
-      break;
-   case _SET_DATA:
-      data_phone_change ();
-      break;
-   case _F_CONTENTS:
-      display_contents ();
-      break;
-   case _COUNTER:
-      if ((p=strstr(argument, "/C=")) != NULL)
-      {
-         gg = atoi(p + 3);
-         if (gg < 0 || gg >= MAXCOUNTER)
-            break;
-         if ((p=strstr(argument, "/I=")) != NULL)
-            usr.counter[gg] += atoi (p + 3);
-         if ((p=strstr(argument, "/D=")) != NULL)
-            usr.counter[gg] -= atoi (p + 3);
-         if ((p=strstr(argument, "/R=")) != NULL)
-            usr.counter[gg] = atoi (p + 3);
-      }
-      break;
-   case _MSG_TAG:
-      tag_area_list (2, 0);
-      break;
-   case _ASCII_DOWNLOAD:
-      pack_tagged_areas ();
-      break;
-   case _RESUME_DOWNLOAD:
-      resume_transmission ();
-      break;
-   case _USAGE:
-      display_usage ();
-      break;
-   case _BANK_ACCOUNT:
-      show_account ();
-      break;
-   case _BANK_DEPOSIT:
-      deposit_time ();
-      break;
-   case _BANK_WITHDRAW:
-      withdraw_time ();
-      break;
-   case _BANK_KDEPOSIT:
-      deposit_kbytes ();
-      break;
-   case _BANK_KWITHDRAW:
-      withdraw_kbytes ();
-      break;
-   case _SET_HOTKEY:
-      hotkey_change ();
-      break;
-   case _BBSLIST_ADD:
-      if ((p=strchr(argument,'/')) != NULL && isdigit(*(p + 1)))
-         bbs_add_list (atoi (p + 1));
-      else
-         bbs_add_list (0);
-      break;
-   case _BBSLIST_SHORT:
-      if ((p=strchr(argument,'/')) != NULL && isdigit(*(p + 1)))
-         bbs_short_list (atoi (p + 1));
-      else
-         bbs_short_list (0);
-      break;
-   case _BBSLIST_LONG:
-      if ((p=strchr(argument,'/')) != NULL && isdigit(*(p + 1)))
-         bbs_long_list (atoi (p + 1));
-      else
-         bbs_long_list (0);
-      break;
-   case _BBSLIST_CHANGE:
-      if ((p=strchr(argument,'/')) != NULL && isdigit(*(p + 1)))
-         bbs_change (atoi (p + 1));
-      else
-         bbs_change (0);
-      break;
-   case _BBSLIST_REMOVE:
-      if ((p=strchr(argument,'/')) != NULL && isdigit(*(p + 1)))
-         bbs_remove (atoi (p + 1));
-      else
-         bbs_remove (0);
-      break;
-   case _QWK_DOWNLOAD:
-      qwk_pack_tagged_areas ();
-      break;
-   case _QWK_UPLOAD:
-      getrep ();
-      break;
-   case _VOTE_USER:
-      if ((p=strstr(argument, "/V=")) != NULL) {
-         xp = atoi(p + 3);
-         if (xp != 0)
-            vote_user (xp);
-      }
-      break;
-   case 117:
-      ibmset_change ();
-      break;
-   case 118:
-      if (!get_menu_password (argument))
          break;
-      xp = get_sig (argument);
-      display_new_area_list (xp);
-      if (sys.quick_board)
-         quick_scan_message_base (sys.quick_board, usr.msg, 1);
-      else if (sys.pip_board)
-         pip_scan_message_base (usr.msg, 1);
-      else if (sys.squish)
-         squish_scan_message_base (usr.msg, sys.msg_path, 1);
-      else
-         scan_message_base(usr.msg, 1);
-      allow_reply = 0;
-      break;
-   case 119:
-      xport_message ();
-      break;
-   case 120:
-      if ((p=strchr(argument,'/')) != NULL && isdigit(*(p + 1)))
-         bbs_list_download (atoi (p + 1));
-      else
-         bbs_list_download (0);
-      break;
-   case 121:
-      if ((p=strstr(argument, "/G=")) != NULL)
-         xp = atoi (&p[3]);
-      else
-         xp = -1;
+      case 119:
+         xport_message ();
+         break;
+      case 120:
+         if ((p=strchr(argument,'/')) != NULL && isdigit(*(p + 1)))
+            bbs_list_download (atoi (p + 1));
+         else
+            bbs_list_download (0);
+         break;
+      case 121:
+         if ((p=strstr(argument, "/G=")) != NULL)
+            xp = atoi (&p[3]);
+         else
+            xp = -1;
 
-      if (strstr(argument, "/M") != NULL)
-         select_group (1, xp);
-      else if (strstr(argument, "/F") != NULL)
-         select_group (2, xp);
-      else
-         select_group (0, xp);
+         if (strstr(argument, "/M") != NULL)
+            select_group (1, xp);
+         else if (strstr(argument, "/F") != NULL)
+            select_group (2, xp);
+         else
+            select_group (0, xp);
+         break;
+      case 122:
+         upload_filebox ();
+         break;
+      case 123:
+         download_filebox (1);
+         break;
+      case 124:
+         ask_birthdate ();
+         break;
+      case 125:
+         ask_default_protocol ();
+         break;
+      case 126:
+         ask_default_archiver ();
+         break;
+      case _FBOX_KILL:
+         file_kill (1, NULL);
+         break;
+      case _FBOX_LIST:
+         download_filebox (0);
+         break;
+      case 129:
+         if (stristr (argument, "/R") != NULL)
+            list_tagged_files (1);
+         else
+            list_tagged_files (0);
+         break;
    }
-
    return (0);
 }
 
 static void return_menu()
 {
-   if (menu_sp)
-   {
+   if (menu_sp) {
       menu_sp--;
-      strcpy(mnu_name,menu_stack[menu_sp]);
+      strcpy (mnu_name, menu_stack[menu_sp]);
+      if (file_stack[menu_sp][0] == '\0')
+         mnu_file = NULL;
+      else
+         mnu_file = file_stack[menu_sp];
       i = -1;
       readed = 0;
    }
 }
 
-static void gosub_menu(m)
-char *m;
+static void gosub_menu (char *m)
 {
-   char *p;
+   char *p, *v;
 
-   if (menu_sp < MENU_STACK)
-   {
-      strcpy(menu_stack[menu_sp],mnu_name);
+   if (menu_sp < MENU_STACK) {
+      strcpy (menu_stack[menu_sp], mnu_name);
+      if (mnu_file == NULL)
+         file_stack[menu_sp][0] = '\0';
+      else
+         strcpy (file_stack[menu_sp], mnu_file);
       menu_sp++;
 
-      if ((p=strchr (m, ' ')) == NULL)
-         p=m;
-      else
-         *p='\0';
+      if ((p = stristr (m, "/L=")) != NULL) {
+         if ((v = strchr (p, ' ')) == NULL)
+            v = p;
+         else
+            *v = '\0';
+         strcpy (file_stack[menu_sp], v);
+         if (v != p)
+            *v = ' ';
+         mnu_file = file_stack[menu_sp];
+      }
+      else {
+         if (mnu_file == NULL)
+            file_stack[menu_sp][0] = '\0';
+         else
+            strcpy (file_stack[menu_sp], mnu_file);
+      }
 
-      strcpy(mnu_name, m);
+      if ((p = strchr (m, ' ')) == NULL)
+         p = m;
+      else
+         *p = '\0';
+
+      strcpy (mnu_name, m);
       readed = 0;
 
       if (p != m)
-         *p=' ';
+         *p = ' ';
    }
 }
 
@@ -1143,8 +1391,8 @@ static void process_user_display (st, item)
 char *st;
 int item;
 {
-   int m, first, i;
-   char ext[128], buffer[50], *p, parola[36];
+   int m, first, i, fd;
+   char ext[256], buffer[50], *p, parola[36];
    long tempo;
    struct tm *tim;
 
@@ -1153,8 +1401,7 @@ int item;
    first = 1;
 
    for (p=st; *p; p++)
-      switch (*p)
-      {
+      switch (*p) {
       case '^':
          if (first)
             sprintf(buffer,"%c", cmd[item].first_color);
@@ -1171,8 +1418,53 @@ int item;
          break;
       case CTRLF:
          p++;
-         switch(*p)
-         {
+         switch(*p) {
+            case '"':
+               if (usr.archiver == bbstxt[B_ZIP][0])
+                  sprintf (buffer, "%s", &bbstxt[B_ZIP][1]);
+               else if (usr.archiver == bbstxt[B_ARJ][0])
+                  sprintf (buffer, "%s", &bbstxt[B_ARJ][1]);
+               else if (usr.archiver == bbstxt[B_LHA][0])
+                  sprintf (buffer, "%s", &bbstxt[B_LHA][1]);
+               else
+                  sprintf (buffer, "%s", &bbstxt[B_NONE][1]);
+               strcat (ext, buffer);
+               m += strlen (buffer);
+               break;
+            case '%':
+               if (usr.protocol == protocols[0][0])
+                  sprintf (buffer, "%s", &protocols[0][1]);
+               else if (usr.protocol == protocols[1][0])
+                  sprintf (buffer, "%s", &protocols[1][1]);
+               else if (usr.protocol == protocols[2][0])
+                  sprintf (buffer, "%s", &protocols[2][1]);
+               else if (usr.protocol == protocols[5][0])
+                  sprintf (buffer, "%s", &protocols[5][1]);
+               else if (config->hslink && usr.protocol == protocols[3][0])
+                  sprintf (buffer, "%s", &protocols[3][1]);
+               else if (config->puma && usr.protocol == protocols[4][0])
+                  sprintf (buffer, "%s", &protocols[4][1]);
+               else {
+                  PROTOCOL prot;
+
+                  sprintf (buffer, "%sPROTOCOL.DAT", config->sys_path);
+                  fd = sh_open (buffer, O_RDONLY|O_BINARY, SH_DENYWR, S_IREAD|S_IWRITE);
+                  buffer[0] = '\0';
+                  if (fd != -1) {
+                     while (read (fd, &prot, sizeof (PROTOCOL)) == sizeof (PROTOCOL)) {
+                        if (prot.active && prot.hotkey == usr.protocol) {
+                           sprintf (buffer, "%s", prot.name);
+                           break;
+                        }
+                     }
+                     close (fd);
+                  }
+                  if (fd == -1 || !prot.active || prot.hotkey != usr.protocol)
+                     sprintf (buffer, "%s", &protocols[B_NONE][1]);
+               }
+               strcat (ext, buffer);
+               m += strlen (buffer);
+               break;
             case 'C':
                if (cps) {
                   sprintf (buffer, "%ld", cps);
@@ -1208,6 +1500,11 @@ int item;
                   strcat(ext, buffer);
                   m += strlen(buffer);
                }
+               break;
+            case 'I':
+               sprintf (buffer, "%s",usr.ibmset ? bbstxt[B_YES] : bbstxt[B_NO]);
+               strcat(ext, buffer);
+               m += strlen(buffer);
                break;
             case 'L':
                sprintf (buffer, "%d", usr.credit);
@@ -1277,12 +1574,12 @@ int item;
                m += strlen(buffer);
                break;
             case '2':
-               sprintf (buffer, "%s",usr.hotkey ? bbstxt[B_YES] : bbstxt[B_NO]);
+               sprintf (buffer, "%d", get_user_age ());
                strcat(ext, buffer);
                m += strlen(buffer);
                break;
             case '3':
-               sprintf (buffer, "%s",usr.handle);
+               sprintf (buffer, "%s",usr.hotkey ? bbstxt[B_YES] : bbstxt[B_NO]);
                strcat(ext, buffer);
                m += strlen(buffer);
                break;
@@ -1297,6 +1594,11 @@ int item;
                m += strlen(buffer);
                break;
             case '6':
+               sprintf (buffer, "%s",usr.scanmail ? bbstxt[B_YES] : bbstxt[B_NO]);
+               strcat(ext, buffer);
+               m += strlen(buffer);
+               break;
+            case '7':
                sprintf (buffer, "%s",usr.subscrdate);
                strcat(ext, buffer);
                m += strlen(buffer);
@@ -1383,6 +1685,10 @@ int item;
                strcat(ext, buffer);
                m += strlen(buffer);
                break;
+            case CTRLS:
+               strcat(ext, usr.signature);
+               m += strlen(usr.signature);
+               break;
             case CTRLT:
                data(buffer);
                strcpy (buffer, &buffer[10]);
@@ -1402,8 +1708,7 @@ int item;
             case '9':
                if (usr.n_upld == 0)
                   sprintf (buffer, "0:%u", usr.n_dnld);
-               else
-               {
+               else {
                   m = (unsigned int)(usr.n_dnld / usr.n_upld);
                   sprintf (buffer, "1:%u", m);
                }
@@ -1427,12 +1732,12 @@ int item;
                m += strlen(buffer);
                break;
             case '[':
-               sprintf (buffer, "%lu", class[usr_class].max_dl - usr.dnldl);
+               sprintf (buffer, "%lu", config->class[usr_class].max_dl - usr.dnldl);
                strcat(ext, buffer);
                m += strlen(buffer);
                break;
             case '\\':
-               sprintf (buffer, "%s", lang_descr[usr.language]);
+               sprintf (buffer, "%s", &config->language[usr.language].descr[1]);
                strcat(ext, buffer);
                m += strlen(buffer);
                break;
@@ -1453,6 +1758,11 @@ int item;
                break;
             case 'B':
                sprintf (buffer, "%s",lastcall.name);
+               strcat(ext, buffer);
+               m += strlen(buffer);
+               break;
+            case 'C':
+               sprintf (buffer, "%d", msg_child);
                strcat(ext, buffer);
                m += strlen(buffer);
                break;
@@ -1501,18 +1811,23 @@ int item;
                strcat(ext, buffer);
                m += strlen(buffer);
                break;
+            case 'P':
+               sprintf (buffer, "%d", msg_parent);
+               strcat(ext, buffer);
+               m += strlen(buffer);
+               break;
             case 'Q':
-               sprintf (buffer, "%d",class[usr_class].max_call);
+               sprintf (buffer, "%d",config->class[usr_class].max_call);
                strcat(ext, buffer);
                m += strlen(buffer);
                break;
             case 'R':
-               sprintf (buffer, "%d", local_mode ? 0 : rate);
+               sprintf (buffer, "%u", local_mode ? 0 : rate);
                strcat(ext, buffer);
                m += strlen(buffer);
                break;
             case 'T':
-               sprintf (buffer, "%d",class[usr_class].max_dl);
+               sprintf (buffer, "%d",config->class[usr_class].max_dl);
                strcat(ext, buffer);
                m += strlen(buffer);
                break;
@@ -1535,6 +1850,7 @@ int item;
                m += strlen(sys.file_name);
                break;
             case '0':
+            case '9':
                sprintf (buffer, "%d",num_msg);
                strcat(ext, buffer);
                m += strlen(buffer);
@@ -1549,14 +1865,25 @@ int item;
                strcat(ext, buffer);
                m += strlen(buffer);
                break;
+            case '5':
+               sprintf (buffer, "%s", sys.msg_name);
+               strcat(ext, buffer);
+               m += strlen(buffer);
+               break;
             case '7':
                sprintf (buffer, "%d",usr.account);
                strcat(ext, buffer);
                m += strlen(buffer);
                break;
+            case '8':
+               sprintf (buffer, "%d",usr.f_account);
+               strcat(ext, buffer);
+               m += strlen(buffer);
+               break;
             case '[':
-               p++;
-               change_attr (*p);
+               sprintf (buffer, "%d", config->class[usr_class].max_dl - usr.dnldl);
+               strcat(ext, buffer);
+               m += strlen(buffer);
                break;
             case '\\':
                del_line ();
@@ -1623,6 +1950,23 @@ int item;
             break;
          }
          break;
+      case CTRLW:
+         p++;
+         switch(*p) {
+            case 'P':
+               strcat (ext, usr.voicephone);
+               m += strlen (usr.voicephone);
+               break;
+            case 'R':
+               strcat (ext, usr.handle);
+               m += strlen (usr.handle);
+               break;
+            case 'S':
+               strcat (ext, usr.signature);
+               m += strlen (usr.signature);
+               break;
+         }
+         break;
       default:
          ext[m++] = *p;
          ext[m] = '\0';
@@ -1632,11 +1976,9 @@ int item;
    change_attr(cmd[item].color);
 
    m = strlen(ext) - 1;
-   if (ext[m] == ';')
-   {
+   if (ext[m] == ';') {
       ext[m] = '\0';
-      m_print("%s",ext);
-      m_print(bbstxt[B_ONE_CR]);
+      m_print("%s\n",ext);
    }
    else
       m_print("%s",ext);
@@ -1764,13 +2106,8 @@ char *argument;
       if ( *(p +2) == '=') {
          if ( *(p + 3) == '?' )
             xp = -1;
-         else {
+         else
             xp = atoi(p + 3);
-            if (active == 1)
-               usr.msg_sig = xp;
-            else if (active == 2)
-               usr.file_sig = xp;
-         }
       }
       else {
          if (active == 1)
@@ -1781,5 +2118,22 @@ char *argument;
    }
 
    return (xp);
+}
+
+static int user_age_ok (char *arg)
+{
+   int i;
+   char *p, argument[80];
+
+   strcpy (argument, arg);
+   strupr (argument);
+   if ((p = strstr (argument, "/AGE=")) != NULL) {
+      p = strtok (p, " ");
+      i = atoi (&p[5]);
+      if (i > get_user_age ())
+         return (0);
+   }
+
+   return (1);
 }
 

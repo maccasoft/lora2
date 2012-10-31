@@ -12,21 +12,27 @@
 #include <cxl\cxlwin.h>
 #include <cxl\cxlstr.h>
 
-#include "defines.h"
-#include "lora.h"
+#include "lsetup.h"
+#include "sched.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
 #include "quickmsg.h"
 
+extern char *VNUM, no_description, no_check, no_external;
+
 union Converter {
    unsigned char  uc[10];
-   unsigned int   ui[5];
+   unsigned short ui[5];
    unsigned long  ul[2];
    float           f[2];
    double          d[1];
 };
 
-static void update_lastread_pointers (void);
+int spawn_program (int swapout, char *outstring);
+void update_lastread_pointers (void);
+void m_print2(char *format, ...);
+
 static int fido_scan_messages (int *, int *, int, int, int, int, FILE *, char);
 static int prescan_tagged_areas (char, FILE *);
 static int is_tagged (int);
@@ -42,7 +48,7 @@ int flag, sig;                       /* flag == 2, Normale una colonna */
    struct _sys tsys;
    struct _sys_idx sysidx[10];
 
-   sprintf(filename,"%sSYSMSG.IDX", sys_path);
+   sprintf(filename,"%sSYSMSG.IDX", config->sys_path);
    fdi = shopen(filename, O_RDONLY|O_BINARY);
    if (fdi == -1)
       return;
@@ -64,7 +70,7 @@ int flag, sig;                       /* flag == 2, Normale una colonna */
       }
 
       if (stringa[0] == '?') {
-         sprintf(filename, SYSMSG_PATH, sys_path);
+         sprintf(filename, SYSMSG_PATH, config->sys_path);
          fd = shopen(filename, O_RDONLY|O_BINARY);
          if (fd == -1) {
             close (fdi);
@@ -233,19 +239,146 @@ int sort_func (const void *a1, const void *b1)
    return ( (int)(a->area - b->area) );
 }
 
+int selpacker (void)
+{
+   int i, m;
+   char c, stringa[4], cmd[20];
+
+reread:
+   if (!usr.archiver) {
+      if ((c=get_command_letter ()) == '\0') {
+         if (!read_system_file ("DEFCOMP")) {
+            m_print (bbstxt[B_AVAIL_COMPR]);
+
+            m = 0;
+            for (i = 0; i < 10; i++) {
+               if (config->packid[i].display[0]) {
+                  m_print (bbstxt[B_PROTOCOL_FORMAT], config->packid[i].display[0], &config->packid[i].display[1]);
+                  cmd[m++] = config->packid[i].display[0];
+               }
+            }
+            m_print (bbstxt[B_PROTOCOL_FORMAT], bbstxt[B_HELP][0], &bbstxt[B_HELP][1]);
+            cmd[m++] = bbstxt[B_HELP][0];
+            cmd[m] = '\0';
+
+            m_print (bbstxt[B_ASK_COMPRESSOR]);
+         }
+         else {
+            m = 0;
+            for (i = 0; i < 10; i++) {
+               if (config->packid[i].display[0])
+                  cmd[m++] = config->packid[i].display[0];
+            }
+            cmd[m++] = bbstxt[B_HELP][0];
+            cmd[m] = '\0';
+         }
+
+         if (usr.hotkey) {
+            cmd_input (stringa, 1);
+            m_print (bbstxt[B_ONE_CR]);
+         }
+         else
+            input (stringa, 1);
+         c = stringa[0];
+         if (c == '\0' || c == '\r' || !CARRIER)
+            return (0);
+      }
+   }
+   else {
+      m = 0;
+      for (i = 0; i < 10; i++) {
+         if (config->packid[i].display[0])
+            cmd[m++] = config->packid[i].display[0];
+      }
+      cmd[m++] = bbstxt[B_HELP][0];
+      cmd[m] = '\0';
+
+      c = usr.archiver;
+   }
+
+   c = toupper(c);
+   strupr (cmd);
+
+   if (strchr (cmd, c) == NULL && usr.archiver != '\0') {
+      usr.archiver = '\0';
+      goto reread;
+   }
+   else if (strchr (cmd, c) == NULL && usr.archiver == '\0')
+      return (0);
+
+   if (c == bbstxt[B_HELP][0]) {
+      read_system_file ("COMPHELP");
+      goto reread;
+   }
+
+   return (c);
+}
+
+/*
+   char c, stringa[4];
+
+   for (;;) {
+      if ((c = get_command_letter ()) == '\0') {
+         if (!usr.archiver) {
+            if (!read_system_file ("DEFCOMP")) {
+               m_print (bbstxt[B_AVAIL_COMPR]);
+               m_print (bbstxt[B_PROTOCOL_FORMAT], bbstxt[B_ZIP][0], &bbstxt[B_ZIP][1]);
+               m_print (bbstxt[B_PROTOCOL_FORMAT], bbstxt[B_ARJ][0], &bbstxt[B_ARJ][1]);
+               m_print (bbstxt[B_PROTOCOL_FORMAT], bbstxt[B_LHA][0], &bbstxt[B_LHA][1]);
+               m_print (bbstxt[B_PROTOCOL_FORMAT], bbstxt[B_HELP][0], &bbstxt[B_HELP][1]);
+               m_print (bbstxt[B_ASK_COMPRESSOR]);
+            }
+
+            if (usr.hotkey) {
+               cmd_input (stringa, 1);
+               m_print (bbstxt[B_ONE_CR]);
+            }
+            else
+               input (stringa, 1);
+            c = stringa[0];
+            if (c == '\0' || c == '\r' || !CARRIER)
+               return (0);
+         }
+         else
+            c = usr.archiver;
+      }
+
+      c = toupper(c);
+      if (c == bbstxt[B_ZIP][0])
+         return (1);
+      else if (c == bbstxt[B_ARJ][0])
+         return (2);
+      else if (c == bbstxt[B_LHA][0])
+         return (3);
+      else if (c == bbstxt[B_HELP][0])
+         read_system_file ("COMPHELP");
+      else {
+         if (c != toupper (usr.archiver))
+            return (0);
+         usr.archiver = '\0';
+      }
+   }
+}
+*/
+
 void pack_tagged_areas ()
 {
-   char file[80], stringa[80], c;
+   int i, x, swapout = 0, *varr;
+   char file[80], stringa[180], c, path[80];
    struct ffblk fbuf;
 
    qsort (&usr.lastread, MAXLREAD, sizeof (struct _lastread), sort_func);
    getcwd (stringa, 79);
 
-   sprintf (file, "%sTASK%02X", QWKDir, line_offset);
+   sprintf (file, "%sTASK%02X", config->QWKDir, line_offset);
    mkdir (file);
 
+   if (file[1] == ':')
+      setdisk (toupper (file[0]) - 'A');
    if (chdir (file) == -1)
       return;
+
+   set_useron_record (7, 0, 0);
 
    if (!findfirst ("*.*", &fbuf, 0)) {
       unlink (fbuf.ff_name);
@@ -253,80 +386,92 @@ void pack_tagged_areas ()
          unlink (fbuf.ff_name);
    }
 
+   setdisk (toupper (stringa[0]) - 'A');
    chdir (stringa);
    m_print (bbstxt[B_ONE_CR]);
 
    if (!prescan_tagged_areas (0, NULL))
       return;
 
-   do {
-      m_print (bbstxt[B_ASK_COMPRESSOR]);
+   if ((c = selpacker ()) == '\0')
+      return;
 
-      if (!cmd_string[0]) {
-         input (stringa, 1);
-         if (!CARRIER)
-            return;
-         c = toupper(stringa[0]);
-      }
-      else {
-         c = toupper(cmd_string[0]);
-         strcpy (&cmd_string[0], &cmd_string[1]);
-         strtrim (cmd_string);
-      }
-   } while (c != '\0' && c != 'A' && c != 'L' && c != 'Z');
+   m_print2 (bbstxt[B_PLEASE_WAIT]);
 
-   m_print (bbstxt[B_PLEASE_WAIT]);
-
-   switch (c) {
-      case 'A':
-         sprintf (file, "%sTASK%02X\\%s.ARJ", QWKDir, line_offset, BBSid);
-         unlink (file);
-         sprintf (stringa, "ARJ m -e %sTASK%02X\\%s %sTASK%02X\\*.* *M",
-                  QWKDir, line_offset, BBSid, QWKDir, line_offset);
-         outside_door (stringa);
-         break;
-      case 'L':
-         sprintf (file, "%sTASK%02X\\%s.LZH", QWKDir, line_offset, BBSid);
-         unlink (file);
-         sprintf (stringa, "LHARC m %sTASK%02X\\%s %sTASK%02X\\*.* *M",
-                  QWKDir, line_offset, BBSid, QWKDir, line_offset);
-         outside_door (stringa);
-         break;
-      case '\0':
-      case 'Z':
-         sprintf (file, "%sTASK%02X\\%s.ZIP", QWKDir, line_offset, BBSid);
-         unlink (file);
-         sprintf (stringa, "PKZIP -m %sTASK%02X\\%s %sTASK%02X\\*.* *M",
-                  QWKDir, line_offset, BBSid, QWKDir, line_offset);
-         outside_door (stringa);
+   for (i = 0; i < 10; i++) {
+      if (toupper (config->packid[i].display[0]) == c)
          break;
    }
 
+   if (i < 10) {
+      sprintf (file, "%sTASK%02X\\%s", config->QWKDir, line_offset, config->BBSid);
+      sprintf (path, "%sTASK%02X\\*.*", config->QWKDir, line_offset);
+      if (config->packers[i].packcmd[0] == '+') {
+         strcpy (stringa, &config->packers[i].packcmd[1]);
+         swapout = 1;
+      }
+      else
+         strcpy (stringa, config->packers[i].packcmd);
+
+      strsrep (stringa, "%1", file);
+      strsrep (stringa, "%2", path);
+
+      status_line ("#%sing ASCII mail packet", config->packers[i].id);
+
+      varr = ssave ();
+      gotoxy_ (1, 0);
+      wtextattr (LGREY|_BLACK);
+      cclrscrn (LGREY|_BLACK);
+      showcur();
+
+      x = spawn_program (swapout, stringa);
+
+      if (varr != NULL)
+         srestore (varr);
+      if (local_mode || snooping)
+         showcur();
+      else
+         hidecur ();
+
+      if (x != 0)
+         status_line (":Return code: %d", x);
+   }
+
    m_print(bbstxt[B_ONE_CR]);
+
    cps = 0;
+   c = sys.freearea;
+   sys.freearea = 1;
+   set_useron_record (7, 0, 0);
+
+   strcat (file, ".*");
    download_file (file, 0);
+
+   sys.freearea = c;
+
    if (cps)
       unlink (file);
-
-   update_lastread_pointers ();
+   if (cps || local_mode)
+      update_lastread_pointers ();
 }
 
 void resume_transmission ()
 {
-   char file[80], *p;
+   char file[80], c;
    struct ffblk fbuf;
 
-   sprintf (file, "%sTASK%02X\\%s.*", QWKDir, line_offset, BBSid);
+   sprintf (file, "%sTASK%02X\\%s.*", config->QWKDir, line_offset, config->BBSid);
 
    if (!findfirst (file, &fbuf, 0))
       do {
-         if ((p=strchr (fbuf.ff_name, '.')) == NULL)
-            continue;
-         if (!stricmp (p, ".QWK") || !stricmp (p, ".ZIP") ||
-          !stricmp (p, ".ARJ") || !stricmp (p, ".LZH")) {
-            sprintf (file, "%sTASK%02X\\%s", QWKDir, line_offset, fbuf.ff_name);
+         if (strchr (fbuf.ff_name, '.') != NULL) {
+            sprintf (file, "%sTASK%02X\\%s", config->QWKDir, line_offset, fbuf.ff_name);
             cps = 0;
+            c = sys.freearea;
+            sys.freearea = 1;
+            set_useron_record (7, 0, 0);
             download_file (file, 0);
+            sys.freearea = c;
             if (cps)
                unlink (file);
             break;
@@ -337,8 +482,8 @@ void resume_transmission ()
 void qwk_pack_tagged_areas ()
 {
    FILE *fpq;
-   int i, fd, totals;
-   char file[80], stringa[80], c;
+   int i, fd, totals, x, swapout = 0, *varr;
+   char file[80], stringa[180], c, path[80];
    time_t aclock;
    struct _sys tsys;
    struct ffblk fbuf;
@@ -347,11 +492,15 @@ void qwk_pack_tagged_areas ()
    qsort (&usr.lastread, MAXLREAD, sizeof (struct _lastread), sort_func);
    getcwd (stringa, 79);
 
-   sprintf (file, "%sTASK%02X", QWKDir, line_offset);
+   sprintf (file, "%sTASK%02X", config->QWKDir, line_offset);
    mkdir (file);
 
+   if (file[1] == ':')
+      setdisk (toupper (file[0]) - 'A');
    if (chdir (file) == -1)
       return;
+
+   set_useron_record (7, 0, 0);
 
    if (!findfirst ("*.*", &fbuf, 0)) {
       unlink (fbuf.ff_name);
@@ -359,12 +508,13 @@ void qwk_pack_tagged_areas ()
          unlink (fbuf.ff_name);
    }
 
+   setdisk (toupper (stringa[0]) - 'A');
    chdir (stringa);
    m_print (bbstxt[B_ONE_CR]);
 
    memcpy ((char *)&tsys, (char *)&sys, sizeof (struct _sys));
 
-   sprintf (file, "%sTASK%02X\\CONTROL.DAT", QWKDir, line_offset);
+   sprintf (file, "%sTASK%02X\\CONTROL.DAT", config->QWKDir, line_offset);
    fpq = fopen(file, "wt");
    if (fpq == NULL)
       return;
@@ -377,7 +527,7 @@ void qwk_pack_tagged_areas ()
    fputs("               \n",fpq);
    fputs(sysop,fpq);
    fputs("\n",fpq);
-   sprintf(stringa,"00000,%s\n",BBSid);         /* Line #5 */
+   sprintf(stringa,"00000,%s\n",config->BBSid);         /* Line #5 */
    fputs(stringa,fpq);
    time(&aclock);
    newtime = localtime(&aclock);
@@ -391,7 +541,7 @@ void qwk_pack_tagged_areas ()
    fputs(" \n",fpq);             /* Line #8 */
    fputs("0\n",fpq);
    fputs("0\n",fpq);             /* Line #10 */
-   sprintf (stringa, SYSMSG_PATH, sys_path);
+   sprintf (stringa, SYSMSG_PATH, config->sys_path);
    fd = shopen (stringa, O_RDONLY|O_BINARY);
    totals = 0;
    for (i=0; i < 1000; i++) {
@@ -416,7 +566,11 @@ void qwk_pack_tagged_areas ()
       sprintf (stringa, "%d\n", tsys.msg_num);
       fputs (stringa, fpq);
       memset (stringa, 0, 11);
-      strncpy (stringa, tsys.msg_name, 40);
+      if (tsys.qwk_name[0])
+         strcpy (stringa, tsys.qwk_name);
+      else
+         strncpy (stringa, tsys.msg_name, 13);
+      stringa[13] = '\0';
       fputs (stringa, fpq);
       fputs ("\n", fpq);
    }
@@ -428,7 +582,7 @@ void qwk_pack_tagged_areas ()
    close (fd);
    fclose (fpq);
 
-   sprintf (file, "%sTASK%02X\\DOOR.ID", QWKDir, line_offset);
+   sprintf (file, "%sTASK%02X\\DOOR.ID", config->QWKDir, line_offset);
    fpq = fopen(file, "wt");
    if (fpq == NULL)
       return;
@@ -436,7 +590,7 @@ void qwk_pack_tagged_areas ()
    sprintf(stringa,"DOOR = LoraBBS\n");
    fputs(stringa,fpq);           /* Line #1 */
 
-   sprintf(stringa,"VERSION = 2.20\n");
+   sprintf(stringa,"VERSION = %s\n", VNUM);
    fputs(stringa,fpq);           /* Line #2 */
 
    sprintf(stringa,"SYSTEM = LoraBBS\n");
@@ -455,7 +609,7 @@ void qwk_pack_tagged_areas ()
 
    fclose (fpq);
 
-   sprintf (file, "%sTASK%02X\\MESSAGES.DAT", QWKDir, line_offset);
+   sprintf (file, "%sTASK%02X\\MESSAGES.DAT", config->QWKDir, line_offset);
    fpq = fopen(file, "w+b");
    if (fpq == NULL)
       return;
@@ -469,52 +623,62 @@ void qwk_pack_tagged_areas ()
    if (!prescan_tagged_areas (1, fpq))
       return;
 
-   do {
-      m_print (bbstxt[B_ASK_COMPRESSOR]);
-
-      if (!cmd_string[0]) {
-         input (stringa, 1);
-         if (!CARRIER)
-            return;
-         c = toupper(stringa[0]);
-      }
-      else {
-         c = toupper(cmd_string[0]);
-         strcpy (&cmd_string[0], &cmd_string[1]);
-         strtrim (cmd_string);
-      }
-   } while (c != '\0' && c != 'A' && c != 'L' && c != 'Z');
+   if ((c = selpacker ()) == '\0')
+      return;
 
    m_print (bbstxt[B_PLEASE_WAIT]);
-   sprintf (file, "%sTASK%02X\\%s.QWK", QWKDir, line_offset, BBSid);
-   unlink (file);
 
-   switch (c) {
-      case 'A':
-         sprintf (stringa, "ARJ m -e %sTASK%02X\\%s.QWK %sTASK%02X\\*.* *M",
-                  QWKDir, line_offset, BBSid, QWKDir, line_offset);
-         outside_door (stringa);
+   for (i = 0; i < 10; i++) {
+      if (toupper (config->packid[i].display[0]) == c)
          break;
-      case 'L':
-         sprintf (stringa, "LHARC m /m %sTASK%02X\\%s.QWK %sTASK%02X\\*.* *M",
-                  QWKDir, line_offset, BBSid, QWKDir, line_offset);
-         outside_door (stringa);
-         break;
-      case '\0':
-      case 'Z':
-         sprintf (stringa, "PKZIP -m %sTASK%02X\\%s.QWK %sTASK%02X\\*.* *M",
-                  QWKDir, line_offset, BBSid, QWKDir, line_offset);
-         outside_door (stringa);
-         break;
+   }
+
+   if (i < 10) {
+      sprintf (file, "%sTASK%02X\\%s.QWK", config->QWKDir, line_offset, config->BBSid);
+      sprintf (path, "%sTASK%02X\\*.*", config->QWKDir, line_offset);
+      if (config->packers[i].packcmd[0] == '+') {
+         strcpy (stringa, &config->packers[i].packcmd[1]);
+         swapout = 1;
+      }
+      else
+         strcpy (stringa, config->packers[i].packcmd);
+
+      strsrep (stringa, "%1", file);
+      strsrep (stringa, "%2", path);
+
+      status_line ("#%sing QWK mail packet", config->packers[i].id);
+
+      varr = ssave ();
+      gotoxy_ (1, 0);
+      wtextattr (LGREY|_BLACK);
+      cclrscrn (LGREY|_BLACK);
+      showcur();
+
+      x = spawn_program (swapout, stringa);
+
+      if (varr != NULL)
+         srestore (varr);
+      if (local_mode || snooping)
+         showcur();
+      else
+         hidecur ();
+
+      if (x != 0)
+         status_line (":Return code: %d", x);
    }
 
    m_print(bbstxt[B_ONE_CR]);
    cps = 0;
+   c = sys.freearea;
+   sys.freearea = 1;
+   set_useron_record (7, 0, 0);
    download_file (file, 0);
+   sys.freearea = c;
+
    if (cps)
       unlink (file);
-
-   update_lastread_pointers ();
+   if (cps || local_mode)
+      update_lastread_pointers ();
 }
 
 float IEEToMSBIN(float f)
@@ -535,6 +699,114 @@ float IEEToMSBIN(float f)
 }
 
 
+static void unpack_repfile (char *dir, char *rep)
+{
+   int id, f, m, i, swapout = 0, x, *varr;
+   char filename[80], outstring[128], *p, r, cpath[80];
+   unsigned char headstr[30];
+   struct ffblk blk;
+
+   sprintf (filename, "%s\\%s", dir, rep);
+   if (findfirst (filename, &blk, 0))
+      return;
+
+   getcwd (cpath, 79);
+   if (dir[1] == ':')
+      setdisk (toupper (dir[0]) - 'A');
+   chdir (dir);
+
+   do {
+      f = open (blk.ff_name, O_RDONLY|O_BINARY);
+      id = -1;
+
+      if (f != -1) {
+         for (i = 0; i < 10; i++) {
+            if (config->packid[i].offset >= 0)
+               lseek (f, config->packid[i].offset, SEEK_SET);
+            else
+               lseek (f, config->packid[i].offset, SEEK_END);
+            read (f, headstr, 14);
+
+            if (!config->packers[i].id[0] || !config->packid[i].ident[0])
+               continue;
+
+            id = i;
+            m = 0;
+            p = (char *)&config->packid[i].ident[0];
+
+            while (*p) {
+               r = 0;
+               if (isdigit (*p)) {
+                  r *= 16L;
+                  r += *p++ - '0';
+               }
+               else if (isxdigit (*p)) {
+                  r *= 16L;
+                  r += *p++ - 55;
+               }
+               if (isdigit (*p)) {
+                  r *= 16L;
+                  r += *p++ - '0';
+               }
+               else if (isxdigit (*p)) {
+                  r *= 16L;
+                  r += *p++ - 55;
+               }
+               if (r != headstr[m++]) {
+                  id = -1;
+                  break;
+               }
+            }
+
+            if (id != -1)
+               break;
+         }
+         close (f);
+      }
+
+      if (id == -1) {
+         status_line ("!Unrecognized method for %s\\%s", dir, blk.ff_name);
+         id = 0;
+         unlink (blk.ff_name);
+         status_line (":%s\\%s deleted", dir, blk.ff_name);
+      }
+      else {
+         activation_key ();
+         status_line ("#Un%sing %s\\%s", config->packers[id].id, dir, blk.ff_name);
+
+         time_release ();
+         if (config->packers[id].unpackcmd[0] == '+') {
+            strcpy (outstring, &config->packers[id].unpackcmd[1]);
+            swapout = 1;
+         }
+         else {
+            strcpy (outstring, config->packers[id].unpackcmd);
+            swapout = 0;
+         }
+         strsrep (outstring, "%1", blk.ff_name);
+         strsrep (outstring, "%2", "*.MSG");
+
+         varr = ssave ();
+         gotoxy_ (1, 0);
+         wtextattr (LGREY|_BLACK);
+
+         x = spawn_program (swapout, outstring);
+
+         if (varr != NULL)
+            srestore (varr);
+
+         if (x != 0)
+            status_line (":Return code: %d", x);
+
+         time_release ();
+         unlink (blk.ff_name);
+      }
+   } while (!findnext (&blk));
+
+   setdisk (toupper (cpath[0]) - 'A');
+   chdir (cpath);
+}
+
 /* Fetch REP packet from user and import if ok */
 void getrep(void)
 {
@@ -543,15 +815,18 @@ void getrep(void)
    int x,y,z,msgfile;
    int endspace, upmsgs, repfile, prev_area, msgrecs;
    char  *msgbuff, *p, temp[80], temp1[80];
+   long t;
    struct QWKmsghd *MsgHead;
    struct ffblk fbuf;
 
    if (!local_mode) {
       getcwd (temp, 79);
 
-      sprintf (temp1, "%sTASK%02X", QWKDir, line_offset);
+      sprintf (temp1, "%sTASK%02X", config->QWKDir, line_offset);
       mkdir (temp1);
 
+      if (temp1[1] == ':')
+         setdisk (toupper (temp1[0]) - 'A');
       if (chdir (temp1) == -1)
          return;
 
@@ -561,105 +836,48 @@ void getrep(void)
             unlink (fbuf.ff_name);
       }
 
+      setdisk (toupper (temp[0]) - 'A');
       chdir (temp);
 
-      if ((y=selprot()) == 0)
-         return;
+      sprintf (temp, "%sTASK%02X\\%s.REP", config->QWKDir, line_offset, config->BBSid);
 
-      sprintf (temp, "%sTASK%02X\\", QWKDir, line_offset);
-      sprintf (temp1, "%s.REP", BBSid);
-
-      m_print(bbstxt[B_READY_TO_RECEIVE],protocols[y-1]);
-      m_print(bbstxt[B_CTRLX_ABORT]);
-      timer(50);
-
-      switch (y) {
-      case 1:
-         who_is_he = 0;
-         overwrite = 0;
-         p = receive (temp, temp1, 'X');
-         break;
-
-      case 2:
-         who_is_he = 0;
-         overwrite = 0;
-         p = receive (temp, temp1, 'Y');
-         break;
-
-      case 3:
-         x = get_Zmodem (temp, NULL);
-         break;
-
-      case 6:
-         x = 0;
-         do {
-            who_is_he = 0;
-            overwrite = 0;
-            p = receive (temp, temp1, 'S');
-            if (p != NULL)
-               x = 1;
-         } while (p != NULL);
-         break;
-      }
-
-      wactiv (mainview);
-
-      CLEAR_INBOUND();
-      if (x || p != NULL) {
-         m_print(bbstxt[B_TRANSFER_OK]);
-         timer(20);
-      }
-      else {
-         m_print(bbstxt[B_TRANSFER_ABORT]);
-         press_enter();
-         return;
-      }
+      no_description = no_check = 1;
+      upload_file (temp, -1);
+      no_description = no_check = 0;
    }
 
-   sprintf (temp, "%sTASK%02X\\%s.RE?", QWKDir, line_offset, BBSid);
+   sprintf (temp, "%sTASK%02X\\%s.RE?", config->QWKDir, line_offset, config->BBSid);
    if (findfirst (temp, &fbuf, 0))
       return;
-   sprintf (temp, "%sTASK%02X\\%s", QWKDir, line_offset, fbuf.ff_name);
-   repfile = shopen (temp, O_RDONLY|O_BINARY);
-   if (repfile == -1)
-      return;
-   read (repfile, temp1, 10);
-   close (repfile);
 
-   if (!strncmp (temp1, "PK", 2))
-      sprintf (temp, "PKUNZIP %sTASK%02X\\%s %sTASK%02X*M", QWKDir, line_offset, fbuf.ff_name, QWKDir, line_offset);
-   else if (!strncmp (&temp1[2], "-lh", 3))
-      sprintf (temp, "LHARC e %sTASK%02X\\%s %sTASK%02X\\*M", QWKDir, line_offset, fbuf.ff_name, QWKDir, line_offset);
-   else if (!strncmp (temp1, "`ê", 2))
-      sprintf (temp, "ARJ e %sTASK%02X\\%s %sTASK%02X\\*M", QWKDir, line_offset, fbuf.ff_name, QWKDir, line_offset);
-   else {
-      unlink (temp);
-      return;
-   }
-
-   outside_door (temp);
+   sprintf (temp, "%sTASK%02X", config->QWKDir, line_offset);
+   unpack_repfile (temp, "*.RE?");
 
    upmsgs = 0;
    prev_area = 0;
 
-   sprintf (temp, "%sTASK%02X\\%s.MSG", QWKDir, line_offset, BBSid);
-   repfile = shopen (temp, O_BINARY|O_RDONLY);
-   if (repfile >= 0) {
-      MsgHead = (struct QWKmsghd *) malloc(sizeof(struct QWKmsghd));
-      if (MsgHead == NULL)
+   sprintf (temp, "%sTASK%02X\\%s.MSG", config->QWKDir, line_offset, config->BBSid);
+   repfile = sh_open (temp, SH_DENYNONE, O_BINARY|O_RDONLY, S_IREAD|S_IWRITE);
+   if (repfile != -1) {
+      MsgHead = (struct QWKmsghd *) malloc (sizeof (struct QWKmsghd));
+      if (MsgHead == NULL) {
+         close (repfile);
          return;
-      msgbuff = (char *) malloc(150);
-      if (msgbuff == NULL)
+      }
+      msgbuff = (char *) malloc (150);
+      if (msgbuff == NULL) {
+         close (repfile);
          return;
-      read(repfile,msgbuff,128);          /* Ignore first record */
+      }
+      read (repfile, msgbuff, 128);          /* Ignore first record */
       msgbuff[8] = 0;
-      strtrim(msgbuff);
-      if (strcmpi(BBSid,msgbuff) == 0) {          /* Make sure it's ours! */
-         m_print (bbstxt[B_HANG_ON]);
+      strtrim (msgbuff);
+      if (stricmp (config->BBSid, msgbuff) == 0) {          /* Make sure it's ours! */
+         m_print2 (bbstxt[B_HANG_ON]);
          x = read(repfile,(struct QWKmsghd *) MsgHead,128);
          while (x == 128) {               /* This is the BBS.MSG import loop */
          /* Build the Fidonet message head */
-            x = atoi(MsgHead->Msgnum) + 1;            /* Area number */
+            x = atoi(MsgHead->Msgnum);               /* Area number */
             if (prev_area != x) {
                read_system (x, 1);
                usr.msg = x;
@@ -676,7 +894,8 @@ void getrep(void)
             }
 
             upmsgs++;
-            m_print (bbstxt[B_IMPORTING_MESSAGE], upmsgs);
+            m_print2 (bbstxt[B_IMPORTING_MESSAGE], upmsgs);
+            m_print2 ("Š%s\n", sys.msg_name);
 
             memset ((char *)&msg, 0, sizeof (struct _msg));
             msgrecs = atoi(MsgHead->Msgrecs) - 1;
@@ -694,11 +913,11 @@ void getrep(void)
             temp[5] = 0;
             sprintf (msg.date,"%d %s %d %s:00",z,mtext[x-1],y+80,temp);
 
-            msg_fzone=alias[sys.use_alias].zone;
-            msg.orig=alias[sys.use_alias].node;
-            msg.orig_net=alias[sys.use_alias].net;
-            msg.dest=alias[sys.use_alias].node;
-            msg.dest_net=alias[sys.use_alias].net;
+            msg_fzone=config->alias[sys.use_alias].zone;
+            msg.orig=config->alias[sys.use_alias].node;
+            msg.orig_net=config->alias[sys.use_alias].net;
+            msg.dest=config->alias[sys.use_alias].node;
+            msg.dest_net=config->alias[sys.use_alias].net;
 
             if (MsgHead->Msgstat == '*') {
                if (!sys.public)
@@ -710,11 +929,13 @@ void getrep(void)
 
             strcpy(msg.to,namefixup(MsgHead->Msgto));
             fancy_str (msg.to);
+            m_print2 ("To: %s\n", msg.to);
             strcpy(msg.from,namefixup(MsgHead->Msgfrom));
             fancy_str (msg.from);
             strcpy(msg.subj,namefixup(MsgHead->Msgsubj));
+            m_print2 ("Subject: %s\n", msg.subj);
 
-            sprintf(temp1,"%s%d.TXT", QWKDir, line_offset);
+            sprintf(temp1,"%s%d.TXT", config->QWKDir, line_offset);
             msgfile = cshopen (temp1, O_TRUNC|O_CREAT|O_BINARY|O_RDWR, S_IREAD|S_IWRITE);
 
             /* Now prepare to read in the REP msg and convert to fidonet */
@@ -764,6 +985,9 @@ void getrep(void)
 
             close (msgfile);
 
+            t = time (NULL);
+            while (t == time (NULL));
+
             if (sys.quick_board)
                quick_save_message(temp1);
             else if (sys.pip_board)
@@ -778,11 +1002,20 @@ void getrep(void)
             x = read(repfile,(struct QWKmsghd *) MsgHead,128);
          }
       }
+
+      free (MsgHead);
+      free (msgbuff);
+      close (repfile);
    }
+
+   sprintf (temp, "%sTASK%02X\\%s.MSG", config->QWKDir, line_offset, config->BBSid);
+   unlink (temp);
 
    if (upmsgs) {
       read_system (usr.msg, 1);
       m_print (bbstxt[B_TOTAL_IMPORTED], upmsgs);
+
+      press_enter ();
    }
 }
 
@@ -810,7 +1043,7 @@ FILE *fpq;
    memcpy ((char *)&tsys, (char *)&sys, sizeof (struct _sys));
 
    if (qwk) {
-      sprintf (file, "%sTASK%02X\\PERSONAL.NDX", QWKDir, line_offset);
+      sprintf (file, "%sTASK%02X\\PERSONAL.NDX", config->QWKDir, line_offset);
       fdp = cshopen(file,O_CREAT | O_TRUNC | O_BINARY | O_WRONLY,S_IREAD|S_IWRITE);
    }
    else
@@ -819,7 +1052,10 @@ FILE *fpq;
    m_print (bbstxt[B_QWK_HEADER1]);
    m_print (bbstxt[B_QWK_HEADER2]);
 
-   for (i=0; i<MAXLREAD && CARRIER; i++) {
+   for (i=0; i < MAXLREAD && CARRIER; i++) {
+      if (config->qwk_maxmsgs && msgcount >= config->qwk_maxmsgs)
+         break;
+
       last[i] = usr.lastread[i].msg_num;
 
       if (!usr.lastread[i].area)
@@ -829,17 +1065,17 @@ FILE *fpq;
          continue;
 
       if (!qwk) {
-         sprintf (file, "%sTASK%02X\\%03d.TXT", QWKDir, line_offset, usr.lastread[i].area);
+         sprintf (file, "%sTASK%02X\\%03d.TXT", config->QWKDir, line_offset, usr.lastread[i].area);
          fpq = fopen(file, "w+t");
          fprintf (fpq, "[*] AREA: %s\n\n", sys.msg_name);
       }
 
-      m_print (bbstxt[B_SCAN_SEARCHING], sys.msg_num, sys.msg_name);
+      m_print2 (bbstxt[B_SCAN_SEARCHING], sys.msg_num, sys.msg_name);
 
       tt = pp = 0;
 
       if (qwk) {
-         sprintf (file, "%sTASK%02X\\%03d.NDX", QWKDir, line_offset, usr.lastread[i].area);
+         sprintf (file, "%sTASK%02X\\%03d.NDX", config->QWKDir, line_offset, usr.lastread[i].area);
          fdi = cshopen(file,O_CREAT | O_TRUNC | O_BINARY | O_WRONLY,S_IREAD|S_IWRITE);
       }
       else
@@ -868,9 +1104,9 @@ FILE *fpq;
 
       if (!tt) {
          if (qwk)
-            sprintf (file, "%sTASK%02X\\%03d.NDX", QWKDir, line_offset, usr.lastread[i].area);
+            sprintf (file, "%sTASK%02X\\%03d.NDX", config->QWKDir, line_offset, usr.lastread[i].area);
          else
-            sprintf (file, "%sTASK%02X\\%03d.TXT", QWKDir, line_offset, usr.lastread[i].area);
+            sprintf (file, "%sTASK%02X\\%03d.TXT", config->QWKDir, line_offset, usr.lastread[i].area);
          unlink (file);
       }
 
@@ -888,10 +1124,15 @@ FILE *fpq;
    if (fdp != -1) {
       close (fdp);
       if (!personal) {
-         sprintf (file, "%sTASK%02X\\PERSONAL.NDX", QWKDir, line_offset);
+         sprintf (file, "%sTASK%02X\\PERSONAL.NDX", config->QWKDir, line_offset);
          unlink (file);
       }
    }
+
+   if (config->qwk_maxmsgs && msgcount >= config->qwk_maxmsgs && i < MAXLREAD && CARRIER)
+      m_print (bbstxt[B_QWK_LIMIT]);
+   else if (!CARRIER)
+      return (0);
 
    m_print (bbstxt[B_QWK_HEADER2]);
    m_print (bbstxt[B_PACKED_MESSAGES], total, personal, msgcount);
@@ -921,12 +1162,16 @@ FILE *fpq;
    return (msgcount);
 }
 
-static void update_lastread_pointers ()
+void update_lastread_pointers ()
 {
    int i;
    struct _sys tsys;
 
    m_print (bbstxt[B_QWK_UPDATE]);
+#ifdef __OS2__
+   UNBUFFER_BYTES ();
+   VioUpdate ();
+#endif
 
    memcpy ((char *)&tsys, (char *)&sys, sizeof (struct _sys));
 
@@ -976,6 +1221,16 @@ char qwk;
 
    tt = 0;
    pp = 0;
+
+   if (start > last_msg)
+      start = last_msg;
+
+   if (start == last_msg) {
+      *personal = pp;
+      *total = tt;
+
+      return (totals);
+   }
 
    for(msg_num = start; msg_num <= last_msg; msg_num++) {
       if (!(msg_num % 5))

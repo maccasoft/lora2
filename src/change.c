@@ -2,15 +2,22 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+#include <dos.h>
+#include <io.h>
+#include <fcntl.h>
+#include <sys\stat.h>
 
 #include <cxl\cxlvid.h>
 #include <cxl\cxlstr.h>
 
-#define CLEAN_MODULE
-#include "defines.h"
-#include "lora.h"
+#include "sched.h"
+#include "lsetup.h"
+#include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
+
+int exist_system_file (char *name);
+int daysleft (struct date *d1, struct date *d2);
 
 void user_configuration()
 {
@@ -47,7 +54,7 @@ void user_configuration()
         m_print(bbstxt[B_CONFIG_IBMSET],
                 usr.ibmset ? bbstxt[B_YES] : bbstxt[B_NO]);
 
-        m_print(bbstxt[B_CONFIG_LANGUAGE], lang_descr[usr.language]);
+        m_print(bbstxt[B_CONFIG_LANGUAGE], &config->language[usr.language].descr[1]);
         m_print(bbstxt[B_CONFIG_SIGN],usr.signature);
 }
 
@@ -223,6 +230,8 @@ void handle_change()
 {
    char stringa[40];
 
+   read_system_file ("ALIASASK");
+
    strcpy (stringa, usr.handle);
    m_print(bbstxt[B_ALIAS_CHANGE]);
    chars_input (stringa, 35, INPUT_FANCY|INPUT_UPDATE|INPUT_FIELD);
@@ -240,7 +249,7 @@ void voice_phone_change()
       m_print(bbstxt[B_ASK_NUMBER]);
       chars_input(stringa,19,INPUT_FIELD);
 
-      if (!strlen (stringa) || !CARRIER)
+      if (!CARRIER)
          return;
 
       for (i = 0; i < strlen (stringa); i++) {
@@ -254,7 +263,7 @@ void voice_phone_change()
             break;
          }
       }
-      if (i < strlen (stringa))
+      if (i < strlen (stringa) || strlen (stringa) < 4)
          continue;
 
       m_print(bbstxt[B_PHONE_IS], stringa);
@@ -276,7 +285,7 @@ void data_phone_change()
       m_print(bbstxt[B_ASK_NUMBER]);
       chars_input(stringa,19,INPUT_FIELD);
 
-      if (!strlen (stringa) || !CARRIER)
+      if (!CARRIER)
          return;
 
       for (i = 0; i < strlen (stringa); i++) {
@@ -290,7 +299,7 @@ void data_phone_change()
             break;
          }
       }
-      if (i < strlen (stringa))
+      if (i < strlen (stringa) || strlen (stringa) < 4)
          continue;
 
       m_print(bbstxt[B_PHONE_IS], stringa);
@@ -352,6 +361,9 @@ void password_change()
    }
 
    strcpy(usr.pwd,strcode(strupr(stringa),usr.name));
+   data (stringa);
+   stringa[9] = '\0';
+   strcpy (usr.lastpwdchange, stringa);
 }
 
 void signature_change()
@@ -360,50 +372,50 @@ void signature_change()
 
    m_print(bbstxt[B_SET_SIGN]);
    m_print(bbstxt[B_ASK_SIGN]);
-   input(stringa,58);
+   chars_input(stringa,58,INPUT_FIELD);
 
    strcpy(usr.signature,stringa);
 }
 
 int select_language ()
 {
-   int i;
+   int i, r;
    char c, stringa[4], strcom[25];
 
-   if (lang_name[1] == NULL)
+   if (!config->language[1].descr[0])
       return (0);
-
-   cls();
 
    i = 0;
    strcom[0] = '\0';
 
    m_print(bbstxt[B_LANGUAGE_AVAIL]);
 
-   while (lang_name[i] != NULL) {
-      m_print(bbstxt[B_PROTOCOL_FORMAT], lang_keys[i], lang_descr[i]);
-      strcom[i] = toupper(lang_keys[i]);
-      i++;
+   for (i = 0; i < MAX_LANG; i++) {
+      if (!config->language[i].descr[0])
+         continue;
+      m_print(bbstxt[B_PROTOCOL_FORMAT], config->language[i].descr[0], &config->language[i].descr[1]);
+      strcom[i] = toupper(config->language[i].descr[0]);
    }
 
    strcom[i] = '\0';
 
-   m_print(bbstxt[B_SELECT_LANGUAGE]);
-   input(stringa,1);
-   c = toupper(stringa[0]);
-   if(c == '\0' || c == '\r' || !CARRIER || !strchr(strcom,c))
-      return(-1 );
+   m_print (bbstxt[B_SELECT_LANGUAGE]);
+   input (stringa,1);
+   c = toupper (stringa[0]);
+   if (c == '\0' || c == '\r' || !CARRIER || !strchr (strcom, c))
+      return (-1);
 
-   i = 0;
-
-   while (lang_name[i] != NULL)
-   {
-      if (lang_keys[i] == c)
+   r = -1;
+   for (i = 0; i < MAX_LANG; i++) {
+      if (!config->language[i].descr[0])
+         continue;
+      if (config->language[i].descr[0] == c) {
+         r = i;
          break;
-      i++;
+      }
    }
 
-   return (i);
+   return (r);
 }
 
 void select_group (type, tosig)
@@ -421,16 +433,376 @@ int type, tosig;
       do {
          m_print (bbstxt[B_GROUP_LIST]);
          chars_input (stringa, 4, INPUT_FIELD);
-         if ( (sig = atoi (stringa)) == 0)
+         if (!stringa[0])
             return;
+         sig = atoi (stringa);
       } while (sig < 0 || sig > 255);
    }
    else
       sig = tosig;
 
    if (type == 1)
-      usr.file_sig = sig;
-   else if (type == 2)
       usr.msg_sig = sig;
+   else if (type == 2)
+      usr.file_sig = sig;
+}
+
+int ask_random_birth ()
+{
+   int i, c, k, curr, m;
+   char stringa[30], *p;
+   struct time dt;
+
+   data (stringa);
+   curr = atoi (&stringa[7]);
+
+   gettime (&dt);
+   srand (dt.ti_sec * 100 + dt.ti_hund);
+
+   if (!usr.security && random (10000) < 6000)
+      return (1);
+
+   if (config->birthdate) {
+      read_system_file ("BVERIFY");
+
+      do {
+         m_print (bbstxt[B_BIRTHDATE], bbstxt[B_DATEFORMAT + config->inp_dateformat]);
+         chars_input(stringa,8,INPUT_FIELD);
+         if (!CARRIER)
+            return (1);
+         c = i = k = 0;
+         p = strtok (stringa, "-./ ");
+         if (p != NULL)
+            c = atoi (p);
+         p = strtok (NULL, "-./ ");
+         if (p != NULL)
+            i = atoi (p);
+         p = strtok (NULL, "-./ ");
+         if (p != NULL)
+            k = atoi (p);
+
+         if (config->inp_dateformat == 1) {
+            m = c;
+            c = i;
+            i = m;
+         }
+         else if (config->inp_dateformat == 2) {
+            m = c;
+            c = k;
+            k = m;
+         }
+      } while ((c < 1 || c > 31) || (i < 1 || i > 12) || (k < 1 || k > curr));
+
+      sprintf (stringa, "%2d %3s %2d", c, mtext[i-1], k);
+      if (stricmp (stringa, usr.birthdate)) {
+         status_line ("!Birthdate check failed");
+         read_system_file ("BFAILED");
+         return (0);
+      }
+   }
+
+   return (1);
+}
+
+void ask_birthdate ()
+{
+   int i, c, k, curr, dd1, mm1, yy1, m;
+   char stringa[30], *p;
+
+   data (stringa);
+   curr = atoi (&stringa[7]);
+
+   sscanf (usr.birthdate, "%2d %3s %2d", &dd1, stringa, &yy1);
+   stringa[3] = '\0';
+   for (i = 0; i < 12; i++)
+      if (!stricmp (stringa, mtext[i]))
+         break;
+   mm1 = i + 1;
+
+   if ((dd1 < 1 || dd1 > 31) || (mm1 < 1 || mm1 > 12) || (yy1 < 1 || yy1 > 99))
+      stringa[0] = '\0';
+   else {
+      if (config->inp_dateformat == 0)
+         sprintf (stringa, "%02d-%02d-%02d", dd1, mm1, yy1);
+      else if (config->inp_dateformat == 1)
+         sprintf (stringa, "%02d-%02d-%02d", mm1, dd1, yy1);
+      else if (config->inp_dateformat == 2)
+         sprintf (stringa, "%02d-%02d-%02d", yy1, mm1, dd1);
+   }
+
+   do {
+      m_print (bbstxt[B_BIRTHDATE], bbstxt[B_DATEFORMAT + config->inp_dateformat]);
+      chars_input (stringa, 8, INPUT_FIELD|INPUT_UPDATE);
+      if (!CARRIER)
+         return;
+      c = i = k = 0;
+      p = strtok (stringa, "-./ ");
+      if (p != NULL)
+         c = atoi (p);
+      p = strtok (NULL, "-./ ");
+      if (p != NULL)
+         i = atoi (p);
+      p = strtok (NULL, "-./ ");
+      if (p != NULL)
+         k = atoi (p);
+
+      if (config->inp_dateformat == 1) {
+         m = c;
+         c = i;
+         i = m;
+      }
+      else if (config->inp_dateformat == 2) {
+         m = c;
+         c = k;
+         k = m;
+      }
+
+      if ((dd1 < 1 || dd1 > 31) || (mm1 < 1 || mm1 > 12) || (yy1 < 1 || yy1 > 99))
+         stringa[0] = '\0';
+      else
+         sprintf (stringa, "%02d-%02d-%02d", dd1, mm1, yy1);
+   } while ((c < 1 || c > 31) || (i < 1 || i > 12) || (k < 1 || k > curr));
+
+   sprintf (usr.birthdate, "%2d %3s %2d", c, mtext[i-1], k);
+}
+
+int get_user_age ()
+{
+   int yy1, yy2, dd1, dd2, mm1, mm2, age, i;
+   char stringa[30], buff[10];
+
+   sscanf (usr.birthdate, "%2d %3s %2d", &dd1, buff, &yy1);
+   buff[3] = '\0';
+   for (i = 0; i < 12; i++)
+      if (!stricmp (buff, mtext[i]))
+         break;
+   mm1 = i + 1;
+
+   if ((dd1 < 1 || dd1 > 31) || (mm1 < 1 || mm1 > 12) || (yy1 < 1 || yy1 > 99))
+      return (0);
+
+   data (stringa);
+   sscanf (stringa, "%2d %3s %2d", &dd2, buff, &yy2);
+   buff[3] = '\0';
+   for (i = 0; i < 12; i++)
+      if (!stricmp (buff, mtext[i]))
+         break;
+   mm2 = i + 1;
+
+   age = yy2 - yy1;
+   if (mm2 < mm1)
+      age--;
+   else if (mm2 == mm1 && dd2 < dd1)
+      age--;
+
+   return (age);
+}
+
+void ask_default_protocol ()
+{
+   int i, fd, cmdpos;
+   char c, stringa[4], extcmd[50], filename[80];
+   PROTOCOL prot;
+
+   cmdpos = 0;
+   sprintf (filename, "%sPROTOCOL.DAT", config->sys_path);
+   fd = sh_open (filename, O_RDONLY|O_BINARY, SH_DENYNONE, S_IREAD|S_IWRITE);
+   if (fd != -1) {
+      while (read (fd, &prot, sizeof (PROTOCOL)) == sizeof (PROTOCOL)) {
+         if (prot.active)
+            extcmd[cmdpos++] = toupper (prot.hotkey);
+      }
+      close (fd);
+   }
+   extcmd[cmdpos] = '\0';
+
+reread:
+   if ((c=get_command_letter ()) == '\0') {
+      if (!read_system_file ("DEFPROT")) {
+         m_print (bbstxt[B_PROTOCOLS]);
+         if (config->prot_xmodem)
+            m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[0][0], &protocols[0][1]);
+         if (config->prot_1kxmodem)
+            m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[1][0], &protocols[1][1]);
+         if (config->prot_zmodem)
+            m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[2][0], &protocols[2][1]);
+         if (config->prot_sealink)
+            m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[5][0], &protocols[5][1]);
+         if (config->hslink)
+            m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[3][0], &protocols[3][1]);
+         if (config->puma)
+            m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[4][0], &protocols[4][1]);
+
+         sprintf (filename, "%sPROTOCOL.DAT", config->sys_path);
+         fd = sh_open (filename, O_RDONLY|O_BINARY, SH_DENYNONE, S_IREAD|S_IWRITE);
+         if (fd != -1) {
+            while (read (fd, &prot, sizeof (PROTOCOL)) == sizeof (PROTOCOL)) {
+               if (prot.active)
+                  m_print (bbstxt[B_PROTOCOL_FORMAT], prot.hotkey, prot.name);
+            }
+            close (fd);
+         }
+
+         m_print (bbstxt[B_PROTOCOL_FORMAT], bbstxt[B_NONE][0], &bbstxt[B_NONE][1]);
+
+         if (exist_system_file ("XFERHELP"))
+            m_print (bbstxt[B_PROTOCOL_FORMAT], bbstxt[B_HELP][0], &bbstxt[B_HELP][1]);
+
+         m_print (bbstxt[B_SELECT_PROT]);
+      }
+
+      if (usr.hotkey) {
+         cmd_input (stringa, 1);
+         m_print (bbstxt[B_ONE_CR]);
+      }
+      else
+         input (stringa, 1);
+      c = stringa[0];
+      if (c == '\0' || c == '\r' || !CARRIER)
+         return;
+   }
+
+   for (i = 0; i < cmdpos; i++)
+      if (toupper (c) == toupper (extcmd[i]))
+         break;
+   if (i < cmdpos) {
+      usr.protocol = toupper (c);
+      return;
+   }
+
+   switch (toupper (c)) {
+      case 'X':
+         if (config->prot_xmodem)
+            usr.protocol = toupper (c);
+         break;
+      case '1':
+         if (config->prot_1kxmodem)
+            usr.protocol = toupper (c);
+         break;
+      case 'Z':
+         if (config->prot_zmodem)
+            usr.protocol = toupper (c);
+         break;
+      case 'H':
+         if (config->hslink)
+            usr.protocol = toupper (c);
+         break;
+      case 'P':
+         if (config->puma)
+            usr.protocol = toupper (c);
+         break;
+      case 'S':
+         if (config->prot_sealink)
+           usr.protocol = toupper (c);
+         break;
+      case '?':
+         read_system_file ("XFERHELP");
+         goto reread;
+      case 'N':
+         usr.protocol = '\0';
+         break;
+      default:
+         return;
+   }
+}
+
+void ask_default_archiver ()
+{
+   int i, m;
+   char c, stringa[4], cmd[20];
+
+reread:
+   if ((c=get_command_letter ()) == '\0') {
+      if (!read_system_file ("DEFCOMP")) {
+         m_print (bbstxt[B_AVAIL_COMPR]);
+
+         m = 0;
+         for (i = 0; i < 10; i++) {
+            if (config->packid[i].display[0]) {
+               m_print (bbstxt[B_PROTOCOL_FORMAT], config->packid[i].display[0], &config->packid[i].display[1]);
+               cmd[m++] = config->packid[i].display[0];
+            }
+         }
+         m_print (bbstxt[B_PROTOCOL_FORMAT], bbstxt[B_NONE][0], &bbstxt[B_NONE][1]);
+         cmd[m++] = bbstxt[B_NONE][0];
+         if (exist_system_file ("COMPHELP")) {
+            m_print (bbstxt[B_PROTOCOL_FORMAT], bbstxt[B_HELP][0], &bbstxt[B_HELP][1]);
+            cmd[m++] = bbstxt[B_HELP][0];
+         }
+         cmd[m] = '\0';
+
+         m_print (bbstxt[B_ASK_COMPRESSOR]);
+      }
+      else {
+         m = 0;
+         for (i = 0; i < 10; i++) {
+            if (config->packid[i].display[0])
+               cmd[m++] = config->packid[i].display[0];
+         }
+         cmd[m] = '\0';
+      }
+
+      if (usr.hotkey) {
+         cmd_input (stringa, 1);
+         m_print (bbstxt[B_ONE_CR]);
+      }
+      else
+         input (stringa, 1);
+      c = stringa[0];
+      if (c == '\0' || c == '\r' || !CARRIER)
+         return;
+   }
+   else {
+      m = 0;
+      for (i = 0; i < 10; i++) {
+         if (config->packid[i].display[0])
+            cmd[m++] = config->packid[i].display[0];
+      }
+   }
+
+   c = toupper(c);
+   strupr (cmd);
+
+   if (strchr (cmd, c) == NULL && usr.archiver != '\0')
+      return;
+   else if (strchr (cmd, c) == NULL && usr.archiver == '\0')
+      goto reread;
+
+   if (c == bbstxt[B_HELP][0]) {
+      read_system_file ("COMPHELP");
+      goto reread;
+   }
+   else if (c == bbstxt[B_NONE][0])
+      usr.archiver = '\0';
+   else
+      usr.archiver = c;
+}
+
+int check_subscription (void)
+{
+   int day, year, mont;
+   char parola[10];
+   struct date now, scad;
+
+   if (!usr.subscrdate[0])
+      return (-1);
+
+   sscanf (usr.subscrdate, "%2d %3s %2d", &day, parola, &year);
+   parola[3] = '\0';
+   for (mont = 0; mont < 12; mont++) {
+      if ((!stricmp (mtext[mont], parola)) || (!stricmp (mesi[mont], parola)))
+         break;
+   }
+   if (mont >= 12)
+      return (-1);
+
+   scad.da_year = year;
+   scad.da_mon = mont + 1;
+   scad.da_day = day;
+
+   getdate (&now);
+   now.da_year %= 100;
+
+   return (daysleft (&now, &scad));
 }
 

@@ -19,25 +19,9 @@ struct date {
 };
 #endif
 
-
 struct _stamp {
    unsigned int date;
    unsigned int time;
-};
-
-struct _noask {
-   bit ansilogon   :2;
-   bit birthdate   :1;
-   bit voicephone  :1;
-   bit dataphone   :1;
-   bit emsi        :1;
-   bit checkfile   :1;
-   bit wazoo       :1;
-   bit msgtrack    :1;
-   bit keeptransit :1;
-   bit hslink      :1;
-   bit puma        :1;
-   bit secure      :1;
 };
 
 struct _votes {
@@ -45,28 +29,47 @@ struct _votes {
    byte priv;
 };
 
+#define NO_CARRIER      -3
+#define NO_DIALTONE     -6
+#define BUSY            -7
+#define NO_ANSWER       -8
+#define VOICE           -9
+#define ABORTED         -50
+#define TIMEDOUT        -51
+
 struct _call_list {
-   int  zone;
-   int  node;
-   int  net;
-   int  type;
-   long size;
+   int   zone;
+   int   node;
+   int   net;
+   int   point;
+   int   type;
+   long  size;
+   int   call_nc;
+   byte  call_wc;
+   int   flags;
+   int   n_mail;
+   int   n_data;
+   long  b_mail;
+   long  b_data;
+   unsigned short ftime;
+   unsigned short fdate;
 };
 
 struct  _node {
-   int  net;
-   int  number;
-   int  cost;
-   char name[34];
+   char name[36];
    char phone[40];
    char city[30];
-   char password[30];
-   int  realcost;
-   int  hubnode;
+   char password[20];
    char rate;
    char modem;
-   word flags1;
-   int  reserved;
+   int  cost_first;
+   int  time_first;
+   int  cost;
+   int  time;
+   char pw_areafix[20];
+   char pw_tic[20];
+   char sysop[36];
+   char akainfo;
 };
 
 struct _lastread {
@@ -151,6 +154,8 @@ struct _usr {
    bit   donotdisturb:1;
    bit   robbed    :1;
    bit   novote    :1;
+   bit   havebox   :1;
+   bit   security  :1;
 
    char  protocol;
    char  archiver;
@@ -175,7 +180,7 @@ struct _usr {
 };
 
 #define SIZEOF_MSGAREA    512
-#define SIZEOF_FILEAREA   256
+#define SIZEOF_FILEAREA   640
 #define SIZEOF_DBASEAREA  119
 
 struct _sys_idx {
@@ -183,6 +188,7 @@ struct _sys_idx {
    long flags;
    char key[13];
    word area;
+   word sig;
 };
 
 struct _sys {
@@ -215,7 +221,12 @@ struct _sys {
    char forward3[80];
    bit  msg_restricted :1;
    bit  passthrough    :1;
-   char filler1[47];
+   bit  internet_mail  :1;
+   byte areafix;
+   char qwk_name[14];
+   long afx_flags;
+   word goldboard;
+   char filler1[27];
 
    char file_name[70];
    int  file_num;
@@ -239,7 +250,17 @@ struct _sys {
    long upload_flags;
    byte list_priv;
    long list_flags;
-   char filler2[31];
+   char filler2[10];
+   char short_name[13];
+   char filler3[8];
+   char tic_tag[32];
+   char tic_forward1[80];
+   char tic_forward2[80];
+   char tic_forward3[80];
+   byte tic_level;
+   long tic_flags;
+   bit  cdrom     :1;
+   char filler4[106];
 };
 
 #define  TWIT        0x10
@@ -280,46 +301,52 @@ struct _msg {
    int  up;
 };
 
-#define MSGPRIVATE 0x0001
-#define MSGCRASH   0x0002
+struct _daystat {
+   // Flag di validita' della statistica
+   long timestamp;
 
-#define MSGREAD    0x0004
-#define MSGSENT    0x0008
-#define MSGFILE    0x0010
-#define MSGFWD     0x0020
-#define MSGORPHAN  0x0040
-#define MSGKILL    0x0080
-#define MSGLOCAL   0x0100
-#define MSGHOLD    0x0200
-#define MSGXX2     0x0400
-#define MSGFRQ     0x0800
-#define MSGRRQ     0x1000
-#define MSGCPT     0x2000
-#define MSGARQ     0x4000
-#define MSGURQ     0x8000
+   // Numero di chiamate e trasmissione/ricezione files
+   long incalls;
+   long outcalls;
+   long humancalls;
+   long filesent;
+   long bytesent;
+   long filerequest;
+   long filereceived;
+   long bytereceived;
+   long completed;
+   long failed;
+   long cost;
+
+   // Statistico messaggi ricevuti/mandati
+   long emailreceived;
+   long emailsent;
+   long echoreceived;
+   long echosent;
+   long dupes;
+   long bad;
+
+   // Tempi di esecuzione del programma
+   long exectime;
+   long idletime;
+   long interaction;
+   long echoscan;
+   long inconnects;
+   long outconnects;
+   long humanconnects;
+};
 
 struct _sysinfo {
+   long stamp_up;
+   long stamp_down;
    long quote_position;
-   unsigned long total_calls;
+   long total_calls;
    char pwd[40];
-   unsigned long local_logons;
-   unsigned long calls_300;
-   unsigned long calls_1200;
-   unsigned long calls_2400;
-   unsigned long calls_9600;
-   unsigned long calls_14400;
-   unsigned long failed_password;
-   unsigned long normal_logoff;
-   unsigned long lost_download;
-   unsigned long lost_carrier;
-   unsigned long out_of_time;
-   unsigned long idle_logoff;
-   unsigned long sysop_logoff;
-   unsigned long new_users;
-   unsigned long file_ratio;
-   unsigned long kbytes_ratio;
-   unsigned long minutes_online;
-   unsigned long mailer_online;
+   struct _daystat today;
+   struct _daystat yesterday;
+   struct _daystat week;
+   struct _daystat month;
+   struct _daystat year;
 };
 
 struct _linestat {
@@ -355,6 +382,7 @@ struct _lastcall {
    long times;
    char logon[6];
    char logoff[6];
+   long timestamp;
 };
 
 struct class_rec {
@@ -470,17 +498,21 @@ struct   _Hello {
    word product;
    word product_maj;
    word product_min;
-   char my_name[60];
+   char my_name[58];
+   word serial_no;         /* Used only by LoraBBS >= 2.31 */
    char sysop[20];
    word my_zone;
    word my_net;
    word my_node;
    word my_point;
    char my_password[8];
-   byte reserved2[8];
+   byte reserved2[4];
+   int  n_mail;            /* Used only by LoraBBS >= 2.20 */
+   int  n_data;            /* Used only by LoraBBS >= 2.20 */
    word capabilities;
    long tranx;             /* Used only by LoraBBS >= 2.10 */
-   byte reserved3[8];
+   long b_mail;            /* Used only by LoraBBS >= 2.20 */
+   long b_data;            /* Used only by LoraBBS >= 2.20 */
 };
 
 struct _ndi {
@@ -584,7 +616,7 @@ struct _pkthdr2
    int ver;                /* packet version                 */
    int orig_net;           /* originating network number     */
    int dest_net;           /* destination network number     */
-   char product;           /* product type                   */
+   byte product;           /* product type                   */
    char serial;            /* serial number (some systems)   */
 
    /* ------------------------------ */
@@ -608,12 +640,14 @@ struct _pkthdr2
 };
 
 struct _fwrd {
-   int zone;
-   int net;
-   int node;
-   int point;
-   bit export: 1;
-   bit reset:  1;
+   int  zone;
+   int  net;
+   int  node;
+   int  point;
+   bit  export: 1;
+   bit  reset:  1;
+   int  fd;
+   char aka;
 };
 
 struct _msghdr2 {
@@ -624,5 +658,13 @@ struct _msghdr2 {
    int dest_net;
    int attrib;
    int cost;
+};
+
+struct _akainfo {
+   int  zone;
+   int  net;
+   int  node;
+   int  point;
+   char aka;
 };
 

@@ -335,8 +335,8 @@ _fill_buffer	proc near
         push    si
 	mov	si,offset _fossil_buffer; Point to buffer
 	mov	_fossil_fetch_pointer,si; Tell high level what to do
-	cmp	_old_fossil,0		; Rev 3 or Rev 4/5?
-	jne	old_fill		; Rev 3
+        cmp     _old_fossil,0           ; Rev 3 or Rev 4/5?
+        jne     old_fill                ; Rev 3
 
         push    di
 
@@ -743,8 +743,8 @@ _sendchars proc far
 
 wbloop:
 
-	cmp	_old_fossil,0		; Rev 3 FOSSIL?
-	jne	wbloop2 		; Yes, go do it that way.
+        cmp     _old_fossil,0           ; Rev 3 FOSSIL?
+        jne     wbloop2                 ; Yes, go do it that way.
 
         mov     ax,ds			; Copy DS
         mov     es,ax			; Into ES
