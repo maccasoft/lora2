@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -44,90 +62,95 @@ void squish_scan_message_base (area, name, upd)
 int area;
 char *name, upd;
 {
-   int i;
+	int i;
 
-   if (sq_ptr != NULL) {
-      MsgUnlock (sq_ptr);
-      MsgCloseArea (sq_ptr);
-   }
+	if (sq_ptr != NULL) {
+		MsgUnlock (sq_ptr);
+		MsgCloseArea (sq_ptr);
+	}
 
-   sq_ptr = MsgOpenArea (name, MSGAREA_CRIFNEC, MSGTYPE_SQUISH);
-   MsgUnlock (sq_ptr);
+	sq_ptr = MsgOpenArea (name, MSGAREA_CRIFNEC, MSGTYPE_SQUISH);
 
-   num_msg = (int)MsgGetNumMsg (sq_ptr);
-   if (num_msg)
-      first_msg = 1;
-   else
-      first_msg = 0;
-   last_msg = num_msg;
-   msg_parent = msg_child = 0;
+	if(sq_ptr == NULL){
+		status_line("! Critical: Unable to open %s",name);
+	}
 
-   for (i=0;i<MAXLREAD;i++)
-      if (usr.lastread[i].area == area)
-         break;
-   if (i != MAXLREAD) {
-      if (usr.lastread[i].msg_num > last_msg)
-         usr.lastread[i].msg_num = last_msg;
-      lastread = usr.lastread[i].msg_num;
-   }
-   else {
-      for (i=0;i<MAXDLREAD;i++)
-         if (usr.dynlastread[i].area == area)
-            break;
-      if (i != MAXDLREAD) {
-         if (usr.dynlastread[i].msg_num > last_msg)
-            usr.dynlastread[i].msg_num = last_msg;
-         lastread = usr.dynlastread[i].msg_num;
-      }
-      else if (upd) {
-         lastread = 0;
-         for (i=1;i<MAXDLREAD;i++) {
-            usr.dynlastread[i-1].area = usr.dynlastread[i].area;
-            usr.dynlastread[i-1].msg_num = usr.dynlastread[i].msg_num;
-         }
+	MsgUnlock (sq_ptr);
 
-         usr.dynlastread[i-1].area = area;
-         usr.dynlastread[i-1].msg_num = 0;
-      }
-      else
-         lastread = 0;
-   }
+	num_msg = (int)MsgGetNumMsg (sq_ptr);
+	if (num_msg)
+		first_msg = 1;
+	else
+		first_msg = 0;
+	last_msg = num_msg;
+	msg_parent = msg_child = 0;
 
-   if (lastread < 0)
-      lastread = 0;
+	for (i=0;i<MAXLREAD;i++)
+		if (usr.lastread[i].area == area)
+			break;
+	if (i != MAXLREAD) {
+		if (usr.lastread[i].msg_num > last_msg)
+			usr.lastread[i].msg_num = last_msg;
+		lastread = usr.lastread[i].msg_num;
+	}
+	else {
+		for (i=0;i<MAXDLREAD;i++)
+			if (usr.dynlastread[i].area == area)
+				break;
+		if (i != MAXDLREAD) {
+			if (usr.dynlastread[i].msg_num > last_msg)
+				usr.dynlastread[i].msg_num = last_msg;
+			lastread = usr.dynlastread[i].msg_num;
+		}
+		else if (upd) {
+			lastread = 0;
+			for (i=1;i<MAXDLREAD;i++) {
+				usr.dynlastread[i-1].area = usr.dynlastread[i].area;
+				usr.dynlastread[i-1].msg_num = usr.dynlastread[i].msg_num;
+			}
+
+			usr.dynlastread[i-1].area = area;
+			usr.dynlastread[i-1].msg_num = 0;
+		}
+		else
+			lastread = 0;
+	}
+
+	if (lastread < 0)
+		lastread = 0;
 }
 
 #ifndef POINT
 static void date_conversion (XMSG *xmsg)
 {
-   sprintf (xmsg->ftsc_date, "%2d %3s %2d %2d:%2d:%2d", xmsg->date_written.date.da, mtext[xmsg->date_written.date.mo - 1], xmsg->date_written.date.yr + 80, xmsg->date_written.time.hh, xmsg->date_written.time.mm, xmsg->date_written.time.ss);
+	sprintf (xmsg->ftsc_date, "%2d %3s %2d %2d:%2d:%2d", xmsg->date_written.date.da, mtext[xmsg->date_written.date.mo - 1], xmsg->date_written.date.yr + 80, xmsg->date_written.time.hh, xmsg->date_written.time.mm, xmsg->date_written.time.ss);
 }
 
 int squish_read_message(msg_num, flag, fakenum)
 int msg_num, flag, fakenum;
 {
-   int i, z, m, line, colf=0, xx, rd;
-   char c, buff[80], wrp[80], *p, sqbuff[80];
-   long fpos;
-   MSGH *sq_msgh;
-   XMSG xmsg;
+	int i, z, m, line, colf=0, xx, rd;
+	char c, buff[80], wrp[80], *p, sqbuff[80];
+	long fpos;
+	MSGH *sq_msgh;
+	XMSG xmsg;
 
-   if (sq_ptr == NULL) {
-      squish_scan_message_base (sys.msg_num, sys.msg_path, 1);
-      if (sq_ptr == NULL)
-         return (0);
-   }
+	if (sq_ptr == NULL) {
+		squish_scan_message_base (sys.msg_num, sys.msg_path, 1);
+		if (sq_ptr == NULL)
+			return (0);
+	}
 
-   if (usr.full_read && !flag)
-      return (squish_full_read_message(msg_num, fakenum));
+	if (usr.full_read && !flag)
+		return (squish_full_read_message(msg_num, fakenum));
 
-   line = 1;
-   msg_fzone = msg_tzone = config->alias[0].zone;
-   msg_fpoint = msg_tpoint = 0;
+	line = 1;
+	msg_fzone = msg_tzone = config->alias[0].zone;
+	msg_fpoint = msg_tpoint = 0;
 
-   sq_msgh = MsgOpenMsg (sq_ptr, MOPEN_RW, (dword)msg_num);
-   if (sq_msgh == NULL)
-      return(0);
+	sq_msgh = MsgOpenMsg (sq_ptr, MOPEN_RW, (dword)msg_num);
+	if (sq_msgh == NULL)
+		return(0);
 
    if (MsgReadMsg (sq_msgh, &xmsg, 0L, 0L, NULL, 0, NULL) == -1) {
       MsgCloseMsg (sq_msgh);
@@ -485,7 +508,7 @@ int msg_num, fakenum;
                   line = 1;
                   rd = 0;
                   break;
-               }
+					}
                else
                   while (line > 5) {
                      cpos (line--, 1);
@@ -508,108 +531,122 @@ int msg_num, fakenum;
    MsgCloseMsg (sq_msgh);
 
    if (line > 1 && usr.more)
-      press_enter();
+		press_enter();
 
-   return(1);
+	return(1);
 }
 
 void squish_save_message(txt)
 char *txt;
 {
-   int i, dest;
-   char origin[128], tear[50], signature[100], pid[40], msgid[40], string[50];
-   long totlen;
-   struct date da;
-   struct time ti;
-   MSGH *sq_msgh;
-   XMSG xmsg;
+	int i, dest;
+	char origin[128], tear[50], signature[100], pid[40], msgid[40], string[50];
+	long totlen;
+	unsigned long crc;
+	struct date da;
+	struct time ti;
+	MSGH *sq_msgh;
+	XMSG xmsg;
 
-   while (MsgLock (sq_ptr) == -1 && msgapierr != MERR_NOMEM)
-      ;
+	if (!sq_ptr){
+		sq_ptr = MsgOpenArea (sys.msg_path, MSGAREA_CRIFNEC, MSGTYPE_SQUISH);
+		if (sq_ptr == NULL)
+		return;
+	}
 
-   m_print(bbstxt[B_SAVE_MESSAGE]);
-   dest = (int)MsgGetNumMsg (sq_ptr) + 1;
-   activation_key ();
-   m_print(" #%d ...",dest);
+	while (MsgLock (sq_ptr) == -1 && msgapierr != MERR_NOMEM)
+		;
 
-   sq_msgh = MsgOpenMsg (sq_ptr, MOPEN_CREATE, (dword)0);
-   if (sq_msgh == NULL) {
-      MsgUnlock (sq_ptr);
-      return;
-   }
+	m_print(bbstxt[B_SAVE_MESSAGE]);
+	dest = (int)MsgGetNumMsg (sq_ptr) + 1;
+	activation_key ();
+	m_print(" #%d ...",dest);
 
-   memset ((char *)&xmsg, 0, sizeof (XMSG));
-   strcpy (xmsg.from, msg.from);
-   strcpy (xmsg.to, msg.to);
-   strcpy (xmsg.subj, msg.subj);
-   strcpy (xmsg.ftsc_date, msg.date);
-   getdate (&da);
-   gettime (&ti);
-   xmsg.date_written.date.da = xmsg.date_arrived.date.da = da.da_day;
-   xmsg.date_written.date.mo = xmsg.date_arrived.date.mo = da.da_mon;
-   xmsg.date_written.date.yr = xmsg.date_arrived.date.yr = (da.da_year % 100) - 80;
-   xmsg.date_written.time.hh = xmsg.date_arrived.time.hh = ti.ti_hour;
-   xmsg.date_written.time.mm = xmsg.date_arrived.time.mm = ti.ti_min;
-   xmsg.date_written.time.ss = xmsg.date_arrived.time.ss = ti.ti_sec;
-   xmsg.orig.zone = config->alias[sys.use_alias].zone;
-   xmsg.orig.node = config->alias[sys.use_alias].node;
-   xmsg.orig.net = config->alias[sys.use_alias].net;
-   xmsg.dest.zone = msg_tzone;
-   xmsg.dest.node = msg.dest;
-   xmsg.dest.net = msg.dest_net;
-   xmsg.dest.point = msg_tpoint;
-   xmsg.attr = msg.attr;
+	sq_msgh = MsgOpenMsg (sq_ptr, MOPEN_CREATE, (dword)0);
+	if (sq_msgh == NULL) {
+		MsgUnlock (sq_ptr);
+		return;
+	}
 
-   totlen = 2L;
+	memset ((char *)&xmsg, 0, sizeof (XMSG));
+	strcpy (xmsg.from, msg.from);
+	strcpy (xmsg.to, msg.to);
+	strcpy (xmsg.subj, msg.subj);
+	strcpy (xmsg.ftsc_date, msg.date);
+	getdate (&da);
+	gettime (&ti);
+	xmsg.date_written.date.da = xmsg.date_arrived.date.da = da.da_day;
+	xmsg.date_written.date.mo = xmsg.date_arrived.date.mo = da.da_mon;
+	xmsg.date_written.date.yr = xmsg.date_arrived.date.yr = (da.da_year % 100) - 80;
+	xmsg.date_written.time.hh = xmsg.date_arrived.time.hh = ti.ti_hour;
+	xmsg.date_written.time.mm = xmsg.date_arrived.time.mm = ti.ti_min;
+	xmsg.date_written.time.ss = xmsg.date_arrived.time.ss = ti.ti_sec;
+	xmsg.orig.zone = config->alias[sys.use_alias].zone;
+	xmsg.orig.node = config->alias[sys.use_alias].node;
+	xmsg.orig.net = config->alias[sys.use_alias].net;
+	xmsg.dest.zone = msg_tzone;
+	xmsg.dest.node = msg.dest;
+	xmsg.dest.net = msg.dest_net;
+	xmsg.dest.point = msg_tpoint;
+	xmsg.attr = msg.attr;
 
-   if (strlen(usr.signature) && registered) {
-      sprintf (signature, msgtxt[M_SIGNATURE], usr.signature);
-      totlen += (long)strlen (signature);
-   }
+	totlen = 2L;
 
-   if (sys.echomail) {
-      sprintf (tear, msgtxt[M_TEAR_LINE],VERSION, registered ? "+" : NOREG);
-      if (strlen (sys.origin))
-         sprintf (origin, msgtxt[M_ORIGIN_LINE], random_origins(), config->alias[sys.use_alias].zone, config->alias[sys.use_alias].net, config->alias[sys.use_alias].node, config->alias[sys.use_alias].point);
-      else
-         sprintf (origin, msgtxt[M_ORIGIN_LINE], system_name, config->alias[sys.use_alias].zone, config->alias[sys.use_alias].net, config->alias[sys.use_alias].node, config->alias[sys.use_alias].point);
+	if (strlen(usr.signature) && registered) {
+		sprintf (signature, msgtxt[M_SIGNATURE], usr.signature);
+		totlen += (long)strlen (signature);
+	}
 
-      sprintf(pid,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-      sprintf(msgid,msgtxt[M_MSGID], config->alias[sys.use_alias].zone, config->alias[sys.use_alias].net, config->alias[sys.use_alias].node, config->alias[sys.use_alias].point, time(NULL));
+	if (sys.echomail) {
+		sprintf (tear, msgtxt[M_TEAR_LINE],VERSION, registered ? "+" : NOREG);
+		if (strlen (sys.origin))
+			sprintf (origin, msgtxt[M_ORIGIN_LINE], random_origins(), config->alias[sys.use_alias].zone, config->alias[sys.use_alias].net, config->alias[sys.use_alias].node, config->alias[sys.use_alias].point);
+		else
+			sprintf (origin, msgtxt[M_ORIGIN_LINE], system_name, config->alias[sys.use_alias].zone, config->alias[sys.use_alias].net, config->alias[sys.use_alias].node, config->alias[sys.use_alias].point);
 
-      totlen += (long)strlen (tear);
-      totlen += (long)strlen (origin);
-      totlen += (long)strlen (pid);
-      totlen += (long)strlen (msgid);
-   }
+		sprintf(pid,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
 
-   if (sys.internet_mail && internet_to != NULL) {
-      sprintf (string, "To: %s\r\n\r\n", internet_to);
-      free (internet_to);
-      totlen += (long)strlen (string);
-   }
+		crc = time (NULL);
+		crc = string_crc(msg.from,crc);
+		crc = string_crc(msg.to,crc);
+		crc = string_crc(msg.subj,crc);
+		crc = string_crc(msg.date,crc);
 
-   if (txt == NULL) {
-      i = 0;
-      while (messaggio[i] != NULL) {
-         totlen += (long)strlen (messaggio[i]);
-         i++;
-      }
+		sprintf(msgid,msgtxt[M_MSGID], config->alias[sys.use_alias].zone, config->alias[sys.use_alias].net, config->alias[sys.use_alias].node, config->alias[sys.use_alias].point, crc);
 
-      MsgWriteMsg (sq_msgh, 0, &xmsg, NULL, 0L, totlen, 1L, "\x00");
+		totlen += (long)strlen (tear);
+		totlen += (long)strlen (origin);
+		totlen += (long)strlen (pid);
+		totlen += (long)strlen (msgid);
+	}
 
-      if (sys.echomail) {
-         MsgWriteMsg (sq_msgh, 1, NULL, pid, strlen (pid), totlen, 0L, NULL);
-         MsgWriteMsg (sq_msgh, 1, NULL, msgid, strlen (msgid), totlen, 0L, NULL);
-      }
+	if (sys.internet_mail && internet_to != NULL) {
+		sprintf (string, "To: %s\r\n\r\n", internet_to);
+		free (internet_to);
+		totlen += (long)strlen (string);
+	}
 
-      if (sys.internet_mail)
-         MsgWriteMsg (sq_msgh, 1, NULL, string, strlen (string), totlen, 0L, NULL);
+	if (txt == NULL) {
+		i = 0;
+		while (messaggio[i] != NULL) {
+			totlen += (long)strlen (messaggio[i]);
+			i++;
+		}
 
-      i = 0;
-      while (messaggio[i] != NULL) {
-         MsgWriteMsg (sq_msgh, 1, NULL, messaggio[i], (long)strlen(messaggio[i]), totlen, 0L, NULL);
-         i++;
+		MsgWriteMsg (sq_msgh, 0, &xmsg, NULL, 0L, totlen, 1L, "\x00");
+
+		if (sys.echomail) {
+			MsgWriteMsg (sq_msgh, 1, NULL, pid, strlen (pid), totlen, 0L, NULL);
+			MsgWriteMsg (sq_msgh, 1, NULL, msgid, strlen (msgid), totlen, 0L, NULL);
+		}
+
+		if (sys.internet_mail)
+			MsgWriteMsg (sq_msgh, 1, NULL, string, strlen (string), totlen, 0L, NULL);
+
+		i = 0;
+		while (messaggio[i] != NULL) {
+			MsgWriteMsg (sq_msgh, 1, NULL, messaggio[i], (long)strlen(messaggio[i]), totlen, 0L, NULL);
+			i++;
       }
    }
    else {
@@ -863,12 +900,19 @@ FILE *sm;
 void squish_list_headers (m, verbose)
 int m, verbose;
 {
-   int i, line = verbose ? 2 : 5, l = 0;
-   struct _msg msgt;
-   MSGH *sq_msgh;
-   XMSG xmsg;
+	int i, line = verbose ? 2 : 5, l = 0;
+	struct _msg msgt;
+	MSGH *sq_msgh;
+	XMSG xmsg;
 
-   for (i = m; i <= last_msg; i++) {
+	if (!sq_ptr){
+		sq_ptr = MsgOpenArea (sys.msg_path, MSGAREA_CRIFNEC, MSGTYPE_SQUISH);
+		if (sq_ptr == NULL)
+		return;
+	}
+
+
+	for (i = m; i <= last_msg; i++) {
       sq_msgh = MsgOpenMsg (sq_ptr, MOPEN_RW, (dword)i);
       if (sq_msgh == NULL)
          continue;
@@ -997,17 +1041,24 @@ char *stringa;
    char *p;
    struct _msg msgt, backup;
    MSGH *sq_msgh;
-   XMSG xmsg;
+	XMSG xmsg;
 
-   for (i = first_msg; i <= last_msg; i++) {
-      sq_msgh = MsgOpenMsg (sq_ptr, MOPEN_RW, (dword)i);
-      if (sq_msgh == NULL)
-         continue;
+	if (!sq_ptr){
+		sq_ptr = MsgOpenArea (sys.msg_path, MSGAREA_CRIFNEC, MSGTYPE_SQUISH);
+		if (sq_ptr == NULL)
+		return;
+	}
 
-      if (MsgReadMsg (sq_msgh, &xmsg, 0L, 0L, NULL, 0, NULL) == -1) {
-         MsgCloseMsg (sq_msgh);
-         continue;
-      }
+
+	for (i = first_msg; i <= last_msg; i++) {
+		sq_msgh = MsgOpenMsg (sq_ptr, MOPEN_RW, (dword)i);
+		if (sq_msgh == NULL)
+			continue;
+
+		if (MsgReadMsg (sq_msgh, &xmsg, 0L, 0L, NULL, 0, NULL) == -1) {
+			MsgCloseMsg (sq_msgh);
+			continue;
+		}
 
       if (!stricmp (xmsg.from,"ARCmail") && !stricmp (xmsg.to, "Sysop")) {
          MsgCloseMsg (sq_msgh);
@@ -1304,83 +1355,83 @@ char qwk;
 
 int squish_save_message2 (FILE *txt)
 {
-   int i, dest, m, dd, hh, mm, ss, aa, mo;
-   char buffer[2050];
-   long totlen;
-   struct date da;
-   struct time ti;
-   MSGH *sq_msgh;
-   XMSG xmsg;
+	int i, dest, m, dd, hh, mm, ss, aa, mo;
+	char buffer[2050];
+	long totlen;
+	struct date da;
+	struct time ti;
+	MSGH *sq_msgh;
+	XMSG xmsg;
 
-   dest = (int)MsgGetNumMsg (sq_ptr) + 1;
+	dest = (int)MsgGetNumMsg (sq_ptr) + 1;
 
-   sq_msgh = MsgOpenMsg (sq_ptr, MOPEN_CREATE, (dword)0);
-   if (sq_msgh == NULL)
-      return (0);
+	sq_msgh = MsgOpenMsg (sq_ptr, MOPEN_CREATE, (dword)0);
+	if (sq_msgh == NULL)
+		return (0);
 
-   memset ((char *)&xmsg, 0, sizeof (XMSG));
-   strcpy (xmsg.from, msg.from);
-   strcpy (xmsg.to, msg.to);
-   strcpy (xmsg.subj, msg.subj);
-   strcpy (xmsg.ftsc_date, msg.date);
-   sscanf(msg.date, "%2d %3s %2d %2d:%2d:%2d", &dd, buffer, &aa, &hh, &mm, &ss);
-   buffer[3] = '\0';
-   for (mo = 0; mo < 12; mo++)
-      if (!stricmp(buffer, mtext[mo]))
-         break;
-   if (mo == 12)
-      mo = 0;
-   xmsg.date_written.date.da = dd;
-   xmsg.date_written.date.mo = mo + 1;
-   xmsg.date_written.date.yr = (aa % 100) - 80;
-   xmsg.date_written.time.hh = hh;
-   xmsg.date_written.time.mm = mm;
-   xmsg.date_written.time.ss = ss;
-   getdate (&da);
-   gettime (&ti);
-   xmsg.date_arrived.date.da = da.da_day;
-   xmsg.date_arrived.date.mo = da.da_mon;
-   xmsg.date_arrived.date.yr = (da.da_year % 100) - 80;
-   xmsg.date_arrived.time.hh = ti.ti_hour;
-   xmsg.date_arrived.time.mm = ti.ti_min;
-   xmsg.date_arrived.time.ss = ti.ti_sec;
-   xmsg.orig.zone = msg_fzone;
-   xmsg.orig.node = msg.orig;
-   xmsg.orig.net = msg.orig_net;
-   xmsg.dest.zone = msg_tzone;
-   xmsg.dest.node = msg.dest;
-   xmsg.dest.net = msg.dest_net;
-   xmsg.dest.point = msg_tpoint;
-   xmsg.attr = msg.attr;
-   if (sys.public)
-      xmsg.attr &= ~MSGPRIVATE;
-   else if (sys.private)
-      xmsg.attr |= MSGPRIVATE;
-   if (sys.echomail && (msg.attr & MSGSENT)) {
-      xmsg.attr |= MSGSCANNED;
-      xmsg.attr &= ~MSGSENT;
-   }
+	memset ((char *)&xmsg, 0, sizeof (XMSG));
+	strcpy (xmsg.from, msg.from);
+	strcpy (xmsg.to, msg.to);
+	strcpy (xmsg.subj, msg.subj);
+	strcpy (xmsg.ftsc_date, msg.date);
+	sscanf(msg.date, "%2d %3s %2d %2d:%2d:%2d", &dd, buffer, &aa, &hh, &mm, &ss);
+	buffer[3] = '\0';
+	for (mo = 0; mo < 12; mo++)
+		if (!stricmp(buffer, mtext[mo]))
+			break;
+	if (mo == 12)
+		mo = 0;
+	xmsg.date_written.date.da = dd;
+	xmsg.date_written.date.mo = mo + 1;
+	xmsg.date_written.date.yr = (aa % 100) - 80;
+	xmsg.date_written.time.hh = hh;
+	xmsg.date_written.time.mm = mm;
+	xmsg.date_written.time.ss = ss;
+	getdate (&da);
+	gettime (&ti);
+	xmsg.date_arrived.date.da = da.da_day;
+	xmsg.date_arrived.date.mo = da.da_mon;
+	xmsg.date_arrived.date.yr = (da.da_year % 100) - 80;
+	xmsg.date_arrived.time.hh = ti.ti_hour;
+	xmsg.date_arrived.time.mm = ti.ti_min;
+	xmsg.date_arrived.time.ss = ti.ti_sec;
+	xmsg.orig.zone = msg_fzone;
+	xmsg.orig.node = msg.orig;
+	xmsg.orig.net = msg.orig_net;
+	xmsg.dest.zone = msg_tzone;
+	xmsg.dest.node = msg.dest;
+	xmsg.dest.net = msg.dest_net;
+	xmsg.dest.point = msg_tpoint;
+	xmsg.attr = msg.attr;
+	if (sys.public)
+		xmsg.attr &= ~MSGPRIVATE;
+	else if (sys.private)
+		xmsg.attr |= MSGPRIVATE;
+	if (sys.echomail && (msg.attr & MSGSENT)) {
+		xmsg.attr |= MSGSCANNED;
+		xmsg.attr &= ~MSGSENT;
+	}
 
-   totlen = memlength ();
+	totlen = memlength ();
 
-   if (MsgWriteMsg (sq_msgh, 0, &xmsg, NULL, 0L, totlen, 1L, "\x00"))
-      return (0);
+	if (MsgWriteMsg (sq_msgh, 0, &xmsg, NULL, 0L, totlen, 1L, "\x00"))
+		return (0);
 
-   do {
-      i = mread (buffer, 1, 2048, txt);
-      for (m = 0; m < i; m++) {
-         if (buffer[m] == 0x1A)
-            buffer[m] = ' ';
-      }
+	do {
+		i = mread (buffer, 1, 2048, txt);
+		for (m = 0; m < i; m++) {
+			if (buffer[m] == 0x1A)
+				buffer[m] = ' ';
+		}
 
-      if (MsgWriteMsg (sq_msgh, 1, NULL, buffer, (long)i, totlen, 0L, NULL))
-         return (0);
-   } while (i == 2048);
+		if (MsgWriteMsg (sq_msgh, 1, NULL, buffer, (long)i, totlen, 0L, NULL))
+			return (0);
+	} while (i == 2048);
 
-   MsgCloseMsg (sq_msgh);
+	MsgCloseMsg (sq_msgh);
 
-   num_msg = last_msg = dest;
-   return (1);
+	num_msg = last_msg = dest;
+	return (1);
 }
 
 int squish_export_mail (int maxnodes, struct _fwrd *forward)
@@ -1409,7 +1460,7 @@ int squish_export_mail (int maxnodes, struct _fwrd *forward)
 	fpd = mopen ("MSGTMP.EXP", "r+b");
 
 	for (i = 0; i < maxnodes; i++)
-		forward[i].reset = forward[i].export = 0;
+		forward[i].receiveonly = forward[i].sendonly = forward[i].passive = forward[i].private = forward[i].reset = forward[i].export = 0;
 
 	z = config->alias[sys.use_alias].zone;
 	ne = config->alias[sys.use_alias].net;

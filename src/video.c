@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <process.h>
 #include <dos.h>
@@ -28,6 +46,7 @@ void idle_system (void);
 void clown_clear (void);
 void stop_blanking (void);
 void open_logfile (void);
+void no_test_key (void);
 
 #define UpdateCRC(c,crc) (cr3tab[((int) crc ^ c) & 0xff] ^ ((crc >> 8) & 0x00FFFFFFL))
 static char *reg_prompt = "[UnRegistered]";
@@ -56,497 +75,212 @@ char serial_id[3];
 word serial_no;
 
 /*---------------------------------------------------------------------------
-   void setup_screen (void);
+	void setup_screen (void);
 
-   Disegna le due parti piu' importanti dello schermo, dalla riga 1 alla
-   riga 23 (dove viene visualizzato il tracciato delle chiamate) e dalla
-   riga 24 alla riga 25 (dove appaiono i vari messaggi di stato).
+	Disegna le due parti piu' importanti dello schermo, dalla riga 1 alla
+	riga 23 (dove viene visualizzato il tracciato delle chiamate) e dalla
+	riga 24 alla riga 25 (dove appaiono i vari messaggi di stato).
 ---------------------------------------------------------------------------*/
 void setup_screen ()
 {
-   char stringa[40];
+	char stringa[40];
 
-   virtual_screen ();
+	virtual_screen ();
 
-   cclrscrn(LGREY|_BLACK);
-   ox = wherex ();
-   oy = wherey ();
-   hidecur ();
+	cclrscrn(LGREY|_BLACK);
+	ox = wherex ();
+	oy = wherey ();
+	hidecur ();
 
-   wh1 = wopen (0, 0, 24, 79, 5, LGREY|_BLACK, LGREY|_BLACK);
-   wactiv (wh1);
+	wh1 = wopen (0, 0, 24, 79, 5, LGREY|_BLACK, LGREY|_BLACK);
+	wactiv (wh1);
 
-   wbox (1, 0, 24, 79, 0, LGREY|_BLACK);
-   whline (12, 0, 80, 0, LGREY|_BLACK);
-   whline (22, 0, 80, 0, LGREY|_BLACK);
-   wvline (1, 52, 24, 0, LGREY|_BLACK);
+	wbox (1, 0, 24, 79, 0, LGREY|_BLACK);
+	whline (12, 0, 80, 0, LGREY|_BLACK);
+	whline (22, 0, 80, 0, LGREY|_BLACK);
+	wvline (22,31, 3, 0, LGREY|_BLACK);
+	wvline (22,41, 3, 0, LGREY|_BLACK);
+	wvline (1, 52, 24, 0, LGREY|_BLACK);
 //   wvline (22, 21, 3, 0, LGREY|_BLACK);
-   sprintf (stringa, "%d:%d/%d.%d", config->alias[0].zone, config->alias[0].net, config->alias[0].node, config->alias[0].point);
-   prints (0, 1, LGREEN|_BLACK, stringa);
-   prints (0, 78 - strlen (VERSION), LGREEN|_BLACK, VERSION);
+	sprintf (stringa, "%d:%d/%d.%d", config->alias[0].zone, config->alias[0].net, config->alias[0].node, config->alias[0].point);
+	prints (0, 1, LGREEN|_BLACK, stringa);
+	prints (0, 78 - strlen (VERSION), LGREEN|_BLACK, VERSION);
 //   prints (0, 78 - strlen (system_name), LGREEN|_BLACK, system_name);
-   prints (1, 2, LCYAN|_BLACK, "LOG");
-   prints (1, 54, LCYAN|_BLACK, "SYSTEM");
-   prints (12, 2, LCYAN|_BLACK, "OUTBOUND");
-   prints (12, 54, LCYAN|_BLACK, "MODEM");
-   prints (13, 2, YELLOW|_BLACK, "Node            Try/Con  Type  Size    Status");
+	prints (1, 1, LCYAN|_BLACK, "LOG");
+	prints (1, 53, LCYAN|_BLACK, "SYSTEM");
+	prints (12, 1, LCYAN|_BLACK, "OUTBOUND");
+	prints (12, 53, LCYAN|_BLACK, "MODEM");
+	prints (22, 1, LCYAN|_BLACK, "EVENT: ");
+	prints (22, 32, LCYAN|_BLACK, "M'TASKER");
+	prints (22, 42, LCYAN|_BLACK, "KEYBD");
+	prints (22, 53, LCYAN|_BLACK, "RECEIVED");
+	prints (13, 2, YELLOW|_BLACK, "Node            Try/Con  Type  Size    Status");
 
-   prints (5, 54, LCYAN|_BLACK, "   Status:");
-   prints (6, 54, LCYAN|_BLACK, "  Elapsed:");
+	prints (5, 54, LCYAN|_BLACK, "   Status:");
+	prints (6, 54, LCYAN|_BLACK, "  Elapsed:");
 
-   idle_system ();
+	idle_system ();
 
-   activation_key ();
-   if (registered)
-      sprintf (stringa, "%s/%s%05u", VERSION, serial_id[0] ? serial_id : "", serial_no);
-   else
-      sprintf (stringa, "%s/Demo", VERSION);
-   prints (0, 78 - strlen (stringa), LGREEN|_BLACK, stringa);
+	activation_key ();
+   sprintf (stringa, "%s", VERSION);
+	prints (0, 78 - strlen (stringa), LGREEN|_BLACK, stringa);
 }
 
 /*---------------------------------------------------------------------------
-   void idle_system (void);
+	void idle_system (void);
 
 ---------------------------------------------------------------------------*/
 void idle_system ()
 {
-   char string[20];
+	char string[20];
 
-   wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
+	wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
 
-   prints (7, 54, LCYAN|_BLACK, "     Next:");
-   prints (8, 54, LCYAN|_BLACK, "Remaining:");
-   prints (9, 54, LCYAN|_BLACK, "  Current:");
-   prints (10, 54, LCYAN|_BLACK, "     Port:");
-
-   mtask_find ();
-   sprintf (string, "%-6lu Com%d", rate, com_port + 1);
-   prints (10, 65, YELLOW|_BLACK, string);
+	prints (7, 54, LCYAN|_BLACK, "     Next:");
+	prints (8, 54, LCYAN|_BLACK, "Remaining:");
+	prints (9, 54, LCYAN|_BLACK, "  Current:");
+	prints (10, 54, LCYAN|_BLACK, "     Port:");
+//	prints (11, 54, LCYAN|_BLACK, " M'tasker:");
+	mtask_find ();
+	sprintf (string, "%-6lu Com%d", rate, com_port + 1);
+	prints (10, 65, YELLOW|_BLACK, string);
 }
 
 /*---------------------------------------------------------------------------
-   void blank_system (void);
+	void blank_system (void);
 
 ---------------------------------------------------------------------------*/
 void blank_system ()
 {
-   wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
+	wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
 }
 
 /*---------------------------------------------------------------------------
-   void toss_system (void);
+	void toss_system (void);
 
 ---------------------------------------------------------------------------*/
 void toss_system ()
 {
-   wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
+	wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
 
-   prints (7, 54, LCYAN|_BLACK, "   Packet:");
-   prints (8, 54, LCYAN|_BLACK, "     Date:");
-   prints (9, 54, LCYAN|_BLACK, "     Time:");
-   prints (10, 54, LCYAN|_BLACK, "     From:");
-   prints (11, 54, LCYAN|_BLACK, " Received:");
+	prints (7, 54, LCYAN|_BLACK, "   Packet:");
+	prints (8, 54, LCYAN|_BLACK, "     Date:");
+	prints (9, 54, LCYAN|_BLACK, "     Time:");
+	prints (10, 54, LCYAN|_BLACK, "     From:");
+	prints (11, 54, LCYAN|_BLACK, " Received:");
 }
 
 /*---------------------------------------------------------------------------
-   void unpack_system (void);
+	void unpack_system (void);
 
 ---------------------------------------------------------------------------*/
 void unpack_system ()
 {
-   wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
+	wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
 
-   prints (7, 54, LCYAN|_BLACK, "   Packet:");
-   prints (8, 54, LCYAN|_BLACK, "   Method:");
+	prints (7, 54, LCYAN|_BLACK, "   Packet:");
+	prints (8, 54, LCYAN|_BLACK, "   Method:");
 }
 
 /*---------------------------------------------------------------------------
-   void scan_system (void);
+	void scan_system (void);
 
 ---------------------------------------------------------------------------*/
 void scan_system ()
 {
-   wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
+	wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
 
-   prints (7, 54, LCYAN|_BLACK, "  Message:");
-   prints (8, 54, LCYAN|_BLACK, "     Area:");
-   prints (9, 54, LCYAN|_BLACK, "     Base:");
-   prints (10, 54, LCYAN|_BLACK, "Forwarded:");
+	prints (7, 54, LCYAN|_BLACK, "  Message:");
+	prints (8, 54, LCYAN|_BLACK, "     Area:");
+	prints (9, 54, LCYAN|_BLACK, "     Base:");
+	prints (10, 54, LCYAN|_BLACK, "Forwarded:");
 }
 
 /*---------------------------------------------------------------------------
-   void pack_system (void);
+	void pack_system (void);
 
 ---------------------------------------------------------------------------*/
 void pack_system ()
 {
-   wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
+	wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
 
-   prints (7, 54, LCYAN|_BLACK, "     Node:");
-   prints (8, 54, LCYAN|_BLACK, " Filename:");
-   prints (9, 54, LCYAN|_BLACK, "   Method:");
+	prints (7, 54, LCYAN|_BLACK, "     Node:");
+	prints (8, 54, LCYAN|_BLACK, " Filename:");
+	prints (9, 54, LCYAN|_BLACK, "   Method:");
 }
 
 /*---------------------------------------------------------------------------
-   void dial_system (void);
+	void dial_system (void);
 
-   Finestra di stato adatta per le operazioni di chiamata di un altro BBS.
-   Viene visualizzato cosa sta facendo il mailer, chi sta chiamado e il
-   timeout dell'azione corrente.
+	Finestra di stato adatta per le operazioni di chiamata di un altro BBS.
+	Viene visualizzato cosa sta facendo il mailer, chi sta chiamando e il
+	timeout dell'azione corrente.
 
-   Local status puo' essere "Dialing" e "Connect".
-   Action puo' essere "Waiting", "YooHoo/2U2", "EMSI/C1", "EMSI/C2" oppure
-   "FTSC-001".
+	Local status puo' essere "Dialing" e "Connect".
+	Action puo' essere "Waiting", "YooHoo/2U2", "EMSI/C1", "EMSI/C2" oppure
+	"FTSC-001".
 ---------------------------------------------------------------------------*/
 void dial_system ()
 {
-   wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
+	wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
 
-   prints (7, 54, LCYAN|_BLACK, "   Action:");
-   prints (8, 54, LCYAN|_BLACK, "  Timeout:");
+	prints (7, 54, LCYAN|_BLACK, "   Action:");
+	prints (8, 54, LCYAN|_BLACK, "  Timeout:");
 }
 
 void filetransfer_system ()
 {
-   wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
+	wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
 
-   prints (7, 55, LCYAN|_BLACK, "Protocol:");
-   prints (8, 54, LCYAN|_BLACK, "Files I/O:");
+	prints (7, 55, LCYAN|_BLACK, "Protocol:");
+	prints (8, 54, LCYAN|_BLACK, "Files I/O:");
 }
 
 /*---------------------------------------------------------------------------
-   void setup_bbs_screen (void);
+	void setup_bbs_screen (void);
 
-   Apre lo schermo da utilizzare per la parte BBS, con due righe di stato
-   in basso e il resto della schermo da dedicare alla visualizzazione di
-   cio' che l'utente sta facendo.
+	Apre lo schermo da utilizzare per la parte BBS, con due righe di stato
+	in basso e il resto della schermo da dedicare alla visualizzazione di
+	cio' che l'utente sta facendo.
 ---------------------------------------------------------------------------*/
 void setup_bbs_screen ()
 {
-   int i;
+	int i;
 
-   if (local_mode != 2)
-      clown_clear ();
+	if (local_mode != 2)
+		clown_clear ();
 
-   i = whandle();
+	i = whandle();
 #ifndef __OS2__
-   wunlink(i);
+	wunlink(i);
 #endif
 
-   if (local_mode != 2) {
-      status = wopen (23, 0, 24, 79, 5, BLACK|_LGREY, BLACK|_LGREY);
-      wactiv (status);
-      wprints (0, 65, BLACK|_LGREY, " [Time:      ]");
-      wprints (1, 79 - strlen (reg_prompt), BLACK|_LGREY, reg_prompt);
-   }
+	if (local_mode != 2) {
+		status = wopen (23, 0, 24, 79, 5, BLACK|_LGREY, BLACK|_LGREY);
+		wactiv (status);
+		wprints (0, 65, BLACK|_LGREY, " [Time:      ]");
+		wprints (1, 79 - strlen (reg_prompt), BLACK|_LGREY, reg_prompt);
+	}
 
-   mainview = wopen (0, 0, (local_mode == 2) ? 24 : 22, 79, 5, LGREY|_BLACK, LGREY|_BLACK);
-   wactiv (mainview);
+	mainview = wopen (0, 0, (local_mode == 2) ? 24 : 22, 79, 5, LGREY|_BLACK, LGREY|_BLACK);
+	wactiv (mainview);
 
-   f4_status ();
+	f4_status ();
 }
 
 /*---------------------------------------------------------------------------
   void activation_key (void);
-
-  Verifica la chiave di registrazione del programma, attivando le opzioni
-  riservate. Se si tratta di una chiave per point la variabile globale
-  registered assume il valore 2, altrimenti il valore 1.
 ---------------------------------------------------------------------------*/
-// #define BETAKEY
-
-#define x32crc(c,crc) (cr3tab[((int) crc ^ c) & 0xff] ^ ((crc >> 8) & 0x00FFFFFFL))
-
-typedef union {
-   long value;
-   struct {
-      char byte1;
-      char byte2;
-      char byte3;
-      char byte4;
-   } sp;
-} SPLIT4;
-
-typedef union {
-   unsigned short value;
-   struct {
-      char byte1;
-      char byte2;
-   } sp;
-} SPLIT2;
-
-// Valori per flag1 - Opzioni di registrazione
-#define REG2    0x01
-#define REG5    0x02
-#define REG10   0x04
-#define REGUNL  0x08
-#define POINT   0x10
-#define BETA    0x20
-#define DOS     0x40
-#define OS2     0x80
-
-typedef struct _ak {
-   char  crc1;
-   char  ending1;
-   char  rnd1;
-   char  crc2;
-   char  flag1;
-   char  id[2];
-   char  ending2;
-   short serial;
-   char  crc3;
-   char  flag2;
-   char  version1;
-   char  crc4;
-   char  version2;
-   char  rnd2;
-} AK;
-
-static unsigned long get_crc (void *buffer, int length)
-{
-   int i;
-   unsigned long crc = 0xAABBCCDDL;
-   char *b;
-
-   b = (char *)buffer;
-
-   for (i = 0; i < length; i++)
-      crc = x32crc ((unsigned char)b[i], crc);
-
-   return (crc);
-}
 
 void activation_key()
 {
-   int i, maxlines;
-   char str[32];
-   unsigned char *p, px, ppx;
-   unsigned long value, mult;
-   AK ak;
-   SPLIT2 cs2;
-   SPLIT4 cs4;
-   int decoding[] = { 0,1,2,3,4,5,6,7,8,9,0,0,0,0,0,0,0,10,11,12,13,14,15,16,17,18,19,20,
-                      21,22,23,24,25,26,27,28,29,30,31,32,33,34,35 };
-
-   memset (serial_id, 0, 3);
-
-   memset (&ak, 0, sizeof (AK));
-   strcpy (str, config->newkey_code);
-
-   p = (unsigned char *)&ak;
-   for (i = 0; i < strlen (str); i++) {
-      if ((i % 7) == 0) {
-         if (i) {
-            memcpy (p, &value, 4);
-            p += 4;
-         }
-         value = 0L;
-         mult = 1L;
-      }
-      value += decoding[str[i] - '0'] * mult;
-      mult *= 36L;
-   }
-   memcpy (p, &value, 4);
-
-   p = (unsigned char *)&ak;
-   ppx = 0xAA;
-   for (i = 0; i < sizeof (AK); i++) {
-      px = *p;
-      *p ^= ppx;
-      ppx = px;
-      p++;
-   }
-
-   cs4.sp.byte1 = ak.crc1;
-   cs4.sp.byte2 = ak.crc2;
-   cs4.sp.byte3 = ak.crc3;
-   cs4.sp.byte4 = ak.crc4;
-   ak.crc1 = ak.crc2 = ak.crc3 = ak.crc4 = 0;
-
-   cs2.sp.byte1 = ak.ending1;
-   cs2.sp.byte2 = ak.ending2;
-
-   if (local_mode)
-      maxlines = line_offset;
-   else {
-      if (ak.flag1 & REG2)
-         maxlines = 2;
-      else if (ak.flag1 & REG5)
-         maxlines = 5;
-      else if (ak.flag1 & REG10)
-         maxlines = 10;
-      else if (ak.flag1 & REGUNL)
-         maxlines = 99;
-      else if (ak.flag1 & POINT)
-         maxlines = 1;
-   }
-
-   if (cs4.value == get_crc (&ak, sizeof (AK))) {
-#ifdef __OS2__
-      if ((ak.flag1 & OS2) && maxlines == 99 || maxlines >= line_offset) {
-#else
-      if ((ak.flag1 & DOS) && maxlines == 99 || maxlines >= line_offset) {
-#endif
-         reg_prompt = "  [Registered]";
-         if (ak.flag1 & POINT)
-            registered = 2;
-         else
-            registered = 1;
-         serial_no = ak.serial;
-         serial_id[0] = ak.id[0];
-         serial_id[1] = ak.id[1];
-      }
-   }
-   else {
-#ifndef COMMERCIAL
-//#ifndef __OS2__
-//      wopen (9, 12, 18, 66, 0, LRED|_BLACK, LGREY|_BLACK);
-//      wtitle (" SECURITY VIOLATION ", TCENTER, YELLOW|_BLACK);
-//      wcenters (0, LCYAN|_BLACK, "This is a beta version that need an authorized");
-//      wcenters (1, LCYAN|_BLACK, "registration key to work.");
-//      wcenters (3, YELLOW|_BLACK|BLINK, "YOU ARE NOT ALLOWED TO USE THIS PROGRAM");
-//      wcenters (5, LCYAN|_BLACK, "Please, discontinue to use this version and contact");
-//      wcenters (6, LCYAN|_BLACK, "the author to obtain an usable copy.");
-//      wcenters (7, LCYAN|_BLACK, "Your system is now freezed");
-//      for (;;);
-//#endif
-#else
-      wopen (9, 12, 18, 66, 0, LRED|_BLACK, LGREY|_BLACK);
-      wtitle (" SECURITY VIOLATION ", TCENTER, YELLOW|_BLACK);
-      wcenters (0, LCYAN|_BLACK, "This is a commercial product that need an");
-      wcenters (1, LCYAN|_BLACK, "authorized registration key to work.");
-      wcenters (3, YELLOW|_BLACK|BLINK, "YOU ARE NOT ALLOWED TO USE THIS PROGRAM");
-      wcenters (5, LCYAN|_BLACK, "Please, discontinue to use this version and contact");
-      wcenters (6, LCYAN|_BLACK, "the author to obtain an usable copy.");
-      wcenters (7, LCYAN|_BLACK, "Your system is now freezed");
-      for (;;);
-#endif
-   }
-}
-
-/*
-   int i;
-   char kc[30];
-   dword crc;
-
-   registered = 0;
-
-#ifdef COMMERCIAL
-   crc = 0x6314F177L;
-   for (i=0; i<strlen(config->sysop);i++)
-      crc = UpdateCRC ((byte)config->sysop[i], crc);
-
-   if (config->keycode == crc) {
-      reg_prompt = "  [Registered]";
-      registered = 1;
-   }
-
-#else
-
-   crc = 0x6FE41197L;
-   for (i=0; i<strlen(config->sysop);i++)
-      crc = UpdateCRC ((byte)config->sysop[i], crc);
-
-   if (config->keycode == crc && line_offset == 1) {
-      reg_prompt = "  [Registered]";
-      registered = 2;
-   }
-   else {
-      crc = 0x7FE50189L;
-      for (i=0; i<strlen(config->sysop);i++)
-         crc = UpdateCRC ((byte)config->sysop[i], crc);
-
-      if (config->keycode == crc && line_offset <= 2) {
-         reg_prompt = "  [Registered]";
-         registered = 1;
-      }
-      else {
-         crc = 0x74E40291L;
-         for (i=0; i<strlen(config->sysop);i++)
-            crc = UpdateCRC ((byte)config->sysop[i], crc);
-
-         if (config->keycode == crc && line_offset <= 5) {
-            reg_prompt = "  [Registered]";
-            registered = 1;
-         }
-         else {
-            crc = 0x7FA45109L;
-            for (i=0; i<strlen(config->sysop);i++)
-               crc = UpdateCRC ((byte)config->sysop[i], crc);
-
-            if (config->keycode == crc && line_offset <= 10) {
-               reg_prompt = "  [Registered]";
-               registered = 1;
-            }
-            else {
-               crc = 0x7FE40199L;
-               for (i=0; i<strlen(config->sysop);i++)
-                  crc = UpdateCRC ((byte)config->sysop[i], crc);
-
-
-               if (config->keycode == crc) {
-                  reg_prompt = "  [Registered]";
-                  registered = 1;
-               }
-            }
-         }
-      }
-   }
-#endif
-
+	memset (serial_id, 0, 3);
+   reg_prompt = "  [Registered]";
+   registered = 1;
    serial_no = 0;
-
-   if (registered) {
-      for (i=0; i<strlen(config->sysop);i++)
-         serial_no = xcrc (serial_no, (byte)config->sysop[i]);
-      sprintf (kc, "%ld", config->keycode);
-      for (i = 0;  i < strlen (kc); i++)
-         serial_no = xcrc (serial_no, (byte)kc[i]);
-   }
-   else {
-#ifndef COMMERCIAL
-//      wopen (9, 12, 18, 66, 0, LRED|_BLACK, LGREY|_BLACK);
-//      wtitle (" SECURITY VIOLATION ", TCENTER, YELLOW|_BLACK);
-//      wcenters (0, LCYAN|_BLACK, "This is a beta version that need an authorized");
-//      wcenters (1, LCYAN|_BLACK, "registration key to work.");
-//      wcenters (3, YELLOW|_BLACK|BLINK, "YOU ARE NOT ALLOWED TO USE THIS PROGRAM");
-//      wcenters (5, LCYAN|_BLACK, "Please, discontinue to use this version and contact");
-//      wcenters (6, LCYAN|_BLACK, "the author to obtain an usable copy.");
-//      wcenters (7, LCYAN|_BLACK, "Your system is now freezed");
-//      for (;;);
-#else
-      wopen (9, 12, 18, 66, 0, LRED|_BLACK, LGREY|_BLACK);
-      wtitle (" SECURITY VIOLATION ", TCENTER, YELLOW|_BLACK);
-      wcenters (0, LCYAN|_BLACK, "This is a commercial product that need an");
-      wcenters (1, LCYAN|_BLACK, "authorized registration key to work.");
-      wcenters (3, YELLOW|_BLACK|BLINK, "YOU ARE NOT ALLOWED TO USE THIS PROGRAM");
-      wcenters (5, LCYAN|_BLACK, "Please, discontinue to use this version and contact");
-      wcenters (6, LCYAN|_BLACK, "the author to obtain an usable copy.");
-      wcenters (7, LCYAN|_BLACK, "Your system is now freezed");
-      for (;;);
-#endif
-   }
-
-#ifdef BETAKEY
-   crc = 0x3FC41159L;
-   for (i=0; i<strlen(config->sysop);i++)
-      crc = UpdateCRC ((byte)config->sysop[i], crc);
-   for (i=0; i<strlen(config->sysop);i++)
-      crc = UpdateCRC ((byte)config->sysop[i], crc);
-   crc = ~crc;
-   if (!registered || crc != config->betakey) {
-      wopen (9, 12, 18, 66, 0, LRED|_BLACK, LGREY|_BLACK);
-      wtitle (" SECURITY VIOLATION ", TCENTER, YELLOW|_BLACK);
-      wcenters (0, LCYAN|_BLACK, "This is a beta version that need an authorized");
-      wcenters (1, LCYAN|_BLACK, "registration key to work.");
-      wcenters (3, YELLOW|_BLACK|BLINK, "YOU ARE NOT ALLOWED TO USE THIS PROGRAM");
-      wcenters (5, LCYAN|_BLACK, "Please, discontinue to use this version and contact");
-      wcenters (6, LCYAN|_BLACK, "the author to obtain an usable copy.");
-      wcenters (7, LCYAN|_BLACK, "Your system is now freezed");
-      for (;;);
-   }
-#endif
-*/
+   serial_id[0] = 'F';
+   serial_id[1] = 'V';
+}
 
 static int os2_active (void)
 {
@@ -555,7 +289,7 @@ static int os2_active (void)
 #else
    union REGS regs;
 
-   regs.h.ah = 0x30;
+	regs.h.ah = 0x30;
    intdos (&regs, &regs);
 
    return (regs.h.al >= 20);
@@ -565,53 +299,53 @@ static int os2_active (void)
 /*---------------------------------------------------------------------------
    void mtask_find (void)
 
-   Cerca di identificare il multitasker sotto cui e' installato il programma.
+	Cerca di identificare il multitasker sotto cui e' installato il programma.
    Per ogni multitasker esiste una routine di time_release appropriata per
-   dare agli altri task il tempo CPU non usato da questo task.
+	dare agli altri task il tempo CPU non usato da questo task.
 ---------------------------------------------------------------------------*/
 void mtask_find ()
 {
 #ifndef __OS2__
-   have_dv = 0;
-   have_ml = 0;
-   have_tv = 0;
-   have_ddos = 0;
-   have_os2 = 0;
+	have_dv = 0;
+	have_ml = 0;
+	have_tv = 0;
+	have_ddos = 0;
+	have_os2 = 0;
 
-   if ((have_dv = dv_get_version()) != 0) {
-      ;// wprints (9, 65, YELLOW|_BLACK, "DESQview");
-      _vinfo.dvexist = 1;
-   }
-   else if ((have_ddos = ddos_active ()) != 0)
-      ;// wprints (9, 65, YELLOW|_BLACK, "DoubleDOS");
-   else if ((have_ml = ml_active ()) != 0)
-      ;// wprints (9, 65, YELLOW|_BLACK, "Multilink");
-   else if ((have_tv = tv_get_version ()) != 0)
-      ;// wprints (9, 65, YELLOW|_BLACK, "TopView");
-   else if (windows_active())
-      ;// wprints (9, 65, YELLOW|_BLACK, "MS-Windows");
-   else if ((have_os2 = os2_active ()) != 0)
-      ;// wprints (9, 65, YELLOW|_BLACK, "OS/2");
-   else
-      ;// wprints (9, 65, YELLOW|_BLACK, "None");
+	if ((have_dv = dv_get_version()) != 0) {
+		 wprints (23, 33, YELLOW|_BLACK, "DESQV.");
+		_vinfo.dvexist = 1;
+	}
+	else if ((have_ddos = ddos_active ()) != 0)
+		 wprints (23, 33, YELLOW|_BLACK, "DoubleD");
+	else if ((have_ml = ml_active ()) != 0)
+		wprints (23, 33, YELLOW|_BLACK, "MultiL");
+	else if ((have_tv = tv_get_version ()) != 0)
+		 wprints (23, 33, YELLOW|_BLACK, "TopView");
+	else if (windows_active())
+		 wprints (23, 33, YELLOW|_BLACK, "Windows");
+	else if ((have_os2 = os2_active ()) != 0)
+		 wprints (23, 33, YELLOW|_BLACK, "OS/2");
+	else
+		 wprints (23, 33, YELLOW|_BLACK, "NONE");
 
-   if (have_dv || have_ddos || have_ml || have_tv || have_os2)
-      use_tasker = 1;
-   else
-      use_tasker = 0;
+	if (have_dv || have_ddos || have_ml || have_tv || have_os2)
+		use_tasker = 1;
+	else
+		use_tasker = 0;
 #else
-   // wprints (9, 65, YELLOW|_BLACK, "OS/2");
+	 wprints (23, 33, YELLOW|_BLACK, "OS/2");
 #endif
 }
 
 void write_sysinfo()
 {
-   int fd;
-   char filename[80];
-   long pos;
-   struct _linestat lt;
+	int fd;
+	char filename[80];
+	long pos;
+	struct _linestat lt;
 
-   strcode (sysinfo.pwd, "YG&%FYTF%$RTD");
+	strcode (sysinfo.pwd, "YG&%FYTF%$RTD");
 
    sprintf (filename, "%sSYSINFO.DAT", config->sys_path);
    fd = shopen(filename, O_BINARY|O_RDWR);
@@ -804,7 +538,7 @@ void terminating_call (void)
             wcenters(1,LCYAN|_BLUE,"Terminating call");
          }
          else
-            prints (5, 65, YELLOW|_BLACK, "Terminating ");
+				prints (5, 65, YELLOW|_BLACK, "Terminating ");
       }
 
       textattr (LGREY|_BLACK);

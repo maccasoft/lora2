@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -55,24 +73,27 @@ static int sort_func (const void *a1, const void *b1)
 
 #define MAX_FORWARD   128
 
-int add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr)
+int add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr,int f_flags)
 {
 	int fd, n_forw, m, czone, cnet, cnode, cpoint, cf, add_area = 1, i, level;
-	char linea[80], addr[40], *p, cc[5];
+	char filename[80],linea[80], addr[40], *p, cc[5];
 	long flags;
 	struct _fwd_alias *forward;
 	struct _sys tsys;
+
+	int fdna;
+	FILE *fdna_handle;
 
 	level = areafix_level;
 	flags = areafix_flags;
 
 	if (*area == '-') {
 		add_area = 0;
-      area++;
-   }
-   else {
-      add_area = 1;
-      if (*area == '+')
+		area++;
+	}
+	else {
+		add_area = 1;
+		if (*area == '+')
 			area++;
 	}
 
@@ -96,6 +117,13 @@ int add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr)
 	}
 
 	if (stricmp (tsys.echotag, area) || (config->check_echo_zone && config->alias[tsys.use_alias].zone != zo)) {
+		if(add_area && !(config->check_echo_zone && config->alias[tsys.use_alias].zone != zo)){
+			sprintf (filename, "%sNEWAREA.TXT", config->sys_path);
+			fdna = sh_open (filename, SH_DENYWR, O_RDWR|O_BINARY|O_CREAT|O_APPEND, S_IREAD|S_IWRITE);
+			fdna_handle = fdopen(fdna,"a+");
+			fprintf(fdna_handle,"%d:%d/%d.%d %s\r\n",zo,ne,no,po,area);
+			fclose(fdna_handle);
+		}
 		close (fd);
 		free (forward);
 		return (-1);
@@ -226,7 +254,7 @@ int add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr)
 		forward[n_forw].net = ne;
 		forward[n_forw].node = no;
 		forward[n_forw].point = po;
-		if(tsys.private) forward[n_forw].private=1;
+		if(tsys.private||f_flags) forward[n_forw].private=1;
 		else forward[n_forw].private=0;
 		if(tsys.sendonly) forward[n_forw].send=1;
 		else forward[n_forw].send=0;
@@ -259,7 +287,7 @@ int add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr)
 	for (m = 0; m < n_forw; m++) {
 		if (czone != forward[m].zone) {
 			if (forward[m].send || forward[m].receive || forward[m].passive || forward[m].private) {
-                cc[0]=0;
+				cc[0]=0;
 				if (forward[m].send) strcat(cc,"<");
 				if (forward[m].receive) strcat(cc,">");
 				if (forward[m].passive) strcat(cc,"!");
@@ -282,7 +310,7 @@ int add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr)
 		}
 		else if (cnet != forward[m].net) {
 			if (forward[m].send || forward[m].receive || forward[m].passive || forward[m].private) {
-                cc[0]=0;
+				cc[0]=0;
 				if (forward[m].send) strcat(cc,"<");
 				if (forward[m].receive) strcat(cc,">");
 				if (forward[m].passive) strcat(cc,"!");
@@ -304,7 +332,7 @@ int add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr)
 		}
 		else if (cnode != forward[m].node) {
 			if (forward[m].send || forward[m].receive || forward[m].passive || forward[m].private) {
-                cc[0]=0;
+				cc[0]=0;
 				if (forward[m].send) strcat(cc,"<");
 				if (forward[m].receive) strcat(cc,">");
 				if (forward[m].passive) strcat(cc,"!");
@@ -325,7 +353,7 @@ int add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr)
 		}
 		else if (forward[m].point && cpoint != forward[m].point) {
 			if (forward[m].send || forward[m].receive || forward[m].passive || forward[m].private) {
-                cc[0]=0;
+				cc[0]=0;
 				if (forward[m].send) strcat(cc,"<");
 				if (forward[m].receive) strcat(cc,">");
 				if (forward[m].passive) strcat(cc,"!");
@@ -339,7 +367,7 @@ int add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr)
 		else
 			strcpy (addr, "");
 
-		if (strlen (linea) + strlen (addr) >= 58) {
+		if (strlen (linea) + strlen (addr) >= 70) {
 			if (cf == 1) {
 				strcpy (tsys.forward1, linea);
 				cf++;
@@ -356,7 +384,7 @@ int add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr)
 			linea[0] = '\0';
 
 			if (forward[m].send || forward[m].receive || forward[m].passive || forward[m].private) {
-                cc[0]=0;
+				cc[0]=0;
 				if (forward[m].send) strcat(cc,"<");
 				if (forward[m].receive) strcat(cc,">");
 				if (forward[m].passive) strcat(cc,"!");
@@ -586,7 +614,7 @@ void scan_all_echomail (FILE *fp, int add_area, int zo, int ne, int no, int po)
 		for (m = 0; m < n_forw; m++) {
 			if (czone != forward[m].zone) {
 				if (forward[m].send || forward[m].receive || forward[m].passive || forward[m].private) {
-                    cc[0]=0;
+					cc[0]=0;
 					if (forward[m].send) strcat(cc,"<");
 					if (forward[m].receive) strcat(cc,">");
 					if (forward[m].passive) strcat(cc,"!");
@@ -609,7 +637,7 @@ void scan_all_echomail (FILE *fp, int add_area, int zo, int ne, int no, int po)
 			}
 			else if (cnet != forward[m].net) {
 				if (forward[m].send || forward[m].receive || forward[m].passive || forward[m].private) {
-                    cc[0]=0;
+					cc[0]=0;
 					if (forward[m].send) strcat(cc,"<");
 					if (forward[m].receive) strcat(cc,">");
 					if (forward[m].passive) strcat(cc,"!");
@@ -631,7 +659,7 @@ void scan_all_echomail (FILE *fp, int add_area, int zo, int ne, int no, int po)
 			}
 			else if (cnode != forward[m].node) {
 				if (forward[m].send || forward[m].receive || forward[m].passive || forward[m].private) {
-                    cc[0]=0;
+					cc[0]=0;
 					if (forward[m].send) strcat(cc,"<");
 					if (forward[m].receive) strcat(cc,">");
 					if (forward[m].passive) strcat(cc,"!");
@@ -652,7 +680,7 @@ void scan_all_echomail (FILE *fp, int add_area, int zo, int ne, int no, int po)
 			}
 			else if (forward[m].point && cpoint != forward[m].point) {
 				if (forward[m].send || forward[m].receive || forward[m].passive || forward[m].private) {
-                    cc[0]=0;
+					cc[0]=0;
 					if (forward[m].send) strcat(cc,"<");
 					if (forward[m].receive) strcat(cc,">");
 					if (forward[m].passive) strcat(cc,"!");
@@ -666,7 +694,7 @@ void scan_all_echomail (FILE *fp, int add_area, int zo, int ne, int no, int po)
 			else
 				strcpy (addr, "");
 
-			if (strlen (linea) + strlen (addr) >= 58) {
+			if (strlen (linea) + strlen (addr) >= 70) {
 				if (cf == 1) {
 					strcpy (tsys.forward1, linea);
 					cf++;
@@ -683,7 +711,7 @@ void scan_all_echomail (FILE *fp, int add_area, int zo, int ne, int no, int po)
 				linea[0] = '\0';
 
 				if (forward[m].send || forward[m].receive || forward[m].passive || forward[m].private) {
-                    cc[0]=0;
+					cc[0]=0;
 					if (forward[m].send) strcat(cc,"<");
 					if (forward[m].receive) strcat(cc,">");
 					if (forward[m].passive) strcat(cc,"!");
@@ -742,7 +770,7 @@ void scan_all_echomail (FILE *fp, int add_area, int zo, int ne, int no, int po)
 	return;
 }
 
-int utility_add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr)
+int utility_add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr,int f_flags)
 {
 	int fd;
 	char linea[80];
@@ -773,7 +801,7 @@ int utility_add_echomail_link (char *area, int zo, int ne, int no, int po, FILE 
 		return (0);
 	}
 
-	return (add_echomail_link (area, zo, ne, no, po, NULL));
+	return (add_echomail_link (area, zo, ne, no, po, NULL,f_flags));
 }
 
 /*
@@ -788,7 +816,7 @@ void generate_echomail_status (fp, zo, ne, no, po, type)
 FILE *fp;
 int zo, ne, no, po, type;
 {
-	int fd, czone, cnet, cnode, cpoint, nlink, level;
+	int fd, czone, cnet, cnode, cpoint, nlink, level, f_flags;
 	char linea[80], *p, found, c,c1,c2;
 	long flags;
 	struct _sys tsys;
@@ -824,6 +852,8 @@ int zo, ne, no, po, type;
 			p = strtok (tsys.forward1, " ");
 			if (p != NULL)
 			  do {
+					f_flags=0;
+					if (strstr(p,"P")||strstr(p,"p")) f_flags=1;
 					if (*p == '<' || *p == '>' || *p == '!' || *p=='P'||*p=='p')
 						p++;
 					parse_netnode2 (p, &czone, &cnet, &cnode, &cpoint);
@@ -838,6 +868,8 @@ int zo, ne, no, po, type;
 			p = strtok (tsys.forward2, " ");
 			if (p != NULL)
 			  do {
+					f_flags=0;
+					if (strstr(p,"P")||strstr(p,"p")) f_flags=1;
 					if (*p == '<' || *p == '>' || *p == '!' || *p=='P'||*p=='p')
 						p++;
 					parse_netnode2 (p, &czone, &cnet, &cnode, &cpoint);
@@ -852,6 +884,8 @@ int zo, ne, no, po, type;
 			p = strtok (tsys.forward3, " ");
 			if (p != NULL)
 			  do {
+					f_flags=0;
+					if (strstr(p,"P")||strstr(p,"p")) f_flags=1;
 					if (*p == '<' || *p == '>' || *p == '!' || *p=='P'||*p=='p')
 						p++;
 					parse_netnode2 (p, &czone, &cnet, &cnode, &cpoint);
@@ -861,7 +895,7 @@ int zo, ne, no, po, type;
 					}
 				} while ((p = strtok (NULL, " ")) != NULL);
 		}
-		if (tsys.private) c = 'P';
+		if (tsys.private||(f_flags&&type==2)) c = 'P';
 		else c=' ';
 		if (tsys.sendonly) c1 = 'S';
 		else c1 = ' ';
@@ -982,369 +1016,382 @@ char *subj;
 
 	if (level == -1 && po) {
 		for (i = 0; config->alias[i].net && i < MAX_ALIAS; i++) {
-         if (zo == config->alias[i].zone && ne == config->alias[i].net && no == config->alias[i].node && config->alias[i].fakenet)
-            break;
-      }
+			if (zo == config->alias[i].zone && ne == config->alias[i].net && no == config->alias[i].node && config->alias[i].fakenet)
+				break;
+		}
 
-      if (config->alias[i].net && i < MAX_ALIAS) {
-         no = po;
-         ne = config->alias[i].fakenet;
-         po = 0;
+		if (config->alias[i].net && i < MAX_ALIAS) {
+			no = po;
+			ne = config->alias[i].fakenet;
+			po = 0;
 
-         lseek (fd, 0L, SEEK_SET);
+			lseek (fd, 0L, SEEK_SET);
 
-         while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO))
+			while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO))
 				if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point) {
-               level = ni.afx_level;
-               areafix_level = level;
-               areafix_flags = ni.afx_flags;
-               useaka = ni.aka;
-               if (useaka > 0)
-                  useaka--;
-               break;
-            }
-      }
+					level = ni.afx_level;
+					areafix_level = level;
+					areafix_flags = ni.afx_flags;
+					useaka = ni.aka;
+					if (useaka > 0)
+						useaka--;
+					break;
+				}
+		}
 	}
 
-   close (fd);
+	close (fd);
 
-   strcpy (ni.sysop_name, msg.from);
-   memset ((char *)&msg, 0, sizeof (struct _msg));
-   strcpy (msg.to, ni.sysop_name);
-   strcpy (msg.from, VERSION);
-   strcpy (msg.subj, "Echomail changes report");
-   msg.attr = MSGLOCAL|MSGPRIVATE;
-   data (msg.date);
-   msg.dest_net = ne;
-   msg.dest = no;
-   msg_tzone = zo;
-   msg_tpoint = po;
+	strcpy (ni.sysop_name, msg.from);
+	memset ((char *)&msg, 0, sizeof (struct _msg));
+	strcpy (msg.to, ni.sysop_name);
+	strcpy (msg.from, VERSION);
+	strcpy (msg.subj, "Echomail changes report");
+	msg.attr = MSGLOCAL|MSGPRIVATE;
+	data (msg.date);
+	msg.dest_net = ne;
+	msg.dest = no;
+	msg_tzone = zo;
+	msg_tpoint = po;
 
-   msg_fzone = config->alias[useaka].zone;
-   if (config->alias[useaka].point && config->alias[useaka].fakenet) {
-      msg.orig = config->alias[useaka].point;
-      msg.orig_net = config->alias[useaka].fakenet;
-      msg_fpoint = 0;
-   }
-   else {
-      msg.orig = config->alias[useaka].node;
-      msg.orig_net = config->alias[useaka].net;
-      msg_fpoint = config->alias[useaka].point;
-   }
-   memcpy ((char *)&tmsg, (char *)&msg, sizeof (struct _msg));
+	msg_fzone = config->alias[useaka].zone;
+	if (config->alias[useaka].point && config->alias[useaka].fakenet) {
+		msg.orig = config->alias[useaka].point;
+		msg.orig_net = config->alias[useaka].fakenet;
+		msg_fpoint = 0;
+	}
+	else {
+		msg.orig = config->alias[useaka].node;
+		msg.orig_net = config->alias[useaka].net;
+		msg_fpoint = config->alias[useaka].point;
+	}
+	memcpy ((char *)&tmsg, (char *)&msg, sizeof (struct _msg));
 
-   if (level == -1 || stricmp (linea, ni.pw_areafix)) {
-      if (level != -1)
-         status_line (msgtxt[M_PWD_ERROR], zo, ne, no, po, linea, ni.pw_areafix);
-      else
-         status_line ("!Areafix password not found for %d:%d/%d.%d", zo, ne, no, po);
+	if (level == -1 || stricmp (linea, ni.pw_areafix)) {
+		if (level != -1)
+			status_line (msgtxt[M_PWD_ERROR], zo, ne, no, po, linea, ni.pw_areafix);
+		else
+			status_line ("!Areafix password not found for %d:%d/%d.%d", zo, ne, no, po);
 
 		sprintf (filename, "ECHOR%d.TMP", config->line_offset);
-      fp = mopen (filename, "w+b");
+		fp = mopen (filename, "w+b");
 
-      if (msg_tzone != msg_fzone || config->force_intl)
-         mprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
-      if (msg_tpoint)
-         mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
-      mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-      mprintf(fp,msgtxt[M_MSGID], config->alias[useaka].zone, config->alias[useaka].net, config->alias[useaka].node, config->alias[useaka].point, time(NULL));
+		if (msg_tzone != msg_fzone || config->force_intl)
+			mprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
+		if (msg_tpoint)
+			mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
+		mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
+		mprintf(fp,msgtxt[M_MSGID], config->alias[useaka].zone, config->alias[useaka].net, config->alias[useaka].node, config->alias[useaka].point, time(NULL));
 
-      mprintf (fp, "\r\nNode %d:%d/%d.%d isn't authorized to use areafix at %d:%d/%d.%d\r\n\r\n", zo, ne, no, po, msg_fzone, msg.orig_net, msg.orig, msg_fpoint);
+		mprintf (fp, "\r\nNode %d:%d/%d.%d isn't authorized to use areafix at %d:%d/%d.%d\r\n\r\n", zo, ne, no, po, msg_fzone, msg.orig_net, msg.orig, msg_fpoint);
 
-      mprintf (fp, "\r\n");
-      mprintf(fp,msgtxt[M_TEAR_LINE],VERSION, registered ? "" : NOREG);
+		mprintf (fp, "\r\n");
+		mprintf(fp,msgtxt[M_TEAR_LINE],VERSION, registered ? "" : NOREG);
 
-      mseek (fp, 0L, SEEK_SET);
-      fido_save_message2 (fp, NULL);
-      mclose (fp);
+		mseek (fp, 0L, SEEK_SET);
+		fido_save_message2 (fp, NULL);
+		mclose (fp);
 
-      sprintf (filename, "ECHOR%d.TMP", config->line_offset);
-      unlink (filename);
+		sprintf (filename, "ECHOR%d.TMP", config->line_offset);
+		unlink (filename);
 
-      forward_message (last_msg, zo, ne, no, po, config->alert_nodes);
+		forward_message (last_msg, zo, ne, no, po, config->alert_nodes);
 
-      return;
-   }
+		return;
+	}
 
-   get_bbs_record (zo, ne, no, po);
+	get_bbs_record (zo, ne, no, po);
 
-   if (dorescan)
-      fpr = fopen ("RESCAN.LOG", "at");
+	if (dorescan)
+		fpr = fopen ("RESCAN.LOG", "at");
 
-   sprintf (filename, "ECHOR%d.TMP", config->line_offset);
-   fp = mopen (filename, "w+b");
+	sprintf (filename, "ECHOR%d.TMP", config->line_offset);
+	fp = mopen (filename, "w+b");
 
-   if (msg_tzone != msg_fzone || config->force_intl)
-      mprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
-   if (msg_tpoint)
-      mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
-   mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-   mprintf(fp,msgtxt[M_MSGID], config->alias[useaka].zone, config->alias[useaka].net, config->alias[useaka].node, config->alias[useaka].point, time(NULL));
+	if (msg_tzone != msg_fzone || config->force_intl)
+		mprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
+	if (msg_tpoint)
+		mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
+	mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
+	mprintf(fp,msgtxt[M_MSGID], config->alias[useaka].zone, config->alias[useaka].net, config->alias[useaka].node, config->alias[useaka].point, time(NULL));
 
-   mprintf (fp, "Following is a summary from %d:%d/%d.%d of changes in Echomail topology:\r\n\r\n", msg_fzone, msg.orig_net, msg.orig, msg_fpoint);
+	mprintf (fp, "Following is a summary from %d:%d/%d.%d of changes in Echomail topology:\r\n\r\n", msg_fzone, msg.orig_net, msg.orig, msg_fpoint);
 
-   while (packet_fgets (linea, 70, fpm) != NULL) {
+	while (packet_fgets (linea, 70, fpm) != NULL) {
 		if (linea[0] == 0x01)
-         continue;
+			continue;
 
-      while (linea[strlen (linea) -1] == 0x0D || linea[strlen (linea) -1] == 0x0A)
-         linea[strlen (linea) -1] = '\0';
+		while (linea[strlen (linea) -1] == 0x0D || linea[strlen (linea) -1] == 0x0A)
+			linea[strlen (linea) -1] = '\0';
 
-      p = strtok (linea, " ");
-      if (p == NULL || *p == 0x01 || !strncmp (p, "---", 3))
-         continue;
+		p = strtok (linea, " ");
+		if (p == NULL || *p == 0x01 || !strncmp (p, "---", 3))
+			continue;
 
-      if (p[0] != '%' && p[0] != '#') {
-         postmsg = 1;
-         i = add_echomail_link (p, zo, ne, no, po, dorescan ? fpr : NULL);
-         if (i == 1) {
-            if (p[0] != '-')
-               mprintf (fp, "Area %s has been added.\r\n", p[0] == '+' ? strupr (&p[1]) : strupr (p));
-            else
-               mprintf (fp, "Area %s has been removed.\r\n", p[0] == '-' ? strupr (&p[1]) : strupr (p));
-         }
-         else if (i == -1)
-            mprintf (fp, "Area %s not found.\r\n", (p[0] == '+' || p[0] == '-') ? strupr (&p[1]) : strupr (p));
-         else if (i == -2)
-            mprintf (fp, "Area %s never linked.\r\n", (p[0] == '+' || p[0] == '-') ? strupr (&p[1]) : strupr (p));
-         else if (i == -3)
-            mprintf (fp, "Area %s already linked.\r\n", (p[0] == '+' || p[0] == '-') ? strupr (&p[1]) : strupr (p));
-         else if (i == -4)
-            mprintf (fp, "Area %s not linked: level too low.\r\n", (p[0] == '+' || p[0] == '-') ? strupr (&p[1]) : strupr (p));
-      }
+		if (p[0] != '%' && p[0] != '#') {
 
-      else if (!stricmp (p, "%-ALL")) {
-         postmsg = 1;
-         scan_all_echomail (fp, 0, zo, ne, no, po);
-      }
+			char *p1;
+			int f_flags=0;
 
-      else if (!stricmp (p, "%+ALL") || !stricmp (p, "%ALL")) {
-         postmsg = 1;
-         scan_all_echomail (fp, 1, zo, ne, no, po);
-      }
+			p1=strtok(NULL, " ");
+         if( p1 && (*p1=='P'||*p1=='p'))
+            f_flags=1;
+			postmsg = 1;
+			i = add_echomail_link (p, zo, ne, no, po, dorescan ? fpr : NULL,f_flags);
+			if (i == 1) {
+				if (p[0] != '-') {
+               mprintf (fp, "Area %s has been added", p[0] == '+' ? strupr (&p[1]) : strupr (p));
+               if (f_flags)
+                  mprintf (fp, " as private");
+               if (dorescan)
+                  mprintf (fp, " and rescanned");
+               mprintf(fp,".\r\n");
+				}
+				else
+					mprintf (fp, "Area %s has been removed.\r\n", p[0] == '-' ? strupr (&p[1]) : strupr (p));
+			}
+			else if (i == -1)
+				mprintf (fp, "Area %s not found.\r\n", (p[0] == '+' || p[0] == '-') ? strupr (&p[1]) : strupr (p));
+			else if (i == -2)
+				mprintf (fp, "Area %s never linked.\r\n", (p[0] == '+' || p[0] == '-') ? strupr (&p[1]) : strupr (p));
+			else if (i == -3)
+				mprintf (fp, "Area %s already linked.\r\n", (p[0] == '+' || p[0] == '-') ? strupr (&p[1]) : strupr (p));
+			else if (i == -4)
+				mprintf (fp, "Area %s not linked: level too low.\r\n", (p[0] == '+' || p[0] == '-') ? strupr (&p[1]) : strupr (p));
+		}
 
-      else if (p[0] == '#') {
-         postmsg = 1;
-         if (level >= config->afx_change_tag) {
-            o = strtok (NULL, ": ");
-            if (o != NULL)
-               o = strbtrim (o);
+		else if (!stricmp (p, "%-ALL")) {
+			postmsg = 1;
+			scan_all_echomail (fp, 0, zo, ne, no, po);
+		}
 
-            p = strtok (&p[1], ": ");
-            if (p != NULL)
-               p = strbtrim (p);
+		else if (!stricmp (p, "%+ALL") || !stricmp (p, "%ALL")) {
+			postmsg = 1;
+			scan_all_echomail (fp, 1, zo, ne, no, po);
+		}
 
-            if (p != NULL && o != NULL) {
-               if (change_echotag (strbtrim (p), strbtrim (o)))
-                  mprintf (fp, "Area %s changed to %s.\r\n", p, o);
-               else
-                  mprintf (fp, "Area %s not found.\r\n", p);
-            }
-         }
-         else
-            mprintf (fp, "Remote maintenance not allowed.\r\n");
-      }
+		else if (p[0] == '#') {
+			postmsg = 1;
+			if (level >= config->afx_change_tag) {
+				o = strtok (NULL, ": ");
+				if (o != NULL)
+					o = strbtrim (o);
 
-      else if (!stricmp (p, "%RESCAN")) {
-         dorescan = 1;
-         if (fpr == NULL)
-            fpr = fopen ("RESCAN.LOG", "at");
-      }
+				p = strtok (&p[1], ": ");
+				if (p != NULL)
+					p = strbtrim (p);
 
-      else if (!stricmp (p, "%FROM")) {
-         postmsg = 1;
-         if (level >= config->afx_remote_maint) {
-            p = strtok (NULL, "");
-            parse_netnode2 (p, &zo, &ne, &no, &po);
-            mprintf (fp, "Remote maintenance for %d:%d/%d.%d.\r\n", zo, ne, no, po);
-         }
-         else
-            mprintf (fp, "Remote maintenance not allowed.\r\n");
-      }
+				if (p != NULL && o != NULL) {
+					if (change_echotag (strbtrim (p), strbtrim (o)))
+						mprintf (fp, "Area %s changed to %s.\r\n", p, o);
+					else
+						mprintf (fp, "Area %s not found.\r\n", p);
+				}
+			}
+			else
+				mprintf (fp, "Remote maintenance not allowed.\r\n");
+		}
 
-      else if (!stricmp (p, "%PWD")) {
-         postmsg = 1;
-         if ((p = strtok (NULL, " ")) != NULL) {
-            sprintf (filename, "%sNODES.DAT", config->net_info);
-            fd = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+		else if (!stricmp (p, "%RESCAN")) {
+			dorescan = 1;
+			if (fpr == NULL)
+				fpr = fopen ("RESCAN.LOG", "at");
+		}
 
-            npos = tell (fd);
-            while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
-               if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point) {
-                  strcpy (ni.pw_areafix, strupr (p));
-                  lseek (fd, npos, SEEK_SET);
-                  write (fd, (char *)&ni, sizeof (NODEINFO));
-						break;
-               }
-               npos = tell (fd);
-            }
+		else if (!stricmp (p, "%FROM")) {
+			postmsg = 1;
+			if (level >= config->afx_remote_maint) {
+				p = strtok (NULL, "");
+				parse_netnode2 (p, &zo, &ne, &no, &po);
+				mprintf (fp, "Remote maintenance for %d:%d/%d.%d.\r\n", zo, ne, no, po);
+			}
+			else
+				mprintf (fp, "Remote maintenance not allowed.\r\n");
+		}
 
-            close (fd);
-
-            if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point)
-               mprintf (fp, "Areafix password %s selected.\r\n", p);
-         }
-      }
-
-      else if (!stricmp (p, "%SESSIONPWD")) {
-         postmsg = 1;
-         if ((p = strtok (NULL, " ")) != NULL) {
-            sprintf (filename, "%sNODES.DAT", config->net_info);
-            fd = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
-
-            npos = tell (fd);
-            while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
-               if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point) {
-                  strcpy (ni.pw_session, strupr (p));
-                  lseek (fd, npos, SEEK_SET);
-                  write (fd, (char *)&ni, sizeof (NODEINFO));
-                  break;
-               }
-               npos = tell (fd);
-            }
-
-            close (fd);
-
-            if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point)
-               mprintf (fp, "Session password %s selected.\r\n", p);
-         }
-      }
-
-      else if (!stricmp (p, "%PKTPWD")) {
-         postmsg = 1;
-         if ((p = strtok (NULL, " ")) != NULL) {
-            sprintf (filename, "%sNODES.DAT", config->net_info);
-            fd = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
-
-            npos = tell (fd);
-            while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
-               if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point) {
-						strcpy (ni.pw_packet, strupr (p));
-                  lseek (fd, npos, SEEK_SET);
-                  write (fd, (char *)&ni, sizeof (NODEINFO));
-                  break;
-               }
-               npos = tell (fd);
-            }
-
-            close (fd);
-
-            if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point)
-               mprintf (fp, "Packet password %s selected.\r\n", p);
-         }
-      }
-
-      else if (!stricmp (p, "%INPKTPWD")) {
-         postmsg = 1;
-         if ((p = strtok (NULL, " ")) != NULL) {
-            sprintf (filename, "%sNODES.DAT", config->net_info);
-            fd = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
-
-            npos = tell (fd);
-            while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
-               if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point) {
-                  strcpy (ni.pw_inbound_packet, strupr (p));
-                  lseek (fd, npos, SEEK_SET);
-                  write (fd, (char *)&ni, sizeof (NODEINFO));
-                  break;
-               }
-               npos = tell (fd);
-            }
-
-            close (fd);
-
-            if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point)
-               mprintf (fp, "Inbound packet password %s selected.\r\n", p);
-         }
-      }
-
-      else if (!stricmp (p, "%PACKER")) {
-         postmsg = 1;
-         if ((p = strtok (NULL, " ")) != NULL) {
-            sprintf (filename, "%sNODES.DAT", config->net_info);
-            fd = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+		else if (!stricmp (p, "%PWD")) {
+			postmsg = 1;
+			if ((p = strtok (NULL, " ")) != NULL) {
+				sprintf (filename, "%sNODES.DAT", config->net_info);
+				fd = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
 
 				npos = tell (fd);
-            while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
-               if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point) {
-                  for (i = 0; i < 10; i++)
-                     if (!stricmp (config->packers[i].id, p)) {
-                        ni.packer = i;
-                        break;
-                     }
-                  lseek (fd, npos, SEEK_SET);
-                  write (fd, (char *)&ni, sizeof (NODEINFO));
-                  break;
-               }
-               npos = tell (fd);
-            }
+				while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
+					if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point) {
+						strcpy (ni.pw_areafix, strupr (p));
+						lseek (fd, npos, SEEK_SET);
+						write (fd, (char *)&ni, sizeof (NODEINFO));
+						break;
+					}
+					npos = tell (fd);
+				}
 
-            close (fd);
+				close (fd);
 
-            if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point)
-               mprintf (fp, "Packer %s selected.\r\n", p);
-         }
-      }
-   }
+				if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point)
+					mprintf (fp, "Areafix password %s selected.\r\n", p);
+			}
+		}
 
-   if (dorescan && fpr != NULL)
-      fclose (fpr);
+		else if (!stricmp (p, "%SESSIONPWD")) {
+			postmsg = 1;
+			if ((p = strtok (NULL, " ")) != NULL) {
+				sprintf (filename, "%sNODES.DAT", config->net_info);
+				fd = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
 
-   if (doquery) {
-      if (postmsg) {
-         mprintf (fp, "\r\n");
-         mprintf (fp, "------------------------------------------------\r\n");
-      }
-      generate_echomail_status (fp, zo, ne, no, po, 2);
-      postmsg = 1;
-   }
+				npos = tell (fd);
+				while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
+					if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point) {
+						strcpy (ni.pw_session, strupr (p));
+						lseek (fd, npos, SEEK_SET);
+						write (fd, (char *)&ni, sizeof (NODEINFO));
+						break;
+					}
+					npos = tell (fd);
+				}
 
-   mprintf (fp, "\r\n");
-   mprintf(fp,msgtxt[M_TEAR_LINE],VERSION, registered ? "" : NOREG);
+				close (fd);
 
-   mseek (fp, 0L, SEEK_SET);
-   if (postmsg)
-      fido_save_message2 (fp, NULL);
-   mclose (fp);
+				if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point)
+					mprintf (fp, "Session password %s selected.\r\n", p);
+			}
+		}
 
-   if (postmsg)
-      forward_message (last_msg, zo, ne, no, po, config->alert_nodes);
+		else if (!stricmp (p, "%PKTPWD")) {
+			postmsg = 1;
+			if ((p = strtok (NULL, " ")) != NULL) {
+				sprintf (filename, "%sNODES.DAT", config->net_info);
+				fd = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+
+				npos = tell (fd);
+				while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
+					if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point) {
+						strcpy (ni.pw_packet, strupr (p));
+						lseek (fd, npos, SEEK_SET);
+						write (fd, (char *)&ni, sizeof (NODEINFO));
+						break;
+					}
+					npos = tell (fd);
+				}
+
+				close (fd);
+
+				if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point)
+					mprintf (fp, "Packet password %s selected.\r\n", p);
+			}
+		}
+
+		else if (!stricmp (p, "%INPKTPWD")) {
+			postmsg = 1;
+			if ((p = strtok (NULL, " ")) != NULL) {
+				sprintf (filename, "%sNODES.DAT", config->net_info);
+				fd = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+
+				npos = tell (fd);
+				while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
+					if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point) {
+						strcpy (ni.pw_inbound_packet, strupr (p));
+						lseek (fd, npos, SEEK_SET);
+						write (fd, (char *)&ni, sizeof (NODEINFO));
+						break;
+					}
+					npos = tell (fd);
+				}
+
+				close (fd);
+
+				if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point)
+					mprintf (fp, "Inbound packet password %s selected.\r\n", p);
+			}
+		}
+
+		else if (!stricmp (p, "%PACKER")) {
+			postmsg = 1;
+			if ((p = strtok (NULL, " ")) != NULL) {
+				sprintf (filename, "%sNODES.DAT", config->net_info);
+				fd = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+
+				npos = tell (fd);
+				while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
+					if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point) {
+						for (i = 0; i < 10; i++)
+							if (!stricmp (config->packers[i].id, p)) {
+								ni.packer = i;
+								break;
+							}
+						lseek (fd, npos, SEEK_SET);
+						write (fd, (char *)&ni, sizeof (NODEINFO));
+						break;
+					}
+					npos = tell (fd);
+				}
+
+				close (fd);
+
+				if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point)
+					mprintf (fp, "Packer %s selected.\r\n", p);
+			}
+		}
+	}
+
+	if (dorescan && fpr != NULL)
+		fclose (fpr);
+
+	if (doquery) {
+		if (postmsg) {
+			mprintf (fp, "\r\n");
+			mprintf (fp, "------------------------------------------------\r\n");
+		}
+		generate_echomail_status (fp, zo, ne, no, po, 2);
+		postmsg = 1;
+	}
+
+	mprintf (fp, "\r\n");
+	mprintf(fp,msgtxt[M_TEAR_LINE],VERSION, registered ? "" : NOREG);
+
+	mseek (fp, 0L, SEEK_SET);
+	if (postmsg)
+		fido_save_message2 (fp, NULL);
+	mclose (fp);
+
+	if (postmsg)
+		forward_message (last_msg, zo, ne, no, po, config->alert_nodes);
 	memcpy ((char *)&msg, (char *)&tmsg, sizeof (struct _msg));
 
-   sprintf (filename, "ECHOR%d.TMP", config->line_offset);
-   unlink (filename);
+	sprintf (filename, "ECHOR%d.TMP", config->line_offset);
+	unlink (filename);
 
-   fseek (fpm, (long)sizeof (struct _msg), SEEK_SET);
+	fseek (fpm, (long)sizeof (struct _msg), SEEK_SET);
 
-   while (packet_fgets (linea, 70, fpm) != NULL) {
-      while (linea[strlen (linea) -1] == 0x0D || linea[strlen (linea) -1] == 0x0A)
-         linea[strlen (linea) -1] = '\0';
+	while (packet_fgets (linea, 70, fpm) != NULL) {
+		while (linea[strlen (linea) -1] == 0x0D || linea[strlen (linea) -1] == 0x0A)
+			linea[strlen (linea) -1] = '\0';
 
-      if (!stricmp (linea, "%LIST")) {
-         sprintf (filename, "ECHOR%d.TMP", config->line_offset);
-         fp = mopen (filename, "w+b");
+		if (!stricmp (linea, "%LIST")) {
+			sprintf (filename, "ECHOR%d.TMP", config->line_offset);
+			fp = mopen (filename, "w+b");
 
-         if (msg_tzone != msg_fzone || config->force_intl)
-            mprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
-         if (msg_tpoint)
-            mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
-         mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-         mprintf(fp,msgtxt[M_MSGID], config->alias[useaka].zone, config->alias[useaka].net, config->alias[useaka].node, config->alias[useaka].point, time(NULL));
+			if (msg_tzone != msg_fzone || config->force_intl)
+				mprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
+			if (msg_tpoint)
+				mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
+			mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
+			mprintf(fp,msgtxt[M_MSGID], config->alias[useaka].zone, config->alias[useaka].net, config->alias[useaka].node, config->alias[useaka].point, time(NULL));
 
-         generate_echomail_status (fp, zo, ne, no, po, 1);
+			generate_echomail_status (fp, zo, ne, no, po, 1);
 
-         mprintf (fp, "\r\n");
-         mprintf(fp,msgtxt[M_TEAR_LINE],VERSION, registered ? "" : NOREG);
+			mprintf (fp, "\r\n");
+			mprintf(fp,msgtxt[M_TEAR_LINE],VERSION, registered ? "" : NOREG);
 
-         mseek (fp, 0L, SEEK_SET);
-         fido_save_message2 (fp, NULL);
-         mclose (fp);
-      }
-      else if (!stricmp (linea, "%QUERY")) {
-         sprintf (filename, "ECHOR%d.TMP", config->line_offset);
-         fp = mopen (filename, "w+b");
+			mseek (fp, 0L, SEEK_SET);
+			fido_save_message2 (fp, NULL);
+			mclose (fp);
+		}
+		else if (!stricmp (linea, "%QUERY")) {
+			sprintf (filename, "ECHOR%d.TMP", config->line_offset);
+			fp = mopen (filename, "w+b");
 
-         if (msg_tzone != msg_fzone || config->force_intl)
+			if (msg_tzone != msg_fzone || config->force_intl)
             mprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
          if (msg_tpoint)
             mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);

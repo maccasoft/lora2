@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -31,8 +49,7 @@ static int cb_online_users(int, int, int);
 static void chat_wrap (char *, int);
 static void cb_send_message (char *, int);
 
-void online_users(flag)
-int flag;
+void online_users(int flag, int use_alias)
 {
    int fd, i, line;
    char linea[128];
@@ -62,7 +79,10 @@ int flag;
 
       useron.city[21] = '\0';
 
-      sprintf (linea, "%-25.25s  %4d  %6lu  %-14.14s  %s\n", useron.name, useron.line, useron.baud, useron.status, useron.city);
+      if (use_alias)
+         sprintf (linea, "%-25.25s  %4d  %6lu  %-14.14s  %s\n", useron.alias, useron.line, useron.baud, useron.status, useron.city);
+      else
+         sprintf (linea, "%-25.25s  %4d  %6lu  %-14.14s  %s\n", useron.name, useron.line, useron.baud, useron.status, useron.city);
       m_print (linea);
 
       if (!(line = more_question (line)) || !CARRIER)
@@ -76,7 +96,7 @@ int flag;
       press_enter ();
 }
 
-void send_online_message (void)
+void send_online_message (int use_alias)
 {
    FILE *fp;
    int fd, ul;
@@ -84,7 +104,7 @@ void send_online_message (void)
    struct _useron useron;
 
    if (!get_command_word (linea, 4)) {
-      online_users(0);
+      online_users(0, use_alias);
 
       change_attr(CYAN|_BLACK);
       m_print(bbstxt[B_SELECT_USER]);
@@ -111,7 +131,10 @@ void send_online_message (void)
    strltrim (cmd_string);
 
    if (!cmd_string[0]) {
-      m_print(bbstxt[B_MESSAGE_FOR], useron.name);
+      if (use_alias)
+         m_print(bbstxt[B_MESSAGE_FOR], useron.alias);
+      else
+         m_print(bbstxt[B_MESSAGE_FOR], useron.name);
       change_attr(WHITE|_BLACK);
       m_print(":");
       input(linea, 77);
@@ -128,12 +151,13 @@ void send_online_message (void)
    m_print(bbstxt[B_PROCESSING]);
 
    sprintf (filename, ONLINE_MSGNAME, ipc_path, ul+1);
-   fp = fopen (filename, "at");
-   fprintf (fp, bbstxt[B_IPC_HEADER]);
-   fprintf (fp, bbstxt[B_IPC_FROM], usr.name, line_offset);
-   fprintf (fp, bbstxt[B_IPC_MESSAGE], linea);
-   fprintf (fp, "\001");
-   fclose (fp);
+   if ((fp = sh_fopen (filename, "at", SH_DENYWR)) != NULL) {
+      fprintf (fp, bbstxt[B_IPC_HEADER]);
+      fprintf (fp, bbstxt[B_IPC_FROM], usr.name, line_offset);
+      fprintf (fp, bbstxt[B_IPC_MESSAGE], linea);
+      fprintf (fp, "\001");
+      fclose (fp);
+   }
 
    m_print (bbstxt[B_MESSAGE_SENT]);
    press_enter ();

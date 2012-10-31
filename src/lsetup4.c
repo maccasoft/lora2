@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -215,7 +233,7 @@ void bbs_general ()
    int wh, i = 1;
    char string[128];
 
-   wh = wopen (2, 4, 22, 76, 1, LCYAN|_BLACK, CYAN|_BLACK);
+   wh = wopen (2, 4, 23, 76, 1, LCYAN|_BLACK, CYAN|_BLACK);
    wactiv (wh);
    wshadow (DGREY|_BLACK);
    wtitle (" General options ", TRIGHT, YELLOW|_BLUE);
@@ -251,6 +269,8 @@ void bbs_general ()
       wmenuitem (16, 30, " Quote string       ", 0, 24, 0, NULL, 0, 0);
       wmenuitem (17, 1, " Min. upload space  ", 0, 26, 0, NULL, 0, 0);
       wmenuitem (17, 30, " Input date format  ", 0, 27, 0, NULL, 0, 0);
+      wmenuitem (18, 1, " CD-ROM Downl. swap ", 0, 29,0, NULL, 0, 0);
+
       wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
       wprints (1, 20, CYAN|_BLACK, config.user_file);
@@ -294,6 +314,8 @@ void bbs_general ()
          wprints (17, 51, CYAN|_BLACK, "MM-DD-YY");
       else if (config.inp_dateformat == 2)
          wprints (17, 51, CYAN|_BLACK, "YY-MM-DD");
+      wprints (18, 22, CYAN|_BLACK, config.cdrom_swap ? "Yes" : "No");
+
 
       start_update ();
       i = wmenuget ();
@@ -470,7 +492,10 @@ void bbs_general ()
             if (++config.inp_dateformat == 3)
                config.inp_dateformat = 0;
             break;
-      }
+
+         case 29:
+            config.cdrom_swap ^= 1;
+            break;      }
 
       hidecur ();
    } while (i != -1);
@@ -509,68 +534,69 @@ void bbs_message ()
    prints (24, 58, YELLOW|_BLACK, "L");
    prints (24, 66, YELLOW|_BLACK, "D");
 
-   wh = wopen (1, 0, 22, 77, 1, LCYAN|_BLACK, CYAN|_BLACK);
-   wactiv (wh);
-   wshadow (DGREY|_BLACK);
-   wtitle (" Message areas ", TRIGHT, YELLOW|_BLUE);
+	wh = wopen (1, 0, 22, 77, 1, LCYAN|_BLACK, CYAN|_BLACK);
+	wactiv (wh);
+	wshadow (DGREY|_BLACK);
+	wtitle (" Message areas ", TRIGHT, YELLOW|_BLUE);
 
-   do {
-      stop_update ();
-      wclear ();
+	do {
+		stop_update ();
+		wclear ();
 
-      wprints (1, 1, LGREY|_BLACK," Number       ");
-      wprints (1, 28, LGREY|_BLACK," QWK Name     ");
-      wprints (2, 1, LGREY|_BLACK," Name         ");
-      wprints (3, 1, LGREY|_BLACK," Type         ");
-      wprints (3, 28, LGREY|_BLACK," Echo-Tag     ");
-      wprints (4, 1, LGREY|_BLACK," Flags        ");
-      wprints (5, 1, LGREY|_BLACK," Storage      ");
-      wprints (4, 28, LGREY|_BLACK," Group        ");
-      wprints (6, 1, LGREY|_BLACK," Path/Board   ");
-      wprints (7, 1, LGREY|_BLACK," Aka          ");
-      wprints (8, 1, LGREY|_BLACK," Origin       ");
-      wprints (9, 1, LGREY|_BLACK," Max messages ");
-      wprints (10, 22, LGREY|_BLACK, "days");
-      wprints (10, 1, LGREY|_BLACK," Message age  ");
-      wprints (10, 28, LGREY|_BLACK," Age received ");
-      wprints (10, 49, LGREY|_BLACK, "days");
-      wprints (11, 1, LGREY|_BLACK," Read level   ");
-      wprints (12, 1, LGREY|_BLACK," A Flag       ");
-      wprints (13, 1, LGREY|_BLACK," B Flag       ");
-      wprints (14, 1, LGREY|_BLACK," C Flag       ");
-      wprints (15, 1, LGREY|_BLACK," D Flag       ");
-      wprints (11, 28, LGREY|_BLACK," Write level  ");
-      wprints (12, 28, LGREY|_BLACK," A Flag       ");
-      wprints (13, 28, LGREY|_BLACK," B Flag       ");
-      wprints (14, 28, LGREY|_BLACK," C Flag       ");
-      wprints (15, 28, LGREY|_BLACK," D Flag       ");
-      wprints (11, 55, LGREY|_BLACK," Afx level ");
-      wprints (12, 55, LGREY|_BLACK," A Flag    ");
-      wprints (13, 55, LGREY|_BLACK," B Flag    ");
-      wprints (14, 55, LGREY|_BLACK," C Flag    ");
-      wprints (15, 55, LGREY|_BLACK," D Flag    ");
-      wprints (16, 1, LGREY|_BLACK," Forward 1    ");
-      wprints (17, 1, LGREY|_BLACK," Forward 2    ");
-      wprints (18, 1, LGREY|_BLACK," Forward 3    ");
+		wprints (1, 1, LGREY|_BLACK," Number       ");
+		wprints (1, 28, LGREY|_BLACK," QWK Name     ");
+		wprints (2, 1, LGREY|_BLACK," Name         ");
+		wprints (3, 1, LGREY|_BLACK," Type         ");
+		wprints (3, 28, LGREY|_BLACK," Echo-Tag     ");
+		wprints (4, 1, LGREY|_BLACK," Flags        ");
+		wprints (5, 1, LGREY|_BLACK," Storage      ");
+		wprints (4, 28, LGREY|_BLACK," Group        ");
+		wprints (6, 1, LGREY|_BLACK," Path/Board   ");
+		wprints (7, 1, LGREY|_BLACK," Aka          ");
+		wprints (8, 1, LGREY|_BLACK," Origin       ");
+		wprints (9, 1, LGREY|_BLACK," Max messages ");
+		wprints (10, 22, LGREY|_BLACK, "days");
+		wprints (10, 1, LGREY|_BLACK," Message age  ");
+		wprints (10, 28, LGREY|_BLACK," Age received ");
+		wprints (10, 49, LGREY|_BLACK, "days");
+		wprints (11, 1, LGREY|_BLACK," Read level   ");
+		wprints (12, 1, LGREY|_BLACK," A Flag       ");
+		wprints (13, 1, LGREY|_BLACK," B Flag       ");
+		wprints (14, 1, LGREY|_BLACK," C Flag       ");
+		wprints (15, 1, LGREY|_BLACK," D Flag       ");
+		wprints (11, 28, LGREY|_BLACK," Write level  ");
+		wprints (12, 28, LGREY|_BLACK," A Flag       ");
+		wprints (13, 28, LGREY|_BLACK," B Flag       ");
+		wprints (14, 28, LGREY|_BLACK," C Flag       ");
+		wprints (15, 28, LGREY|_BLACK," D Flag       ");
+		wprints (11, 55, LGREY|_BLACK," Afx level ");
+		wprints (12, 55, LGREY|_BLACK," A Flag    ");
+		wprints (13, 55, LGREY|_BLACK," B Flag    ");
+		wprints (14, 55, LGREY|_BLACK," C Flag    ");
+		wprints (15, 55, LGREY|_BLACK," D Flag    ");
+		wprints (16, 1, LGREY|_BLACK," Forward to:");
+		wprints (17, 1, LGREY|_BLACK," 1 ");
+		wprints (18, 1, LGREY|_BLACK," 2 ");
+		wprints (19, 1, LGREY|_BLACK," 3 ");
 
-      sprintf (string, "%d", sys.msg_num);
-      wprints (1, 16, CYAN|_BLACK, string);
+		sprintf (string, "%d", sys.msg_num);
+		wprints (1, 16, CYAN|_BLACK, string);
 
-      wprints (1, 43, CYAN|_BLACK, sys.qwk_name);
+		wprints (1, 43, CYAN|_BLACK, sys.qwk_name);
 
-      sys.msg_name[55] = '\0';
-      wprints (2, 16, CYAN|_BLACK, sys.msg_name);
+		sys.msg_name[55] = '\0';
+		wprints (2, 16, CYAN|_BLACK, sys.msg_name);
 
-      if (sys.netmail)
-         wprints (3, 16, CYAN|_BLACK, "Netmail");
-      else if (sys.echomail)
-         wprints (3, 16, CYAN|_BLACK, "Echomail");
-      else if (sys.internet_mail)
-         wprints (3, 16, CYAN|_BLACK, "Internet");
-      else
-         wprints (3, 16, CYAN|_BLACK, "Local");
+		if (sys.netmail)
+			wprints (3, 16, CYAN|_BLACK, "Netmail");
+		else if (sys.echomail)
+			wprints (3, 16, CYAN|_BLACK, "Echomail");
+		else if (sys.internet_mail)
+			wprints (3, 16, CYAN|_BLACK, "Internet");
+		else
+			wprints (3, 16, CYAN|_BLACK, "Local");
 
-      wprints (3, 43, CYAN|_BLACK, sys.echotag);
+		wprints (3, 43, CYAN|_BLACK, sys.echotag);
 
 		strcpy (string, "......");  // P=Public, V=Private,
 										  // A=Allow alias, G=Group restricted,
@@ -614,106 +640,106 @@ void bbs_message ()
 			sprintf (string, "%d", sys.pip_board);
 		else
 			strcpy (string, sys.msg_path);
-      wprints (6, 16, CYAN|_BLACK, string);
+		wprints (6, 16, CYAN|_BLACK, string);
 
-      sprintf (string, "%d:%d/%d.%d", config.alias[sys.use_alias].zone, config.alias[sys.use_alias].net, config.alias[sys.use_alias].node, config.alias[sys.use_alias].point);
-      wprints (7, 16, CYAN|_BLACK, string);
+		sprintf (string, "%d:%d/%d.%d", config.alias[sys.use_alias].zone, config.alias[sys.use_alias].net, config.alias[sys.use_alias].node, config.alias[sys.use_alias].point);
+		wprints (7, 16, CYAN|_BLACK, string);
 
-      wprints (8, 16, CYAN|_BLACK, sys.origin);
+		wprints (8, 16, CYAN|_BLACK, sys.origin);
 
-      sprintf (string, "%d", sys.max_msgs);
-      wprints (9, 16, CYAN|_BLACK, string);
+		sprintf (string, "%d", sys.max_msgs);
+		wprints (9, 16, CYAN|_BLACK, string);
 
-      sprintf (string, "%d", sys.max_age);
-      wprints (10, 16, CYAN|_BLACK, string);
+		sprintf (string, "%d", sys.max_age);
+		wprints (10, 16, CYAN|_BLACK, string);
 
-      sprintf (string, "%d", sys.age_rcvd);
-      wprints (10, 43, CYAN|_BLACK, string);
+		sprintf (string, "%d", sys.age_rcvd);
+		wprints (10, 43, CYAN|_BLACK, string);
 
-      wprints (11, 15, CYAN|_BLACK, get_priv_text (sys.msg_priv));
-      wprints (12, 16, CYAN|_BLACK, get_flagA_text ((sys.msg_flags >> 24) & 0xFF));
-      wprints (13, 16, CYAN|_BLACK, get_flagB_text ((sys.msg_flags >> 16) & 0xFF));
-      wprints (14, 16, CYAN|_BLACK, get_flagC_text ((sys.msg_flags >> 8) & 0xFF));
-      wprints (15, 16, CYAN|_BLACK, get_flagD_text (sys.msg_flags & 0xFF));
+		wprints (11, 15, CYAN|_BLACK, get_priv_text (sys.msg_priv));
+		wprints (12, 16, CYAN|_BLACK, get_flagA_text ((sys.msg_flags >> 24) & 0xFF));
+		wprints (13, 16, CYAN|_BLACK, get_flagB_text ((sys.msg_flags >> 16) & 0xFF));
+		wprints (14, 16, CYAN|_BLACK, get_flagC_text ((sys.msg_flags >> 8) & 0xFF));
+		wprints (15, 16, CYAN|_BLACK, get_flagD_text (sys.msg_flags & 0xFF));
 
-      wprints (11, 42, CYAN|_BLACK, get_priv_text (sys.write_priv));
-      wprints (12, 43, CYAN|_BLACK, get_flagA_text ((sys.write_flags >> 24) & 0xFF));
-      wprints (13, 43, CYAN|_BLACK, get_flagB_text ((sys.write_flags >> 16) & 0xFF));
-      wprints (14, 43, CYAN|_BLACK, get_flagC_text ((sys.write_flags >> 8) & 0xFF));
-      wprints (15, 43, CYAN|_BLACK, get_flagD_text (sys.write_flags & 0xFF));
+		wprints (11, 42, CYAN|_BLACK, get_priv_text (sys.write_priv));
+		wprints (12, 43, CYAN|_BLACK, get_flagA_text ((sys.write_flags >> 24) & 0xFF));
+		wprints (13, 43, CYAN|_BLACK, get_flagB_text ((sys.write_flags >> 16) & 0xFF));
+		wprints (14, 43, CYAN|_BLACK, get_flagC_text ((sys.write_flags >> 8) & 0xFF));
+		wprints (15, 43, CYAN|_BLACK, get_flagD_text (sys.write_flags & 0xFF));
 
-      sprintf (string, "%d", sys.areafix);
-      wprints (11, 67, CYAN|_BLACK, string);
-      wprints (12, 67, CYAN|_BLACK, get_flagA_text ((sys.afx_flags >> 24) & 0xFF));
-      wprints (13, 67, CYAN|_BLACK, get_flagB_text ((sys.afx_flags >> 16) & 0xFF));
-      wprints (14, 67, CYAN|_BLACK, get_flagC_text ((sys.afx_flags >> 8) & 0xFF));
-      wprints (15, 67, CYAN|_BLACK, get_flagD_text (sys.afx_flags & 0xFF));
+		sprintf (string, "%d", sys.areafix);
+		wprints (11, 67, CYAN|_BLACK, string);
+		wprints (12, 67, CYAN|_BLACK, get_flagA_text ((sys.afx_flags >> 24) & 0xFF));
+		wprints (13, 67, CYAN|_BLACK, get_flagB_text ((sys.afx_flags >> 16) & 0xFF));
+		wprints (14, 67, CYAN|_BLACK, get_flagC_text ((sys.afx_flags >> 8) & 0xFF));
+		wprints (15, 67, CYAN|_BLACK, get_flagD_text (sys.afx_flags & 0xFF));
 
-      wprints (16, 16, CYAN|_BLACK, sys.forward1);
-      wprints (17, 16, CYAN|_BLACK, sys.forward2);
-      wprints (18, 16, CYAN|_BLACK, sys.forward3);
-      start_update ();
+		wprints (17, 4, CYAN|_BLACK, sys.forward1);
+		wprints (18, 4, CYAN|_BLACK, sys.forward2);
+		wprints (19, 4, CYAN|_BLACK, sys.forward3);
+		start_update ();
 
-      i = getxch ();
-      if ( (i & 0xFF) != 0 )
-         i &= 0xFF;
+		i = getxch ();
+		if ( (i & 0xFF) != 0 )
+			i &= 0xFF;
 
-      switch (i) {
-         // PgDn
-         case 0x5100:
-            read (fd, (char *)&sys, SIZEOF_MSGAREA);
-            break;
+		switch (i) {
+			// PgDn
+			case 0x5100:
+				read (fd, (char *)&sys, SIZEOF_MSGAREA);
+				break;
 
-         // PgUp
-         case 0x4900:
-            if (tell (fd) > SIZEOF_MSGAREA) {
-               lseek (fd, -2L * SIZEOF_MSGAREA, SEEK_CUR);
-               read (fd, (char *)&sys, SIZEOF_MSGAREA);
-            }
-            break;
+			// PgUp
+			case 0x4900:
+				if (tell (fd) > SIZEOF_MSGAREA) {
+					lseek (fd, -2L * SIZEOF_MSGAREA, SEEK_CUR);
+					read (fd, (char *)&sys, SIZEOF_MSGAREA);
+				}
+				break;
 
-         // E Edit
-         case 'E':
-         case 'e':
-            saved = sys.msg_num;
-            strcpy (string, sys.qwk_name);
+			// E Edit
+			case 'E':
+			case 'e':
+				saved = sys.msg_num;
+				strcpy (string, sys.qwk_name);
 
-            edit_single_area (&sys);
+				edit_single_area (&sys);
 
-            lseek (fd, -1L * SIZEOF_MSGAREA, SEEK_CUR);
-            write (fd, (char *)&sys, SIZEOF_MSGAREA);
+				lseek (fd, -1L * SIZEOF_MSGAREA, SEEK_CUR);
+				write (fd, (char *)&sys, SIZEOF_MSGAREA);
 
-            if (saved != sys.msg_num || strcmp (string, sys.qwk_name)) {
-               pos = tell (fd) - (long)SIZEOF_MSGAREA;
-               close (fd);
+				if (saved != sys.msg_num || strcmp (string, sys.qwk_name)) {
+					pos = tell (fd) - (long)SIZEOF_MSGAREA;
+					close (fd);
 
-               update_message ();
+					update_message ();
 
-               sprintf (string, "%sSYSMSG.IDX", config.sys_path);
-               while ((fdx = sh_open (string, SH_DENYRD, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE)) == -1)
-                  ;
-               sprintf (filename, "%sSYSMSG.BAK", config.sys_path);
-               while ((fdi = sh_open (filename, SH_DENYRW, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE)) == -1)
-                  ;
-               sprintf (string, "%sSYSMSG.DAT", config.sys_path);
-               while ((fd = sh_open (string, SH_DENYRD, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE)) == -1)
-                  ;
-               saved = 0;
+					sprintf (string, "%sSYSMSG.IDX", config.sys_path);
+					while ((fdx = sh_open (string, SH_DENYRD, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+						;
+					sprintf (filename, "%sSYSMSG.BAK", config.sys_path);
+					while ((fdi = sh_open (filename, SH_DENYRW, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+						;
+					sprintf (string, "%sSYSMSG.DAT", config.sys_path);
+					while ((fd = sh_open (string, SH_DENYRD, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+						;
+					saved = 0;
 
-               while (read (fd, (char *)&bsys, SIZEOF_MSGAREA) == SIZEOF_MSGAREA) {
-                  if (!saved && bsys.msg_num > sys.msg_num) {
-                     pos = tell (fdi);
-                     write (fdi, (char *)&sys, SIZEOF_MSGAREA);
-                     memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
-                     sysidx.priv = sys.msg_priv;
-                     sysidx.flags = sys.msg_flags;
-                     sysidx.area = sys.msg_num;
-                     sysidx.sig = sys.msg_sig;
+					while (read (fd, (char *)&bsys, SIZEOF_MSGAREA) == SIZEOF_MSGAREA) {
+						if (!saved && bsys.msg_num > sys.msg_num) {
+							pos = tell (fdi);
+							write (fdi, (char *)&sys, SIZEOF_MSGAREA);
+							memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
+							sysidx.priv = sys.msg_priv;
+							sysidx.flags = sys.msg_flags;
+							sysidx.area = sys.msg_num;
+							sysidx.sig = sys.msg_sig;
                      strcpy (sysidx.key, sys.qwk_name);
                      write (fdx, (char *)&sysidx, sizeof (struct _sys_idx));
                      saved = 1;
                   }
-                  if (bsys.msg_num != sys.msg_num) {
+						if (bsys.msg_num != sys.msg_num) {
                      write (fdi, (char *)&bsys, SIZEOF_MSGAREA);
                      memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
                      sysidx.priv = bsys.msg_priv;
@@ -726,9 +752,9 @@ void bbs_message ()
                }
 
                if (!saved) {
-                  pos = tell (fdi);
+						pos = tell (fdi);
                   write (fdi, (char *)&sys, SIZEOF_MSGAREA);
-                  memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
+						memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
                   sysidx.priv = sys.msg_priv;
                   sysidx.flags = sys.msg_flags;
                   sysidx.area = sys.msg_num;
@@ -741,12 +767,12 @@ void bbs_message ()
                chsize (fd, 0L);
                lseek (fdi, 0L, SEEK_SET);
 
-               while (read (fdi, (char *)&bsys, SIZEOF_MSGAREA) == SIZEOF_MSGAREA)
+					while (read (fdi, (char *)&bsys, SIZEOF_MSGAREA) == SIZEOF_MSGAREA)
                   write (fd, (char *)&bsys, SIZEOF_MSGAREA);
 
                close (fdx);
                close (fd);
-               close (fdi);
+					close (fdi);
 
                unlink (filename);
 
@@ -759,7 +785,7 @@ void bbs_message ()
                wclose ();
             }
             else {
-               pos = tell (fd) - (long)SIZEOF_MSGAREA;
+					pos = tell (fd) - (long)SIZEOF_MSGAREA;
                i = (int)(pos / (long)SIZEOF_MSGAREA);
 
                sprintf (string, "%sSYSMSG.IDX", config.sys_path);
@@ -773,13 +799,13 @@ void bbs_message ()
                sysidx.sig = sys.msg_sig;
                strcpy (sysidx.key, sys.qwk_name);
                write (fdx, (char *)&sysidx, sizeof (struct _sys_idx));
-               close (fdx);
-            }
+					close (fdx);
+				}
 
             break;
 
          // A Add
-         case 'A':
+			case 'A':
          case 'a':
             memcpy ((char *)&bsys, (char *)&sys, sizeof (struct _sys));
             memset ((char *)&sys, 0, sizeof (struct _sys));
@@ -794,7 +820,7 @@ void bbs_message ()
                memcpy ((char *)&bsys, (char *)&sys, sizeof (struct _sys));
 
             sys.msg_num = 0;
-            edit_single_area (&sys);
+				edit_single_area (&sys);
 
             if (sys.msg_num && strcmp (sys.msg_name, "")) {
                pos = tell (fd) - (long)SIZEOF_MSGAREA;
@@ -807,7 +833,7 @@ void bbs_message ()
                   ;
                sprintf (filename, "%sSYSMSG.BAK", config.sys_path);
                while ((fdi = sh_open (filename, SH_DENYRW, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE)) == -1)
-                  ;
+						;
                sprintf (string, "%sSYSMSG.DAT", config.sys_path);
                while ((fd = sh_open (string, SH_DENYRD, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE)) == -1)
                   ;
@@ -825,9 +851,9 @@ void bbs_message ()
                      strcpy (sysidx.key, sys.qwk_name);
                      write (fdx, (char *)&sysidx, sizeof (struct _sys_idx));
                      saved = 1;
-                  }
+						}
                   if (bsys.msg_num != sys.msg_num) {
-                     write (fdi, (char *)&bsys, SIZEOF_MSGAREA);
+							write (fdi, (char *)&bsys, SIZEOF_MSGAREA);
                      memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
                      sysidx.priv = bsys.msg_priv;
                      sysidx.flags = bsys.msg_flags;
@@ -840,12 +866,12 @@ void bbs_message ()
 
                if (!saved) {
                   pos = tell (fdi);
-                  write (fdi, (char *)&sys, SIZEOF_MSGAREA);
+						write (fdi, (char *)&sys, SIZEOF_MSGAREA);
                   memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
                   sysidx.priv = sys.msg_priv;
                   sysidx.flags = sys.msg_flags;
                   sysidx.area = sys.msg_num;
-                  sysidx.sig = sys.msg_sig;
+						sysidx.sig = sys.msg_sig;
                   strcpy (sysidx.key, sys.qwk_name);
                   write (fdx, (char *)&sysidx, sizeof (struct _sys_idx));
                }
@@ -858,7 +884,7 @@ void bbs_message ()
                   write (fd, (char *)&bsys, SIZEOF_MSGAREA);
 
                close (fdx);
-               close (fd);
+					close (fd);
                close (fdi);
 
                unlink (filename);
@@ -873,12 +899,12 @@ void bbs_message ()
             }
             else
                memcpy ((char *)&sys, (char *)&bsys, sizeof (struct _sys));
-            break;
+				break;
 
          // D Delete
          case 'D':
          case 'd':
-            wh1 = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
+				wh1 = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
             wactiv (wh1);
             wshadow (DGREY|_BLACK);
 
@@ -893,7 +919,7 @@ void bbs_message ()
             hidecur ();
 
             if (i == W_ESCPRESS)
-               break;
+					break;
 
             if (toupper (string[0]) == 'Y') {
                pos = tell (fd) - (long)SIZEOF_MSGAREA;
@@ -906,12 +932,12 @@ void bbs_message ()
                   ;
                sprintf (filename, "%sSYSMSG.BAK", config.sys_path);
                while ((fdi = sh_open (filename, SH_DENYRW, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE)) == -1)
-                  ;
+						;
                sprintf (string, "%sSYSMSG.DAT", config.sys_path);
                while ((fd = sh_open (string, SH_DENYRD, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE)) == -1)
                   ;
 
-               while (read (fd, (char *)&bsys, SIZEOF_MSGAREA) == SIZEOF_MSGAREA) {
+					while (read (fd, (char *)&bsys, SIZEOF_MSGAREA) == SIZEOF_MSGAREA) {
                   if (bsys.msg_num != sys.msg_num) {
                      write (fdi, (char *)&bsys, SIZEOF_MSGAREA);
                      memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
@@ -924,9 +950,9 @@ void bbs_message ()
                   }
                }
 
-               lseek (fd, 0L, SEEK_SET);
+					lseek (fd, 0L, SEEK_SET);
                chsize (fd, 0L);
-               lseek (fdi, 0L, SEEK_SET);
+					lseek (fdi, 0L, SEEK_SET);
 
                while (read (fdi, (char *)&bsys, SIZEOF_MSGAREA) == SIZEOF_MSGAREA)
                   write (fd, (char *)&bsys, SIZEOF_MSGAREA);
@@ -939,12 +965,12 @@ void bbs_message ()
 
                sprintf (string, "%sSYSMSG.DAT", config.sys_path);
                while ((fd = sh_open (string, SH_DENYNONE, O_RDWR|O_BINARY, S_IREAD|S_IWRITE)) == -1)
-                  ;
+						;
                if (lseek (fd, pos, SEEK_SET) == -1 || pos == filelength (fd)) {
                   lseek (fd, -1l * SIZEOF_MSGAREA, SEEK_END);
                   pos = tell (fd);
                }
-               read (fd, (char *)&sys, SIZEOF_MSGAREA);
+					read (fd, (char *)&sys, SIZEOF_MSGAREA);
 
                wclose ();
             }
@@ -957,95 +983,96 @@ void bbs_message ()
             break;
 
          // ESC Exit
-         case 0x1B:
+			case 0x1B:
             i = -1;
-            break;
+				break;
       }
 
    } while (i != -1);
 
    close (fd);
 
-   wclose ();
-   gotoxy_ (24, 1);
-   clreol_ ();
+	wclose ();
+	gotoxy_ (24, 1);
+	clreol_ ();
 }
 
 static void edit_single_area (sys)
 struct _sys *sys;
 {
-   int i = 1, wh1, m, mx;
-   char string[128], *akas[MAX_ALIAS];
-   struct _sys nsys;
+	int i = 1, wh1, m, mx;
+	char string[128], *akas[MAX_ALIAS], temp[42];
+	struct _sys nsys;
 
-   memcpy ((char *)&nsys, (char *)sys, SIZEOF_MSGAREA);
+	memcpy ((char *)&nsys, (char *)sys, SIZEOF_MSGAREA);
 
-   gotoxy_ (24, 1);
-   clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "ESC-Exit/Save  ENTER-Edit");
-   prints (24, 1, YELLOW|_BLACK, "ESC");
-   prints (24, 16, YELLOW|_BLACK, "ENTER");
+	gotoxy_ (24, 1);
+	clreol_ ();
+	prints (24, 1, LGREY|_BLACK, "ESC-Exit/Save  ENTER-Edit");
+	prints (24, 1, YELLOW|_BLACK, "ESC");
+	prints (24, 16, YELLOW|_BLACK, "ENTER");
 
 continue_editing:
-   do {
-      stop_update ();
-      wclear ();
+	do {
+		stop_update ();
+		wclear ();
 
-      wmenubegc ();
-      wmenuitem (1, 1," Number       ", 0, 1, 0, NULL, 0, 0);
-      wmenuitem (1, 28," QWK Name     ", 0, 25, 0, NULL, 0, 0);
-      wmenuitem (2, 1," Name         ", 0, 2, 0, NULL, 0, 0);
-      wmenuitem (3, 1," Type         ", 0, 3, 0, NULL, 0, 0);
-      wmenuitem (3, 28," Echo-Tag     ", 0, 24, 0, NULL, 0, 0);
-      wmenuitem (4, 1," Flags        ", 0, 4, 0, NULL, 0, 0);
-      wmenuitem (5, 1," Storage      ", 0, 6, 0, NULL, 0, 0);
-      wmenuitem (4, 28," Group        ", 0, 5, 0, NULL, 0, 0);
-      wmenuitem (6, 1," Path/Board   ", 0, 7, 0, NULL, 0, 0);
-      wmenuitem (7, 1," Aka          ", 0, 8, 0, NULL, 0, 0);
-      wmenuitem (8, 1," Origin       ", 0, 9, 0, NULL, 0, 0);
-      wmenuitem (9, 1," Max messages ", 0, 10, 0, NULL, 0, 0);
-      wmenuitem (10, 1," Message age  ", 0, 11, 0, NULL, 0, 0);
-      wprints (10, 22, LGREY|_BLACK, "days");
-      wmenuitem (10, 28," Age received ", 0, 12, 0, NULL, 0, 0);
-      wprints (10, 49, LGREY|_BLACK, "days");
-      wmenuitem (11, 1," Read level   ", 0, 13, 0, NULL, 0, 0);
-      wmenuitem (12, 1," A Flag       ", 0, 14, 0, NULL, 0, 0);
-      wmenuitem (13, 1," B Flag       ", 0, 15, 0, NULL, 0, 0);
-      wmenuitem (14, 1," C Flag       ", 0, 16, 0, NULL, 0, 0);
-      wmenuitem (15, 1," D Flag       ", 0, 17, 0, NULL, 0, 0);
-      wmenuitem (11, 28," Write level  ", 0, 18, 0, NULL, 0, 0);
-      wmenuitem (12, 28," A Flag       ", 0, 19, 0, NULL, 0, 0);
-      wmenuitem (13, 28," B Flag       ", 0, 20, 0, NULL, 0, 0);
-      wmenuitem (14, 28," C Flag       ", 0, 21, 0, NULL, 0, 0);
-      wmenuitem (15, 28," D Flag       ", 0, 22, 0, NULL, 0, 0);
-      wmenuitem (11, 55," Afx level ", 0, 23, 0, NULL, 0, 0);
-      wmenuitem (12, 55," A Flag    ", 0, 29, 0, NULL, 0, 0);
-      wmenuitem (13, 55," B Flag    ", 0, 30, 0, NULL, 0, 0);
-      wmenuitem (14, 55," C Flag    ", 0, 31, 0, NULL, 0, 0);
-      wmenuitem (15, 55," D Flag    ", 0, 32, 0, NULL, 0, 0);
-      wmenuitem (16, 1," Forward 1    ", 0, 26, 0, NULL, 0, 0);
-      wmenuitem (17, 1," Forward 2    ", 0, 27, 0, NULL, 0, 0);
-      wmenuitem (18, 1," Forward 3    ", 0, 28, 0, NULL, 0, 0);
-      wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
+		wmenubegc ();
+		wmenuitem (1, 1," Number       ", 0, 1, 0, NULL, 0, 0);
+		wmenuitem (1, 28," QWK Name     ", 0, 25, 0, NULL, 0, 0);
+		wmenuitem (2, 1," Name         ", 0, 2, 0, NULL, 0, 0);
+		wmenuitem (3, 1," Type         ", 0, 3, 0, NULL, 0, 0);
+		wmenuitem (3, 28," Echo-Tag     ", 0, 24, 0, NULL, 0, 0);
+		wmenuitem (4, 1," Flags        ", 0, 4, 0, NULL, 0, 0);
+		wmenuitem (5, 1," Storage      ", 0, 6, 0, NULL, 0, 0);
+		wmenuitem (4, 28," Group        ", 0, 5, 0, NULL, 0, 0);
+		wmenuitem (6, 1," Path/Board   ", 0, 7, 0, NULL, 0, 0);
+		wmenuitem (7, 1," Aka          ", 0, 8, 0, NULL, 0, 0);
+		wmenuitem (8, 1," Origin       ", 0, 9, 0, NULL, 0, 0);
+		wmenuitem (9, 1," Max messages ", 0, 10, 0, NULL, 0, 0);
+		wmenuitem (10, 1," Message age  ", 0, 11, 0, NULL, 0, 0);
+		wprints (10, 22, LGREY|_BLACK, "days");
+		wmenuitem (10, 28," Age received ", 0, 12, 0, NULL, 0, 0);
+		wprints (10, 49, LGREY|_BLACK, "days");
+		wmenuitem (11, 1," Read level   ", 0, 13, 0, NULL, 0, 0);
+		wmenuitem (12, 1," A Flag       ", 0, 14, 0, NULL, 0, 0);
+		wmenuitem (13, 1," B Flag       ", 0, 15, 0, NULL, 0, 0);
+		wmenuitem (14, 1," C Flag       ", 0, 16, 0, NULL, 0, 0);
+		wmenuitem (15, 1," D Flag       ", 0, 17, 0, NULL, 0, 0);
+		wmenuitem (11, 28," Write level  ", 0, 18, 0, NULL, 0, 0);
+		wmenuitem (12, 28," A Flag       ", 0, 19, 0, NULL, 0, 0);
+		wmenuitem (13, 28," B Flag       ", 0, 20, 0, NULL, 0, 0);
+		wmenuitem (14, 28," C Flag       ", 0, 21, 0, NULL, 0, 0);
+		wmenuitem (15, 28," D Flag       ", 0, 22, 0, NULL, 0, 0);
+		wmenuitem (11, 55," Afx level ", 0, 23, 0, NULL, 0, 0);
+		wmenuitem (12, 55," A Flag    ", 0, 29, 0, NULL, 0, 0);
+		wmenuitem (13, 55," B Flag    ", 0, 30, 0, NULL, 0, 0);
+		wmenuitem (14, 55," C Flag    ", 0, 31, 0, NULL, 0, 0);
+		wmenuitem (15, 55," D Flag    ", 0, 32, 0, NULL, 0, 0);
+		wprints (16, 1, LGREY|_BLACK," Forward to:");
+		wmenuitem (17, 1," 1 ", 0, 26, 0, NULL, 0, 0);
+		wmenuitem (18, 1," 2 ", 0, 27, 0, NULL, 0, 0);
+		wmenuitem (19, 1," 3 ", 0, 28, 0, NULL, 0, 0);
+		wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
-      sprintf (string, "%d", nsys.msg_num);
-      wprints (1, 16, CYAN|_BLACK, string);
+		sprintf (string, "%d", nsys.msg_num);
+		wprints (1, 16, CYAN|_BLACK, string);
 
-      wprints (1, 43, CYAN|_BLACK, nsys.qwk_name);
+		wprints (1, 43, CYAN|_BLACK, nsys.qwk_name);
 
-      nsys.msg_name[55] = '\0';
-      wprints (2, 16, CYAN|_BLACK, nsys.msg_name);
+		nsys.msg_name[55] = '\0';
+		wprints (2, 16, CYAN|_BLACK, nsys.msg_name);
 
-      if (nsys.netmail)
-         wprints (3, 16, CYAN|_BLACK, "Netmail");
-      else if (nsys.echomail)
-         wprints (3, 16, CYAN|_BLACK, "Echomail");
-      else if (nsys.internet_mail)
-         wprints (3, 16, CYAN|_BLACK, "Internet");
-      else
-         wprints (3, 16, CYAN|_BLACK, "Local");
+		if (nsys.netmail)
+			wprints (3, 16, CYAN|_BLACK, "Netmail");
+		else if (nsys.echomail)
+			wprints (3, 16, CYAN|_BLACK, "Echomail");
+		else if (nsys.internet_mail)
+			wprints (3, 16, CYAN|_BLACK, "Internet");
+		else
+			wprints (3, 16, CYAN|_BLACK, "Local");
 
-      wprints (3, 43, CYAN|_BLACK, nsys.echotag);
+		wprints (3, 43, CYAN|_BLACK, nsys.echotag);
 
 		strcpy (string, "......");  // P=Public, V=Private,
 										  // A=Allow alias, G=Group restricted,
@@ -1125,43 +1152,43 @@ continue_editing:
       wprints (14, 67, CYAN|_BLACK, get_flagC_text ((nsys.afx_flags >> 8) & 0xFF));
       wprints (15, 67, CYAN|_BLACK, get_flagD_text (nsys.afx_flags & 0xFF));
 
-      wprints (16, 16, CYAN|_BLACK, nsys.forward1);
-      wprints (17, 16, CYAN|_BLACK, nsys.forward2);
-      wprints (18, 16, CYAN|_BLACK, nsys.forward3);
-      start_update ();
+		wprints (17, 4, CYAN|_BLACK, nsys.forward1);
+		wprints (18, 4, CYAN|_BLACK, nsys.forward2);
+		wprints (19, 4, CYAN|_BLACK, nsys.forward3);
+		start_update ();
 
-      i = wmenuget ();
+		i = wmenuget ();
 
-      switch (i) {
-         case 1:
-            sprintf (string, "%d", nsys.msg_num);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (1, 16, string, "?????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               nsys.msg_num = atoi (strbtrim (string));
-           break;
+		switch (i) {
+			case 1:
+				sprintf (string, "%d", nsys.msg_num);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (1, 16, string, "?????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					nsys.msg_num = atoi (strbtrim (string));
+			  break;
 
-         case 2:
-            strcpy (string, nsys.msg_name);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (2, 16, string, "????????????????????????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (nsys.msg_name, strbtrim (string));
-            break;
+			case 2:
+				strcpy (string, nsys.msg_name);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (2, 16, string, "????????????????????????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (nsys.msg_name, strbtrim (string));
+				break;
 
-         case 3:
-            if (nsys.netmail) {
+			case 3:
+				if (nsys.netmail) {
 					nsys.netmail = 0;
-               nsys.echomail = 1;
-            }
-            else if (nsys.echomail) {
-               nsys.echomail = 0;
-               nsys.internet_mail = 1;
-            }
-            else if (nsys.internet_mail)
-               nsys.internet_mail = 0;
-            else {
-               nsys.internet_mail = 0;
+					nsys.echomail = 1;
+				}
+				else if (nsys.echomail) {
+					nsys.echomail = 0;
+					nsys.internet_mail = 1;
+				}
+				else if (nsys.internet_mail)
+					nsys.internet_mail = 0;
+				else {
+					nsys.internet_mail = 0;
 					nsys.netmail = 1;
 				}
 				break;
@@ -1259,7 +1286,7 @@ continue_editing:
 					if ((nsys.gold_board = sys->gold_board) == 0)
                   nsys.gold_board = 499;
                nsys.quick_board = 0;
-            }
+				}
             else if (nsys.gold_board) {
                if ((nsys.pip_board = sys->pip_board) == 0)
                   nsys.pip_board = 1;
@@ -1292,7 +1319,7 @@ continue_editing:
                   sprintf (string, "%d", nsys.gold_board);
                   winpbeg (BLUE|_GREEN, BLUE|_GREEN);
                   winpdef (6, 16, string, "???", 0, 2, NULL, 0);
-                  if (winpread () != W_ESCPRESS)
+						if (winpread () != W_ESCPRESS)
                      nsys.gold_board = atoi (strbtrim (string));
                   else
                      break;
@@ -1301,31 +1328,31 @@ continue_editing:
             else if (nsys.pip_board) {
                sprintf (string, "%d", nsys.pip_board);
                winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-               winpdef (6, 16, string, "????", 0, 2, NULL, 0);
-               if (winpread () != W_ESCPRESS)
-                  nsys.pip_board = atoi (strbtrim (string));
-            }
+					winpdef (6, 16, string, "????", 0, 2, NULL, 0);
+					if (winpread () != W_ESCPRESS)
+						nsys.pip_board = atoi (strbtrim (string));
+				}
 				else if (nsys.squish) {
-               strcpy (string, nsys.msg_path);
-               winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-               winpdef (6, 16, string, "???????????????????????????????????????", 0, 2, NULL, 0);
-               if (winpread () != W_ESCPRESS) {
-                  strcpy (nsys.msg_path, strbtrim (string));
-                  if (nsys.msg_path[strlen (nsys.msg_path) - 1] == '\\')
-                     nsys.msg_path[strlen (nsys.msg_path) - 1] = '\0';
-               }
-           }
-           else {
-               strcpy (string, nsys.msg_path);
-               winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-               winpdef (6, 16, string, "??????????????????????????????????????", 0, 2, NULL, 0);
-               if (winpread () != W_ESCPRESS) {
-                  strcpy (nsys.msg_path, strbtrim (string));
-                  if (nsys.msg_path[strlen (nsys.msg_path) - 1] != '\\')
-                     strcat (nsys.msg_path, "\\");
-                  create_path (nsys.msg_path);
-               }
-            }
+					strcpy (string, nsys.msg_path);
+					winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+					winpdef (6, 16, string, "???????????????????????????????????????", 0, 2, NULL, 0);
+					if (winpread () != W_ESCPRESS) {
+						strcpy (nsys.msg_path, strbtrim (string));
+						if (nsys.msg_path[strlen (nsys.msg_path) - 1] == '\\')
+							nsys.msg_path[strlen (nsys.msg_path) - 1] = '\0';
+					}
+			  }
+			  else {
+					strcpy (string, nsys.msg_path);
+					winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+					winpdef (6, 16, string, "??????????????????????????????????????", 0, 2, NULL, 0);
+					if (winpread () != W_ESCPRESS) {
+						strcpy (nsys.msg_path, strbtrim (string));
+						if (nsys.msg_path[strlen (nsys.msg_path) - 1] != '\\')
+							strcat (nsys.msg_path, "\\");
+						create_path (nsys.msg_path);
+					}
+				}
             break;
 
          case 8:
@@ -1334,15 +1361,19 @@ continue_editing:
                sprintf (string, "%d:%d/%d.%d", config.alias[m].zone, config.alias[m].net, config.alias[m].node, config.alias[m].point);
                akas[m] = (char *)malloc (strlen (string) + 1);
                strcpy (akas[m], string);
-               if (strlen (string) > mx)
+					if (strlen (string) > mx)
                   mx = strlen (string);
             }
             akas[m] = NULL;
-            wh1 = wopen (10, 28, m + 11, mx + 29, 0, LGREY|_BLACK, LCYAN|_BLACK);
-				wactiv (wh1);
-            wtitle ("AKA", TLEFT, LCYAN|_BLACK);
-            m = wpickstr (11, 29, m + 10, mx + 28, 5, LGREY|_BLACK, YELLOW|_BLACK, BLACK|_CYAN, akas, nsys.use_alias, NULL);
-            if (m != -1)
+            /* MM */ // Modificata la gestione del wpickstr, la finestra e'
+                     // a dimensione fissa e non viene piu' calcolata come prima.
+                     // Se necessario aumentare le dimensioni di wopen w wpickstr
+            wh1 = wopen (10, 25, 20, 48, 1, LCYAN|_BLACK, CYAN|_BLACK);
+            wactiv (wh1);
+            wshadow (DGREY|_BLACK);
+            wtitle (" AKAs ", TRIGHT, YELLOW|_BLUE);
+            m = wpickstr (12, 27, 18, 46, 5, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY, akas, nsys.use_alias, NULL);
+            /* MM */            if (m != -1)
                nsys.use_alias = m;
             wclose ();
             for (m = 0; m < MAX_ALIAS && config.alias[m].net; m++)
@@ -1367,7 +1398,7 @@ continue_editing:
 
          case 11:
             sprintf (string, "%d", nsys.max_age);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
             winpdef (10, 16, string, "?????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                nsys.max_age = atoi (strbtrim (string));
@@ -1433,45 +1464,45 @@ continue_editing:
             strcpy (string, nsys.echotag);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
             winpdef (3, 43, string, "???????????????????????????????", 0, 1, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (nsys.echotag, strupr (strbtrim (string)));
-            break;
-
-         case 25:
-            strcpy (string, nsys.qwk_name);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (1, 43, string, "????????????", 0, 2, NULL, 0);
 				if (winpread () != W_ESCPRESS)
-               strcpy (nsys.qwk_name, strbtrim (string));
-            break;
+					strcpy (nsys.echotag, strupr (strbtrim (string)));
+				break;
 
-         case 26:
-            strcpy (string, nsys.forward1);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (16, 16, string, "??????????????????????????????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (nsys.forward1, strbtrim (string));
-            break;
+			case 25:
+				strcpy (string, nsys.qwk_name);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (1, 43, string, "????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (nsys.qwk_name, strbtrim (string));
+				break;
 
-         case 27:
-            strcpy (string, nsys.forward2);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (17, 16, string, "??????????????????????????????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (nsys.forward2, strbtrim (string));
-            break;
+			case 26:
+				strcpy (string, nsys.forward1);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (17, 4, string, "??????????????????????????????????????????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (nsys.forward1, strbtrim (string));
+				break;
 
-         case 28:
-            strcpy (string, nsys.forward3);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (18, 16, string, "??????????????????????????????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (nsys.forward3, strbtrim (string));
-            break;
+			case 27:
+				strcpy (string, nsys.forward2);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (18, 4, string, "??????????????????????????????????????????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (nsys.forward2, strbtrim (string));
+				break;
 
-         case 29:
-            nsys.afx_flags = window_get_flags (8, 66, 1, nsys.afx_flags);
-            break;
+			case 28:
+				strcpy (string, nsys.forward3);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (19, 4, string, "??????????????????????????????????????????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (nsys.forward3, strbtrim (string));
+				break;
+
+			case 29:
+				nsys.afx_flags = window_get_flags (8, 66, 1, nsys.afx_flags);
+				break;
 
          case 30:
             nsys.afx_flags = window_get_flags (8, 66, 2, nsys.afx_flags);

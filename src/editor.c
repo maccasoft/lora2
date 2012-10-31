@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <alloc.h>
@@ -217,14 +235,15 @@ char *txt;
     FILE *fp;
 	int i, dest;
 	char filename[80];
+	unsigned long crc;
 
-    m_print(bbstxt[B_SAVE_MESSAGE]);
-    scan_message_base(sys.msg_num, 1);
-    dest = last_msg + 1;
-    activation_key ();
-    m_print2 (" #%d ...",dest);
+	 m_print(bbstxt[B_SAVE_MESSAGE]);
+	 scan_message_base(sys.msg_num, 1);
+	 dest = last_msg + 1;
+	 activation_key ();
+	 m_print2 (" #%d ...",dest);
 
-    sprintf(filename,"%s%d.MSG",sys.msg_path,dest);
+	 sprintf(filename,"%s%d.MSG",sys.msg_path,dest);
 	fp = fopen(filename,"wb");
 	if (fp == NULL)
 		return;
@@ -251,9 +270,15 @@ char *txt;
           fprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
     }
 
-    if(sys.echomail) {
-       fprintf(fp,msgtxt[M_PID], VERSION, registered ? "+" : NOREG);
-       fprintf(fp,msgtxt[M_MSGID], config->alias[sys.use_alias].zone, config->alias[sys.use_alias].net, config->alias[sys.use_alias].node, config->alias[sys.use_alias].point, time(NULL));
+	 if(sys.echomail) {
+		crc = time (NULL);
+		crc = string_crc(msg.from,crc);
+		crc = string_crc(msg.to,crc);
+		crc = string_crc(msg.subj,crc);
+		crc = string_crc(msg.date,crc);
+
+		fprintf(fp,msgtxt[M_PID], VERSION, registered ? "+" : NOREG);
+		fprintf(fp,msgtxt[M_MSGID], config->alias[sys.use_alias].zone, config->alias[sys.use_alias].net, config->alias[sys.use_alias].node, config->alias[sys.use_alias].point, crc);
     }
 
     if (config->internet_gate == 0) {
@@ -290,7 +315,7 @@ char *txt;
              if (buffer[m] == 0x1A)
                 buffer[m] = ' ';
           }
-          fwrite(buffer, 1, i, fp);
+			 fwrite(buffer, 1, i, fp);
        } while (i == 2048);
 
        close(fptxt);
@@ -299,7 +324,7 @@ char *txt;
     fprintf(fp,"\r\n");
 
     if (strlen(usr.signature) && registered)
-       fprintf(fp,msgtxt[M_SIGNATURE],usr.signature);
+		 fprintf(fp,msgtxt[M_SIGNATURE],usr.signature);
 
     if(sys.echomail) {
        put_tearline (fp);
@@ -322,27 +347,27 @@ int get_message_data(reply, s)
 int reply;
 char *s;
 {
-   FILE *xferinfo;
-   int i, protocol;
-   char c, stringa[80], to[80], *p, *v, subj[72];
-   long fpos;
-   struct _msg msgt;
+	FILE *xferinfo, *msginf;
+	int i, protocol;
+	char c, stringa[80], to[80], *p, *v, subj[72];
+	long fpos;
+	struct _msg msgt;
 
-   cls ();
+	cls ();
 
-   to[0] = '\0';
-   subj[0] = '\0';
+	to[0] = '\0';
+	subj[0] = '\0';
 
-   if (reply > 0) {
-      memcpy((char *)&msgt, (char *)&msg, sizeof(struct _msg));
-      if (stricmp (msgt.from, usr.name) && stricmp(msgt.from, usr.handle))
-         strcpy (to, msgt.from);
-   }
+	if (reply > 0) {
+		memcpy((char *)&msgt, (char *)&msg, sizeof(struct _msg));
+		if (stricmp (msgt.from, usr.name) && stricmp(msgt.from, usr.handle))
+			strcpy (to, msgt.from);
+	}
 
-   if (s != NULL) {
-      while ((p = strchr (s, '/')) != NULL) {
-         if (!strnicmp(p,"/T=\"",4)) {
-            if ((v = strchr (&p[4], '"')) != NULL)
+	if (s != NULL) {
+		while ((p = strchr (s, '/')) != NULL) {
+			if (!strnicmp(p,"/T=\"",4)) {
+				if ((v = strchr (&p[4], '"')) != NULL)
                *v = '\0';
             strncpy(to, (char *)&p[4], 35);
             fancy_str(to);
@@ -358,16 +383,16 @@ char *s;
                *v = '"';
          }
 
-         else if (!strnicmp (p, "/A=", 3)) {
+			else if (!strnicmp (p, "/A=", 3)) {
             i = atoi (&p[3]);
             if (!read_system (i, 1)) {
                status_line ("!Access denied to area #%d", i);
                return (0);
             }
-            if (sys.quick_board || sys.gold_board)
+				if (sys.quick_board || sys.gold_board)
                quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 0);
             else if (sys.pip_board)
-               pip_scan_message_base (usr.msg, 0);
+					pip_scan_message_base (usr.msg, 0);
             else if (sys.squish)
                squish_scan_message_base (usr.msg, sys.msg_path, 0);
             else
@@ -376,7 +401,7 @@ char *s;
 
          s = p + 1;
       }
-   }
+	}
 
    change_attr (WHITE|_BLACK);
    m_print (bbstxt[B_WRITE_MSG]);
@@ -397,9 +422,11 @@ char *s;
    msg.attr = MSGLOCAL;
 
    msg.dest_net = config->alias[sys.use_alias].net;
-   msg.dest = config->alias[sys.use_alias].node;
+	msg.dest = config->alias[sys.use_alias].node;
 
-   m_print (bbstxt[B_FROM]);
+	msg_tzone = config->alias[sys.use_alias].zone;
+
+	m_print (bbstxt[B_FROM]);
    if (sys.anon_ok) {
       m_print ("%s\n", usr.handle);
       strcpy (msg.from, usr.handle);
@@ -419,169 +446,185 @@ char *s;
          chars_input (stringa, 35, INPUT_FANCY|INPUT_FIELD);
          if (!strlen (stringa)) {
             read_system (usr.msg, 1);
-            return (0);
-         }
+				return (0);
+			}
 
-         fancy_str (stringa);
+			fancy_str (stringa);
 
-         if (!stricmp (stringa, "Sysop") && !sys.netmail) {
-            strcpy (msg.to, sysop);
-            m_print (bbstxt[B_REDIRECT], msg.to);
-         }
-         else
-            strcpy (msg.to, stringa);
-      }
+			if (!stricmp (stringa, "Sysop") && !sys.netmail) {
+				strcpy (msg.to, sysop);
+				m_print (bbstxt[B_REDIRECT], msg.to);
+			}
+			else
+				strcpy (msg.to, stringa);
+		}
 
-      if (!stricmp (msg.to, usr.name) || !stricmp (msg.to, usr.handle)) {
-         read_system (usr.msg, 1);
-         return (0);
-      }
-   }
+		if (!stricmp (msg.to, usr.name) || !stricmp (msg.to, usr.handle)) {
+			read_system (usr.msg, 1);
+			return (0);
+		}
+	}
 
-   if (sys.internet_mail) {
-      msg.dest_net = config->uucp_net;
-      msg.dest = config->uucp_node;
-      msg_tzone = config->uucp_zone;
-      msg_tpoint = config->uucp_point;
+	if (sys.internet_mail) {
+		msg.dest_net = config->uucp_net;
+		msg.dest = config->uucp_node;
+		msg_tzone = config->uucp_zone;
+		msg_tpoint = config->uucp_point;
 
-      if (strlen (to)) {
-         strcpy (msg.to, to);
-         m_print ("%s%s\n", bbstxt[B_TO], msg.to);
-      }
-      else {
-         m_print (bbstxt[B_TO]);
-         chars_input (stringa, 35, INPUT_FIELD);
-         if (!strlen (stringa)) {
-            read_system (usr.msg, 1);
-            return (0);
-         }
-      }
+		if (strlen (to)) {
+			strcpy (msg.to, to);
+			m_print ("%s%s\n", bbstxt[B_TO], msg.to);
+		}
+		else {
+			m_print (bbstxt[B_TO]);
+			chars_input (stringa, 35, INPUT_FIELD);
+			if (!strlen (stringa)) {
+				read_system (usr.msg, 1);
+				return (0);
+			}
+		}
 
-      internet_to = (char *)malloc (strlen (stringa) + 1);
-      strcpy (internet_to, stringa);
-   }
-   else if (sys.netmail) {
-      if (reply > 0) {
-         msg.dest_net = msgt.orig_net;
-         msg.dest = msgt.orig;
-         msg_tzone = msg_fzone;
-         msg_tpoint = msg_fpoint;
-      }
-      else if (get_address (msg.to, &msg_tzone, (int *)&msg.dest_net, (int *)&msg.dest, &msg_tpoint)) {
-         m_print(bbstxt[B_ADDRESS_MSG2]);
+		internet_to = (char *)malloc (strlen (stringa) + 1);
+		strcpy (internet_to, stringa);
+	}
+	else if (sys.netmail) {
+		if (reply > 0) {
+			msg.dest_net = msgt.orig_net;
+			msg.dest = msgt.orig;
+			msg_tzone = msg_fzone;
+			msg_tpoint = msg_fpoint;
+		}
+		else if (get_address (msg.to, &msg_tzone, (int *)&msg.dest_net, (int *)&msg.dest, &msg_tpoint)) {
+			m_print(bbstxt[B_ADDRESS_MSG2]);
 
-         if (!get_bbs_record (msg_tzone, msg.dest_net, msg.dest, 0))
-            m_print ("%d:%d/%d.%d, %s (%s)\n", msg_tzone, msg.dest_net, msg.dest, msg_tpoint, "Unknown", "Somewhere");
-         else
-            m_print ("%d:%d/%d.%d, %s (%s)\n", msg_tzone, msg.dest_net, msg.dest, msg_tpoint, nodelist.name, nodelist.city);
-      }
-      else {
-         m_print(bbstxt[B_ADDRESS_MSG1]);
-         for (;;) {
-            m_print(bbstxt[B_ADDRESS_MSG2]);
-            chars_input (stringa, 25, INPUT_FIELD);
-            if (strlen (stringa) < 1)
+			if (!get_bbs_record (msg_tzone, msg.dest_net, msg.dest, 0))
+				m_print ("%d:%d/%d.%d, %s (%s)\n", msg_tzone, msg.dest_net, msg.dest, msg_tpoint, "Unknown", "Somewhere");
+			else
+				m_print ("%d:%d/%d.%d, %s (%s)\n", msg_tzone, msg.dest_net, msg.dest, msg_tpoint, nodelist.name, nodelist.city);
+		}
+		else {
+			m_print(bbstxt[B_ADDRESS_MSG1]);
+			for (;;) {
+				m_print(bbstxt[B_ADDRESS_MSG2]);
+				chars_input (stringa, 25, INPUT_FIELD);
+				if (strlen (stringa) < 1)
+					break;
+
+				parse_netnode (stringa, &msg_tzone, (int *)&msg.dest_net, (int *)&msg.dest, &msg_tpoint);
+
+				if (!get_bbs_record (msg_tzone, msg.dest_net, msg.dest, 0))
+					m_print (bbstxt[B_NOTFOUND_NODELIST], msg_tzone, msg.dest_net, msg.dest, msg_tpoint);
+            else
+					m_print (bbstxt[B_FOUND_NODELIST], msg_tzone, msg.dest_net, msg.dest, msg_tpoint, nodelist.name, nodelist.city);
+            m_print(bbstxt[B_PHONE_OK]);
+            if (yesno_question (DEF_YES) == DEF_YES)
                break;
-
-            parse_netnode (stringa, &msg_tzone, (int *)&msg.dest_net, (int *)&msg.dest, &msg_tpoint);
-
-            if (!get_bbs_record (msg_tzone, msg.dest_net, msg.dest, 0))
-               m_print (bbstxt[B_NOTFOUND_NODELIST], msg_tzone, msg.dest_net, msg.dest, msg_tpoint);
-            else {
-               m_print (bbstxt[B_FOUND_NODELIST], msg_tzone, msg.dest_net, msg.dest, msg_tpoint, nodelist.name, nodelist.city);
-               m_print(bbstxt[B_PHONE_OK]);
-               if (yesno_question (DEF_YES) == DEF_YES)
-                  break;
-            }
          }
 
-         if (strlen (stringa) < 1) {
-            read_system (usr.msg, 1);
-            if (internet_to != NULL) {
-               free (internet_to);
-               internet_to = NULL;
-            }
-            return (0);
-         }
-      }
-   }
+			if (strlen (stringa) < 1) {
+				read_system (usr.msg, 1);
+				if (internet_to != NULL) {
+					free (internet_to);
+					internet_to = NULL;
+				}
+				return (0);
+			}
+		}
+	}
 
-   if ((msg.attr & MSGFILE) || (msg.attr & MSGFRQ))
-      m_print (bbstxt[B_SUBJFILES]);
-   else
-      m_print (bbstxt[B_SUBJECT]);
+	if ((msg.attr & MSGFILE) || (msg.attr & MSGFRQ))
+		m_print (bbstxt[B_SUBJFILES]);
+	else
+		m_print (bbstxt[B_SUBJECT]);
 
-   if (subj[0] == '\0') {
-      if (reply > 0) {
-         if (strncmp (msgt.subj, "Re: ",4))
-            m_print ("Re: ");
+	if (subj[0] == '\0') {
+		if (reply > 0) {
+			if (strncmp (msgt.subj, "Re: ",4))
+				m_print ("Re: ");
 
-         m_print ("%s\n", msgt.subj);
-         m_print (bbstxt[B_KEEP_SAME]);
-         m_print (bbstxt[B_SUBJECT]);
-      }
+			m_print ("%s\n", msgt.subj);
+			m_print (bbstxt[B_KEEP_SAME]);
+			m_print (bbstxt[B_SUBJECT]);
+		}
 
-      chars_input (stringa, 71, INPUT_NOLF|INPUT_FIELD);
-      if(!strlen(stringa) && !reply) {
-         m_print (bbstxt[B_ONE_CR]);
-         read_system(usr.msg, 1);
-         if (internet_to != NULL) {
-            free (internet_to);
-            internet_to = NULL;
-         }
-         return (0);
-      }
-      else if (!strlen(stringa) && reply > 0) {
-         if(strncmp(msgt.subj,"Re: ",4))
-            sprintf(stringa,"Re: %s",msgt.subj);
-         else
-            strcpy(stringa,msgt.subj);
+		chars_input (stringa, 71, INPUT_NOLF|INPUT_FIELD);
+		if(!strlen(stringa) && !reply) {
+			m_print (bbstxt[B_ONE_CR]);
+			read_system(usr.msg, 1);
+			if (internet_to != NULL) {
+				free (internet_to);
+				internet_to = NULL;
+			}
+			return (0);
+		}
+		else if (!strlen(stringa) && reply > 0) {
+			if(strncmp(msgt.subj,"Re: ",4))
+				sprintf(stringa,"Re: %s",msgt.subj);
+			else
+				strcpy(stringa,msgt.subj);
 
-         stringa[71] = '\0';
-         m_print("%s\n", stringa);
-      }
-      else
-         m_print (bbstxt[B_ONE_CR]);
+			stringa[71] = '\0';
+			m_print("%s\n", stringa);
+		}
+		else
+			m_print (bbstxt[B_ONE_CR]);
 
-      strcpy(msg.subj,stringa);
-   }
-   else {
-      m_print("%s\n", subj);
-      strcpy(msg.subj,subj);
-   }
+		strcpy(msg.subj,stringa);
+	}
+	else {
+		m_print("%s\n", subj);
+		strcpy(msg.subj,subj);
+	}
 
-   if(!sys.public && !sys.private) {
-      do {
-         m_print(bbstxt[B_ASK_PRIVATE]);
-         c = yesno_question (DEF_NO|QUESTION);
-         if(c == QUESTION)
-            read_system_file("WHY_PVT");
-      } while(c != DEF_NO && c != DEF_YES);
+	if(!sys.public && !sys.private) {
+		do {
+			m_print(bbstxt[B_ASK_PRIVATE]);
+			c = yesno_question (DEF_NO|QUESTION);
+			if(c == QUESTION)
+				read_system_file("WHY_PVT");
+		} while(c != DEF_NO && c != DEF_YES);
 
-      if(c == DEF_YES)
-         msg.attr|=MSGPRIVATE;
-   }
-   else {
-      if(sys.private)
-         msg.attr|=MSGPRIVATE;
-   }
+		if(c == DEF_YES)
+			msg.attr|=MSGPRIVATE;
+	}
+	else {
+		if(sys.private)
+			msg.attr|=MSGPRIVATE;
+	}
 
-   data(msg.date);
-   msg.up=0;
-   msg_fzone=config->alias[sys.use_alias].zone;
-   msg.orig=config->alias[sys.use_alias].node;
-   msg.orig_net=config->alias[sys.use_alias].net;
-   msg_fpoint=config->alias[sys.use_alias].point;
+	if(!usr.use_lore&&config->external_editor[0]){
+		sprintf(stringa,"%sMSGINF",config->sys_path);
+		msginf=fopen(stringa,"wt");
+		if(msginf){
+			fprintf(msginf,"%s\n",msg.from);
+			fprintf(msginf,"%s\n",msg.to);
+			fprintf(msginf,"%s\n",msg.subj);
+			fprintf(msginf,"1\n");
+			fprintf(msginf,"%s\n",sys.msg_name);
+			if(msg.attr&MSGPRIVATE)
+				fprintf(msginf,"YES\n");
+			else
+				fprintf(msginf,"NO\n");
+			}
+		fclose(msginf);
+	}
 
-   if (sys.netmail || sys.internet_mail) {
-      for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
-         if (config->alias[i].zone == msg_tzone)
-            break;
-      if (i < MAX_ALIAS && config->alias[i].net) {
-         msg_fzone = config->alias[i].zone;
-         msg.orig = config->alias[i].node;
-         msg.orig_net = config->alias[i].net;
-         msg_fpoint=config->alias[i].point;
+	data(msg.date);
+	msg.up=0;
+	msg_fzone=config->alias[sys.use_alias].zone;
+	msg.orig=config->alias[sys.use_alias].node;
+	msg.orig_net=config->alias[sys.use_alias].net;
+	msg_fpoint=config->alias[sys.use_alias].point;
+
+	if (sys.netmail || sys.internet_mail) {
+		for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
+			if (config->alias[i].zone == msg_tzone)
+				break;
+		if (i < MAX_ALIAS && config->alias[i].net) {
+			msg_fzone = config->alias[i].zone;
+			msg.orig = config->alias[i].node;
+			msg.orig_net = config->alias[i].net;
+			msg_fpoint=config->alias[i].point;
       }
    }
 

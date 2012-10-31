@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -944,11 +962,12 @@ char *txt;
    char fn[128];
    MSGPTR hdr;
    MSGPKTHDR mpkt;
-   DESTPTR pt;
+	DESTPTR pt;
+	unsigned long crc;
 
-   m_print(bbstxt[B_SAVE_MESSAGE]);
-   pip_scan_message_base(sys.pip_board, 0);
-   dest = last_msg + 1;
+	m_print(bbstxt[B_SAVE_MESSAGE]);
+	pip_scan_message_base(sys.pip_board, 0);
+	dest = last_msg + 1;
    activation_key ();
    m_print(" #%d ...",dest);
 
@@ -979,7 +998,7 @@ char *txt;
    strcpy(pt.to,msg.to);
    pt.next=0;
 
-   if (msg.attr & MSGPRIVATE)
+	if (msg.attr & MSGPRIVATE)
       mpkt.attribute |= SET_PKT_PRIV;
 
    fwrite(&hdr,sizeof hdr,1,f1);
@@ -1002,8 +1021,13 @@ char *txt;
 
    if(sys.echomail) {
       sprintf(fn,msgtxt[M_PID], VERSION, registered ? "+" : NOREG);
-      pipstring(fn,f2);
-      sprintf(fn,msgtxt[M_MSGID], config->alias[sys.use_alias].zone, config->alias[sys.use_alias].net, config->alias[sys.use_alias].node, config->alias[sys.use_alias].point, time(NULL));
+		pipstring(fn,f2);
+		crc = time (NULL);
+		crc = string_crc(msg.from,crc);
+		crc = string_crc(msg.to,crc);
+		crc = string_crc(msg.subj,crc);
+		crc = string_crc(msg.date,crc);
+		sprintf(fn,msgtxt[M_MSGID], config->alias[sys.use_alias].zone, config->alias[sys.use_alias].net, config->alias[sys.use_alias].node, config->alias[sys.use_alias].point, crc);
       pipstring(fn,f2);
    }
 

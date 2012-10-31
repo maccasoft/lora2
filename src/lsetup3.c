@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,69 +50,72 @@ void modem_hardware ()
    int wh, i = 1;
    char string[128];
 
-   wh = wopen (5, 22, 18, 65, 3, LCYAN|_BLACK, CYAN|_BLACK);
-   wactiv (wh);
-   wshadow (DGREY|_BLACK);
-   wtitle (" Hardware ", TRIGHT, YELLOW|_BLUE);
+	wh = wopen (5, 22, 19, 65, 3, LCYAN|_BLACK, CYAN|_BLACK);
+	wactiv (wh);
+	wshadow (DGREY|_BLACK);
+	wtitle (" Hardware ", TRIGHT, YELLOW|_BLUE);
 
-   do {
-      stop_update ();
-      wclear ();
+	do {
+		stop_update ();
+		wclear ();
 
-      wmenubegc ();
-      wmenuitem ( 1,  1, " Modem port        ", 0,  1, 0, NULL, 0, 0);
-      wmenuitem ( 2,  1, " Maximum baud rate ", 0,  2, 0, NULL, 0, 0);
-      wmenuitem ( 3,  1, " Lock port         ", 0,  3, 0, NULL, 0, 0);
-      wmenuitem ( 4,  1, " Terminal          ", 0,  4, 0, NULL, 0, 0);
-      wmenuitem ( 5,  1, " FAX Message       ", 0,  5, 0, NULL, 0, 0);
-      wmenuitem ( 6,  1, " À FAX Errorlevel  ", 0,  6, 0, NULL, 0, 0);
-      wmenuitem ( 7,  1, " Strip dashes      ", 0,  7, 0, NULL, 0, 0);
-      wmenuitem ( 8,  1, " Dialing timeout   ", 0,  8, 0, NULL, 0, 0);
-      wmenuitem ( 9,  1, " Carrier mask      ", 0,  9, 0, NULL, 0, 0);
-      wmenuitem (10,  1, " DCD drop timeout  ", 0, 10, 0, NULL, 0, 0);
-      wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
+		wmenubegc ();
+		wmenuitem ( 1,  1, " Modem port        ", 0,  1, 0, NULL, 0, 0);
+		wmenuitem ( 2,  1, " Maximum baud rate ", 0,  2, 0, NULL, 0, 0);
+		wmenuitem ( 3,  1, " Lock port         ", 0,  3, 0, NULL, 0, 0);
+		wmenuitem ( 4,  1, " Terminal          ", 0,  4, 0, NULL, 0, 0);
+		wmenuitem ( 5,  1, " FAX Message       ", 0,  5, 0, NULL, 0, 0);
+		wmenuitem ( 6,  1, " À FAX Errorlevel  ", 0,  6, 0, NULL, 0, 0);
+		wmenuitem ( 7,  1, " Strip dashes      ", 0,  7, 0, NULL, 0, 0);
+		wmenuitem ( 8,  1, " Dialing timeout   ", 0,  8, 0, NULL, 0, 0);
+		wmenuitem ( 9,  1, " Carrier mask      ", 0,  9, 0, NULL, 0, 0);
+		wmenuitem (10,  1, " DCD drop timeout  ", 0, 10, 0, NULL, 0, 0);
+		wmenuitem (11,  1, " No init answer    ", 0, 11, 0, NULL, 0, 0);
+		wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
-      sprintf (string, "%d", config.com_port + 1);
-      wprints (1, 21, CYAN|_BLACK, string);
-      sprintf (string, "%lu", config.speed);
-      wprints (2, 21, CYAN|_BLACK, string);
-      wprints (3, 21, CYAN|_BLACK, config.lock_baud ? "Yes" : "No");
-      wprints (4, 21, CYAN|_BLACK, config.terminal ? "Yes" : "No");
-      wprints (5, 21, CYAN|_BLACK, config.fax_response);
-      sprintf (string, "%d", config.fax_errorlevel);
-      wprints (6, 21, CYAN|_BLACK, string);
-      wprints (7, 21, CYAN|_BLACK, config.stripdash ? "Yes" : "No");
-      sprintf (string, "%d", config.modem_timeout);
-      wprints (8, 21, CYAN|_BLACK, string);
-      sprintf (string, "%d", config.carrier_mask);
-      wprints (9, 21, CYAN|_BLACK, string);
-      sprintf (string, "%d", config.dcd_timeout);
-      wprints (10, 21, CYAN|_BLACK, string);
+		sprintf (string, "%d", config.com_port + 1);
+		wprints (1, 21, CYAN|_BLACK, string);
+		sprintf (string, "%lu", config.speed);
+		wprints (2, 21, CYAN|_BLACK, string);
+		wprints (3, 21, CYAN|_BLACK, config.lock_baud ? "Yes" : "No");
+		wprints (4, 21, CYAN|_BLACK, config.terminal ? "Yes" : "No");
+		wprints (5, 21, CYAN|_BLACK, config.fax_response);
+		sprintf (string, "%d", config.fax_errorlevel);
+		wprints (6, 21, CYAN|_BLACK, string);
+		wprints (7, 21, CYAN|_BLACK, config.stripdash ? "Yes" : "No");
+		sprintf (string, "%d", config.modem_timeout);
+		wprints (8, 21, CYAN|_BLACK, string);
+		sprintf (string, "%d", config.carrier_mask);
+		wprints (9, 21, CYAN|_BLACK, string);
+		sprintf (string, "%d", config.dcd_timeout);
+		wprints (10, 21, CYAN|_BLACK, string);
+		sprintf (string, "%d", config.modem_OK_errorlevel);
+		wprints (11, 21, CYAN|_BLACK, string);
 
-      start_update ();
-      i = wmenuget ();
+		start_update ();
+		i = wmenuget ();
 
-      switch (i) {
-         case 1:
-            sprintf (string, "%d", config.com_port + 1);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (1, 21, string, "??", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               config.com_port = atoi (string) - 1;
-            hidecur ();
-            break;
+		switch (i) {
+			case 1:
+				sprintf (string, "%d", config.com_port + 1);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (1, 21, string, "??", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					config.com_port = atoi (string) - 1;
+				hidecur ();
+				break;
 
-         case 2:
-            switch (config.speed) {
-               case 300L:
-                  config.speed = 1200L;
-                  break;
-               case 1200L:
-                  config.speed = 2400L;
-                  break;
-               case 2400L:
-                  config.speed = 4800L;
-                  break;
+			case 2:
+				switch (config.speed) {
+					case 300L:
+						config.speed = 1200L;
+						break;
+					case 1200L:
+						config.speed = 2400L;
+						break;
+					case 2400L:
+						config.speed = 4800L;
+						break;
                case 4800L:
                   config.speed = 9600L;
                   break;
@@ -104,7 +125,7 @@ void modem_hardware ()
                case 19200L:
                   config.speed = 38400L;
                   break;
-               case 38400L:
+					case 38400L:
                   config.speed = 57600L;
                   break;
                case 57600L:
@@ -127,73 +148,81 @@ void modem_hardware ()
             config.terminal ^= 1;
             break;
 
-         case 5:
+			case 5:
             strcpy (string, config.fax_response);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (5, 21, string, "???????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (config.fax_response, strbtrim (string));
-            break;
+				winpdef (5, 21, string, "???????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (config.fax_response, strbtrim (string));
+				break;
 
-         case 6:
-            sprintf (string, "%d", config.fax_errorlevel);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (6, 21, string, "???", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               config.fax_errorlevel = atoi (strbtrim (string));
-            break;
+			case 6:
+				sprintf (string, "%d", config.fax_errorlevel);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (6, 21, string, "???", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					config.fax_errorlevel = atoi (strbtrim (string));
+				break;
 
-         case 7:
-            config.stripdash ^= 1;
-            break;
+			case 7:
+				config.stripdash ^= 1;
+				break;
 
-         case 8:
-            sprintf (string, "%d", config.modem_timeout);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (8, 21, string, "???", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               config.modem_timeout = atoi (strbtrim (string));
-            break;
+			case 8:
+				sprintf (string, "%d", config.modem_timeout);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (8, 21, string, "???", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					config.modem_timeout = atoi (strbtrim (string));
+				break;
 
-         case 9:
-            sprintf (string, "%d", config.carrier_mask);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (9, 21, string, "???", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               config.carrier_mask = atoi (strbtrim (string));
-            break;
+			case 9:
+				sprintf (string, "%d", config.carrier_mask);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (9, 21, string, "???", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					config.carrier_mask = atoi (strbtrim (string));
+				break;
 
-         case 10:
-            sprintf (string, "%d", config.dcd_timeout);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (10, 21, string, "???", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               config.dcd_timeout = atoi (strbtrim (string));
-            break;
-      }
+			case 10:
+				sprintf (string, "%d", config.dcd_timeout);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (10, 21, string, "???", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					config.dcd_timeout = atoi (strbtrim (string));
+				break;
 
-      hidecur ();
+			case 11:
+				sprintf (string, "%d", config.modem_OK_errorlevel);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (11, 21, string, "???", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					config.modem_OK_errorlevel = atoi (strbtrim (string));
+				break;
+		}
 
-   } while (i != -1);
+		hidecur ();
 
-   wclose ();
+	} while (i != -1);
+
+	wclose ();
 }
 
 void modem_answer_control ()
 {
-   int wh, i = 1;
-   char string[128], *p;
+	int wh, i = 1;
+	char string[128], *p;
 
-   wh = wopen (5, 10, 13, 71, 3, LCYAN|_BLACK, CYAN|_BLACK);
-   wactiv (wh);
-   wshadow (DGREY|_BLACK);
-   wtitle (" Answer control ", TRIGHT, YELLOW|_BLUE);
+	wh = wopen (5, 10, 13, 71, 3, LCYAN|_BLACK, CYAN|_BLACK);
+	wactiv (wh);
+	wshadow (DGREY|_BLACK);
+	wtitle (" Answer control ", TRIGHT, YELLOW|_BLUE);
 
-   do {
-      stop_update ();
-      wclear ();
+	do {
+		stop_update ();
+		wclear ();
 
-      wmenubegc ();
+		wmenubegc ();
       wmenuitem ( 1,  1, " Manual answer   ", 0, 1, 0, NULL, 0, 0);
       wmenuitem ( 2,  1, " Answer command  ", 0, 2, 0, NULL, 0, 0);
       wmenuitem ( 3,  1, " Limited hours   ", 0, 3, 0, NULL, 0, 0);
@@ -207,7 +236,7 @@ void modem_answer_control ()
       sprintf (string, "%02d:%02d", config.start_time / 60, config.start_time % 60);
       wprints (4, 19, CYAN|_BLACK, string);
       sprintf (string, "%02d:%02d", config.end_time / 60, config.end_time % 60);
-      wprints (5, 19, CYAN|_BLACK, string);
+		wprints (5, 19, CYAN|_BLACK, string);
 
       start_update ();
       i = wmenuget ();
@@ -1448,7 +1477,7 @@ void bbs_language ()
 
    wh = wopen (2, 1, 21, 77, 1, LCYAN|_BLACK, CYAN|_BLACK);
    wactiv (wh);
-   wshadow (DGREY|_BLACK);
+	wshadow (DGREY|_BLACK);
    wtitle (" Language ", TRIGHT, YELLOW|_BLUE);
    i = 80;
 
@@ -1471,18 +1500,18 @@ void bbs_language ()
       wmenuitem (11, 1," Lang. 10 ", 'L', 89, 0, NULL, 0, 0);
       wmenuitem (12, 1," Lang. 11 ", 'L', 90, 0, NULL, 0, 0);
       wmenuitem (13, 1," Lang. 12 ", 'L', 91, 0, NULL, 0, 0);
-      wmenuitem (14, 1," Lang. 13 ", 'L', 92, 0, NULL, 0, 0);
-      wmenuitem (15, 1," Lang. 14 ", 'L', 93, 0, NULL, 0, 0);
-      wmenuitem (16, 1," Lang. 15 ", 'L', 94, 0, NULL, 0, 0);
-      wmenuend (i, M_VERT, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
+		wmenuitem (14, 1," Lang. 13 ", 'L', 92, 0, NULL, 0, 0);
+		wmenuitem (15, 1," Lang. 14 ", 'L', 93, 0, NULL, 0, 0);
+		wmenuitem (16, 1," Lang. 15 ", 'L', 94, 0, NULL, 0, 0);
+		wmenuend (i, M_VERT, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
-      for (i = 0; i < 15; i++) {
-         wprints (i + 2, 13, CYAN|_BLACK, config.language[i].basename);
-         wprints (i + 2, 23, CYAN|_BLACK, config.language[i].descr);
-         wprints (i + 2, 48, CYAN|_BLACK, config.language[i].txt_path);
-      }
+		for (i = 0; i < 15; i++) {
+			wprints (i + 2, 13, CYAN|_BLACK, config.language[i].basename);
+			wprints (i + 2, 23, CYAN|_BLACK, config.language[i].descr);
+			wprints (i + 2, 48, CYAN|_BLACK, config.language[i].txt_path);
+		}
 
-      start_update ();
+		start_update ();
       i = wmenuget ();
       if (i != -1) {
          i -= 80;
@@ -1505,7 +1534,7 @@ void bbs_language ()
 
                strcpy (string, config.language[i].txt_path);
                winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-               winpdef (i + 2, 48, string, "?????????????????????????", 0, 2, NULL, 0);
+					winpdef (i + 2, 48, string, "?????????????????????????", 0, 2, NULL, 0);
                if (winpread () != W_ESCPRESS) {
                   strcpy (config.language[i].txt_path, strbtrim (string));
                   strcpy (config.language[i].txt_path, strbtrim (string));
@@ -1516,7 +1545,7 @@ void bbs_language ()
                   wprints (i + 2, 48, CYAN|_BLACK, config.language[i].txt_path);
                }
             }
-         }
+			}
 
          i += 80;
          hidecur ();
@@ -1539,7 +1568,7 @@ void bbs_files ()
    fd = sh_open (string, SH_DENYNONE, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
    if (fd == -1)
       return;
-   memset ((char *)&sys.file_name, 0, SIZEOF_FILEAREA);
+	memset ((char *)&sys.file_name, 0, SIZEOF_FILEAREA);
    read (fd, (char *)&sys.file_name, SIZEOF_FILEAREA);
 
    gotoxy_ (24, 1);
@@ -1549,8 +1578,8 @@ void bbs_files ()
    prints (24, 26, YELLOW|_BLACK, "E");
    prints (24, 34, YELLOW|_BLACK, "A");
    prints (24, 50, YELLOW|_BLACK, "C");
-   prints (24, 58, YELLOW|_BLACK, "L");
-   prints (24, 66, YELLOW|_BLACK, "D");
+	prints (24, 58, YELLOW|_BLACK, "L");
+	prints (24, 66, YELLOW|_BLACK, "D");
 
    wh = wopen (1, 2, 22, 76, 1, LCYAN|_BLACK, CYAN|_BLACK);
    wactiv (wh);
@@ -1573,140 +1602,141 @@ void bbs_files ()
       wprints ( 9,  1, LGREY|_BLACK, " C Flag       ");
       wprints (10,  1, LGREY|_BLACK, " D Flag       ");
       wprints ( 6, 28, LGREY|_BLACK, " Download ");
-      wprints ( 7, 28, LGREY|_BLACK, " A Flag   ");
+		wprints ( 7, 28, LGREY|_BLACK, " A Flag   ");
       wprints ( 8, 28, LGREY|_BLACK, " B Flag   ");
       wprints ( 9, 28, LGREY|_BLACK, " C Flag   ");
       wprints (10, 28, LGREY|_BLACK, " D Flag   ");
       wprints ( 6, 51, LGREY|_BLACK, " Upload ");
       wprints ( 7, 51, LGREY|_BLACK, " A Flag ");
-      wprints ( 8, 51, LGREY|_BLACK, " B Flag ");
-      wprints ( 9, 51, LGREY|_BLACK, " C Flag ");
+		wprints ( 8, 51, LGREY|_BLACK, " B Flag ");
+		wprints ( 9, 51, LGREY|_BLACK, " C Flag ");
       wprints (10, 51, LGREY|_BLACK, " D Flag ");
-      wprints (11,  1, LGREY|_BLACK, " TIC Level    ");
+		wprints (11,  1, LGREY|_BLACK, " TIC Level    ");
       wprints (12,  1, LGREY|_BLACK, " A Flag       ");
-      wprints (13,  1, LGREY|_BLACK, " B Flag       ");
-      wprints (14,  1, LGREY|_BLACK, " C Flag       ");
-      wprints (15,  1, LGREY|_BLACK, " D Flag       ");
-      wprints (12, 28, LGREY|_BLACK, " Group    ");
-      wprints (13, 28, LGREY|_BLACK, " Flags    ");
-      wprints (14, 28, LGREY|_BLACK, " TIC Tag  ");
-      wprints (16,  1, LGREY|_BLACK, " Forward 1    ");
-      wprints (17,  1, LGREY|_BLACK, " Forward 2    ");
-      wprints (18,  1, LGREY|_BLACK, " Forward 3    ");
+		wprints (13,  1, LGREY|_BLACK, " B Flag       ");
+		wprints (14,  1, LGREY|_BLACK, " C Flag       ");
+		wprints (15,  1, LGREY|_BLACK, " D Flag       ");
+		wprints (12, 28, LGREY|_BLACK, " Group    ");
+		wprints (13, 28, LGREY|_BLACK, " Flags    ");
+		wprints (14, 28, LGREY|_BLACK, " TIC Tag  ");
+		wprints (16,  1, LGREY|_BLACK, " Forward to:");
+		wprints (17,  1, LGREY|_BLACK, " 1 ");
+		wprints (18,  1, LGREY|_BLACK, " 2 ");
+		wprints (19,  1, LGREY|_BLACK, " 3 ");
 
-      sprintf (string, "%d", sys.file_num);
-      wprints (1, 16, CYAN|_BLACK, string);
+		sprintf (string, "%d", sys.file_num);
+		wprints (1, 16, CYAN|_BLACK, string);
 
-      wprints (1, 41, CYAN|_BLACK, sys.short_name);
+		wprints (1, 41, CYAN|_BLACK, sys.short_name);
 
-      sys.file_name[55] = '\0';
-      wprints (2, 16, CYAN|_BLACK, sys.file_name);
+		sys.file_name[55] = '\0';
+		wprints (2, 16, CYAN|_BLACK, sys.file_name);
 
-      wprints (3, 16, CYAN|_BLACK, sys.filepath);
+		wprints (3, 16, CYAN|_BLACK, sys.filepath);
 
-      wprints (4, 16, CYAN|_BLACK, sys.uppath);
+		wprints (4, 16, CYAN|_BLACK, sys.uppath);
 
-      wprints (5, 16, CYAN|_BLACK, sys.filelist);
+		wprints (5, 16, CYAN|_BLACK, sys.filelist);
 
-      wprints (6, 15, CYAN|_BLACK, get_priv_text (sys.file_priv));
-      wprints (7, 16, CYAN|_BLACK, get_flagA_text ((sys.file_flags >> 24) & 0xFF));
-      wprints (8, 16, CYAN|_BLACK, get_flagB_text ((sys.file_flags >> 16) & 0xFF));
-      wprints (9, 16, CYAN|_BLACK, get_flagC_text ((sys.file_flags >> 8) & 0xFF));
-      wprints (10, 16, CYAN|_BLACK, get_flagD_text (sys.file_flags & 0xFF));
+		wprints (6, 15, CYAN|_BLACK, get_priv_text (sys.file_priv));
+		wprints (7, 16, CYAN|_BLACK, get_flagA_text ((sys.file_flags >> 24) & 0xFF));
+		wprints (8, 16, CYAN|_BLACK, get_flagB_text ((sys.file_flags >> 16) & 0xFF));
+		wprints (9, 16, CYAN|_BLACK, get_flagC_text ((sys.file_flags >> 8) & 0xFF));
+		wprints (10, 16, CYAN|_BLACK, get_flagD_text (sys.file_flags & 0xFF));
 
-      wprints (6, 38, CYAN|_BLACK, get_priv_text (sys.download_priv));
-      wprints (7, 39, CYAN|_BLACK, get_flagA_text ((sys.download_flags >> 24) & 0xFF));
-      wprints (8, 39, CYAN|_BLACK, get_flagB_text ((sys.download_flags >> 16) & 0xFF));
-      wprints (9, 39, CYAN|_BLACK, get_flagC_text ((sys.download_flags >> 8) & 0xFF));
-      wprints (10, 39, CYAN|_BLACK, get_flagD_text (sys.download_flags & 0xFF));
+		wprints (6, 38, CYAN|_BLACK, get_priv_text (sys.download_priv));
+		wprints (7, 39, CYAN|_BLACK, get_flagA_text ((sys.download_flags >> 24) & 0xFF));
+		wprints (8, 39, CYAN|_BLACK, get_flagB_text ((sys.download_flags >> 16) & 0xFF));
+		wprints (9, 39, CYAN|_BLACK, get_flagC_text ((sys.download_flags >> 8) & 0xFF));
+		wprints (10, 39, CYAN|_BLACK, get_flagD_text (sys.download_flags & 0xFF));
 
-      wprints (6, 59, CYAN|_BLACK, get_priv_text (sys.upload_priv));
-      wprints (7, 60, CYAN|_BLACK, get_flagA_text ((sys.upload_flags >> 24) & 0xFF));
-      wprints (8, 60, CYAN|_BLACK, get_flagB_text ((sys.upload_flags >> 16) & 0xFF));
-      wprints (9, 60, CYAN|_BLACK, get_flagC_text ((sys.upload_flags >> 8) & 0xFF));
-      wprints (10, 60, CYAN|_BLACK, get_flagD_text (sys.upload_flags & 0xFF));
+		wprints (6, 59, CYAN|_BLACK, get_priv_text (sys.upload_priv));
+		wprints (7, 60, CYAN|_BLACK, get_flagA_text ((sys.upload_flags >> 24) & 0xFF));
+		wprints (8, 60, CYAN|_BLACK, get_flagB_text ((sys.upload_flags >> 16) & 0xFF));
+		wprints (9, 60, CYAN|_BLACK, get_flagC_text ((sys.upload_flags >> 8) & 0xFF));
+		wprints (10, 60, CYAN|_BLACK, get_flagD_text (sys.upload_flags & 0xFF));
 
-      wprints (14, 39, CYAN|_BLACK, sys.tic_tag);
+		wprints (14, 39, CYAN|_BLACK, sys.tic_tag);
 
-      sprintf (string, "%d", sys.tic_level);
-      wprints (11, 16, CYAN|_BLACK, string);
+		sprintf (string, "%d", sys.tic_level);
+		wprints (11, 16, CYAN|_BLACK, string);
 
-      wprints (12, 16, CYAN|_BLACK, get_flagA_text ((sys.tic_flags >> 24) & 0xFF));
-      wprints (13, 16, CYAN|_BLACK, get_flagB_text ((sys.tic_flags >> 16) & 0xFF));
-      wprints (14, 16, CYAN|_BLACK, get_flagC_text ((sys.tic_flags >> 8) & 0xFF));
-      wprints (15, 16, CYAN|_BLACK, get_flagD_text (sys.tic_flags & 0xFF));
+		wprints (12, 16, CYAN|_BLACK, get_flagA_text ((sys.tic_flags >> 24) & 0xFF));
+		wprints (13, 16, CYAN|_BLACK, get_flagB_text ((sys.tic_flags >> 16) & 0xFF));
+		wprints (14, 16, CYAN|_BLACK, get_flagC_text ((sys.tic_flags >> 8) & 0xFF));
+		wprints (15, 16, CYAN|_BLACK, get_flagD_text (sys.tic_flags & 0xFF));
 
-      sprintf (string, "%d", sys.file_sig);
-      wprints (12, 39, CYAN|_BLACK, string);
+		sprintf (string, "%d", sys.file_sig);
+		wprints (12, 39, CYAN|_BLACK, string);
 
-      strcpy (string, "........");
-      if (sys.freearea)
-         string[0] = 'F';
-      if (sys.file_restricted)
-         string[1] = 'G';
-      if (sys.no_global_search)
-         string[2] = 'S';
-      if (sys.no_filedate)
-         string[3] = 'D';
-      if (sys.norm_req)
-         string[4] = 'N';
-      if (sys.know_req)
-         string[5] = 'K';
-      if (sys.prot_req)
-         string[6] = 'P';
-      if (sys.cdrom)
-         string[7] = 'C';
-      wprints (13, 39, CYAN|_BLACK, string);
+		strcpy (string, "........");
+		if (sys.freearea)
+			string[0] = 'F';
+		if (sys.file_restricted)
+			string[1] = 'G';
+		if (sys.no_global_search)
+			string[2] = 'S';
+		if (sys.no_filedate)
+			string[3] = 'D';
+		if (sys.norm_req)
+			string[4] = 'N';
+		if (sys.know_req)
+			string[5] = 'K';
+		if (sys.prot_req)
+			string[6] = 'P';
+		if (sys.cdrom)
+			string[7] = 'C';
+		wprints (13, 39, CYAN|_BLACK, string);
 
-      wprints (16, 16, CYAN|_BLACK, sys.tic_forward1);
-      wprints (17, 16, CYAN|_BLACK, sys.tic_forward2);
-      wprints (18, 16, CYAN|_BLACK, sys.tic_forward3);
+		wprints (17, 4, CYAN|_BLACK, sys.tic_forward1);
+		wprints (18, 4, CYAN|_BLACK, sys.tic_forward2);
+		wprints (19, 4, CYAN|_BLACK, sys.tic_forward3);
 
-      start_update ();
+		start_update ();
 
-      i = getxch ();
-      if ( (i & 0xFF) != 0 )
-         i &= 0xFF;
+		i = getxch ();
+		if ( (i & 0xFF) != 0 )
+			i &= 0xFF;
 
-      switch (i) {
-         // PgDn
-         case 0x5100:
-            read (fd, (char *)&sys.file_name, SIZEOF_FILEAREA);
-            break;
+		switch (i) {
+			// PgDn
+			case 0x5100:
+				read (fd, (char *)&sys.file_name, SIZEOF_FILEAREA);
+				break;
 
-         // PgUp
-         case 0x4900:
-            if (tell (fd) > SIZEOF_FILEAREA) {
-               lseek (fd, -2L * SIZEOF_FILEAREA, SEEK_CUR);
-               read (fd, (char *)&sys.file_name, SIZEOF_FILEAREA);
-            }
-            break;
+			// PgUp
+			case 0x4900:
+				if (tell (fd) > SIZEOF_FILEAREA) {
+					lseek (fd, -2L * SIZEOF_FILEAREA, SEEK_CUR);
+					read (fd, (char *)&sys.file_name, SIZEOF_FILEAREA);
+				}
+				break;
 
-         // E Edit
-         case 'E':
-         case 'e':
-            saved = sys.file_num;
+			// E Edit
+			case 'E':
+			case 'e':
+				saved = sys.file_num;
 
-            file_edit_single_area (&sys);
+				file_edit_single_area (&sys);
 
-            lseek (fd, -1L * SIZEOF_FILEAREA, SEEK_CUR);
-            write (fd, (char *)&sys.file_name, SIZEOF_FILEAREA);
+				lseek (fd, -1L * SIZEOF_FILEAREA, SEEK_CUR);
+				write (fd, (char *)&sys.file_name, SIZEOF_FILEAREA);
 
-            if (saved != sys.file_num) {
-               pos = tell (fd) - (long)SIZEOF_FILEAREA;
-               close (fd);
+				if (saved != sys.file_num) {
+					pos = tell (fd) - (long)SIZEOF_FILEAREA;
+					close (fd);
 
-               update_message ();
+					update_message ();
 
-               sprintf (string, "%sSYSFILE.IDX", config.sys_path);
-               while ((fdx = sh_open (string, SH_DENYRD, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE)) == -1)
-                  ;
-               sprintf (filename, "%sSYSFILE.BAK", config.sys_path);
-               while ((fdi = sh_open (filename, SH_DENYRW, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE)) == -1)
-                  ;
-               sprintf (string, "%sSYSFILE.DAT", config.sys_path);
-               while ((fd = sh_open (string, SH_DENYRD, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE)) == -1)
-                  ;
+					sprintf (string, "%sSYSFILE.IDX", config.sys_path);
+					while ((fdx = sh_open (string, SH_DENYRD, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+						;
+					sprintf (filename, "%sSYSFILE.BAK", config.sys_path);
+					while ((fdi = sh_open (filename, SH_DENYRW, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+						;
+					sprintf (string, "%sSYSFILE.DAT", config.sys_path);
+					while ((fd = sh_open (string, SH_DENYRD, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+						;
                saved = 0;
 
                while (read (fd, (char *)&bsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
@@ -1714,7 +1744,7 @@ void bbs_files ()
                      pos = tell (fdi);
                      write (fdi, (char *)&sys.file_name, SIZEOF_FILEAREA);
                      memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
-                     sysidx.priv = sys.file_priv;
+							sysidx.priv = sys.file_priv;
                      sysidx.flags = sys.file_flags;
                      sysidx.sig = sys.file_sig;
                      sysidx.area = sys.file_num;
@@ -1722,12 +1752,12 @@ void bbs_files ()
                      write (fdx, (char *)&sysidx, sizeof (struct _sys_idx));
                      saved = 1;
                   }
-                  if (bsys.file_num != sys.file_num) {
+						if (bsys.file_num != sys.file_num) {
                      write (fdi, (char *)&bsys.file_name, SIZEOF_FILEAREA);
                      memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
-                     sysidx.priv = bsys.file_priv;
+							sysidx.priv = bsys.file_priv;
                      sysidx.flags = bsys.file_flags;
-                     sysidx.area = bsys.file_num;
+							sysidx.area = bsys.file_num;
                      sysidx.sig = sys.file_sig;
                      strcpy (sysidx.key, bsys.short_name);
                      write (fdx, (char *)&sysidx, sizeof (struct _sys_idx));
@@ -1740,7 +1770,7 @@ void bbs_files ()
                   memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
                   sysidx.priv = sys.file_priv;
                   sysidx.flags = sys.file_flags;
-                  sysidx.area = sys.file_num;
+						sysidx.area = sys.file_num;
                   sysidx.sig = sys.file_sig;
                   strcpy (sysidx.key, sys.short_name);
                   write (fdx, (char *)&sysidx, sizeof (struct _sys_idx));
@@ -1748,7 +1778,7 @@ void bbs_files ()
 
                lseek (fd, 0L, SEEK_SET);
                chsize (fd, 0L);
-               lseek (fdi, 0L, SEEK_SET);
+					lseek (fdi, 0L, SEEK_SET);
 
                while (read (fdi, (char *)&bsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA)
                   write (fd, (char *)&bsys.file_name, SIZEOF_FILEAREA);
@@ -1759,9 +1789,9 @@ void bbs_files ()
 
                unlink (filename);
 
-               sprintf (string, "%sSYSFILE.DAT", config.sys_path);
+					sprintf (string, "%sSYSFILE.DAT", config.sys_path);
                while ((fd = sh_open (string, SH_DENYNONE, O_RDWR|O_BINARY, S_IREAD|S_IWRITE)) == -1)
-                  ;
+						;
                lseek (fd, pos, SEEK_SET);
                read (fd, (char *)&sys.file_name, SIZEOF_FILEAREA);
 
@@ -1782,7 +1812,7 @@ void bbs_files ()
                sysidx.sig = sys.file_sig;
                strcpy (sysidx.key, sys.short_name);
                write (fdx, (char *)&sysidx, sizeof (struct _sys_idx));
-               close (fdx);
+					close (fdx);
             }
 
             break;
@@ -1790,12 +1820,12 @@ void bbs_files ()
          // A Add
          case 'A':
          case 'a':
-            memcpy ((char *)&bsys, (char *)&sys, sizeof (struct _sys));
+				memcpy ((char *)&bsys, (char *)&sys, sizeof (struct _sys));
             memset ((char *)&sys, 0, sizeof (struct _sys));
             sys.file_priv = sys.download_priv = sys.upload_priv = TWIT;
 
          // Copy
-         case 'C':
+			case 'C':
          case 'c':
             if (i == 'C' || i == 'c')
                memcpy ((char *)&bsys, (char *)&sys, sizeof (struct _sys));
@@ -1816,7 +1846,7 @@ void bbs_files ()
                while ((fdi = sh_open (filename, SH_DENYRW, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE)) == -1)
                   ;
                sprintf (string, "%sSYSFILE.DAT", config.sys_path);
-               while ((fd = sh_open (string, SH_DENYRD, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+					while ((fd = sh_open (string, SH_DENYRD, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE)) == -1)
                   ;
                saved = 0;
 
@@ -1824,10 +1854,10 @@ void bbs_files ()
                   if (!saved && bsys.file_num > sys.file_num) {
                      pos = tell (fdi);
                      write (fdi, (char *)&sys.file_name, SIZEOF_FILEAREA);
-                     memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
+							memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
                      sysidx.priv = sys.file_priv;
                      sysidx.flags = sys.file_flags;
-                     sysidx.area = sys.file_num;
+							sysidx.area = sys.file_num;
                      sysidx.sig = sys.file_sig;
                      strcpy (sysidx.key, sys.short_name);
                      write (fdx, (char *)&sysidx, sizeof (struct _sys_idx));
@@ -1850,7 +1880,7 @@ void bbs_files ()
                   write (fdi, (char *)&sys.file_name, SIZEOF_FILEAREA);
                   memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
                   sysidx.priv = sys.file_priv;
-                  sysidx.flags = sys.file_flags;
+						sysidx.flags = sys.file_flags;
                   sysidx.area = sys.file_num;
                   sysidx.sig = sys.file_sig;
                   strcpy (sysidx.key, sys.short_name);
@@ -1858,10 +1888,10 @@ void bbs_files ()
                }
 
                lseek (fd, 0L, SEEK_SET);
-               chsize (fd, 0L);
+					chsize (fd, 0L);
                lseek (fdi, 0L, SEEK_SET);
 
-               while (read (fdi, (char *)&bsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA)
+					while (read (fdi, (char *)&bsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA)
                   write (fd, (char *)&bsys.file_name, SIZEOF_FILEAREA);
 
                close (fdx);
@@ -1884,7 +1914,7 @@ void bbs_files ()
 
          // D Delete
          case 'D':
-         case 'd':
+			case 'd':
             wh1 = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
             wactiv (wh1);
             wshadow (DGREY|_BLACK);
@@ -1892,10 +1922,10 @@ void bbs_files ()
             wcenters (1, BLACK|_LGREY, "Are you sure (Y/n) ?  ");
 
             strcpy (string, "Y");
-            winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+				winpbeg (BLACK|_LGREY, BLACK|_LGREY);
             winpdef (1, 24, string, "?", 0, 2, NULL, 0);
 
-            i = winpread ();
+				i = winpread ();
             wclose ();
             hidecur ();
 
@@ -1918,7 +1948,7 @@ void bbs_files ()
                while ((fd = sh_open (string, SH_DENYRD, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE)) == -1)
                   ;
 
-               while (read (fd, (char *)&bsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
+					while (read (fd, (char *)&bsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
                   if (bsys.file_num != sys.file_num) {
                      write (fdi, (char *)&bsys.file_name, SIZEOF_FILEAREA);
                      memset ((char *)&sysidx, 0, sizeof (struct _sys_idx));
@@ -1926,10 +1956,10 @@ void bbs_files ()
                      sysidx.flags = bsys.file_flags;
                      sysidx.area = bsys.file_num;
                      sysidx.sig = bsys.file_sig;
-                     strcpy (sysidx.key, bsys.short_name);
+							strcpy (sysidx.key, bsys.short_name);
                      write (fdx, (char *)&sysidx, sizeof (struct _sys_idx));
                   }
-               }
+					}
 
                lseek (fd, 0L, SEEK_SET);
                chsize (fd, 0L);
@@ -1960,10 +1990,10 @@ void bbs_files ()
          // L List
          case 'L':
          case 'l':
-            file_select_area_list (fd, &sys);
+				file_select_area_list (fd, &sys);
             break;
 
-         // ESC Exit
+			// ESC Exit
          case 0x1B:
             i = -1;
             break;
@@ -1987,286 +2017,287 @@ struct _sys *sys;
 
    memcpy ((char *)&nsys.file_name, (char *)sys->file_name, SIZEOF_FILEAREA);
 
-   gotoxy_ (24, 1);
-   clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "ESC-Exit/Save  ENTER-Edit");
-   prints (24, 1, YELLOW|_BLACK, "ESC");
-   prints (24, 16, YELLOW|_BLACK, "ENTER");
+	gotoxy_ (24, 1);
+	clreol_ ();
+	prints (24, 1, LGREY|_BLACK, "ESC-Exit/Save  ENTER-Edit");
+	prints (24, 1, YELLOW|_BLACK, "ESC");
+	prints (24, 16, YELLOW|_BLACK, "ENTER");
 
 continue_editing:
-   do {
-      stop_update ();
-      wclear ();
+	do {
+		stop_update ();
+		wclear ();
 
-      wmenubegc ();
-      wmenuitem ( 1,  1, " Number       ", 0,  1, 0, NULL, 0, 0);
-      wmenuitem ( 1, 28, " Short name ", 0, 23, 0, NULL, 0, 0);
-      wmenuitem ( 2,  1, " Name         ", 0,  2, 0, NULL, 0, 0);
-      wmenuitem ( 3,  1, " Download     ", 0,  5, 0, NULL, 0, 0);
-      wmenuitem ( 4,  1, " Upload       ", 0,  6, 0, NULL, 0, 0);
-      wmenuitem ( 5,  1, " File List    ", 0,  7, 0, NULL, 0, 0);
-      wmenuitem ( 6,  1, " Access priv. ", 0,  8, 0, NULL, 0, 0);
-      wmenuitem ( 7,  1, " A Flag       ", 0,  9, 0, NULL, 0, 0);
-      wmenuitem ( 8,  1, " B Flag       ", 0, 10, 0, NULL, 0, 0);
-      wmenuitem ( 9,  1, " C Flag       ", 0, 11, 0, NULL, 0, 0);
-      wmenuitem (10,  1, " D Flag       ", 0, 12, 0, NULL, 0, 0);
-      wmenuitem ( 6, 28, " Download ", 0, 13, 0, NULL, 0, 0);
-      wmenuitem ( 7, 28, " A Flag   ", 0, 14, 0, NULL, 0, 0);
-      wmenuitem ( 8, 28, " B Flag   ", 0, 15, 0, NULL, 0, 0);
-      wmenuitem ( 9, 28, " C Flag   ", 0, 16, 0, NULL, 0, 0);
-      wmenuitem (10, 28, " D Flag   ", 0, 17, 0, NULL, 0, 0);
-      wmenuitem ( 6, 51, " Upload ", 0, 18, 0, NULL, 0, 0);
-      wmenuitem ( 7, 51, " A Flag ", 0, 19, 0, NULL, 0, 0);
-      wmenuitem ( 8, 51, " B Flag ", 0, 20, 0, NULL, 0, 0);
-      wmenuitem ( 9, 51, " C Flag ", 0, 21, 0, NULL, 0, 0);
-      wmenuitem (10, 51, " D Flag ", 0, 22, 0, NULL, 0, 0);
-      wmenuitem (11,  1, " TIC Level ", 0, 28, 0, NULL, 0, 0);
-      wmenuitem (12,  1, " A Flag       ", 0, 29, 0, NULL, 0, 0);
-      wmenuitem (13,  1, " B Flag       ", 0, 30, 0, NULL, 0, 0);
-      wmenuitem (14,  1, " C Flag       ", 0, 31, 0, NULL, 0, 0);
-      wmenuitem (15,  1, " D Flag       ", 0, 32, 0, NULL, 0, 0);
-      wmenuitem (12, 28, " Group    ", 0,  4, 0, NULL, 0, 0);
-      wmenuitem (13, 28, " Flags    ", 0,  3, 0, NULL, 0, 0);
-      wmenuitem (14, 28, " TIC Tag  ", 0, 24, 0, NULL, 0, 0);
-      wmenuitem (16,  1, " Forward 1    ", 0, 25, 0, NULL, 0, 0);
-      wmenuitem (17,  1, " Forward 2    ", 0, 26, 0, NULL, 0, 0);
-      wmenuitem (18,  1, " Forward 3    ", 0, 27, 0, NULL, 0, 0);
-      wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
+		wmenubegc ();
+		wmenuitem ( 1,  1, " Number       ", 0,  1, 0, NULL, 0, 0);
+		wmenuitem ( 1, 28, " Short name ", 0, 23, 0, NULL, 0, 0);
+		wmenuitem ( 2,  1, " Name         ", 0,  2, 0, NULL, 0, 0);
+		wmenuitem ( 3,  1, " Download     ", 0,  5, 0, NULL, 0, 0);
+		wmenuitem ( 4,  1, " Upload       ", 0,  6, 0, NULL, 0, 0);
+		wmenuitem ( 5,  1, " File List    ", 0,  7, 0, NULL, 0, 0);
+		wmenuitem ( 6,  1, " Access priv. ", 0,  8, 0, NULL, 0, 0);
+		wmenuitem ( 7,  1, " A Flag       ", 0,  9, 0, NULL, 0, 0);
+		wmenuitem ( 8,  1, " B Flag       ", 0, 10, 0, NULL, 0, 0);
+		wmenuitem ( 9,  1, " C Flag       ", 0, 11, 0, NULL, 0, 0);
+		wmenuitem (10,  1, " D Flag       ", 0, 12, 0, NULL, 0, 0);
+		wmenuitem ( 6, 28, " Download ", 0, 13, 0, NULL, 0, 0);
+		wmenuitem ( 7, 28, " A Flag   ", 0, 14, 0, NULL, 0, 0);
+		wmenuitem ( 8, 28, " B Flag   ", 0, 15, 0, NULL, 0, 0);
+		wmenuitem ( 9, 28, " C Flag   ", 0, 16, 0, NULL, 0, 0);
+		wmenuitem (10, 28, " D Flag   ", 0, 17, 0, NULL, 0, 0);
+		wmenuitem ( 6, 51, " Upload ", 0, 18, 0, NULL, 0, 0);
+		wmenuitem ( 7, 51, " A Flag ", 0, 19, 0, NULL, 0, 0);
+		wmenuitem ( 8, 51, " B Flag ", 0, 20, 0, NULL, 0, 0);
+		wmenuitem ( 9, 51, " C Flag ", 0, 21, 0, NULL, 0, 0);
+		wmenuitem (10, 51, " D Flag ", 0, 22, 0, NULL, 0, 0);
+		wmenuitem (11,  1, " TIC Level    ", 0, 28, 0, NULL, 0, 0);
+		wmenuitem (12,  1, " A Flag       ", 0, 29, 0, NULL, 0, 0);
+		wmenuitem (13,  1, " B Flag       ", 0, 30, 0, NULL, 0, 0);
+		wmenuitem (14,  1, " C Flag       ", 0, 31, 0, NULL, 0, 0);
+		wmenuitem (15,  1, " D Flag       ", 0, 32, 0, NULL, 0, 0);
+		wmenuitem (12, 28, " Group    ", 0,  4, 0, NULL, 0, 0);
+		wmenuitem (13, 28, " Flags    ", 0,  3, 0, NULL, 0, 0);
+		wmenuitem (14, 28, " TIC Tag  ", 0, 24, 0, NULL, 0, 0);
+		wprints (16,  1, LGREY|_BLACK, " Forward to:");
+		wmenuitem (17,  1, " 1 ", 0, 25, 0, NULL, 0, 0);
+		wmenuitem (18,  1, " 2 ", 0, 26, 0, NULL, 0, 0);
+		wmenuitem (19,  1, " 3 ", 0, 27, 0, NULL, 0, 0);
+		wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
-      sprintf (string, "%d", nsys.file_num);
-      wprints (1, 16, CYAN|_BLACK, string);
+		sprintf (string, "%d", nsys.file_num);
+		wprints (1, 16, CYAN|_BLACK, string);
 
-      wprints (1, 41, CYAN|_BLACK, nsys.short_name);
+		wprints (1, 41, CYAN|_BLACK, nsys.short_name);
 
-      nsys.file_name[55] = '\0';
-      wprints (2, 16, CYAN|_BLACK, nsys.file_name);
+		nsys.file_name[55] = '\0';
+		wprints (2, 16, CYAN|_BLACK, nsys.file_name);
 
-      wprints (3, 16, CYAN|_BLACK, nsys.filepath);
+		wprints (3, 16, CYAN|_BLACK, nsys.filepath);
 
-      wprints (4, 16, CYAN|_BLACK, nsys.uppath);
+		wprints (4, 16, CYAN|_BLACK, nsys.uppath);
 
-      wprints (5, 16, CYAN|_BLACK, nsys.filelist);
+		wprints (5, 16, CYAN|_BLACK, nsys.filelist);
 
-      wprints (6, 15, CYAN|_BLACK, get_priv_text (nsys.file_priv));
-      wprints (7, 16, CYAN|_BLACK, get_flagA_text ((nsys.file_flags >> 24) & 0xFF));
-      wprints (8, 16, CYAN|_BLACK, get_flagB_text ((nsys.file_flags >> 16) & 0xFF));
-      wprints (9, 16, CYAN|_BLACK, get_flagC_text ((nsys.file_flags >> 8) & 0xFF));
-      wprints (10, 16, CYAN|_BLACK, get_flagD_text (nsys.file_flags & 0xFF));
+		wprints (6, 15, CYAN|_BLACK, get_priv_text (nsys.file_priv));
+		wprints (7, 16, CYAN|_BLACK, get_flagA_text ((nsys.file_flags >> 24) & 0xFF));
+		wprints (8, 16, CYAN|_BLACK, get_flagB_text ((nsys.file_flags >> 16) & 0xFF));
+		wprints (9, 16, CYAN|_BLACK, get_flagC_text ((nsys.file_flags >> 8) & 0xFF));
+		wprints (10, 16, CYAN|_BLACK, get_flagD_text (nsys.file_flags & 0xFF));
 
-      wprints (6, 38, CYAN|_BLACK, get_priv_text (nsys.download_priv));
-      wprints (7, 39, CYAN|_BLACK, get_flagA_text ((nsys.download_flags >> 24) & 0xFF));
-      wprints (8, 39, CYAN|_BLACK, get_flagB_text ((nsys.download_flags >> 16) & 0xFF));
-      wprints (9, 39, CYAN|_BLACK, get_flagC_text ((nsys.download_flags >> 8) & 0xFF));
-      wprints (10, 39, CYAN|_BLACK, get_flagD_text (nsys.download_flags & 0xFF));
+		wprints (6, 38, CYAN|_BLACK, get_priv_text (nsys.download_priv));
+		wprints (7, 39, CYAN|_BLACK, get_flagA_text ((nsys.download_flags >> 24) & 0xFF));
+		wprints (8, 39, CYAN|_BLACK, get_flagB_text ((nsys.download_flags >> 16) & 0xFF));
+		wprints (9, 39, CYAN|_BLACK, get_flagC_text ((nsys.download_flags >> 8) & 0xFF));
+		wprints (10, 39, CYAN|_BLACK, get_flagD_text (nsys.download_flags & 0xFF));
 
-      wprints (6, 59, CYAN|_BLACK, get_priv_text (nsys.upload_priv));
-      wprints (7, 60, CYAN|_BLACK, get_flagA_text ((nsys.upload_flags >> 24) & 0xFF));
-      wprints (8, 60, CYAN|_BLACK, get_flagB_text ((nsys.upload_flags >> 16) & 0xFF));
-      wprints (9, 60, CYAN|_BLACK, get_flagC_text ((nsys.upload_flags >> 8) & 0xFF));
-      wprints (10, 60, CYAN|_BLACK, get_flagD_text (nsys.upload_flags & 0xFF));
+		wprints (6, 59, CYAN|_BLACK, get_priv_text (nsys.upload_priv));
+		wprints (7, 60, CYAN|_BLACK, get_flagA_text ((nsys.upload_flags >> 24) & 0xFF));
+		wprints (8, 60, CYAN|_BLACK, get_flagB_text ((nsys.upload_flags >> 16) & 0xFF));
+		wprints (9, 60, CYAN|_BLACK, get_flagC_text ((nsys.upload_flags >> 8) & 0xFF));
+		wprints (10, 60, CYAN|_BLACK, get_flagD_text (nsys.upload_flags & 0xFF));
 
-      wprints (14, 39, CYAN|_BLACK, nsys.tic_tag);
+		wprints (14, 39, CYAN|_BLACK, nsys.tic_tag);
 
-      sprintf (string, "%d", nsys.tic_level);
-      wprints (11, 16, CYAN|_BLACK, string);
+		sprintf (string, "%d", nsys.tic_level);
+		wprints (11, 16, CYAN|_BLACK, string);
 
-      wprints (12, 16, CYAN|_BLACK, get_flagA_text ((nsys.tic_flags >> 24) & 0xFF));
-      wprints (13, 16, CYAN|_BLACK, get_flagB_text ((nsys.tic_flags >> 16) & 0xFF));
-      wprints (14, 16, CYAN|_BLACK, get_flagC_text ((nsys.tic_flags >> 8) & 0xFF));
-      wprints (15, 16, CYAN|_BLACK, get_flagD_text (nsys.tic_flags & 0xFF));
+		wprints (12, 16, CYAN|_BLACK, get_flagA_text ((nsys.tic_flags >> 24) & 0xFF));
+		wprints (13, 16, CYAN|_BLACK, get_flagB_text ((nsys.tic_flags >> 16) & 0xFF));
+		wprints (14, 16, CYAN|_BLACK, get_flagC_text ((nsys.tic_flags >> 8) & 0xFF));
+		wprints (15, 16, CYAN|_BLACK, get_flagD_text (nsys.tic_flags & 0xFF));
 
-      sprintf (string, "%d", nsys.file_sig);
-      wprints (12, 39, CYAN|_BLACK, string);
+		sprintf (string, "%d", nsys.file_sig);
+		wprints (12, 39, CYAN|_BLACK, string);
 
-      strcpy (string, "........");
-      if (nsys.freearea)
-         string[0] = 'F';
-      if (nsys.file_restricted)
-         string[1] = 'G';
-      if (nsys.no_global_search)
-         string[2] = 'S';
-      if (nsys.no_filedate)
-         string[3] = 'D';
-      if (nsys.norm_req)
-         string[4] = 'N';
-      if (nsys.know_req)
-         string[5] = 'K';
-      if (nsys.prot_req)
-         string[6] = 'P';
-      if (nsys.cdrom)
-         string[7] = 'C';
-      wprints (13, 39, CYAN|_BLACK, string);
+		strcpy (string, "........");
+		if (nsys.freearea)
+			string[0] = 'F';
+		if (nsys.file_restricted)
+			string[1] = 'G';
+		if (nsys.no_global_search)
+			string[2] = 'S';
+		if (nsys.no_filedate)
+			string[3] = 'D';
+		if (nsys.norm_req)
+			string[4] = 'N';
+		if (nsys.know_req)
+			string[5] = 'K';
+		if (nsys.prot_req)
+			string[6] = 'P';
+		if (nsys.cdrom)
+			string[7] = 'C';
+		wprints (13, 39, CYAN|_BLACK, string);
 
-      wprints (16, 16, CYAN|_BLACK, nsys.tic_forward1);
-      wprints (17, 16, CYAN|_BLACK, nsys.tic_forward2);
-      wprints (18, 16, CYAN|_BLACK, nsys.tic_forward3);
+		wprints (17, 4, CYAN|_BLACK, nsys.tic_forward1);
+		wprints (18, 4, CYAN|_BLACK, nsys.tic_forward2);
+		wprints (19, 4, CYAN|_BLACK, nsys.tic_forward3);
 
-      start_update ();
-      i = wmenuget ();
+		start_update ();
+		i = wmenuget ();
 
-      switch (i) {
-         case 1:
-            sprintf (string, "%d", nsys.file_num);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (1, 16, string, "?????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               nsys.file_num = atoi (strbtrim (string));
-            break;
+		switch (i) {
+			case 1:
+				sprintf (string, "%d", nsys.file_num);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (1, 16, string, "?????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					nsys.file_num = atoi (strbtrim (string));
+				break;
 
-         case 2:
-            strcpy (string, nsys.file_name);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (2, 16, string, "???????????????????????????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (nsys.file_name, strbtrim (string));
-            break;
+			case 2:
+				strcpy (string, nsys.file_name);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (2, 16, string, "???????????????????????????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (nsys.file_name, strbtrim (string));
+				break;
 
-         case 3:
-            wh1 = wopen (6, 42, 17, 70, 1, LCYAN|_BLACK, CYAN|_BLACK);
-            wactiv (wh1);
-            wshadow (DGREY|_BLACK);
-            wtitle (" Flags ", TRIGHT, YELLOW|_BLUE);
-            m = 1;
+			case 3:
+				wh1 = wopen (6, 42, 17, 70, 1, LCYAN|_BLACK, CYAN|_BLACK);
+				wactiv (wh1);
+				wshadow (DGREY|_BLACK);
+				wtitle (" Flags ", TRIGHT, YELLOW|_BLUE);
+				m = 1;
 
-            do {
-               wmenubegc ();
-               wmenuitem (1, 1, " No download limits ", 0, 1, 0, NULL, 0, 0);
-               wmenuitem (2, 1, " Group restricted   ", 0, 5, 0, NULL, 0, 0);
-               wmenuitem (3, 1, " No global search   ", 0, 6, 0, NULL, 0, 0);
-               wmenuitem (4, 1, " No file date       ", 0, 7, 0, NULL, 0, 0);
-               wmenuitem (5, 1, " Unknow can request ", 0, 2, 0, NULL, 0, 0);
-               wmenuitem (6, 1, " Know can request   ", 0, 3, 0, NULL, 0, 0);
-               wmenuitem (7, 1, " Prot can request   ", 0, 4, 0, NULL, 0, 0);
-               wmenuitem (8, 1, " CD-ROM             ", 0, 8, 0, NULL, 0, 0);
-               wmenuend (m, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
+				do {
+					wmenubegc ();
+					wmenuitem (1, 1, " No download limits ", 0, 1, 0, NULL, 0, 0);
+					wmenuitem (2, 1, " Group restricted   ", 0, 5, 0, NULL, 0, 0);
+					wmenuitem (3, 1, " No global search   ", 0, 6, 0, NULL, 0, 0);
+					wmenuitem (4, 1, " No file date       ", 0, 7, 0, NULL, 0, 0);
+					wmenuitem (5, 1, " Unknow can request ", 0, 2, 0, NULL, 0, 0);
+					wmenuitem (6, 1, " Know can request   ", 0, 3, 0, NULL, 0, 0);
+					wmenuitem (7, 1, " Prot can request   ", 0, 4, 0, NULL, 0, 0);
+					wmenuitem (8, 1, " CD-ROM             ", 0, 8, 0, NULL, 0, 0);
+					wmenuend (m, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
-               wprints (1, 22, CYAN|_BLACK, nsys.freearea ? "Yes" : "No ");
-               wprints (2, 22, CYAN|_BLACK, nsys.file_restricted ? "Yes" : "No ");
-               wprints (3, 22, CYAN|_BLACK, nsys.no_global_search ? "Yes" : "No ");
-               wprints (4, 22, CYAN|_BLACK, nsys.no_filedate ? "Yes" : "No ");
-               wprints (5, 22, CYAN|_BLACK, nsys.norm_req ? "Yes" : "No ");
-               wprints (6, 22, CYAN|_BLACK, nsys.know_req ? "Yes" : "No ");
-               wprints (7, 22, CYAN|_BLACK, nsys.prot_req ? "Yes" : "No ");
-               wprints (8, 22, CYAN|_BLACK, nsys.cdrom ? "Yes" : "No ");
+					wprints (1, 22, CYAN|_BLACK, nsys.freearea ? "Yes" : "No ");
+					wprints (2, 22, CYAN|_BLACK, nsys.file_restricted ? "Yes" : "No ");
+					wprints (3, 22, CYAN|_BLACK, nsys.no_global_search ? "Yes" : "No ");
+					wprints (4, 22, CYAN|_BLACK, nsys.no_filedate ? "Yes" : "No ");
+					wprints (5, 22, CYAN|_BLACK, nsys.norm_req ? "Yes" : "No ");
+					wprints (6, 22, CYAN|_BLACK, nsys.know_req ? "Yes" : "No ");
+					wprints (7, 22, CYAN|_BLACK, nsys.prot_req ? "Yes" : "No ");
+					wprints (8, 22, CYAN|_BLACK, nsys.cdrom ? "Yes" : "No ");
 
-               start_update ();
-               m = wmenuget ();
+					start_update ();
+					m = wmenuget ();
 
-               switch (m) {
-                  case 1:
-                     nsys.freearea = nsys.freearea ? 0 : 1;
-                     break;
-                  case 2:
-                     nsys.norm_req = nsys.norm_req ? 0 : 1;
-                     break;
-                  case 3:
-                     nsys.know_req = nsys.know_req ? 0 : 1;
-                     break;
-                  case 4:
-                     nsys.prot_req = nsys.prot_req ? 0 : 1;
-                     break;
-                  case 5:
-                     nsys.file_restricted = nsys.file_restricted ? 0 : 1;
-                     break;
-                  case 6:
-                     nsys.no_global_search = nsys.no_global_search ? 0 : 1;
-                     break;
-                  case 7:
-                     nsys.no_filedate = nsys.no_filedate ? 0 : 1;
-                     break;
-                  case 8:
-                     nsys.cdrom = nsys.cdrom ? 0 : 1;
-                     break;
-               }
+					switch (m) {
+						case 1:
+							nsys.freearea = nsys.freearea ? 0 : 1;
+							break;
+						case 2:
+							nsys.norm_req = nsys.norm_req ? 0 : 1;
+							break;
+						case 3:
+							nsys.know_req = nsys.know_req ? 0 : 1;
+							break;
+						case 4:
+							nsys.prot_req = nsys.prot_req ? 0 : 1;
+							break;
+						case 5:
+							nsys.file_restricted = nsys.file_restricted ? 0 : 1;
+							break;
+						case 6:
+							nsys.no_global_search = nsys.no_global_search ? 0 : 1;
+							break;
+						case 7:
+							nsys.no_filedate = nsys.no_filedate ? 0 : 1;
+							break;
+						case 8:
+							nsys.cdrom = nsys.cdrom ? 0 : 1;
+							break;
+					}
 
-            } while (m != -1);
+				} while (m != -1);
 
-            wclose ();
-            break;
+				wclose ();
+				break;
 
-         case 4:
-            sprintf (string, "%d", nsys.file_sig);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (12, 39, string, "???", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               nsys.file_sig = atoi (strbtrim (string));
-	    break;
+			case 4:
+				sprintf (string, "%d", nsys.file_sig);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (12, 39, string, "???", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					nsys.file_sig = atoi (strbtrim (string));
+		 break;
 
-         case 5:
-            strcpy (string, nsys.filepath);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (3, 16, string, "???????????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS) {
-               strcpy (nsys.filepath, strbtrim (string));
-               if (nsys.filepath[0] && nsys.filepath[strlen (nsys.filepath) - 1] != '\\')
-                  strcat (nsys.filepath, "\\");
-               create_path (nsys.filepath);
-            }
-            break;
+			case 5:
+				strcpy (string, nsys.filepath);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (3, 16, string, "???????????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS) {
+					strcpy (nsys.filepath, strbtrim (string));
+					if (nsys.filepath[0] && nsys.filepath[strlen (nsys.filepath) - 1] != '\\')
+						strcat (nsys.filepath, "\\");
+					create_path (nsys.filepath);
+				}
+				break;
 
-         case 6:
-            strcpy (string, nsys.uppath);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (4, 16, string, "???????????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS) {
-               strcpy (nsys.uppath, strbtrim (string));
-               if (nsys.uppath[0] && nsys.uppath[strlen (nsys.uppath) - 1] != '\\')
-                  strcat (nsys.uppath, "\\");
-               create_path (nsys.uppath);
-            }
-            break;
+			case 6:
+				strcpy (string, nsys.uppath);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (4, 16, string, "???????????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS) {
+					strcpy (nsys.uppath, strbtrim (string));
+					if (nsys.uppath[0] && nsys.uppath[strlen (nsys.uppath) - 1] != '\\')
+						strcat (nsys.uppath, "\\");
+					create_path (nsys.uppath);
+				}
+				break;
 
-         case 7:
-            strcpy (string, nsys.filelist);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (5, 16, string, "?????????????????????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (nsys.filelist, strbtrim (string));
-            break;
+			case 7:
+				strcpy (string, nsys.filelist);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (5, 16, string, "?????????????????????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (nsys.filelist, strbtrim (string));
+				break;
 
-         case 8:
-            nsys.file_priv = select_level (nsys.file_priv, 25, 6);
-            break;
+			case 8:
+				nsys.file_priv = select_level (nsys.file_priv, 25, 6);
+				break;
 
-         case 9:
-            nsys.file_flags = window_get_flags (4, 26, 1, nsys.file_flags);
-            break;
+			case 9:
+				nsys.file_flags = window_get_flags (4, 26, 1, nsys.file_flags);
+				break;
 
-         case 10:
-            nsys.file_flags = window_get_flags (4, 26, 2, nsys.file_flags);
-            break;
+			case 10:
+				nsys.file_flags = window_get_flags (4, 26, 2, nsys.file_flags);
+				break;
 
-         case 11:
-            nsys.file_flags = window_get_flags (4, 26, 3, nsys.file_flags);
-            break;
+			case 11:
+				nsys.file_flags = window_get_flags (4, 26, 3, nsys.file_flags);
+				break;
 
-         case 12:
-            nsys.file_flags = window_get_flags (4, 26, 4, nsys.file_flags);
-            break;
+			case 12:
+				nsys.file_flags = window_get_flags (4, 26, 4, nsys.file_flags);
+				break;
 
-         case 13:
-            nsys.download_priv = select_level (nsys.download_priv, 45, 6);
-            break;
+			case 13:
+				nsys.download_priv = select_level (nsys.download_priv, 45, 6);
+				break;
 
-         case 14:
-            nsys.download_flags = window_get_flags (4, 50, 1, nsys.download_flags);
-            break;
+			case 14:
+				nsys.download_flags = window_get_flags (4, 50, 1, nsys.download_flags);
+				break;
 
-         case 15:
-            nsys.download_flags = window_get_flags (4, 50, 2, nsys.download_flags);
-            break;
+			case 15:
+				nsys.download_flags = window_get_flags (4, 50, 2, nsys.download_flags);
+				break;
 
-         case 16:
-            nsys.download_flags = window_get_flags (4, 50, 3, nsys.download_flags);
-            break;
+			case 16:
+				nsys.download_flags = window_get_flags (4, 50, 3, nsys.download_flags);
+				break;
 
-         case 17:
-            nsys.download_flags = window_get_flags (4, 50, 4, nsys.download_flags);
-            break;
+			case 17:
+				nsys.download_flags = window_get_flags (4, 50, 4, nsys.download_flags);
+				break;
 
-         case 18:
-            nsys.upload_priv = select_level (nsys.upload_priv, 47, 6);
-            break;
+			case 18:
+				nsys.upload_priv = select_level (nsys.upload_priv, 47, 6);
+				break;
 
          case 19:
             nsys.upload_flags = window_get_flags (4, 66, 1, nsys.upload_flags);
@@ -2300,62 +2331,62 @@ continue_editing:
                strcpy (nsys.tic_tag, strbtrim (string));
             break;
 
-         case 25:
-            strcpy (string, nsys.tic_forward1);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (16, 16, string, "????????????????????????????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (nsys.tic_forward1, strbtrim (string));
-            break;
+			case 25:
+				strcpy (string, nsys.tic_forward1);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (17, 4, string, "????????????????????????????????????????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (nsys.tic_forward1, strbtrim (string));
+				break;
 
-         case 26:
-            strcpy (string, nsys.tic_forward2);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (17, 16, string, "????????????????????????????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (nsys.tic_forward2, strbtrim (string));
-            break;
+			case 26:
+				strcpy (string, nsys.tic_forward2);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (18, 4, string, "????????????????????????????????????????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (nsys.tic_forward2, strbtrim (string));
+				break;
 
-         case 27:
-            strcpy (string, nsys.tic_forward3);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (18, 16, string, "????????????????????????????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (nsys.tic_forward3, strbtrim (string));
-            break;
+			case 27:
+				strcpy (string, nsys.tic_forward3);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (19, 4, string, "????????????????????????????????????????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (nsys.tic_forward3, strbtrim (string));
+				break;
 
-         case 28:
-            sprintf (string, "%d", nsys.tic_level);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (11, 16, string, "???", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               nsys.tic_level = atoi (strbtrim (string));
-            break;
+			case 28:
+				sprintf (string, "%d", nsys.tic_level);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (11, 16, string, "???", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					nsys.tic_level = atoi (strbtrim (string));
+				break;
 
-         case 29:
-            nsys.tic_flags = window_get_flags (9, 26, 1, nsys.tic_flags);
-            break;
+			case 29:
+				nsys.tic_flags = window_get_flags (9, 26, 1, nsys.tic_flags);
+				break;
 
-         case 30:
-            nsys.tic_flags = window_get_flags (9, 26, 2, nsys.tic_flags);
-            break;
+			case 30:
+				nsys.tic_flags = window_get_flags (9, 26, 2, nsys.tic_flags);
+				break;
 
-         case 31:
-            nsys.tic_flags = window_get_flags (9, 26, 3, nsys.tic_flags);
-            break;
+			case 31:
+				nsys.tic_flags = window_get_flags (9, 26, 3, nsys.tic_flags);
+				break;
 
-         case 32:
-            nsys.tic_flags = window_get_flags (9, 26, 4, nsys.tic_flags);
-            break;
-      }
+			case 32:
+				nsys.tic_flags = window_get_flags (9, 26, 4, nsys.tic_flags);
+				break;
+		}
 
-      hidecur ();
-   } while (i != -1);
+		hidecur ();
+	} while (i != -1);
 
-   if (memcmp ((char *)&nsys.file_name, (char *)sys->file_name, SIZEOF_FILEAREA)) {
-      wh1 = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
-      wactiv (wh1);
-      wshadow (DGREY|_BLACK);
+	if (memcmp ((char *)&nsys.file_name, (char *)sys->file_name, SIZEOF_FILEAREA)) {
+		wh1 = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
+		wactiv (wh1);
+		wshadow (DGREY|_BLACK);
 
       wcenters (1, BLACK|_LGREY, "Save changes (Y/n) ?  ");
 

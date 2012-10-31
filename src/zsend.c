@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <io.h>
 #include <string.h>
@@ -524,6 +542,7 @@ static int ZS_GetReceiverInfo ()
          case ZCAN:
          case RCDO:
          case TIMEOUT:
+         something_wrong=1;
             return ERROR;
 
          case ZRQINIT:
@@ -573,10 +592,13 @@ int wazoo;
 
          XON_ENABLE ();
          status_line (msgtxt[M_KBD_MSG]);
+         something_wrong=1;
          return ERROR;
          }
-      else if (!CARRIER)
+      else if (!CARRIER){
+         something_wrong=1;
          return ERROR;
+         }
 
       Txhdr[ZF0] = LZCONV;                       /* Default file conversion
                                                   * mode */
@@ -606,12 +628,14 @@ Again:
          case TIMEOUT:
          case ZFIN:
          case ZABORT:
+            something_wrong=1;
             return ERROR;
 
          case ZSKIP:
             /*-----------------------------------------*/
             /* Other system wants to skip this file    */
             /*-----------------------------------------*/
+            something_wrong=1;
             return c;
 
          case ZRPOS:
@@ -678,6 +702,7 @@ WaitAck:
             /*-----------------------------------------*/
             /* Skip this file                          */
             /*-----------------------------------------*/
+            something_wrong=1;
             return c;
 
          case ZACK:
@@ -704,6 +729,7 @@ WaitAck:
             /*-----------------------------------------*/
             /* Timed out on message from other side    */
             /*-----------------------------------------*/
+            something_wrong=1;
             break;
 
          default:
@@ -712,6 +738,7 @@ WaitAck:
                fclose (Infile);
                Infile = NULL;
             }
+            something_wrong=1;
             return ERROR;
          }                                       /* switch */
 
@@ -764,8 +791,10 @@ WaitAck:
          goto oops;
          }
 
-      if (!CARRIER)
+      if (!CARRIER) {
+         something_wrong=1;
          goto oops;
+         }
 
       if ((c = fread (Txbuf, 1, blklen, Infile)) != z_size)
          {
@@ -829,6 +858,7 @@ WaitAck:
                /* Interruption detected;               */
                /* stop sending and process complaint   */
                /*--------------------------------------*/
+               something_wrong=1;
                z_message (msgtxt[M_TROUBLE]);
                CLEAR_OUTBOUND ();
                ZS_SendData (Txbuf, 0, ZCRCE);
@@ -868,6 +898,7 @@ WaitAck:
             /* Request to skip the current file        */
             /*-----------------------------------------*/
             status_line (msgtxt[M_SKIP_MSG]);
+            something_wrong=1;
             if (Infile) {
                fclose (Infile);
                Infile = NULL;
@@ -881,6 +912,7 @@ WaitAck:
                fclose (Infile);
                Infile = NULL;
             }
+            something_wrong=1;
             return ERROR;
          }                                       /* switch */
       }                                          /* while */
@@ -916,6 +948,7 @@ int num_errs;
          case ZFIN:
          case RCDO:
             status_line (msgtxt[M_ERROR]);
+            something_wrong=1;
             return ERROR;
 
          case ZRPOS:
@@ -936,6 +969,7 @@ int num_errs;
 
          case ZSKIP:
             status_line (msgtxt[M_SKIP_MSG]);
+            something_wrong=1;
 
          case ZRINIT:
             if (Infile) {
@@ -991,6 +1025,7 @@ static void ZS_EndSend ()
          case ZCAN:
          case RCDO:
          case TIMEOUT:
+            something_wrong=1;
             return;
          }                                       /* switch */
       }                                          /* while */

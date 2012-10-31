@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,7 +51,7 @@ unsigned long cr3tab[] = {                /* CRC polynomial 0xedb88320 */
    0x35b5a8faL, 0x42b2986cL, 0xdbbbc9d6L, 0xacbcf940L, 0x32d86ce3L, 0x45df5c75L, 0xdcd60dcfL, 0xabd13d59L,
    0x26d930acL, 0x51de003aL, 0xc8d75180L, 0xbfd06116L, 0x21b4f4b5L, 0x56b3c423L, 0xcfba9599L, 0xb8bda50fL,
    0x2802b89eL, 0x5f058808L, 0xc60cd9b2L, 0xb10be924L, 0x2f6f7c87L, 0x58684c11L, 0xc1611dabL, 0xb6662d3dL,
-   0x76dc4190L, 0x01db7106L, 0x98d220bcL, 0xefd5102aL, 0x71b18589L, 0x06b6b51fL, 0x9fbfe4a5L, 0xe8b8d433L,
+	0x76dc4190L, 0x01db7106L, 0x98d220bcL, 0xefd5102aL, 0x71b18589L, 0x06b6b51fL, 0x9fbfe4a5L, 0xe8b8d433L,
    0x7807c9a2L, 0x0f00f934L, 0x9609a88eL, 0xe10e9818L, 0x7f6a0dbbL, 0x086d3d2dL, 0x91646c97L, 0xe6635c01L,
    0x6b6b51f4L, 0x1c6c6162L, 0x856530d8L, 0xf262004eL, 0x6c0695edL, 0x1b01a57bL, 0x8208f4c1L, 0xf50fc457L,
    0x65b0d9c6L, 0x12b7e950L, 0x8bbeb8eaL, 0xfcb9887cL, 0x62dd1ddfL, 0x15da2d49L, 0x8cd37cf3L, 0xfbd44c65L,
@@ -246,41 +264,41 @@ void edit_language (struct _usr *usr)
    }
    wmenuend (usr->language + 1, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
-   i = wmenuget ();
+	i = wmenuget ();
 
-   if (i != -1)
-      usr->language = i - 1;
+	if (i != -1)
+		usr->language = i - 1;
 
-   wclose ();
+	wclose ();
 }
 
 void edit_single_user (struct _usr *usr)
 {
-   int i = 1, wh1, m;
-   char string[128];
-   struct _usr nusr;
+	int i = 1, wh1, m;
+	char string[128];
+	struct _usr nusr;
 
-   memcpy ((char *)&nusr, (char *)usr, sizeof (struct _usr));
+	memcpy ((char *)&nusr, (char *)usr, sizeof (struct _usr));
 
-   gotoxy_ (24, 1);
-   clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "ESC-Exit/Save  ENTER-Edit");
-   prints (24, 1, YELLOW|_BLACK, "ESC");
-   prints (24, 16, YELLOW|_BLACK, "ENTER");
+	gotoxy_ (24, 1);
+	clreol_ ();
+	prints (24, 1, LGREY|_BLACK, "ESC-Exit/Save  ENTER-Edit");
+	prints (24, 1, YELLOW|_BLACK, "ESC");
+	prints (24, 16, YELLOW|_BLACK, "ENTER");
 
 continue_editing:
-   do {
-      stop_update ();
-      wclear ();
+	do {
+		stop_update ();
+		wclear ();
 
-      wmenubegc ();
-      wmenuitem ( 1,  1, " Name       ", 0,  1, 0, NULL, 0, 0);
-      wmenuitem ( 2,  1, " Alias      ", 0,  2, 0, NULL, 0, 0);
+		wmenubegc ();
+		wmenuitem ( 1,  1, " Name       ", 0,  1, 0, NULL, 0, 0);
+		wmenuitem ( 2,  1, " Alias      ", 0,  2, 0, NULL, 0, 0);
       wmenuitem ( 3,  1, " City       ", 0,  3, 0, NULL, 0, 0);
       wmenuitem ( 3, 43, " First call ", 0,  5, 0, NULL, 0, 0);
 
       if (!otherdata) {
-         wmenuitem ( 4,  1, " Password   ", 0,  4, 0, NULL, 0, 0);
+			wmenuitem ( 4,  1, " Password   ", 0,  4, 0, NULL, 0, 0);
          wmenuitem ( 4, 43, " Last call  ", 0,  6, 0, NULL, 0, 0);
          wmenuitem ( 5,  1, " Level      ", 0,  7, 0, NULL, 0, 0);
          wmenuitem ( 5, 26, " Mail scan  ", 0, 19, 0, NULL, 0, 0);
@@ -315,8 +333,8 @@ continue_editing:
          wmenuitem (15, 43, " Width      ", 0, 39, 0, NULL, 0, 0);
          wmenuitem (15, 26, " File box   ", 0, 29, 0, NULL, 0, 0);
          wmenuitem (15,  1, " Protocol   ", 0, 41, 0, NULL, 0, 0);
-         wmenuitem (16,  1, " Signature  ", 0, 15, 0, NULL, 0, 0);
-         wmenuitem (17,  1, " Comment    ", 0, 16, 0, NULL, 0, 0);
+			wmenuitem (16,  1, " Signature  ", 0, 15, 0, NULL, 0, 0);
+			wmenuitem (17,  1, " Comment    ", 0, 16, 0, NULL, 0, 0);
       }
       else {
          wmenuitem ( 4,  1, " Pwd change ", 0, 50, 0, NULL, 0, 0);
@@ -417,8 +435,8 @@ continue_editing:
          wprints (15, 39, CYAN|_BLACK, nusr.havebox ? "Yes" : "No");
          sprintf (string, "%c", nusr.protocol);
          wprints (15, 14, CYAN|_BLACK, string);
-         wprints (16, 14, CYAN|_BLACK, nusr.signature);
-         wprints (17, 14, CYAN|_BLACK, nusr.comment);
+			wprints (16, 14, CYAN|_BLACK, nusr.signature);
+			wprints (17, 14, CYAN|_BLACK, nusr.comment);
       }
       else {
          wprints ( 4, 14, CYAN|_BLACK, nusr.lastpwdchange);
@@ -577,17 +595,17 @@ continue_editing:
             break;
 
          case 15:
-            strcpy (string, nusr.signature);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (16, 14, string, "?????????????????????????????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (nusr.signature, strbtrim (string));
-            break;
+				strcpy (string, nusr.signature);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (16, 14, string, "?????????????????????????????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (nusr.signature, strbtrim (string));
+				break;
 
-         case 16:
-            strcpy (string, nusr.comment);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (17, 14, string, "???????????????????????????????????????????????????????????", 0, 2, NULL, 0);
+			case 16:
+				strcpy (string, nusr.comment);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (17, 14, string, "???????????????????????????????????????????????????????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                strcpy (nusr.comment, strbtrim (string));
             break;
@@ -948,56 +966,56 @@ continue_editing:
 
       if (toupper (string[0]) == 'Y')
          memcpy ((char *)usr, (char *)&nusr, sizeof (struct _usr));
-   }
+	}
 
-   gotoxy_ (24, 1);
-   clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New User  L-List  D-Delete  O-Other");
-   prints (24, 1, YELLOW|_BLACK, "PgUp/PgDn");
-   prints (24, 26, YELLOW|_BLACK, "E");
-   prints (24, 34, YELLOW|_BLACK, "A");
-   prints (24, 50, YELLOW|_BLACK, "L");
-   prints (24, 58, YELLOW|_BLACK, "D");
-   prints (24, 68, YELLOW|_BLACK, "O");
+	gotoxy_ (24, 1);
+	clreol_ ();
+	prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New User  L-List  D-Delete  O-Other");
+	prints (24, 1, YELLOW|_BLACK, "PgUp/PgDn");
+	prints (24, 26, YELLOW|_BLACK, "E");
+	prints (24, 34, YELLOW|_BLACK, "A");
+	prints (24, 50, YELLOW|_BLACK, "L");
+	prints (24, 58, YELLOW|_BLACK, "D");
+	prints (24, 68, YELLOW|_BLACK, "O");
 }
 
 void manager_users (void)
 {
-   int fd, fdidx, wh, i = 1, readed = 1, m;
-   char string[128];
-   struct _usr usr;
-   struct _usridx usridx;
+	int fd, fdidx, wh, i = 1, readed = 1, m;
+	char string[128];
+	struct _usr usr;
+	struct _usridx usridx;
 
-   sprintf (string, "%s.BBS", config.user_file);
-   fd = sh_open (string, SH_DENYNONE, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-   if (fd == -1)
-      return;
+	sprintf (string, "%s.BBS", config.user_file);
+	fd = sh_open (string, SH_DENYNONE, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+	if (fd == -1)
+		return;
 
-   sprintf (string, "%s.IDX", config.user_file);
-   fdidx = sh_open (string, SH_DENYNONE, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-   if (fdidx == -1)
-      return;
+	sprintf (string, "%s.IDX", config.user_file);
+	fdidx = sh_open (string, SH_DENYNONE, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+	if (fdidx == -1)
+		return;
 
-   memset ((char *)&usr, 0, sizeof (struct _usr));
-   if (read (fd, &usr, sizeof (struct _usr)) < sizeof (struct _usr))
-      readed = 0;
-   else
-      read (fdidx, &usridx, sizeof (struct _usridx));
+	memset ((char *)&usr, 0, sizeof (struct _usr));
+	if (read (fd, &usr, sizeof (struct _usr)) < sizeof (struct _usr))
+		readed = 0;
+	else
+		read (fdidx, &usridx, sizeof (struct _usridx));
 
-   gotoxy_ (24, 1);
-   clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New User  L-List  D-Delete  O-Other");
-   prints (24, 1, YELLOW|_BLACK, "PgUp/PgDn");
-   prints (24, 26, YELLOW|_BLACK, "E");
-   prints (24, 34, YELLOW|_BLACK, "A");
-   prints (24, 50, YELLOW|_BLACK, "L");
-   prints (24, 58, YELLOW|_BLACK, "D");
-   prints (24, 68, YELLOW|_BLACK, "O");
+	gotoxy_ (24, 1);
+	clreol_ ();
+	prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New User  L-List  D-Delete  O-Other");
+	prints (24, 1, YELLOW|_BLACK, "PgUp/PgDn");
+	prints (24, 26, YELLOW|_BLACK, "E");
+	prints (24, 34, YELLOW|_BLACK, "A");
+	prints (24, 50, YELLOW|_BLACK, "L");
+	prints (24, 58, YELLOW|_BLACK, "D");
+	prints (24, 68, YELLOW|_BLACK, "O");
 
-   wh = wopen (2, 0, 22, 77, 1, LCYAN|_BLACK, CYAN|_BLACK);
-   wactiv (wh);
-   wshadow (DGREY|_BLACK);
-   wtitle (" Users ", TRIGHT, YELLOW|_BLUE);
+	wh = wopen (2, 0, 22, 77, 1, LCYAN|_BLACK, CYAN|_BLACK);
+	wactiv (wh);
+	wshadow (DGREY|_BLACK);
+	wtitle (" Users ", TRIGHT, YELLOW|_BLUE);
 
    otherdata = 0;
 
@@ -1021,7 +1039,7 @@ void manager_users (void)
       }
 
       if (!otherdata) {
-         wprints ( 4,  1, LGREY|_BLACK, " Password   ");
+			wprints ( 4,  1, LGREY|_BLACK, " Password   ");
          wprints ( 4, 43, LGREY|_BLACK, " Last call  ");
          wprints ( 5,  1, LGREY|_BLACK, " Level      ");
          wprints ( 5, 26, LGREY|_BLACK, " Mail scan  ");
@@ -1056,77 +1074,77 @@ void manager_users (void)
          wprints (15, 43, LGREY|_BLACK, " Width      ");
          wprints (15, 26, LGREY|_BLACK, " File box   ");
          wprints (15,  1, LGREY|_BLACK, " Protocol   ");
-         wprints (16,  1, LGREY|_BLACK, " Signature  ");
-         wprints (17,  1, LGREY|_BLACK, " Comment    ");
+			wprints (16,  1, LGREY|_BLACK, " Signature  ");
+			wprints (17,  1, LGREY|_BLACK, " Comment    ");
 
-         if (readed) {
-            strcpy (string, "***************");
-            string[strlen (usr.pwd)] = '\0';
-            wprints (4, 14, CYAN|_BLACK, string);
-            wprints (4, 56, CYAN|_BLACK, usr.ldate);
-            wprints (5, 13, CYAN|_BLACK, get_priv_text (usr.priv));
-            wprints (5, 39, CYAN|_BLACK, usr.scanmail ? "Yes" : "No");
-            for (m = 0; m < 10; m++) {
-               if (!config.packid[m].display[0])
-                  continue;
-               if (toupper (config.packid[m].display[0]) == toupper (usr.archiver))
-                  break;
-            }
-            wprints (5, 56, CYAN|_BLACK, (m < 10) ? &config.packid[m].display[1] : "None");
-            wprints (6, 14, CYAN|_BLACK, get_flagA_text ((usr.flags >> 24) & 0xFF));
-            wprints (6, 39, CYAN|_BLACK, !usr.use_lore ? "Yes" : "No");
-            sprintf (string, "%d", usr.nulls);
-            wprints (6, 56, CYAN|_BLACK, string);
-            wprints (7, 14, CYAN|_BLACK, get_flagB_text ((usr.flags >> 16) & 0xFF));
-            wprints (7, 39, CYAN|_BLACK, usr.more ? "Yes" : "No");
-            if (!config.language[usr.language].descr[0])
-               usr.language = 0;
-            wprints (7, 56, CYAN|_BLACK, &config.language[usr.language].descr[1]);
-            wprints (8, 14, CYAN|_BLACK, get_flagC_text ((usr.flags >> 8) & 0xFF));
-            wprints (8, 39, CYAN|_BLACK, usr.formfeed ? "Yes" : "No");
-            sprintf (string, "%d", usr.time);
-            wprints (8, 56, CYAN|_BLACK, string);
-            wprints (9, 14, CYAN|_BLACK, get_flagD_text (usr.flags & 0xFF));
-            wprints (9, 39, CYAN|_BLACK, usr.hotkey ? "Yes" : "No");
-            sprintf (string, "%d", usr.credit);
-            wprints (9, 56, CYAN|_BLACK, string);
-            if (usr.ansi)
-               wprints (10, 14, CYAN|_BLACK, "Ansi");
-            else if (usr.avatar)
-               wprints (10, 14, CYAN|_BLACK, "Avatar");
-            else
-               wprints (10, 14, CYAN|_BLACK, "TTY");
-            wprints (10, 39, CYAN|_BLACK, usr.full_read ? "Yes" : "No");
-            wprints (10, 56, CYAN|_BLACK, usr.voicephone);
-            wprints (11, 14, CYAN|_BLACK, usr.color ? "Yes" : "No");
-            wprints (11, 39, CYAN|_BLACK, usr.ibmset ? "Yes" : "No");
-            wprints (11, 56, CYAN|_BLACK, usr.dataphone);
-            sprintf (string, "%ld", usr.times);
-            wprints (12, 14, CYAN|_BLACK, string);
-            wprints (12, 39, CYAN|_BLACK, usr.usrhidden ? "Yes" : "No");
-            wprints (12, 56, CYAN|_BLACK, usr.birthdate);
-            sprintf (string, "%u", usr.msg);
-            wprints (13, 14, CYAN|_BLACK, string);
-            wprints (13, 39, CYAN|_BLACK, usr.nokill ? "Yes" : "No");
-            wprints (13, 56, CYAN|_BLACK, usr.subscrdate);
-            sprintf (string, "%u", usr.files);
-            wprints (14, 14, CYAN|_BLACK, string);
-            wprints (14, 39, CYAN|_BLACK, usr.xfer_prior ? "Yes" : "No");
-            sprintf (string, "%d", usr.len);
-            wprints (14, 56, CYAN|_BLACK, string);
-            sprintf (string, "%d", usr.width);
-            wprints (15, 56, CYAN|_BLACK, string);
-            wprints (15, 39, CYAN|_BLACK, usr.havebox ? "Yes" : "No");
-            sprintf (string, "%c", usr.protocol);
-            wprints (15, 14, CYAN|_BLACK, string);
-            wprints (16, 14, CYAN|_BLACK, usr.signature);
-            wprints (17, 14, CYAN|_BLACK, usr.comment);
+			if (readed) {
+				strcpy (string, "***************");
+				string[strlen (usr.pwd)] = '\0';
+				wprints (4, 14, CYAN|_BLACK, string);
+				wprints (4, 56, CYAN|_BLACK, usr.ldate);
+				wprints (5, 13, CYAN|_BLACK, get_priv_text (usr.priv));
+				wprints (5, 39, CYAN|_BLACK, usr.scanmail ? "Yes" : "No");
+				for (m = 0; m < 10; m++) {
+					if (!config.packid[m].display[0])
+						continue;
+					if (toupper (config.packid[m].display[0]) == toupper (usr.archiver))
+						break;
+				}
+				wprints (5, 56, CYAN|_BLACK, (m < 10) ? &config.packid[m].display[1] : "None");
+				wprints (6, 14, CYAN|_BLACK, get_flagA_text ((usr.flags >> 24) & 0xFF));
+				wprints (6, 39, CYAN|_BLACK, !usr.use_lore ? "Yes" : "No");
+				sprintf (string, "%d", usr.nulls);
+				wprints (6, 56, CYAN|_BLACK, string);
+				wprints (7, 14, CYAN|_BLACK, get_flagB_text ((usr.flags >> 16) & 0xFF));
+				wprints (7, 39, CYAN|_BLACK, usr.more ? "Yes" : "No");
+				if (!config.language[usr.language].descr[0])
+					usr.language = 0;
+				wprints (7, 56, CYAN|_BLACK, &config.language[usr.language].descr[1]);
+				wprints (8, 14, CYAN|_BLACK, get_flagC_text ((usr.flags >> 8) & 0xFF));
+				wprints (8, 39, CYAN|_BLACK, usr.formfeed ? "Yes" : "No");
+				sprintf (string, "%d", usr.time);
+				wprints (8, 56, CYAN|_BLACK, string);
+				wprints (9, 14, CYAN|_BLACK, get_flagD_text (usr.flags & 0xFF));
+				wprints (9, 39, CYAN|_BLACK, usr.hotkey ? "Yes" : "No");
+				sprintf (string, "%d", usr.credit);
+				wprints (9, 56, CYAN|_BLACK, string);
+				if (usr.ansi)
+					wprints (10, 14, CYAN|_BLACK, "Ansi");
+				else if (usr.avatar)
+					wprints (10, 14, CYAN|_BLACK, "Avatar");
+				else
+					wprints (10, 14, CYAN|_BLACK, "TTY");
+				wprints (10, 39, CYAN|_BLACK, usr.full_read ? "Yes" : "No");
+				wprints (10, 56, CYAN|_BLACK, usr.voicephone);
+				wprints (11, 14, CYAN|_BLACK, usr.color ? "Yes" : "No");
+				wprints (11, 39, CYAN|_BLACK, usr.ibmset ? "Yes" : "No");
+				wprints (11, 56, CYAN|_BLACK, usr.dataphone);
+				sprintf (string, "%ld", usr.times);
+				wprints (12, 14, CYAN|_BLACK, string);
+				wprints (12, 39, CYAN|_BLACK, usr.usrhidden ? "Yes" : "No");
+				wprints (12, 56, CYAN|_BLACK, usr.birthdate);
+				sprintf (string, "%u", usr.msg);
+				wprints (13, 14, CYAN|_BLACK, string);
+				wprints (13, 39, CYAN|_BLACK, usr.nokill ? "Yes" : "No");
+				wprints (13, 56, CYAN|_BLACK, usr.subscrdate);
+				sprintf (string, "%u", usr.files);
+				wprints (14, 14, CYAN|_BLACK, string);
+				wprints (14, 39, CYAN|_BLACK, usr.xfer_prior ? "Yes" : "No");
+				sprintf (string, "%d", usr.len);
+				wprints (14, 56, CYAN|_BLACK, string);
+				sprintf (string, "%d", usr.width);
+				wprints (15, 56, CYAN|_BLACK, string);
+				wprints (15, 39, CYAN|_BLACK, usr.havebox ? "Yes" : "No");
+				sprintf (string, "%c", usr.protocol);
+				wprints (15, 14, CYAN|_BLACK, string);
+				wprints (16, 14, CYAN|_BLACK, usr.signature);
+				wprints (17, 14, CYAN|_BLACK, usr.comment);
 
-            if (usr.deleted)
-               wprints (1, 62, WHITE|_BLACK, "* DELETED *");
-         }
-      }
-      else {
+				if (usr.deleted)
+					wprints (1, 62, WHITE|_BLACK, "* DELETED *");
+			}
+		}
+		else {
          wprints ( 4,  1, LGREY|_BLACK, " Pwd change ");
          wprints ( 5,  1, LGREY|_BLACK, " UL Kbytes  ");
          wprints ( 5, 26, LGREY|_BLACK, " UL Files   ");

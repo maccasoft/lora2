@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -39,6 +57,8 @@ static int prescan_tagged_areas (char, FILE *);
 static char * namefixup (char *);
 static int bluewave_prescan_tagged_areas (void);
 static int bluewave_process_reply (void);
+
+int offline_reader = 0, lastread_need_save = 0;
 
 static int is_tagged (int area)
 {
@@ -414,16 +434,19 @@ void offline_pack_tagged_areas (int bw)
    m_print (bbstxt[B_ONE_CR]);
 
    cps = 0;
-   c = sys.freearea;
-   sys.freearea = 1;
-   set_useron_record (QWKDOOR, 0, 0);
+	c = sys.freearea;
+	sys.freearea = 0;
+	offline_reader = 1;
+	set_useron_record (QWKDOOR, 0, 0);
 
-   if (!bw)
-      strcat (file, ".*");
+	if (!bw)
+		strcat (file, ".*");
+    lastread_need_save = 1;
+	download_file (file, 0);
+    lastread_need_save = 0;
 
-   download_file (file, 0);
-
-   sys.freearea = c;
+	sys.freearea = c;
+	offline_reader = 0;
 
    if (cps)
       unlink (file);
@@ -443,11 +466,13 @@ void resume_transmission ()
          if (strchr (fbuf.ff_name, '.') != NULL) {
             sprintf (file, "%sTASK%02X\\%s", config->QWKDir, line_offset, fbuf.ff_name);
             cps = 0;
-            c = sys.freearea;
-            sys.freearea = 1;
-            set_useron_record (QWKDOOR, 0, 0);
-            download_file (file, 0);
-            sys.freearea = c;
+				c = sys.freearea;
+				sys.freearea = 0;
+				offline_reader = 1;
+				set_useron_record (QWKDOOR, 0, 0);
+				download_file (file, 0);
+				sys.freearea = c;
+				offline_reader = 0;
 
             if (cps || local_mode) {
                if (!local_mode)
@@ -480,7 +505,7 @@ void qwk_pack_tagged_areas ()
    if (chdir (file) == -1)
       return;
 
-   set_useron_record (QWKDOOR, 0, 0);
+	set_useron_record (QWKDOOR, 0, 0);
 
    if (!findfirst ("*.*", &fbuf, 0)) {
       unlink (fbuf.ff_name);
@@ -514,7 +539,7 @@ void qwk_pack_tagged_areas ()
    sprintf(stringa,"%02d-%02d-19%02d,%02d:%02d:%02d\n",
       newtime->tm_mon+1,newtime->tm_mday,newtime->tm_year,
       newtime->tm_hour,newtime->tm_min,newtime->tm_sec);
-   fputs(stringa,fpq);              /* Line #6 */
+	fputs(stringa,fpq);              /* Line #6 */
 //   strcpy (stringa, usr.name);
    fputs(usr.name,fpq);
    fputs("\n",fpq);
@@ -548,7 +573,7 @@ void qwk_pack_tagged_areas ()
       memset (stringa, 0, 11);
       if (tsys.qwk_name[0])
          strcpy (stringa, tsys.qwk_name);
-      else
+		else
          strncpy (stringa, tsys.msg_name, 13);
       stringa[13] = '\0';
       fputs (stringa, fpq);
@@ -582,7 +607,7 @@ void qwk_pack_tagged_areas ()
    sprintf(stringa,"CONTROLTYPE = ADD\n");
    fputs(stringa,fpq);           /* Line #5 */
 
-   sprintf(stringa,"CONTROLTYPE = DROP\n");
+	sprintf(stringa,"CONTROLTYPE = DROP\n");
    fputs(stringa,fpq);           /* Line #6 */
    sprintf(stringa,"CONTROLTYPE = REQUEST\n");
    fputs(stringa,fpq);           /* Line #6 */
@@ -592,7 +617,7 @@ void qwk_pack_tagged_areas ()
    sprintf (file, "%sTASK%02X\\MESSAGES.DAT", config->QWKDir, line_offset);
    fpq = fopen(file, "w+b");
    if (fpq == NULL)
-      return;
+		return;
 
    fwrite("Produced by Qmail...",20,1,fpq);
    fwrite("Copywright (c) 1987 by Sparkware.  ",35,1,fpq);
@@ -616,7 +641,7 @@ void qwk_pack_tagged_areas ()
    if (i < 10) {
       sprintf (file, "%sTASK%02X\\%s.QWK", config->QWKDir, line_offset, config->BBSid);
       sprintf (path, "%sTASK%02X\\*.*", config->QWKDir, line_offset);
-      if (config->packers[i].packcmd[0] == '+') {
+		if (config->packers[i].packcmd[0] == '+') {
          strcpy (stringa, &config->packers[i].packcmd[1]);
          swapout = 1;
       }
@@ -649,11 +674,13 @@ void qwk_pack_tagged_areas ()
 
    m_print(bbstxt[B_ONE_CR]);
    cps = 0;
-   c = sys.freearea;
-   sys.freearea = 1;
-   set_useron_record (QWKDOOR, 0, 0);
-   download_file (file, 0);
-   sys.freearea = c;
+	c = sys.freearea;
+	sys.freearea = 0;
+	offline_reader = 1;
+	set_useron_record (QWKDOOR, 0, 0);
+	download_file (file, 0);
+	sys.freearea = c;
+	offline_reader = 0;
 
    if (cps)
       unlink (file);
@@ -666,149 +693,149 @@ float IEEToMSBIN(float f)
    union Converter t;
    int   sign,exp;
 
-   t.f[0] = f;
+	t.f[0] = f;
 
 /* Extract sign & change exponent bias from 0x7f to 0x81 */
 
-   sign = t.uc[3] / 0x80;
-   exp  = ((t.ui[1] >> 7) - 0x7f + 0x81) & 0xff;
+	sign = t.uc[3] / 0x80;
+	exp  = ((t.ui[1] >> 7) - 0x7f + 0x81) & 0xff;
 
 /* reassemble them in MSBIN format */
-   t.ui[1] = (t.ui[1] & 0x7f) | (sign << 7) | (exp << 8);
-   return t.f[0];
+	t.ui[1] = (t.ui[1] & 0x7f) | (sign << 7) | (exp << 8);
+	return t.f[0];
 }
 
 
 static void unpack_repfile (char *dir, char *rep)
 {
-   int id, f, m, i, swapout = 0, x, *varr;
-   char filename[80], outstring[128], *p, cpath[80];
-   unsigned char headstr[30],r;
-   struct ffblk blk;
+	int id, f, m, i, swapout = 0, x, *varr;
+	char filename[80], outstring[128], *p, cpath[80];
+	unsigned char headstr[30],r;
+	struct ffblk blk;
 
-   sprintf (filename, "%s\\%s", dir, rep);
-   if (findfirst (filename, &blk, 0))
-      return;
+	sprintf (filename, "%s\\%s", dir, rep);
+	if (findfirst (filename, &blk, 0))
+		return;
 
-   getcwd (cpath, 79);
-   if (dir[1] == ':')
-      setdisk (toupper (dir[0]) - 'A');
-   chdir (dir);
+	getcwd (cpath, 79);
+	if (dir[1] == ':')
+		setdisk (toupper (dir[0]) - 'A');
+	chdir (dir);
 
-   do {
-      f = open (blk.ff_name, O_RDONLY|O_BINARY);
-      id = -1;
+	do {
+		f = open (blk.ff_name, O_RDONLY|O_BINARY);
+		id = -1;
 
-      if (f != -1) {
-         for (i = 0; i < 10; i++) {
-            if (config->packid[i].offset >= 0)
-               lseek (f, config->packid[i].offset, SEEK_SET);
-            else
-               lseek (f, config->packid[i].offset, SEEK_END);
-            read (f, headstr, 14);
+		if (f != -1) {
+			for (i = 0; i < 10; i++) {
+				if (config->packid[i].offset >= 0)
+					lseek (f, config->packid[i].offset, SEEK_SET);
+				else
+					lseek (f, config->packid[i].offset, SEEK_END);
+				read (f, headstr, 14);
 
-            if (!config->packers[i].id[0] || !config->packid[i].ident[0])
-               continue;
+				if (!config->packers[i].id[0] || !config->packid[i].ident[0])
+					continue;
 
-            id = i;
-            m = 0;
-            p = (char *)&config->packid[i].ident[0];
+				id = i;
+				m = 0;
+				p = (char *)&config->packid[i].ident[0];
 
-            while (*p) {
-               r = 0;
-               if (isdigit (*p)) {
-                  r *= 16L;
-                  r += *p++ - '0';
-               }
-               else if (isxdigit (*p)) {
-                  r *= 16L;
-                  r += *p++ - 55;
-               }
-               if (isdigit (*p)) {
-                  r *= 16L;
-                  r += *p++ - '0';
-               }
-               else if (isxdigit (*p)) {
-                  r *= 16L;
-                  r += *p++ - 55;
-               }
-               if (r != headstr[m++]) {
-                  id = -1;
-                  break;
-               }
-            }
+				while (*p) {
+					r = 0;
+					if (isdigit (*p)) {
+						r *= 16L;
+						r += *p++ - '0';
+					}
+					else if (isxdigit (*p)) {
+						r *= 16L;
+						r += *p++ - 55;
+					}
+					if (isdigit (*p)) {
+						r *= 16L;
+						r += *p++ - '0';
+					}
+					else if (isxdigit (*p)) {
+						r *= 16L;
+						r += *p++ - 55;
+					}
+					if (r != headstr[m++]) {
+						id = -1;
+						break;
+					}
+				}
 
-            if (id != -1)
-               break;
-         }
-         close (f);
-      }
+				if (id != -1)
+					break;
+			}
+			close (f);
+		}
 
-      if (id == -1) {
-         status_line ("!Unrecognized method for %s\\%s", dir, blk.ff_name);
-         id = 0;
-         unlink (blk.ff_name);
-         status_line (":%s\\%s deleted", dir, blk.ff_name);
-      }
-      else {
-         activation_key ();
-         status_line ("#Un%sing %s\\%s", config->packers[id].id, dir, blk.ff_name);
+		if (id == -1) {
+			status_line ("!Unrecognized method for %s\\%s", dir, blk.ff_name);
+			id = 0;
+//			unlink (blk.ff_name);
+//			status_line (":%s\\%s deleted", dir, blk.ff_name);
+		}
+		else {
+			activation_key ();
+			status_line ("#Un%sing %s\\%s", config->packers[id].id, dir, blk.ff_name);
 
-         time_release ();
-         if (config->packers[id].unpackcmd[0] == '+') {
-            strcpy (outstring, &config->packers[id].unpackcmd[1]);
-            swapout = 1;
-         }
-         else {
-            strcpy (outstring, config->packers[id].unpackcmd);
-            swapout = 0;
-         }
-         strsrep (outstring, "%1", blk.ff_name);
-         strsrep (outstring, "%2", "*.*");
+			time_release ();
+			if (config->packers[id].unpackcmd[0] == '+') {
+				strcpy (outstring, &config->packers[id].unpackcmd[1]);
+				swapout = 1;
+			}
+			else {
+				strcpy (outstring, config->packers[id].unpackcmd);
+				swapout = 0;
+			}
+			strsrep (outstring, "%1", blk.ff_name);
+			strsrep (outstring, "%2", "*.*");
 
-         varr = ssave ();
-         gotoxy_ (1, 0);
-         wtextattr (LGREY|_BLACK);
+			varr = ssave ();
+			gotoxy_ (1, 0);
+			wtextattr (LGREY|_BLACK);
 
-         x = spawn_program (swapout, outstring);
+			x = spawn_program (swapout, outstring);
 
-         if (varr != NULL)
-            srestore (varr);
+			if (varr != NULL)
+				srestore (varr);
 
-         if (x != 0)
-            status_line (":Return code: %d", x);
+			if (x != 0)
+				status_line (":Return code: %d", x);
 
-         time_release ();
-         unlink (blk.ff_name);
-      }
-   } while (!findnext (&blk));
+			time_release ();
+			unlink (blk.ff_name);
+		}
+	} while (!findnext (&blk));
 
-   setdisk (toupper (cpath[0]) - 'A');
-   chdir (cpath);
+	setdisk (toupper (cpath[0]) - 'A');
+	chdir (cpath);
 }
 
 /* Fetch REP packet from user and import if ok */
 void getrep(void)
 {
-   #define TRUE  1
-   #define FALSE 0
-   int x,y,z,msgfile,origarea;
-   int endspace, upmsgs, repfile, prev_area, msgrecs;
-   char  *msgbuff, *p, temp[80], temp1[80];
-   long t;
-   struct QWKmsghd *MsgHead;
-   struct ffblk fbuf;
+	#define TRUE  1
+	#define FALSE 0
+	int x,y,z,msgfile,origarea;
+	int endspace, upmsgs, repfile, prev_area, msgrecs;
+	char  *msgbuff, *p, temp[80], temp1[80],*pp;
+	long t;
+	struct QWKmsghd *MsgHead;
+	struct ffblk fbuf;
 
-   origarea = usr.msg;
+	origarea = usr.msg;
 
-   if (!local_mode) {
-      getcwd (temp, 79);
+	if (!local_mode) {
+		getcwd (temp, 79);
 
-      sprintf (temp1, "%sTASK%02X", config->QWKDir, line_offset);
-      mkdir (temp1);
+		sprintf (temp1, "%sTASK%02X", config->QWKDir, line_offset);
+		mkdir (temp1);
 
-      if (temp1[1] == ':')
-         setdisk (toupper (temp1[0]) - 'A');
+		if (temp1[1] == ':')
+			setdisk (toupper (temp1[0]) - 'A');
       if (chdir (temp1) == -1)
          return;
 
@@ -828,76 +855,76 @@ void getrep(void)
       no_precheck = no_description = no_check = 0;
    }
 
-   // Cerca prima i pacchetti *.RE? (.REP) del QWK
-   sprintf (temp, "%sTASK%02X\\%s.RE?", config->QWKDir, line_offset, config->BBSid);
-   if (!findfirst (temp, &fbuf, 0)) {
-      sprintf (temp, "%sTASK%02X", config->QWKDir, line_offset);
-      unpack_repfile (temp, "*.RE?");
-   }
-   else {
-      // Se non li trova, cerca i file .NE? (.NEW) del Bluewave.
-      sprintf (temp, "%sTASK%02X\\%s.NE?", config->QWKDir, line_offset, config->BBSid);
-      if (!findfirst (temp, &fbuf, 0)) {
-         sprintf (temp, "%sTASK%02X", config->QWKDir, line_offset);
-         unpack_repfile (temp, "*.NE?");
-      }
-      else {
-         // Come ultima spiaggia cerca i pacchetti con le iniziali del
-         // giorno della settimana (come gli arcmail) sempre del Bluewave.
-         for (x = 0; x < 7; x++) {
-            sprintf (temp, "%sTASK%02X\\%s.%s?", config->QWKDir, line_offset, config->BBSid, suffixes[x]);
-            if (!findfirst (temp, &fbuf, 0))
-               break;
-         }
+	// Cerca prima i pacchetti *.REP del QWK
+	sprintf (temp, "%sTASK%02X\\%s.REP", config->QWKDir, line_offset, config->BBSid);
+	if (!findfirst (temp, &fbuf, 0)) {
+		sprintf (temp, "%sTASK%02X", config->QWKDir, line_offset);
+		unpack_repfile (temp, "*.RE?");
+	}
+	else {
+		// Se non li trova, cerca i file NEW del Bluewave.
+		sprintf (temp, "%sTASK%02X\\%s.NEW", config->QWKDir, line_offset, config->BBSid);
+		if (!findfirst (temp, &fbuf, 0)) {
+			sprintf (temp, "%sTASK%02X", config->QWKDir, line_offset);
+			unpack_repfile (temp, "*.NEW");
+		}
+		else {
+			// Come ultima spiaggia cerca i pacchetti con le iniziali del
+			// giorno della settimana (come gli arcmail) sempre del Bluewave.
+			for (x = 0; x < 7; x++) {
+				sprintf (temp, "%sTASK%02X\\%s.%s?", config->QWKDir, line_offset, config->BBSid, suffixes[x]);
+				if (!findfirst (temp, &fbuf, 0))
+					break;
+			}
 
-         if (x >= 7)
-            return;
+			if (x >= 7)
+				return;
 
-         sprintf (temp, "%sTASK%02X", config->QWKDir, line_offset);
-         sprintf (temp1, "*.%s0", suffixes[x]);
-         unpack_repfile (temp, temp1);
-      }
-   }
+			sprintf (temp, "%sTASK%02X", config->QWKDir, line_offset);
+			sprintf (temp1, "*.%s0", suffixes[x]);
+			unpack_repfile (temp, temp1);
+		}
+	}
 
-   upmsgs = 0;
-   prev_area = 0;
+	upmsgs = 0;
+	prev_area = 0;
 
-   sprintf (temp, "%sTASK%02X\\%s.MSG", config->QWKDir, line_offset, config->BBSid);
-   repfile = sh_open (temp, SH_DENYNONE, O_BINARY|O_RDONLY, S_IREAD|S_IWRITE);
+	sprintf (temp, "%sTASK%02X\\%s.MSG", config->QWKDir, line_offset, config->BBSid);
+	repfile = sh_open (temp, SH_DENYNONE, O_BINARY|O_RDONLY, S_IREAD|S_IWRITE);
 
-   if (repfile != -1) {
-      MsgHead = (struct QWKmsghd *) malloc (sizeof (struct QWKmsghd));
-      if (MsgHead == NULL) {
-         close (repfile);
-         return;
-      }
-      msgbuff = (char *) malloc (150);
-      if (msgbuff == NULL) {
-         close (repfile);
-         return;
-      }
-      read (repfile, msgbuff, 128);          /* Ignore first record */
-      msgbuff[8] = 0;
-      strtrim (msgbuff);
-      if (stricmp (config->BBSid, msgbuff) == 0) {          /* Make sure it's ours! */
-         m_print2 (bbstxt[B_HANG_ON]);
-         x = read(repfile,(struct QWKmsghd *) MsgHead,128);
-         while (x == 128) {               /* This is the BBS.MSG import loop */
-         /* Build the Fidonet message head */
-            x = atoi(MsgHead->Msgnum);               /* Area number */
-            if (prev_area != x) {
-               read_system (x, 1);
-               usr.msg = x;
+	if (repfile != -1) {
+		MsgHead = (struct QWKmsghd *) malloc (sizeof (struct QWKmsghd));
+		if (MsgHead == NULL) {
+			close (repfile);
+			return;
+		}
+		msgbuff = (char *) malloc (150);
+		if (msgbuff == NULL) {
+			close (repfile);
+			return;
+		}
+		read (repfile, msgbuff, 128);          /* Ignore first record */
+		msgbuff[8] = 0;
+		strtrim (msgbuff);
+		if (stricmp (config->BBSid, msgbuff) == 0) {          /* Make sure it's ours! */
+			m_print2 (bbstxt[B_HANG_ON]);
+			x = read(repfile,(struct QWKmsghd *) MsgHead,128);
+			while (x == 128) {               /* This is the BBS.MSG import loop */
+			/* Build the Fidonet message head */
+				x = atoi(MsgHead->Msgnum);               /* Area number */
+				if (prev_area != x) {
+					read_system (x, 1);
+					usr.msg = x;
 
-               if (sys.quick_board || sys.gold_board)
-                  quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
-               else if (sys.pip_board)
-                  pip_scan_message_base (usr.msg, 1);
-               else if (sys.squish)
-                  squish_scan_message_base (usr.msg, sys.msg_path, 1);
-               else
+					if (sys.quick_board || sys.gold_board)
+						quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
+					else if (sys.pip_board)
+						pip_scan_message_base (usr.msg, 1);
+					else if (sys.squish)
+						squish_scan_message_base (usr.msg, sys.msg_path, 1);
+					else
                   scan_message_base(usr.msg, 1);
-               prev_area = x;
+					prev_area = x;
 
                m_print2 ("ŠArea #%d, %s\n", sys.msg_num, sys.msg_name);
             }
@@ -913,7 +940,7 @@ void getrep(void)
             p = strtok(temp,"-");              /* Fetch month */
             x = atoi(p);
             p = strtok(NULL,"-");              /* Fetch day */
-            z = atoi(p);
+				z = atoi(p);
             p = strtok(NULL," \0-");           /* Fetch year */
             y = (atoi(p) - 80);
 
@@ -921,23 +948,23 @@ void getrep(void)
             temp[5] = 0;
             sprintf (msg.date,"%d %s %d %s:00",z,mtext[x-1],y+80,temp);
 
-            msg_tzone = msg_fzone = config->alias[sys.use_alias].zone;
-            msg.orig = config->alias[sys.use_alias].node;
-            msg.orig_net = config->alias[sys.use_alias].net;
-            msg.dest = config->alias[sys.use_alias].node;
-            msg.dest_net = config->alias[sys.use_alias].net;
-            msg_tpoint = msg_fpoint = config->alias[sys.use_alias].point;
+				msg_tzone = msg_fzone = config->alias[sys.use_alias].zone;
+				msg.orig = config->alias[sys.use_alias].node;
+				msg.orig_net = config->alias[sys.use_alias].net;
+				msg.dest = config->alias[sys.use_alias].node;
+				msg.dest_net = config->alias[sys.use_alias].net;
+				msg_tpoint = msg_fpoint = config->alias[sys.use_alias].point;
 
-            if (MsgHead->Msgstat == '*') {
-               if (!sys.public)
-                  msg.attr |= MSGPRIVATE;
-            }
+				if (MsgHead->Msgstat == '*') {
+					if (!sys.public)
+						msg.attr |= MSGPRIVATE;
+				}
 
             if (sys.private)
                msg.attr |= MSGPRIVATE;
 
             strcpy (msg.to, namefixup (MsgHead->Msgto));
-            fancy_str (msg.to);
+				fancy_str (msg.to);
             strcpy (msg.from,namefixup (MsgHead->Msgfrom));
             fancy_str (msg.from);
             strcpy (msg.subj, namefixup (MsgHead->Msgsubj));
@@ -945,7 +972,7 @@ void getrep(void)
             m_print2 ("To: %s, Subject: %s\n", msg.to, msg.subj);
 
             sprintf(temp1,"%s%d.TXT", config->QWKDir, line_offset);
-            msgfile = cshopen (temp1, O_TRUNC|O_CREAT|O_BINARY|O_RDWR, S_IREAD|S_IWRITE);
+				msgfile = cshopen (temp1, O_TRUNC|O_CREAT|O_BINARY|O_RDWR, S_IREAD|S_IWRITE);
 
             /* Now prepare to read in the REP msg and convert to fidonet */
             for (x=0; x < msgrecs; x++) {
@@ -960,12 +987,12 @@ void getrep(void)
                endspace = TRUE;
 
             /* Now go backwards and strip out '---' after a c/r */
-               while (p > msgbuff) {
-                  if (*p == '-' && sys.echomail) {
+					while (p > msgbuff) {
+						if (*p == '-' && sys.echomail) {
                      endspace = FALSE;
-                     p--;
+							p--;
                      if (*p == '-') {
-                        p--;
+								p--;
                         if (*p == '-') {
                            if (*(p-1) == '\r') {
                               *p = ' ';
@@ -977,24 +1004,37 @@ void getrep(void)
                      }
                   }
 
-                  if (*p & 0x80) {  /* Hi bit set? */
+						if (*p & 0x80) {  /* Hi bit set? */
                      *p &= 0x7f;         /* Make it harmless */
                      endspace = FALSE;
                   }
 
-                  if ((x == (msgrecs - 1)) && *p == ' ' && endspace && *(p-1) == ' ')
-                     *p = 0;
-                  else
-                     endspace = FALSE;
-                  p--;
-               }
+						if ((x == (msgrecs - 1)) && *p == ' ' && endspace && *(p-1) == ' ')
+			  *p = 0;
+						else
+							endspace = FALSE;
+						p--;
+			 }
 
-               write (msgfile, msgbuff, strlen (msgbuff));
-            }
+			/* Search for %TO: netmail redirection*/
+			 if(!(p=strstr(msgbuff,"%TO:"))) p=strstr(msgbuff,"%to:");
+			 if(p&&(p==msgbuff||*(p-1)=='\r')){
+				status_line("*%TO: in QWK is appeared!");
+				pp=p;
+				p+=4;
+				msg.dest_net=msg.dest=0;
+				parse_netnode(p,&msg_tzone,(int*)&msg.dest_net,(int*)&msg.dest,&msg_tpoint);
+				while(*pp!='\r')
+					pp++;
+				memmove(p-4,pp+1,strlen(pp+1)+1);
+			 }
 
-            close (msgfile);
+			 write (msgfile, msgbuff, strlen (msgbuff));
+				}
 
-            t = time (NULL);
+				close (msgfile);
+
+				t = time (NULL);
             while (t == time (NULL));
 
             if (usr.priv >= sys.write_priv && sys.write_priv != HIDDEN && (usr.flags & sys.write_flags) == sys.write_flags) {
@@ -1189,7 +1229,7 @@ void update_lastread_pointers ()
    m_print (bbstxt[B_QWK_UPDATE]);
 #ifdef __OS2__
    UNBUFFER_BYTES ();
-   VioUpdate ();
+	VioUpdate ();
 #endif
 
    memcpy ((char *)&tsys, (char *)&sys, sizeof (struct _sys));

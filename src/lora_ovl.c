@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <io.h>
 #include <dos.h>
@@ -53,66 +71,67 @@ int argc;
 char *argv[];
 long fmem;
 {
-   int m, i, doexit = 0, oc;
-   long t;
+	int m, i, doexit = 0, oc;
+	long t;
 
-   function_active = 99;
-   oc = caller;
+	function_active = 99;
+	oc = caller;
 //   caller = 0;
-   read_sched();
-   set_event ();
+	read_sched();
+	set_event ();
 
-   time_release ();
+	time_release ();
 
-   show_statistics (fmem);
+	show_statistics (fmem);
 
-   activation_key ();
-   if (!registered) {
-      status_line ("!WARNING: No license key found.");
-      status_line ("!The software WILL NOT function");
-      status_line ("!completely without a license key!");
-   }
+	activation_key ();
+	if (!registered) {
+		status_line ("!WARNING: No license key found.");
+		status_line ("!The software WILL NOT function");
+		status_line ("!completely without a license key!");
+	}
 
-   read_sysinfo ();
-   if (local_mode != 2) {
-      if (locked && password != NULL && registered)
-         prints (23, 16, YELLOW|_BLACK, "Keyboard locked");
-      else
-         prints (23, 17, YELLOW|_BLACK, "Press ESC for menu");
-   }
+	read_sysinfo ();
+	if (local_mode != 2) {
+		if (locked && password != NULL && registered)
+			prints (23, 43, YELLOW|_BLACK, "LOCKED  ");
+		else
+			prints (23, 43, YELLOW|_BLACK, "UNLOCKED");
 
-   t = time (NULL);
+	}
 
-   for (i = 1; i < argc; i++) {
-      if (!stricmp (argv[i], "-NB")) {
-         config->pre_import[0] = '\0';
-         config->after_import[0] = '\0';
-         config->pre_export[0] = '\0';
-         config->after_export[0] = '\0';
-         config->pre_pack[0] = '\0';
-         config->after_pack[0] = '\0';
-      }
-   }
+	t = time (NULL);
 
-   for (i = 1; i < argc; i++) {
-      if (argv[i][0] == '-')
-         continue;
+	for (i = 1; i < argc; i++) {
+		if (!stricmp (argv[i], "-NB")) {
+			config->pre_import[0] = '\0';
+			config->after_import[0] = '\0';
+			config->pre_export[0] = '\0';
+			config->after_export[0] = '\0';
+			config->pre_pack[0] = '\0';
+			config->after_pack[0] = '\0';
+		}
+	}
 
-      if (!stricmp (argv[i], "POLL")) {
+	for (i = 1; i < argc; i++) {
+		if (argv[i][0] == '-')
+			continue;
+
+		if (!stricmp (argv[i], "POLL")) {
 #ifndef __OS2__
-         blank_video_interrupt ();
+			blank_video_interrupt ();
 #endif
-         if (!com_install(com_port)) {
+			if (!com_install(com_port)) {
 #ifndef __OS2__
-            restore_video_interrupt ();
-            wopen (9, 12, 16, 70, 0, LRED|_BLACK, LGREY|_BLACK);
-            wtitle (" SYSTEM MALFUNCTION ", TCENTER, YELLOW|_BLACK);
-            wcenters (1, LCYAN|_BLACK, "There doesn't appear to be a FOSSIL driver loaded.");
+				restore_video_interrupt ();
+				wopen (9, 12, 16, 70, 0, LRED|_BLACK, LGREY|_BLACK);
+				wtitle (" SYSTEM MALFUNCTION ", TCENTER, YELLOW|_BLACK);
+				wcenters (1, LCYAN|_BLACK, "There doesn't appear to be a FOSSIL driver loaded.");
             wcenters (2, LCYAN|_BLACK, "LoraBBS requires a FOSSIL driver.");
             wcenters (3, LCYAN|_BLACK, "Please take care of this before attempting");
             wcenters (4, LCYAN|_BLACK, "to run Lora BBS again.");
 #else
-            wopen (9, 12, 16, 70, 0, LRED|_BLACK, LGREY|_BLACK);
+				wopen (9, 12, 16, 70, 0, LRED|_BLACK, LGREY|_BLACK);
             wtitle (" SYSTEM MALFUNCTION ", TCENTER, YELLOW|_BLACK);
             wcenters (1, LCYAN|_BLACK, "The COM port isn't available.");
             wcenters (2, LCYAN|_BLACK, "LoraBBS requires at least one COM port available.");
@@ -186,14 +205,14 @@ long fmem;
          if (!com_install(com_port)) {
 #ifndef __OS2__
             restore_video_interrupt ();
-            wopen (9, 12, 16, 70, 0, LRED|_BLACK, LGREY|_BLACK);
+				wopen (9, 12, 16, 70, 0, LRED|_BLACK, LGREY|_BLACK);
             wtitle (" SYSTEM MALFUNCTION ", TCENTER, YELLOW|_BLACK);
             wcenters (1, LCYAN|_BLACK, "There doesn't appear to be a FOSSIL driver loaded.");
             wcenters (2, LCYAN|_BLACK, "LoraBBS requires a FOSSIL driver.");
             wcenters (3, LCYAN|_BLACK, "Please take care of this before attempting");
             wcenters (4, LCYAN|_BLACK, "to run Lora BBS again.");
 #else
-            wopen (9, 12, 16, 70, 0, LRED|_BLACK, LGREY|_BLACK);
+				wopen (9, 12, 16, 70, 0, LRED|_BLACK, LGREY|_BLACK);
             wtitle (" SYSTEM MALFUNCTION ", TCENTER, YELLOW|_BLACK);
             wcenters (1, LCYAN|_BLACK, "The COM port isn't available.");
             wcenters (2, LCYAN|_BLACK, "LoraBBS requires at least one COM port available.");
@@ -242,14 +261,20 @@ long fmem;
       if (!com_install(com_port)) {
 #ifndef __OS2__
          restore_video_interrupt ();
-#endif
-         wopen (9, 12, 16, 70, 0, LRED|_BLACK, LGREY|_BLACK);
+			wopen (9, 12, 16, 70, 0, LRED|_BLACK, LGREY|_BLACK);
          wtitle (" SYSTEM MALFUNCTION ", TCENTER, YELLOW|_BLACK);
          wcenters (1, LCYAN|_BLACK, "There doesn't appear to be a FOSSIL driver loaded.");
          wcenters (2, LCYAN|_BLACK, "Lora BBS requires a FOSSIL driver.");
          wcenters (3, LCYAN|_BLACK, "Please take care of this before attempting");
          wcenters (4, LCYAN|_BLACK, "to run Lora BBS again.");
-
+#else
+			wopen (9, 12, 16, 70, 0, LRED|_BLACK, LGREY|_BLACK);
+         wtitle (" SYSTEM MALFUNCTION ", TCENTER, YELLOW|_BLACK);
+         wcenters (1, LCYAN|_BLACK, "The COM port isn't available.");
+         wcenters (2, LCYAN|_BLACK, "LoraBBS requires at least one COM port available.");
+         wcenters (3, LCYAN|_BLACK, "Please take care of this before attempting");
+         wcenters (4, LCYAN|_BLACK, "to run Lora BBS again.");
+#endif
          t = timerset (500);
          while (!timeup (t) && !kbmhit ())
             time_release ();
@@ -267,58 +292,58 @@ long fmem;
       com_baud (rate);
    }
 
-   get_last_caller ();
-   system_crash ();
-   caller = oc;
+	get_last_caller ();
+	system_crash ();
+	caller = oc;
 }
 
 void run_external_editor ()
 {
-   int fd, *varr;
+	int fd, *varr;
 
-   if (config->local_editor[0]) {
-      status_line ("+Shelling to editor");
-      fclose (logf);
-      if (modem_busy != NULL)
-         mdm_sendcmd (modem_busy);
-      varr = ssave ();
-      cclrscrn(LGREY|_BLACK);
+	if (config->local_editor[0]) {
+		status_line ("+Shelling to editor");
+		fclose (logf);
+		if (modem_busy != NULL)
+			mdm_sendcmd (modem_busy);
+		varr = ssave ();
+		cclrscrn(LGREY|_BLACK);
 
-      spawn_program (1, config->local_editor);
+		spawn_program (1, config->local_editor);
 
-      if (varr != NULL)
-         srestore (varr);
-      if (cur_event >= 0) {
-         if ( (call_list[next_call].type & MAIL_WILLGO) || !(e_ptrs[cur_event]->behavior & MAT_NOOUT))
-            events = random_time (e_ptrs[cur_event]->wait_time);
-      }
-      else if (cur_event < 0)
-         events = timerset (500);
-      clocks = 0L;
-      to = 0L;
-      blankto = timerset (0);
-      blankto += blank_timer * 6000L;
-      verfile = 0L;
-      hidecur ();
+		if (varr != NULL)
+			srestore (varr);
+		if (cur_event >= 0) {
+			if ( (call_list[next_call].type & MAIL_WILLGO) || !(e_ptrs[cur_event]->behavior & MAT_NOOUT))
+				events = random_time (e_ptrs[cur_event]->wait_time);
+		}
+		else if (cur_event < 0)
+			events = timerset (500);
+		clocks = 0L;
+		to = 0L;
+		blankto = timerset (0);
+		blankto += blank_timer * 6000L;
+		verfile = 0L;
+		hidecur ();
 
-      fd = open (config_file, O_RDONLY|O_BINARY);
-      if (fd != -1) {
-         read (fd, (char *)config, sizeof (struct _configuration));
-         close (fd);
-      }
+		fd = open (config_file, O_RDONLY|O_BINARY);
+		if (fd != -1) {
+			read (fd, (char *)config, sizeof (struct _configuration));
+			close (fd);
+		}
 
-      open_logfile ();
-      check_new_netmail ();
-      if (modem_busy != NULL)
-         modem_hangup ();
-   }
+		open_logfile ();
+		check_new_netmail ();
+		if (modem_busy != NULL)
+			modem_hangup ();
+	}
 }
 
 void shell_to_config ()
 {
-   FILE *fp;
-   int *varr;
-   char cpath[80], *p, linea[128], *pc, cmd[128];
+	FILE *fp;
+	int *varr;
+	char cpath[80], *p, linea[128], *pc, cmd[128];
 
    if (blanked)
       stop_blanking ();
@@ -365,7 +390,7 @@ void shell_to_config ()
    events = 0L;
    to = 0L;
    config_file = pc;
-   clocks = 0L;
+	clocks = 0L;
    blankto = timerset (0);
    blankto += blank_timer * 6000L;
    verfile = 0L;
@@ -413,7 +438,7 @@ int import;
    unlink ("NETMAIL.RSN");
    display_outbound_info (outinfo);
    events = 0L;
-   clocks = 0L;
+	clocks = 0L;
    blankto = timerset (0);
    blankto += blank_timer * 6000L;
    function_active = 99;
@@ -508,8 +533,8 @@ static void keyboard_loop (void)
    struct time timep;
    struct tm *tp;
 
-   if (timeup(clocks)) {
-      clocks = timerset (97);
+	if (timeup(clocks)) {
+		clocks = timerset (97);
 
       if (caller) {
          if (local_mode != 2) {
@@ -647,7 +672,7 @@ void pull_down_menu ()
 
    wmenubeg (0, 0, 0, 79, 5, BLACK|_LGREY, BLACK|_LGREY, NULL);
    wmenuitem (0, 1, " Programs ", 'P', 100, M_HASPD, NULL, 0, 0);
-      wmenubeg (1, 1, 8, 29, 3, RED|_LGREY, BLUE|_LGREY, addshadow);
+		wmenubeg (1, 1, 8, 29, 3, RED|_LGREY, BLUE|_LGREY, addshadow);
       wmenuitem (0, 0, " Message Editor      Alt-E ", 0, 101, M_CLALL, set_selection, 0, 0);
       wmenuitem (1, 0, " Terminal Emulator   Alt-T ", 0, 102, M_CLALL, set_selection, 0, 0);
       wmenuitem (2, 0, " Configure           Alt-C ", 0, 103, M_CLALL, set_selection, 0, 0);
@@ -660,19 +685,19 @@ void pull_down_menu ()
       wmenuitem (5, 0, " Leave Lora          Alt-X ", 0, 106, M_CLALL, set_selection, 0, 0);
       wmenuend (101, M_PD|M_SAVE, 0, 0, BLUE|_LGREY, WHITE|_LGREY, DGREY|_LGREY, YELLOW|_BLACK);
    wmenuitem (0, 11, " Utility ", 'U', 200, M_HASPD, NULL, 0, 0);
-      wmenubeg (1, 11, 11, 39, 3, RED|_LGREY, BLUE|_LGREY, addshadow);
+		wmenubeg (1, 11, 11, 39, 3, RED|_LGREY, BLUE|_LGREY, addshadow);
       wmenuitem (0, 0, " Process ECHOmail    Alt-P ", 0, 201, M_CLALL, set_selection, 0, 0);
       wmenuitem (1, 0, " Process TIC Files         ", 0, 209, M_CLALL, set_selection, 0, 0);
       wmenuitem (2, 0, " Inbound History           ", 0, 202, M_CLALL, set_selection, 0, 0);
       wmenuitem (3, 0, " Outbound History          ", 0, 203, M_CLALL, set_selection, 0, 0);
       wmenuitem (4, 0, " Rebuild Outbound    Alt-Q ", 0, 204, M_CLALL, set_selection, 0, 0);
-      wmenuitem (5, 0, " Lock keyboard       Alt-L ", 0, 205, M_CLALL, set_selection, 0, 0);
+		wmenuitem (5, 0, " Lock keyboard       Alt-L ", 0, 205, M_CLALL, set_selection, 0, 0);
       wmenuitem (6, 0, " Activity chart            ", 0, 206, M_CLALL, set_selection, 0, 0);
       wmenuitem (7, 0, " Time usage                ", 0, 207, M_CLALL, set_selection, 0, 0);
-      wmenuitem (8, 0, " Clock Adjustment          ", 0, 208, M_CLALL, set_selection, 0, 0);
+		wmenuitem (8, 0, " Clock Adjustment          ", 0, 208, M_CLALL, set_selection, 0, 0);
       wmenuend (201, M_PD|M_SAVE, 0, 0, BLUE|_LGREY, WHITE|_LGREY, DGREY|_LGREY, YELLOW|_BLACK);
    wmenuitem (0, 20, " Mail ", 'M', 300, M_HASPD, NULL, 0, 0);
-      wmenubeg (1, 20, 13, 52, 3, RED|_LGREY, BLUE|_LGREY, addshadow);
+		wmenubeg (1, 20, 13, 52, 3, RED|_LGREY, BLUE|_LGREY, addshadow);
       wmenuitem ( 0, 0, " Import mail                   ", 0, 310, M_CLALL, set_selection, 0, 0);
       wmenuitem ( 1, 0, " Export echomail               ", 0, 311, M_CLALL, set_selection, 0, 0);
       wmenuitem ( 2, 0, " Pack netmail                  ", 0, 312, M_CLALL, set_selection, 0, 0);
@@ -686,7 +711,7 @@ void pull_down_menu ()
       wmenuitem (10, 0, " New TIC file link             ", 0, 309, M_CLALL, set_selection, 0, 0);
       wmenuend (310, M_PD|M_SAVE, 0, 0, BLUE|_LGREY, WHITE|_LGREY, DGREY|_LGREY, YELLOW|_BLACK);
    wmenuitem (0, 26, " BBS ", 'B', 400, M_HASPD, NULL, 0, 0);
-      wmenubeg (1, 26, 4, 50, 3, RED|_LGREY, BLUE|_LGREY, addshadow);
+		wmenubeg (1, 26, 4, 50, 3, RED|_LGREY, BLUE|_LGREY, addshadow);
       wmenuitem (0, 0, " Local login     Alt-K ", 0, 401, M_CLALL, set_selection, 0, 0);
       wmenuitem (1, 0, " Fast login            ", 0, 402, M_CLALL, set_selection, 0, 0);
       wmenuend (401, M_PD|M_SAVE, 0, 0, BLUE|_LGREY, WHITE|_LGREY, DGREY|_LGREY, YELLOW|_BLACK);
@@ -720,7 +745,7 @@ void pull_down_menu ()
             hidecur ();
             events = 0L;
             to = 0L;
-            clocks = 0L;
+				clocks = 0L;
             blankto = timerset (0);
             blankto += blank_timer * 6000L;
             verfile = 0L;
@@ -737,7 +762,7 @@ void pull_down_menu ()
             old_event = -1;
             events = 0L;
             to = 0L;
-            clocks = 0L;
+				clocks = 0L;
             blankto = timerset (0);
             blankto += blank_timer * 6000L;
             verfile = 0L;
@@ -782,176 +807,176 @@ void pull_down_menu ()
             }
             break;
 
-         // Lock keyboard
+			// Lock keyboard
          case 205:
-            keyboard_password ();
-            if (locked && password != NULL && registered)
-               prints (23, 5, YELLOW|_BLACK, "Keyboard locked - Enter password to unlock");
-            break;
+				keyboard_password ();
+				if (locked && password != NULL && registered)
+					prints (23, 43, YELLOW|_BLACK, "LOCKED  ");
+				break;
 
-         // Activity chart
-         case 206:
-            activity_chart ();
-            break;
+			// Activity chart
+			case 206:
+				activity_chart ();
+				break;
 
-         // Time usage
-         case 207:
-            time_usage ();
-            break;
+			// Time usage
+			case 207:
+				time_usage ();
+				break;
 
-         // Remote clock
-         case 208:
-            poll_galileo (5, 100);
-            old_event = -1;
-            events = 0L;
-            to = 0L;
-            clocks = 0L;
-            blankto = timerset (0);
-            blankto += blank_timer * 6000L;
-            verfile = 0L;
-            break;
+			// Remote clock
+			case 208:
+				poll_galileo (5, 100);
+				old_event = -1;
+				events = 0L;
+				to = 0L;
+				clocks = 0L;
+				blankto = timerset (0);
+				blankto += blank_timer * 6000L;
+				verfile = 0L;
+				break;
 
-         case 209:
-            function_active = 0;
-            timeout = 0L;
-            import_tic_files ();
-            get_call_list();
-            outinfo = 0;
-            unlink ("RESCAN.NOW");
-            display_outbound_info (outinfo);
-            events = 0L;
-            clocks = 0L;
-            blankto = timerset (0);
-            blankto += blank_timer * 6000L;
-            function_active = 99;
-            old_event = -1;
-            break;
+			case 209:
+				function_active = 0;
+				timeout = 0L;
+				import_tic_files ();
+				get_call_list();
+				outinfo = 0;
+				unlink ("RESCAN.NOW");
+				display_outbound_info (outinfo);
+				events = 0L;
+				clocks = 0L;
+				blankto = timerset (0);
+				blankto += blank_timer * 6000L;
+				function_active = 99;
+				old_event = -1;
+				break;
 
-         // File request
-         case 301:
-            file_request ();
-            break;
+			// File request
+			case 301:
+				file_request ();
+				break;
 
-         // File attach
-         case 302:
-            file_attach ();
-            break;
+			// File attach
+			case 302:
+				file_attach ();
+				break;
 
-         // Poll manuale
-         case 304:
-            manual_poll ();
-            break;
+			// Poll manuale
+			case 304:
+				manual_poll ();
+				break;
 
-         // View/Modify Outbound
-         case 305:
-            edit_outbound_info ();
-            break;
+			// View/Modify Outbound
+			case 305:
+				edit_outbound_info ();
+				break;
 
-         // Request echomail link
-         case 306:
-            request_echomail_link ();
-            break;
+			// Request echomail link
+			case 306:
+				request_echomail_link ();
+				break;
 
-         // New echomail link
-         case 307:
-            new_echomail_link ();
-            break;
+			// New echomail link
+			case 307:
+				new_echomail_link ();
+				break;
 
-         // Rescan echomail
-         case 308:
-            rescan_echomail_link ();
-            break;
+			// Rescan echomail
+			case 308:
+				rescan_echomail_link ();
+				break;
 
-         // New echomail link
-         case 309:
-            new_tic_link ();
-            break;
+			// New echomail link
+			case 309:
+				new_tic_link ();
+				break;
 
-         case 310:
-            function_active = 0;
-            timeout = 0L;
-            mail_batch (config->pre_import);
-            import_mail ();
-            events = 0L;
-            clocks = 0L;
-            blankto = timerset (0);
-            blankto += blank_timer * 6000L;
-            function_active = 99;
-            old_event = -1;
-            break;
+			case 310:
+				function_active = 0;
+				timeout = 0L;
+				mail_batch (config->pre_import);
+				import_mail ();
+				events = 0L;
+				clocks = 0L;
+				blankto = timerset (0);
+				blankto += blank_timer * 6000L;
+				function_active = 99;
+				old_event = -1;
+				break;
 
-         case 311:
-            function_active = 0;
-            timeout = 0L;
-            export_mail (ECHOMAIL_RSN);
-            get_call_list();
-            outinfo = 0;
-            unlink ("ECHOMAIL.RSN");
-            display_outbound_info (outinfo);
-            events = 0L;
-            clocks = 0L;
-            blankto = timerset (0);
-            blankto += blank_timer * 6000L;
-            function_active = 99;
-            old_event = -1;
-            check_new_netmail ();
-            break;
+			case 311:
+				function_active = 0;
+				timeout = 0L;
+				export_mail (ECHOMAIL_RSN);
+				get_call_list();
+				outinfo = 0;
+				unlink ("ECHOMAIL.RSN");
+				display_outbound_info (outinfo);
+				events = 0L;
+				clocks = 0L;
+				blankto = timerset (0);
+				blankto += blank_timer * 6000L;
+				function_active = 99;
+				old_event = -1;
+				check_new_netmail ();
+				break;
 
-         case 312:
-            function_active = 0;
-            timeout = 0L;
-            export_mail (NETMAIL_RSN);
-            get_call_list();
-            outinfo = 0;
-            unlink ("RESCAN.NOW");
-            unlink ("NETMAIL.RSN");
-            display_outbound_info (outinfo);
-            events = 0L;
-            clocks = 0L;
-            blankto = timerset (0);
-            blankto += blank_timer * 6000L;
-            function_active = 99;
-            old_event = -1;
-            check_new_netmail ();
-            break;
+			case 312:
+				function_active = 0;
+				timeout = 0L;
+				export_mail (NETMAIL_RSN);
+				get_call_list();
+				outinfo = 0;
+				unlink ("RESCAN.NOW");
+				unlink ("NETMAIL.RSN");
+				display_outbound_info (outinfo);
+				events = 0L;
+				clocks = 0L;
+				blankto = timerset (0);
+				blankto += blank_timer * 6000L;
+				function_active = 99;
+				old_event = -1;
+				check_new_netmail ();
+				break;
 
-         // Entra nel BBS in modo locale
-         case 401:
-            if (!local_mode) {
-               local_mode = 1;
-               local_kbd = -1;
-            }
-            break;
+			// Entra nel BBS in modo locale
+			case 401:
+				if (!local_mode) {
+					local_mode = 1;
+					local_kbd = -1;
+				}
+				break;
 
-         // Entra nel BBS in modo locale (fast)
-         case 402:
-            strcpy (usr.name, config->sysop);
-            if (!local_mode) {
-               local_mode = 1;
-               local_kbd = -1;
-            }
-            break;
-      }
-   }
-   else
-      freonkey ();
+			// Entra nel BBS in modo locale (fast)
+			case 402:
+				strcpy (usr.name, config->sysop);
+				if (!local_mode) {
+					local_mode = 1;
+					local_kbd = -1;
+				}
+				break;
+		}
+	}
+	else
+		freonkey ();
 
-   kbclear ();
-   CLEAR_INBOUND ();
+	kbclear ();
+	CLEAR_INBOUND ();
 
-   if (cur_event >= 0) {
-      if ( (call_list[next_call].type & MAIL_WILLGO) || !(e_ptrs[cur_event]->behavior & MAT_NOOUT))
-         events = random_time (e_ptrs[cur_event]->wait_time);
-   }
-   else if (cur_event < 0)
-      events = timerset (500);
+	if (cur_event >= 0) {
+		if ( (call_list[next_call].type & MAIL_WILLGO) || !(e_ptrs[cur_event]->behavior & MAT_NOOUT))
+			events = random_time (e_ptrs[cur_event]->wait_time);
+	}
+	else if (cur_event < 0)
+		events = timerset (500);
 
-   clocks = 0L;
+	clocks = 0L;
 
-   sysinfo.today.interaction += time (NULL) - elapsed;
-   sysinfo.week.interaction += time (NULL) - elapsed;
-   sysinfo.month.interaction += time (NULL) - elapsed;
-   sysinfo.year.interaction += time (NULL) - elapsed;
+	sysinfo.today.interaction += time (NULL) - elapsed;
+	sysinfo.week.interaction += time (NULL) - elapsed;
+	sysinfo.month.interaction += time (NULL) - elapsed;
+	sysinfo.year.interaction += time (NULL) - elapsed;
 
    local_status ("Idle");
    blankto = timerset (0);

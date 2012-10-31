@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -598,10 +616,14 @@ loop:
                   break;
                }
                break;
-            case CR:
-               break;
-            case LF:
-               if (!local_mode) {
+				case CR:
+					break;
+				case LF:
+
+					if (vy<25) vy++;
+					vx=1;
+
+					if (!local_mode) {
                   BUFFER_BYTE('\r');
                   BUFFER_BYTE('\n');
                }
@@ -1213,8 +1235,11 @@ loop:
                   }
                   p = strchr(p,'\0') - 1;
                   break;
+               case 'h':
+                  online_users (1, 1);
+                  break;
                case 'w':
-                  online_users (1);
+                  online_users (1, 0);
                   break;
                case 'X':
                   p++;

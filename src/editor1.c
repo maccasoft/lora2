@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -348,8 +366,8 @@ int quote;
    usr.msgposted++;
    lastread = securetmp;
 
-   unlink (filename);
-   return (1);
+	unlink (filename);
+	return (1);
 }
 
 void text_header (msg_ptr, s, fp)
@@ -357,60 +375,60 @@ struct _msg *msg_ptr;
 int s;
 FILE *fp;
 {
-   char stringa[80];
+	char stringa[80];
 
-   adjust_date(msg_ptr);
+	adjust_date(msg_ptr);
 
-   memset (stringa, '=', 78);
-   stringa[78] = '\0';
-   fprintf (fp, "%s\n", stringa);
+	memset (stringa, '=', 78);
+	stringa[78] = '\0';
+	fprintf (fp, "%s\n", stringa);
 
-   fprintf (fp,"From    : ");
+	fprintf (fp,"From    : ");
 
-   if(sys.netmail) {
-      if (!msg_fzone)
-         msg_fzone = config->alias[0].zone;
-      sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",msg_ptr->from,msg_fzone,msg_ptr->orig_net,msg_ptr->orig,msg_fpoint);
-      fprintf (fp,"%36s   ",stringa);
-   }
-   else
-      fprintf (fp,"%-36s   ",msg_ptr->from);
+	if(sys.netmail) {
+		if (!msg_fzone)
+			msg_fzone = config->alias[sys.use_alias].zone;
+		sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",msg_ptr->from,msg_fzone,msg_ptr->orig_net,msg_ptr->orig,msg_fpoint);
+		fprintf (fp,"%36s   ",stringa);
+	}
+	else
+		fprintf (fp,"%-36s   ",msg_ptr->from);
 
-   if(msg_ptr->attr & MSGPRIVATE)
-      fprintf (fp, bbstxt[B_MSGPRIVATE]);
-   if(msg_ptr->attr & MSGCRASH)
-      fprintf (fp, bbstxt[B_MSGCRASH]);
-   if(msg_ptr->attr & MSGREAD)
-      fprintf (fp, bbstxt[B_MSGREAD]);
-   if(msg_ptr->attr & MSGSENT)
-      fprintf (fp, bbstxt[B_MSGSENT]);
-   if(msg_ptr->attr & MSGFILE)
-      fprintf (fp, bbstxt[B_MSGFILE]);
-   if(msg_ptr->attr & MSGFWD)
-      fprintf (fp, bbstxt[B_MSGFWD]);
-   if(msg_ptr->attr & MSGORPHAN)
-      fprintf (fp, bbstxt[B_MSGORPHAN]);
-   if(msg_ptr->attr & MSGKILL)
-      fprintf (fp, bbstxt[B_MSGKILL]);
-   if(msg_ptr->attr & MSGHOLD)
-      fprintf (fp, bbstxt[B_MSGHOLD]);
-   if(msg_ptr->attr & MSGFRQ)
-      fprintf (fp, bbstxt[B_MSGFRQ]);
-   if(msg_ptr->attr & MSGRRQ)
-      fprintf (fp, bbstxt[B_MSGRRQ]);
-   if(msg_ptr->attr & MSGCPT)
-      fprintf (fp, bbstxt[B_MSGCPT]);
-   if(msg_ptr->attr & MSGARQ)
-      fprintf (fp, bbstxt[B_MSGARQ]);
-   if(msg_ptr->attr & MSGURQ)
-      fprintf (fp, bbstxt[B_MSGURQ]);
-   fprintf (fp,bbstxt[B_ONE_CR]);
+	if(msg_ptr->attr & MSGPRIVATE)
+		fprintf (fp, bbstxt[B_MSGPRIVATE]);
+	if(msg_ptr->attr & MSGCRASH)
+		fprintf (fp, bbstxt[B_MSGCRASH]);
+	if(msg_ptr->attr & MSGREAD)
+		fprintf (fp, bbstxt[B_MSGREAD]);
+	if(msg_ptr->attr & MSGSENT)
+		fprintf (fp, bbstxt[B_MSGSENT]);
+	if(msg_ptr->attr & MSGFILE)
+		fprintf (fp, bbstxt[B_MSGFILE]);
+	if(msg_ptr->attr & MSGFWD)
+		fprintf (fp, bbstxt[B_MSGFWD]);
+	if(msg_ptr->attr & MSGORPHAN)
+		fprintf (fp, bbstxt[B_MSGORPHAN]);
+	if(msg_ptr->attr & MSGKILL)
+		fprintf (fp, bbstxt[B_MSGKILL]);
+	if(msg_ptr->attr & MSGHOLD)
+		fprintf (fp, bbstxt[B_MSGHOLD]);
+	if(msg_ptr->attr & MSGFRQ)
+		fprintf (fp, bbstxt[B_MSGFRQ]);
+	if(msg_ptr->attr & MSGRRQ)
+		fprintf (fp, bbstxt[B_MSGRRQ]);
+	if(msg_ptr->attr & MSGCPT)
+		fprintf (fp, bbstxt[B_MSGCPT]);
+	if(msg_ptr->attr & MSGARQ)
+		fprintf (fp, bbstxt[B_MSGARQ]);
+	if(msg_ptr->attr & MSGURQ)
+		fprintf (fp, bbstxt[B_MSGURQ]);
+	fprintf (fp,bbstxt[B_ONE_CR]);
 
-   fprintf (fp,"To      : ");
-   if(sys.netmail) {
-      if (!msg_tzone)
-         msg_tzone = config->alias[0].zone;
-      sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",msg_ptr->to,msg_tzone,msg_ptr->dest_net,msg_ptr->dest,msg_tpoint);
+	fprintf (fp,"To      : ");
+	if(sys.netmail) {
+		if (!msg_tzone)
+			msg_tzone = config->alias[sys.use_alias].zone;
+		sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",msg_ptr->to,msg_tzone,msg_ptr->dest_net,msg_ptr->dest,msg_tpoint);
       fprintf (fp,"%36s   ",stringa);
    }
    else

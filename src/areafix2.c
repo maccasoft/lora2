@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -309,7 +327,7 @@ int add_tic_link (char *area, int zo, int ne, int no, int po)
       else
          strcpy (addr, "");
 
-      if (strlen (linea) + strlen (addr) >= 58) {
+		if (strlen (linea) + strlen (addr) >= 68) {
          if (cf == 1) {
             strcpy (tsys.tic_forward1, linea);
             cf++;
@@ -600,7 +618,7 @@ void scan_all_tic (FILE *fp, int add_area, int zo, int ne, int no, int po)
          else
             strcpy (addr, "");
 
-         if (strlen (linea) + strlen (addr) >= 58) {
+			if (strlen (linea) + strlen (addr) >= 68) {
             if (cf == 1) {
                strcpy (tsys.tic_forward1, linea);
                cf++;
@@ -662,12 +680,12 @@ void scan_all_tic (FILE *fp, int add_area, int zo, int ne, int no, int po)
       write (fd, (char *)&tsys.file_name, SIZEOF_FILEAREA);
 
       if (add_area) {
-         status_line (":  %s added", strupr (tsys.echotag));
-         mprintf (fp, "Area %s has been added.\r\n", strupr (tsys.echotag));
-      }
-      else {
-         status_line (":  %s removed", strupr (tsys.echotag));
-         mprintf (fp, "Area %s has been removed.\r\n", strupr (tsys.echotag));
+			status_line (":  %s added", strupr (tsys.tic_tag));
+			mprintf (fp, "Area %s has been added.\r\n", strupr (tsys.tic_tag));
+		}
+		else {
+			status_line (":  %s removed", strupr (tsys.tic_tag));
+			mprintf (fp, "Area %s has been removed.\r\n", strupr (tsys.tic_tag));
       }
    }
 
@@ -870,7 +888,7 @@ int zo, ne, no, po;
 char *subj;
 {
    FILE *fp, *fph;
-   int fd, i, level = -1, use_aka = 0;
+	int fd, i, level = -1, use_aka = 0;
    char linea[80], filename[80], *p, doquery = 0, *o, postmsg = 0;
    long npos;
    NODEINFO ni;
@@ -897,9 +915,9 @@ char *subj;
          level = ni.tic_level;
          areafix_level = level;
          areafix_flags = ni.tic_flags;
-         use_aka = ni.tic_aka;
-         if (use_aka > 0)
-            use_aka--;
+			use_aka = ni.tic_aka;
+			if (use_aka > 0)
+				use_aka--;
          break;
       }
 
@@ -921,9 +939,9 @@ char *subj;
                level = ni.afx_level;
                areafix_level = level;
                areafix_flags = ni.afx_flags;
-               use_aka = ni.tic_aka;
-               if (use_aka > 0)
-                  use_aka--;
+					use_aka = ni.tic_aka;
+					if (use_aka > 0)
+						use_aka--;
                break;
             }
       }
@@ -942,18 +960,18 @@ char *subj;
    msg.dest = no;
    msg_tzone = zo;
    msg_tpoint = po;
-   if (use_aka)
-      use_aka--;
-   msg_fzone = config->alias[use_aka].zone;
-   if (config->alias[use_aka].point && config->alias[use_aka].fakenet) {
-      msg.orig = config->alias[use_aka].point;
-      msg.orig_net = config->alias[use_aka].fakenet;
-      msg_fpoint = 0;
-   }
-   else {
-      msg.orig = config->alias[use_aka].node;
-      msg.orig_net = config->alias[use_aka].net;
-      msg_fpoint = config->alias[use_aka].point;
+//   if (use_aka)
+//      use_aka--;
+	msg_fzone = config->alias[use_aka].zone;
+	if (config->alias[use_aka].point && config->alias[use_aka].fakenet) {
+		msg.orig = config->alias[use_aka].point;
+		msg.orig_net = config->alias[use_aka].fakenet;
+		msg_fpoint = 0;
+	}
+	else {
+		msg.orig = config->alias[use_aka].node;
+		msg.orig_net = config->alias[use_aka].net;
+		msg_fpoint = config->alias[use_aka].point;
    }
    memcpy ((char *)&tmsg, (char *)&msg, sizeof (struct _msg));
 
@@ -971,7 +989,7 @@ char *subj;
       if (msg_tpoint)
          mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
       mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-      mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
+		mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
 
       mprintf (fp, "\r\nNode %d:%d/%d.%d isn't authorized to use raid at %d:%d/%d.%d\r\n\r\n", zo, ne, no, po, msg_fzone, msg.orig_net, msg.orig, msg_fpoint);
 
@@ -1000,7 +1018,7 @@ char *subj;
    if (msg_tpoint)
       mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
    mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-   mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
+	mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
 
    mprintf (fp, "Following is a summary from %d:%d/%d.%d of changes in TIC topology:\r\n\r\n", msg_fzone, msg.orig_net, msg.orig, msg_fpoint);
 
@@ -1097,7 +1115,7 @@ char *subj;
             close (fd);
 
             if (zo == ni.zone && ne == ni.net && no == ni.node && po == ni.point)
-               mprintf (fp, "Areafix password %s selected.\r\n", p);
+					mprintf (fp, "Raid password %s selected.\r\n", p);
          }
       }
 
@@ -1165,7 +1183,7 @@ char *subj;
          if (msg_tpoint)
             mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
          mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-         mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
+			mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
 
          generate_tic_status (fp, zo, ne, no, po, 1);
 
@@ -1185,7 +1203,7 @@ char *subj;
          if (msg_tpoint)
             mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
          mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-         mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
+			mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
 
          generate_tic_status (fp, zo, ne, no, po, 2);
 
@@ -1205,7 +1223,7 @@ char *subj;
          if (msg_tpoint)
             mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
          mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-         mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
+			mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
 
          generate_tic_status (fp, zo, ne, no, po, 3);
 
@@ -1225,7 +1243,7 @@ char *subj;
          if (msg_tpoint)
             mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
          mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-         mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
+			mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
 
          fph = fopen (config->tic_help, "rb");
          if (fph == NULL)

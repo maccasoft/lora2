@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 int  com_online (void);
 void setup_screen(void);
 void m_print(char *, ...);
@@ -146,7 +164,7 @@ void getblock(void);
 char *receive(char *, char *, char);
 void invent_pkt_name (char *);
 void get_call_list(void);
-void online_users(int);
+void online_users (int flag, int use_alias);
 int fsend(char *, char);
 int bad_call(int, int, int, int);
 int logoff_procedure(void);
@@ -208,7 +226,7 @@ void f8_status (void);
 void f9_status (void);
 void f10_status (void);
 void clear_status (void);
-void send_online_message (void);
+void send_online_message (int use_alias);
 void set_useron_record (int, int, int);
 void cb_chat (void);
 int check_multilogon (char *);

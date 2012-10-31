@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,11 +48,12 @@
 extern HFILE hfComHandle;
 #endif
 
-extern int blank_timer, socket;
+extern int blank_timer, socket, lastread_need_save;
 extern short tcpip;
 extern long exectime;
 
 int spawn_program (int swapout, char *outstring);
+void update_lastread_pointers (void);
 char *config_file = "CONFIG.DAT", **dos_argv, nopoll = 0, nomailproc = 0, nonetmail = 0;
 
 static MDM_TRNS *mm_head;
@@ -85,7 +104,11 @@ try_setup:
       phone = config->phone;
       flags = config->flags;
       lock_baud = config->lock_baud;
-      terminal = config->terminal;
+		terminal = config->terminal;
+
+		if(config->areachange_key[0])
+			strncpy(area_change_key,config->areachange_key,4);
+
       if (config->modem_busy[0])
          modem_busy = config->modem_busy;
       if (config->mustbezero) {
@@ -118,7 +141,7 @@ try_setup:
       snooping = config->snooping;
       aftercaller_exit = config->aftercaller_exit;
       aftermail_exit = config->aftermail_exit;
-      dateformat = config->dateformat;
+		dateformat = config->dateformat;
       timeformat = config->timeformat;
 
       if (config->no_direct)
@@ -158,7 +181,6 @@ try_setup:
    }
 
    config_file = pc;
-
    return(1);
 }
 
@@ -386,7 +408,7 @@ char **argv;
 
          case 'N':
             if (isdigit (argv[i][2]))
-               line_offset = atoi (&argv[i][2]);
+					line_offset = atoi (&argv[i][2]);
             else if (toupper (argv[i][2]) == 'A') {
                if (isdigit (argv[i][3]))
                   line_offset = atoi (&argv[i][3]);
@@ -419,7 +441,7 @@ char **argv;
             errors = 1;
             printf (msgtxt[M_UNRECOGNIZED_OPTION], argv[i]);
             break;
-      }
+		}
    }
 
 #ifndef __OS2__
@@ -485,7 +507,7 @@ char *phone;
       }
       else {
          type -= 20;
-         if (config->prefixdial[type].prefix[0])
+			if (config->prefixdial[type].prefix[0])
             predial = config->prefixdial[type].prefix;
       }
    }
@@ -518,7 +540,7 @@ long get_flags (char *p)
          break;
       case 'R':
          flag |= 0x00000010L;
-         break;
+			break;
       case 'Q':
          flag |= 0x00000020L;
          break;
@@ -551,105 +573,113 @@ long get_flags (char *p)
          break;
       case 'G':
          flag |= 0x00008000L;
-         break;
+			break;
       case 'F':
          flag |= 0x00010000L;
          break;
       case 'E':
          flag |= 0x00020000L;
          break;
-      case 'D':
-         flag |= 0x00040000L;
-         break;
-      case 'C':
-         flag |= 0x00080000L;
-         break;
-      case 'B':
-         flag |= 0x00100000L;
-         break;
-      case 'A':
-         flag |= 0x00200000L;
-         break;
-      case '9':
-         flag |= 0x00400000L;
-         break;
-      case '8':
-         flag |= 0x00800000L;
-         break;
-      case '7':
-         flag |= 0x01000000L;
-         break;
-      case '6':
-         flag |= 0x02000000L;
-         break;
-      case '5':
-         flag |= 0x04000000L;
-         break;
-      case '4':
-         flag |= 0x08000000L;
-         break;
-      case '3':
-         flag |= 0x10000000L;
-         break;
-      case '2':
-         flag |= 0x20000000L;
-         break;
-      case '1':
-         flag |= 0x40000000L;
-         break;
-      case '0':
-         flag |= 0x80000000L;
-         break;
-      }
+		case 'D':
+			flag |= 0x00040000L;
+			break;
+		case 'C':
+			flag |= 0x00080000L;
+			break;
+		case 'B':
+			flag |= 0x00100000L;
+			break;
+		case 'A':
+			flag |= 0x00200000L;
+			break;
+		case '9':
+			flag |= 0x00400000L;
+			break;
+		case '8':
+			flag |= 0x00800000L;
+			break;
+		case '7':
+			flag |= 0x01000000L;
+			break;
+		case '6':
+			flag |= 0x02000000L;
+			break;
+		case '5':
+			flag |= 0x04000000L;
+			break;
+		case '4':
+			flag |= 0x08000000L;
+			break;
+		case '3':
+			flag |= 0x10000000L;
+			break;
+		case '2':
+			flag |= 0x20000000L;
+			break;
+		case '1':
+			flag |= 0x40000000L;
+			break;
+		case '0':
+			flag |= 0x80000000L;
+			break;
+		}
 
-   return (flag);
+	return (flag);
 }
 
 extern int ox, oy, wh1;
 
 void get_down (int errlev, int flag)
 {
-   char filename[80];
+	char filename[80];
 
-   sysinfo.today.exectime += time (NULL) - exectime;
-   sysinfo.week.exectime += time (NULL) - exectime;
-   sysinfo.month.exectime += time (NULL) - exectime;
-   sysinfo.year.exectime += time (NULL) - exectime;
+	sysinfo.today.exectime += time (NULL) - exectime;
+	sysinfo.week.exectime += time (NULL) - exectime;
+	sysinfo.month.exectime += time (NULL) - exectime;
+    sysinfo.year.exectime += time (NULL) - exectime;
 
-   MsgCloseApi ();
-   write_sysinfo();
-   sprintf (filename, "F-TAG%d.TMP", config->line_offset);
-   unlink (filename);
-   sprintf (filename, "DL-REP%d.BBS", line_offset);
-   unlink (filename);
-   sprintf (filename, "REP%d.TXT", line_offset);
-   unlink (filename);
-   update_user ();
+    if(lastread_need_save)          // Aggiorna se necessario i puntatori
+        update_lastread_pointers (); // Lastread per il qwk/BW
 
-   if (!frontdoor) {
-      status_line(":End");
-      fprintf(logf, "\n");
-   }
 
-   fclose (logf);
+	if(something_wrong){
+	bad_call (sw_net, sw_node, 1, ABORTED);
+	}
 
-   if (errlev || dos_argv == NULL) {
-      if (!local_mode) {
-         if (modem_busy != NULL)
-            mdm_sendcmd (modem_busy);
-      }
+	MsgCloseApi ();
+	write_sysinfo();
+	sprintf (filename, "F-TAG%d.TMP", config->line_offset);
+	unlink (filename);
+	sprintf (filename, "DL-REP%d.BBS", line_offset);
+	unlink (filename);
+	sprintf (filename, "REP%d.TXT", line_offset);
+	unlink (filename);
+	update_user ();
 
-      MDM_DISABLE();
+	if (!frontdoor) {
+		status_line(":End");
+		fprintf(logf, "\n");
+	}
 
-      wcloseall ();
-      cclrscrn(LGREY|_BLACK);
-      showcur();
-      gotoxy (1, 10);
-      exit ((errlev == -1) ? config->altx_errorlevel : errlev);
-   }
-   else {
-      MDM_DISABLE();
-      exit (255);
-   }
+	fclose (logf);
+
+	if (errlev || dos_argv == NULL) {
+		if (!local_mode) {
+			if (modem_busy != NULL)
+				mdm_sendcmd (modem_busy);
+		}
+
+		MDM_DISABLE();
+
+		wcloseall ();
+		cclrscrn(LGREY|_BLACK);
+		showcur();
+		gotoxy (1, 10);
+		exit ((errlev == -1) ? config->altx_errorlevel : errlev);
+	}
+	else {
+		MDM_DISABLE();
+		exit (255);
+	}
 }
 

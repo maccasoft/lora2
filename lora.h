@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 typedef unsigned int   bit;
 typedef unsigned short word;
 typedef unsigned char  byte;
@@ -69,7 +87,8 @@ struct  _node {
    char pw_areafix[20];
    char pw_tic[20];
    char sysop[36];
-   char akainfo;
+	char akainfo;
+	char tic_akainfo;
 };
 
 struct _lastread {
@@ -77,7 +96,7 @@ struct _lastread {
    short msg_num;
 };
 
-#define MAXLREAD   50
+#define MAXLREAD   250      // 250 solo dalla pl 57; prima erano 50
 #define MAXDLREAD  20
 #define MAXFLAGS   4
 #define MAXCOUNTER 10
@@ -170,6 +189,97 @@ struct _usr {
       word min_file_baud;
       word start_ratio;
    } ovr_class;
+
+   short   msg_sig;
+   word  account;
+   word  f_account;
+   short   votes;
+   short   file_sig;
+
+   long  baud_rate;
+
+   bit   dhotkey    :1;
+
+   long  alias_id;
+
+   char  extradata[281];
+};
+
+struct _usr_old {
+   char  name[36];
+   char  handle[36];
+   char  city[26];
+
+   struct _lastread lastread[50];
+   struct _lastread dynlastread[MAXDLREAD];
+
+   char  pwd[16];
+   dword times;
+   word  nulls;
+   word  msg;
+
+   bit   avatar    :1;
+   bit   color     :1;
+   bit   scanmail  :1;
+   bit   use_lore  :1;
+   bit   more      :1;
+   bit   ansi      :1;
+   bit   kludge    :1;
+   bit   formfeed  :1;
+
+   bit   hotkey    :1;
+   bit   tabs      :1;
+   bit   full_read :1;
+   bit   badpwd    :1;
+   bit   usrhidden :1;
+   bit   nokill    :1;
+   bit   ibmset    :1;
+   bit   deleted   :1;
+
+   byte  language;
+   byte  priv;
+   long  flags;
+   char  ldate[20];
+   short   time;
+   dword upld;
+   dword dnld;
+   short   dnldl;
+   word  n_upld;
+   word  n_dnld;
+   word  files;
+   word  credit;
+   word  dbase;
+   char  signature[58];
+   char  voicephone[20];
+   char  dataphone[20];
+   char  birthdate[10];
+   char  subscrdate[10];
+   char  firstdate[20];
+   char  lastpwdchange[10];
+   long  ptrquestion;
+   byte  len;
+   byte  width;
+   long  id;
+   short   msgposted;
+   char  comment[80];
+   byte  help;
+   word  old_baud_rate;
+   byte  counter[MAXCOUNTER];
+   word  chat_minutes;
+
+   bit   xfer_prior:1;
+   bit   quiet     :1;
+   bit   nerd      :1;
+   bit   donotdisturb:1;
+   bit   robbed    :1;
+   bit   novote    :1;
+   bit   havebox   :1;
+   bit   security  :1;
+
+   char  protocol;
+   char  archiver;
+
+   struct _ovr_class_rec ovr_class;
 
    short   msg_sig;
    word  account;
@@ -378,6 +488,7 @@ struct _linestat {
 
 struct _useron {
    char   name[36];
+   char   alias[36];
    short  line;
    long   baud;
    char   city[26];

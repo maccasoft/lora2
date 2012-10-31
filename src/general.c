@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <dos.h>
 #include <io.h>
@@ -44,7 +62,7 @@ void software_version (char *arguments)
 
    change_attr (LMAGENTA|_BLACK);
    m_print ("%s - The Computer-Based Information System\n", VERSION);
-   m_print ("CopyRight (c) 1989-95 by Marco Maccaferri. All Rights Reserved.\n");
+   m_print ("CopyRight (c) 1989-96 by Marco Maccaferri. All Rights Reserved.\n");
 #ifdef __OCC__
    m_print ("CopyRight (c) 1995 Old Colorado City Communications. All Rights Reserved.\n");
 #endif
@@ -725,38 +743,39 @@ int read_system (int s, int type)
    char filename[50];
    struct _sys_idx sysidx[10];
    struct _sys tsys;
-   MSG *ptr;
+	MSG *ptr;
+	offline_reader =  0;
 
-   if (type != 1 && type != 2)
-      return (0);
+	if (type != 1 && type != 2)
+		return (0);
 
-   if (sq_ptr != NULL) {
-      MsgCloseArea (sq_ptr);
-      sq_ptr = NULL;
-   }
+	if (sq_ptr != NULL) {
+		MsgCloseArea (sq_ptr);
+		sq_ptr = NULL;
+	}
 
-   if (type == 1)
-      sprintf(filename,"%sSYSMSG.IDX", config->sys_path);
-   else if (type == 2)
-      sprintf(filename,"%sSYSFILE.IDX", config->sys_path);
+	if (type == 1)
+		sprintf(filename,"%sSYSMSG.IDX", config->sys_path);
+	else if (type == 2)
+		sprintf(filename,"%sSYSFILE.IDX", config->sys_path);
 
-   fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD);
-   if (fd == -1)
-      return (0);
+	fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD);
+	if (fd == -1)
+		return (0);
 
-   do {
-      nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
-      nsys /= sizeof (struct _sys_idx);
-      for (i = 0; i < nsys; i++, mn++) {
-         if (sysidx[i].area == s)
-            break;
-      }
-   } while (i == nsys && nsys == 10);
+	do {
+		nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+		nsys /= sizeof (struct _sys_idx);
+		for (i = 0; i < nsys; i++, mn++) {
+			if (sysidx[i].area == s)
+				break;
+		}
+	} while (i == nsys && nsys == 10);
 
-   close (fd);
+	close (fd);
 
-   if (i == nsys)
-      return (0);
+	if (i == nsys)
+		return (0);
 //   if (usr.name[0] && (sysidx[i].priv > usr.priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags))
 //      return (0);
 
@@ -791,7 +810,7 @@ int read_system (int s, int type)
             return (0);
          close(fd);
 
-         sprintf(filename, "%sMPKT%04x.PIP", pip_msgpath, sys.pip_board);
+			sprintf(filename, "%sMPKT%04x.PIP", pip_msgpath, sys.pip_board);
          fd = shopen(filename, O_RDONLY|O_BINARY);
          if (fd == -1) {
             fd = cshopen(filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
@@ -812,11 +831,11 @@ int read_system (int s, int type)
          if (!dexists (filename))
             return (0);
       }
-      else if (sys.squish) {
-         ptr = MsgOpenArea (sys.msg_path, MSGAREA_CRIFNEC, MSGTYPE_SQUISH);
-         if (ptr == NULL)
-            return (0);
-         MsgCloseArea (ptr);
+		else if (sys.squish) {
+			ptr = MsgOpenArea (sys.msg_path, MSGAREA_CRIFNEC, MSGTYPE_SQUISH);
+			if (ptr == NULL)
+				return (0);
+			MsgCloseArea (ptr);
       }
       else {
          sys.msg_path[strlen (sys.msg_path) - 1] = '\0';
@@ -824,7 +843,7 @@ int read_system (int s, int type)
             return (0);
          sys.msg_path[strlen (sys.msg_path)] = '\\';
       }
-   }
+	}
    else if (type == 2) {
       sprintf(filename,"%sSYSFILE.DAT", config->sys_path);
       while ((fd = sopen (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
@@ -865,40 +884,41 @@ struct _sys *tsys;
 {
    int fd, nsys, i, mn=0;
    char filename[50];
-   struct _sys_idx sysidx[10];
+	struct _sys_idx sysidx[10];
+	offline_reader =0;
 
-   if (type != 1 && type != 2)
-      return (0);
+	if (type != 1 && type != 2)
+		return (0);
 
-   if (sq_ptr != NULL) {
-      MsgCloseArea (sq_ptr);
-      sq_ptr = NULL;
-   }
+	if (sq_ptr != NULL) {
+		MsgCloseArea (sq_ptr);
+		sq_ptr = NULL;
+	}
 
-   if (type == 1)
-      sprintf(filename,"%sSYSMSG.IDX", config->sys_path);
-   else if (type == 2)
-      sprintf(filename,"%sSYSFILE.IDX", config->sys_path);
+	if (type == 1)
+		sprintf(filename,"%sSYSMSG.IDX", config->sys_path);
+	else if (type == 2)
+		sprintf(filename,"%sSYSFILE.IDX", config->sys_path);
 
-   fd = cshopen(filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
-   if (fd == -1)
-      return (0);
+	fd = cshopen(filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+	if (fd == -1)
+		return (0);
 
-   do {
-      nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
-      nsys /= sizeof (struct _sys_idx);
-      for (i=0; i < nsys; i++, mn++) {
-         if (sysidx[i].area == s)
-            break;
-      }
-   } while (i == nsys && nsys == 10);
+	do {
+		nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+		nsys /= sizeof (struct _sys_idx);
+		for (i=0; i < nsys; i++, mn++) {
+			if (sysidx[i].area == s)
+				break;
+		}
+	} while (i == nsys && nsys == 10);
 
-   close (fd);
+	close (fd);
 
-   if (i == nsys || sysidx[i].priv > usr.priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
-      return (0);
+	if (i == nsys || sysidx[i].priv > usr.priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+		return (0);
 
-   i = mn;
+	i = mn;
 
    if (type == 1) {
       sprintf(filename,SYSMSG_PATH, config->sys_path);
@@ -932,7 +952,7 @@ char *args;
    struct _usr tempusr;
 
    nopause = 0;
-   line = 3;
+	line = 3;
    act = 0;
    nn = 0;
    filebox = vote = handle = swap = 0;
@@ -965,7 +985,7 @@ char *args;
       sscanf(stringa, "%2d %3s %2d", &day, linea, &year);
       linea[3] = '\0';
       for (mont = 0; mont < 12; mont++) {
-         if ((!stricmp(mtext[mont], linea)) || (!stricmp(mesi[mont], linea)))
+			if ((!stricmp(mtext[mont], linea)) || (!stricmp(mesi[mont], linea)))
             break;
       }
       now = (long)year*365;
@@ -998,7 +1018,7 @@ char *args;
    strupr(stringa);
 
    cls();
-   change_attr(YELLOW|_BLACK);
+	change_attr(YELLOW|_BLACK);
    m_print(bbstxt[B_USERLIST_TITLE]);
    m_print(bbstxt[B_USERLIST_UNDERLINE]);
 
@@ -1031,7 +1051,7 @@ char *args;
          linea[3] = '\0';
          for (mont = 0; mont < 12; mont++) {
             if ((!stricmp(mtext[mont], linea)) || (!stricmp(mesi[mont], linea)))
-               break;
+					break;
          }
          days = (long)year*365;
          for (line=0;line<mont;line++)
@@ -1130,7 +1150,7 @@ void update_user (void)
                break;
             }
 
-         if (!fflag)
+			if (!fflag)
             posit += m;
       } while (m == MAX_INDEX && !fflag);
 

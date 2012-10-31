@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <dir.h>
@@ -9,7 +27,7 @@
 #include <sys\stat.h>
 
 #ifndef __OS2__
-#include "implode.h"
+//#include "implode.h"
 #endif
 
 int fdin, fdout = -1;
@@ -120,7 +138,7 @@ void main (int argc, char *argv[])
 
          p = strtok (NULL, " ");
          printf ("Target Directory: %s\n", p);
-         strcpy (cr.filename, p);
+         strcpy (cr.filename, strlwr (p));
 
          write (fdout, &cr, sizeof (COMPREC));
       }
@@ -144,7 +162,7 @@ void main (int argc, char *argv[])
 
          p = strtok (NULL, " ");
          printf ("Execute: %s\n", p);
-         strcpy (cr.filename, p);
+         strcpy (cr.filename, strlwr (p));
 
          write (fdout, &cr, sizeof (COMPREC));
       }
@@ -200,23 +218,23 @@ void main (int argc, char *argv[])
             do {
                printf ("\r    > %-12s ", blk.ff_name);
                if (newname != NULL && newname[0])
-                  strcpy (cr.filename, strupr (newname));
+                  strcpy (cr.filename, strlwr (newname));
                else
-                  strcpy (cr.filename, blk.ff_name);
+                  strcpy (cr.filename, strlwr (blk.ff_name));
                sprintf (filename, "%s\\%s", path, blk.ff_name);
                fdin = open (filename, O_RDONLY|O_BINARY);
 
                pos = tell (fdout);
                write (fdout, &cr, sizeof (COMPREC));
 
-               if (!store) {
-#ifndef __OS2__
-                  type = CMP_BINARY;
-                  dsize = 4096;
-                  implode (ReadBuff, WriteBuff, WorkBuff, &type, &dsize);
-#endif
-               }
-               else
+//               if (!store) {
+//#ifndef __OS2__
+//                  type = CMP_BINARY;
+//                  dsize = 4096;
+//                  implode (ReadBuff, WriteBuff, WorkBuff, &type, &dsize);
+//#endif
+//               }
+//               else
                   store_file (WorkBuff);
 
                cr.complen = tell (fdout) - pos - sizeof (COMPREC);

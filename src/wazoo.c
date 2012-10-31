@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <dos.h>
 #include <string.h>
@@ -378,10 +396,12 @@ int send_WaZOO (int caller)
 
          if (!stat(fname,&buf)) {
             invent_pkt_name(s);
-            if (!send_Zmodem(fname,s,fsent++,DO_WAZOO))
+            if ((rzcond = send_Zmodem(fname,s,fsent++,DO_WAZOO)) == 0)
                goto bad_send;
-            update_filesio (fsent, freceived);
-            unlink(fname);
+            if (rzcond != SPEC_COND) {
+               update_filesio (fsent, freceived);
+               unlink(fname);
+            }
          }
       }
    }
@@ -395,10 +415,12 @@ int send_WaZOO (int caller)
 
          if (!stat(fname,&buf)) {
             invent_pkt_name(s);
-            if (!send_Zmodem(fname,s,fsent++,DO_WAZOO))
+            if ((rzcond = send_Zmodem(fname,s,fsent++,DO_WAZOO)) == 0)
                goto bad_send;
-            update_filesio (fsent, freceived);
-            unlink(fname);
+            if (rzcond != SPEC_COND) {
+               update_filesio (fsent, freceived);
+               unlink(fname);
+            }
          }
       }
    }
@@ -579,7 +601,7 @@ int send_WaZOO (int caller)
          status_line (msgtxt[M_FREQ_DECLINED]);
       else {
          status_line (msgtxt[M_MAKING_FREQ]);
-         if (send_Zmodem (fname, NULL, fsent++, DO_WAZOO)) {
+         if ((rzcond = send_Zmodem (fname, NULL, fsent++, DO_WAZOO)) != 0 && rzcond != SPEC_COND) {
             unlink (fname);
             update_filesio (fsent, freceived);
             made_request = 1;
@@ -1123,25 +1145,25 @@ int id;
          close (fd);
       }
       if (ni.zone == pkthdr.dest_zone && ni.node == pkthdr.dest_node && ni.net == pkthdr.dest_net && ni.point == pkthdr.dest_point) {
-         strcpy (pkthdr.password, ni.pw_packet);
-         pkthdr.orig_zone = config->alias[assumed].zone;
-      }
+			strncpy (pkthdr.password, ni.pw_packet,8);
+			pkthdr.orig_zone = config->alias[assumed].zone;
+		}
 
-      pkthdr.hour = timep.ti_hour;
-      pkthdr.minute = timep.ti_min;
-      pkthdr.second = timep.ti_sec;
-      pkthdr.year = datep.da_year;
-      pkthdr.month = datep.da_mon - 1;
-      pkthdr.day = datep.da_day;
-      fwrite ((char *)&pkthdr, sizeof (struct _pkthdr2), 1, fp);
+		pkthdr.hour = timep.ti_hour;
+		pkthdr.minute = timep.ti_min;
+		pkthdr.second = timep.ti_sec;
+		pkthdr.year = datep.da_year;
+		pkthdr.month = datep.da_mon - 1;
+		pkthdr.day = datep.da_day;
+		fwrite ((char *)&pkthdr, sizeof (struct _pkthdr2), 1, fp);
 
-      mhdr.ver = PKTVER;
-      mhdr.orig_node = config->alias[assumed].node;
-      mhdr.orig_net = config->alias[assumed].net;
-      mhdr.dest_node = remote_node;
-      mhdr.dest_net = remote_net;
-      mhdr.cost = 0;
-      mhdr.attrib = 0;
+		mhdr.ver = PKTVER;
+		mhdr.orig_node = config->alias[assumed].node;
+		mhdr.orig_net = config->alias[assumed].net;
+		mhdr.dest_node = remote_node;
+		mhdr.dest_net = remote_net;
+		mhdr.cost = 0;
+		mhdr.attrib = 0;
       fwrite ((char *)&mhdr, sizeof (struct _msghdr2), 1, fp);
 
       data (string);

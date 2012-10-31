@@ -9,6 +9,9 @@
    읕컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴켸
 */
 
+#if !defined(__CXLVID_H__)
+#define __CXLVID_H__
+
 #if defined(__TURBOC__)                     /* Turbo C */
     #if __STDC__
         #define _Cdecl
@@ -30,6 +33,10 @@
 #endif
 
 /*---------------------------[ function prototypes ]-------------------------*/
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 void     _Cdecl box_(int srow,int scol,int erow,int ecol,int btype,int attr);
 void     _Cdecl cclrscrn(int attr);
@@ -72,6 +79,10 @@ int      _Cdecl videoinit(void);
 int      _Cdecl vidmode(void);
 int      _Cdecl vidtype(void);
 int      _Cdecl wintodisk(int srow,int scol,int erow,int ecol,char *fname);
+
+#ifdef __cplusplus
+}
+#endif
 
 /*-------------[ display adapter types returned from vidtype() ]-------------*/
 
@@ -159,3 +170,7 @@ extern struct _vinfo_t _Near _Cdecl _vinfo;
 #endif
 #define attrib(f,b,i,bl)    ((b<<4)|(f)|(i<<3)|(bl<<7))
 #define clrwin(a,b,c,d)     gotoxy_(a,b);fill_(a,b,c,d,' ',(readchat()>>8))
+
+#endif
+
+

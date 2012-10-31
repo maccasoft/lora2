@@ -4,7 +4,7 @@ OBJ = OBJ
 SRC = SRC
 UTI = $(SRC)\UTIL
 TCLIB = D:\BORLANDC\LIB
-CXLIB = $(TCLIB)\CXL
+CXLIB = CXL
 
 #		*Translator Definitions*
 CC = bcc +TURBOC.CFG -c -v -y
@@ -27,12 +27,11 @@ INCLUDEPATH = D:\BORLANDC\INCLUDE
 
 #		*List Macros*
 
-all: lora loraovl lsetup lorakey lmsg ltop luser lnetmgr langcomp makeinst install usered fileidx
+all: lora loraovl lsetup lmsg ltop luser lnetmgr langcomp makeinst install fileidx
 
 lora:      lora.exe
 loraovl:   lora.ovl
 lsetup:    lsetup.exe
-lorakey:   lorakey.exe
 lmsg:      lmsg.exe
 ltop:      ltop.exe
 luser:     luser.exe
@@ -121,9 +120,6 @@ EXE_dependencies =  \
 
 EXE_START_dependencies = \
   $(OBJ)\startup.obj
-
-EXE_KEY_dependencies = \
-  $(OBJ)\lorakey.obj
 
 EXE_LMSG_dependencies = \
   squish-l.lib \
@@ -263,17 +259,6 @@ $(TCLIB)\mathl.lib+
 $(TCLIB)\cl.lib+
 |
 
-lorakey.exe: turboc.cfg $(EXE_KEY_dependencies)
-  $(TLINK) @&&|
-$(TCLIB)\c0l.obj+
-$(OBJ)\lorakey.obj
-lorakey,
-$(CXLIB)\cxltcl.lib+
-$(TCLIB)\emu.lib+
-$(TCLIB)\mathl.lib+
-$(TCLIB)\cl.lib+
-|
-
 lmsg.exe: turboc.cfg $(EXE_LMSG_dependencies)
   $(TLINK) @&&|
 $(TCLIB)\c0l.obj+
@@ -335,7 +320,6 @@ makeinst.exe: turboc.cfg $(EXE_MKINST_dependencies)
 $(TCLIB)\c0l.obj+
 $(OBJ)\makeinst.obj
 makeinst,
-implode.lib+
 $(TCLIB)\emu.lib+
 $(TCLIB)\mathl.lib+
 $(TCLIB)\cl.lib
@@ -346,7 +330,6 @@ install.exe: turboc.cfg $(EXE_INST_dependencies)
 $(TCLIB)\c0l.obj+
 $(OBJ)\install.obj
 install,
-implode.lib+
 $(CXLIB)\cxltcl.lib+
 $(TCLIB)\emu.lib+
 $(TCLIB)\mathl.lib+
@@ -595,11 +578,6 @@ $(OBJ)\zreceive.obj: $(SRC)\zreceive.c
 
 $(OBJ)\startup.obj: $(SRC)\startup.c
         $(CC) -n$(OBJ) -N- -Z- $(SRC)\startup.c
-
-
-
-$(OBJ)\lorakey.obj: $(SRC)\lorakey.c
-        $(CC) -n$(OBJ) $(SRC)\lorakey.c
 
 
 

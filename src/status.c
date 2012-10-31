@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <ctype.h>
 #include <time.h>
@@ -74,44 +92,44 @@ void status_line (char *format, ...)
 #ifndef __OS2__
       real_flush (fileno (logf));
 #endif
-   }
+	}
 }
 
 extern long elapsed;
 
 void local_status(char *format, ...)
 {
-   va_list var_args;
+	va_list var_args;
 
-   if (string == NULL)
-      string = (char *)malloc (2048);
+	if (string == NULL)
+		string = (char *)malloc (2048);
 
-   if (string==NULL || strlen(format) > 256)
-      return;
+	if (string==NULL || strlen(format) > 256)
+		return;
 
-   va_start(var_args,format);
-   vsprintf(string,format,var_args);
-   va_end(var_args);
+	va_start(var_args,format);
+	vsprintf(string,format,var_args);
+	va_end(var_args);
 
-   if (strlen (string)) {
-      prints (5, 65, YELLOW|_BLACK, "              ");
-      prints (5, 65, YELLOW|_BLACK, string);
-      elapsed = time (NULL);
-   }
+	if (strlen (string)) {
+		prints (5, 65, YELLOW|_BLACK, "              ");
+		prints (5, 65, YELLOW|_BLACK, string);
+		elapsed = time (NULL);
+	}
 
 #ifdef __OS2__
-   VioUpdate ();
+	VioUpdate ();
 #endif
 }
 
 void m_print(char *format, ...)
 {
-   va_list var_args;
-   char *q, visual, strm[2];
-   byte c, a, m;
+	va_list var_args;
+	char *q, visual, strm[2];
+	byte c, a, m;
 
-   if (string == NULL)
-      string = (char *)malloc (2048);
+	if (string == NULL)
+		string = (char *)malloc (2048);
 
    if (string==NULL || strlen(format) > 256)
       return;
@@ -196,10 +214,8 @@ void m_print(char *format, ...)
       }
    }
 
-#ifndef __OS2__
    if (!local_mode)
       UNBUFFER_BYTES ();
-#endif
 }
 
 void m_print2(char *format, ...)

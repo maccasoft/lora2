@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <dir.h>
 #include <dos.h>
@@ -73,19 +91,19 @@ static long xtol (char *p)
 {
    long r = 0L;
 
-   while (*p) {
-      if (isdigit (*p)) {
-         r *= 16L;
-         r += *p - '0';
-      }
-      else if (isxdigit (*p)) {
-         r *= 16L;
-         r += *p - 55;
-      }
-      p++;
-   }
+	while (*p) {
+		if (isdigit (*p)) {
+			r *= 16L;
+			r += *p - '0';
+		}
+		else if (isxdigit (*p)) {
+			r *= 16L;
+			r += *p - 55;
+		}
+		p++;
+	}
 
-   return (r);
+	return (r);
 }
 
 #define MAX_BUFFERING       2048
@@ -107,7 +125,7 @@ void import_tic_files ()
    struct _sys tsys;
    struct _fwd_alias *forward;
 
-   forward = (struct _fwd_alias *)malloc (MAX_FORWARD * sizeof (struct _fwd_alias));
+	forward = (struct _fwd_alias *)malloc (MAX_FORWARD * sizeof (struct _fwd_alias));
    if (forward == NULL)
       return;
 
@@ -140,7 +158,7 @@ void import_tic_files ()
    printc (12, 79, LGREY|_BLACK, '´');
    wr = wfindrec (wh);
    wr->srow++;
-   wr->row++;
+	wr->row++;
 
    for (d = 0; d < 3; d++) {
       if ( (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL)) ) {
@@ -174,8 +192,8 @@ void import_tic_files ()
          if (findfirst (filename, &blk, 0))
             break;
 
-         sprintf (filename, "%s%s", inpath, blk.ff_name);
-         fp = fopen (filename, "rt");
+			sprintf (filename, "%s%s", inpath, blk.ff_name);
+			fp = fopen (filename, "rt");
          if (fp == NULL)
             continue;
 
@@ -208,8 +226,8 @@ void import_tic_files ()
                strcpy (area, p);
             }
             else if (!stricmp (p, "From")) {
-               p = strtok (NULL, " ");
-               fzo = config->alias[0].zone;
+					p = strtok (NULL, " ");
+					fzo = config->alias[0].zone;
                fne = config->alias[0].net;
                fno = fpo = 0;
                parse_netnode (p, &fzo, &fne, &fno, &fpo);
@@ -242,8 +260,8 @@ void import_tic_files ()
             else if (!stricmp (p, "CRC")) {
                if ((p = strtok (NULL, " ")) != NULL)
                   crc = xtol (p);
-               else
-                  crc = 0L;
+					else
+						crc = 0L;
             }
             else if (!stricmp (p, "Pw")) {
                if ((p = strtok (NULL, " ")) != NULL) {
@@ -273,17 +291,17 @@ void import_tic_files ()
             if (crc != 0L && crcf != crc) {
                fclose (fp);
                status_line ("!%s bad CRC! (%08lX / %08lX)", name, crcf, crc);
-               rename_bad_tics (inpath, blk.ff_name);
+					rename_bad_tics (inpath, blk.ff_name);
                continue;
             }
-         }
-         else {
+			}
+			else {
             fclose (fp);
             if (fds == -1)
                status_line ("!%s not found in inbound area", name);
             else
                status_line ("!%s zero byte size", name);
-            rename_bad_tics (inpath, blk.ff_name);
+				rename_bad_tics (inpath, blk.ff_name);
             continue;
          }
 
@@ -310,7 +328,7 @@ void import_tic_files ()
                zo = config->alias[0].zone;
                ne = config->alias[0].net;
                no = config->alias[0].node;
-               po = config->alias[0].point;
+					po = config->alias[0].point;
 
                strcpy (linea, config->tic_newareas_create);
                p = strtok (linea, " ");
@@ -344,8 +362,8 @@ void import_tic_files ()
                   area[8] = '\0';
                sprintf (filename, "FNEWAREA\\%s", area);
 
-               if (mkdir (filename) == -1) {
-                  i = 0;
+					if (mkdir (filename) == -1) {
+						i = 0;
                   do {
                      i++;
                      sprintf (filename, "FNEWAREA\\%s.%03d", area, i);
@@ -378,7 +396,7 @@ void import_tic_files ()
 
             zo = config->alias[0].zone;
             ne = config->alias[0].net;
-            no = po = 0;
+				no = po = 0;
 
             strcpy (linea, tsys.tic_forward1);
             if ((p = strtok (linea, " ")) != NULL)
@@ -412,8 +430,8 @@ void import_tic_files ()
                   forward[n_forw].passive = forward[n_forw].receive = forward[n_forw].send = 0;
                   if (*p == '<') {
                      forward[n_forw].send = 1;
-                     p++;
-                  }
+							p++;
+						}
                   if (*p == '>') {
                      forward[n_forw].receive = 1;
                      p++;
@@ -446,8 +464,8 @@ void import_tic_files ()
                   }
                   if (*p == '!') {
                      forward[n_forw].passive = 1;
-                     p++;
-                  }
+							p++;
+						}
                   parse_netnode2 (p, &zo, &ne, &no, &po);
                   if (!forward[n_forw].passive && !forward[n_forw].receive && zo == fzo && ne == fne && no == fno && po == fpo)
                      found = 1;
@@ -465,7 +483,7 @@ void import_tic_files ()
                   wputs ("Bad Node\n");
                   status_line ("!Node %d:%d/%d.%d not found", fzo, fne, fno, fpo);
                   fclose (fp);
-                  rename_bad_tics (inpath, blk.ff_name);
+						rename_bad_tics (inpath, blk.ff_name);
                   continue;
                }
 
@@ -473,47 +491,47 @@ void import_tic_files ()
                   wputs ("Bad Pwd\n");
                   status_line ("!Bad password from %d:%d/%d.%d", fzo, fne, fno, fpo);
                   fclose (fp);
-                  rename_bad_tics (inpath, blk.ff_name);
-                  continue;
-               }
+						rename_bad_tics (inpath, blk.ff_name);
+						continue;
+					}
 
-               strcpy (dpath, tsys.filepath);
+					strcpy (dpath, tsys.filepath);
 
-               if (repl[0]) {
-                  sprintf (filename, "%s%s", dpath, repl);
-                  if (unlink (filename) == -1)
-                     status_line ("*%s doesn't exist", filename);
-                  else
-                     status_line ("*Replaces: %s", repl);
+					if (repl[0]) {
+						sprintf (filename, "%s%s", dpath, repl);
+						if (unlink (filename) == -1)
+							status_line ("*%s doesn't exist", filename);
+						else
+							status_line ("*Replaces: %s", repl);
 
-                  sprintf (filename, "%sFILES.BBS", sys.filepath);
-                  sprintf (linea, "%sFILES.BBS", sys.filepath);
+						sprintf (filename, "%sFILES.BBS", sys.filepath);
+						sprintf (linea, "%sFILES.BBS", sys.filepath);
 
-                  rename (filename, linea);
-                  godelete = 0;
+						rename (filename, linea);
+						godelete = 0;
 
-                  fpd = fopen (filename, "wt");
-                  fps = fopen (linea, "rt");
+						fpd = fopen (filename, "wt");
+						fps = fopen (linea, "rt");
 
-                  while (fgets (linea, MAX_BUFFERING - 2, fps) != NULL) {
-                     if (godelete) {
-                        if (linea[1] == '>')
-                           continue;
-                        else
-                           godelete = 0;
-                     }
-                     if (!strncmp (linea, repl, strlen (repl))) {
-                        godelete = 1;
-                        continue;
-                     }
-                     fputs (linea, fpd);
-                  }
+						while (fgets (linea, MAX_BUFFERING - 2, fps) != NULL) {
+							if (godelete) {
+								if (linea[1] == '>')
+									continue;
+								else
+									godelete = 0;
+							}
+							if (!strncmp (linea, repl, strlen (repl))) {
+								godelete = 1;
+								continue;
+							}
+							fputs (linea, fpd);
+						}
 
-                  fclose (fps);
-                  fclose (fpd);
-               }
+						fclose (fps);
+						fclose (fpd);
+					}
 
-               status_line (" Moving %s%s to %s%s", inpath, name, dpath, name);
+					status_line (" Moving %s%s to %s%s", inpath, name, dpath, name);
 
 //               if (inpath[1] == ':' && dpath[1] == ':' && toupper (inpath[0]) == toupper (dpath[0])) {
 //                  sprintf (linea, "%s%s", dpath, name);
@@ -522,266 +540,322 @@ void import_tic_files ()
 //                  rename (filename, linea);
 //               }
 //               else {
-               sprintf (filename, "%s%s", dpath, name);
-               fdd = open (filename, O_WRONLY|O_BINARY|O_CREAT|O_TRUNC, S_IREAD|S_IWRITE);
+					sprintf (filename, "%s%s", dpath, name);
+					fdd = open (filename, O_WRONLY|O_BINARY|O_CREAT|O_TRUNC, S_IREAD|S_IWRITE);
 
-               sprintf (filename, "%s%s", inpath, name);
-               fds = open (filename, O_RDONLY|O_BINARY);
+					sprintf (filename, "%s%s", inpath, name);
+					fds = open (filename, O_RDONLY|O_BINARY);
 
-               do {
-                  i = read (fds, linea, MAX_BUFFERING);
-                  if (write (fdd, linea, i) != i) {
-                     found = 0;
-                     status_line ("!Error during copy");
-                     break;
-                  }
+					do {
+						i = read (fds, linea, MAX_BUFFERING);
+						if (write (fdd, linea, i) != i) {
+							found = 0;
+							status_line ("!Error during copy");
+							break;
+						}
 
-                  t = ((float)filelength (fdd) * (float)100) / (float)filelength (fds);
-                  sprintf (linea, "\b\b\b\b\b%04.1f%%", t);
-                  wputs (linea);
-                  time_release ();
-               } while (i == MAX_BUFFERING);
+						t = ((float)filelength (fdd) * (float)100) / (float)filelength (fds);
+						sprintf (linea, "\b\b\b\b\b%04.1f%%", t);
+						wputs (linea);
+						time_release ();
+					} while (i == MAX_BUFFERING);
 
-               close (fdd);
-               close (fds);
+					close (fdd);
+					close (fds);
 
-               if (!found) {
-                  sprintf (filename, "%s%s", dpath, name);
-                  unlink (filename);
-               }
+					if (!found) {
+						sprintf (filename, "%s%s", dpath, name);
+						unlink (filename);
+					}
 //               }
 
-               if (found) {
-                  unlink (filename);
+					if (found) {
+						unlink (filename);
 
-                  status_line (":AREA: %s", area);
-                  status_line (":%s", descr);
-                  status_line (":Originated by %d:%d/%d.%d", ozo, one, ono, opo);
+						status_line (":AREA: %s", area);
+						status_line (":%s", descr);
+						status_line (":Originated by %d:%d/%d.%d", ozo, one, ono, opo);
 
-                  if (!stricmp (tsys.filepath, dpath) && tsys.filelist[0])
-                     fpd = fopen (tsys.filelist, "ab");
-                  else {
-                     sprintf (filename, "%sFILES.BBS", dpath);
-                     fpd = fopen (filename, "ab");
-                  }
-                  sprintf (filename, "%c  0%c ", config->dl_counter_limits[0], config->dl_counter_limits[1]);
-                  fprintf (fpd, "%-12.12s %s%s\r\n", strupr (name), config->keep_dl_count ? filename : "", descr);
-                  fclose (fpd);
+						if (!stricmp (tsys.filepath, dpath) && tsys.filelist[0])
+							fpd = fopen (tsys.filelist, "ab");
+						else {
+							sprintf (filename, "%sFILES.BBS", dpath);
+							fpd = fopen (filename, "ab");
+						}
+						sprintf (filename, "%c  0%c ", config->dl_counter_limits[0], config->dl_counter_limits[1]);
+						fprintf (fpd, "%-12.12s %s%s\r\n", strupr (name), config->keep_dl_count ? filename : "", descr);
+						fclose (fpd);
 
-                  crc = time (NULL);
-                  tim = gmtime (&crc);
+						crc = time (NULL);
+						tim = gmtime (&crc);
 
-                  for (nf = 0; nf < n_forw; nf++) {
-                     if (forward[nf].passive || forward[nf].send)
-                        continue;
+						for (nf = 0; nf < n_forw; nf++) {
+							if (forward[nf].passive || forward[nf].send)
+								continue;
 
-                     zo = forward[nf].zone;
-                     ne = forward[nf].net;
-                     no = forward[nf].node;
-                     po = forward[nf].point;
+							zo = forward[nf].zone;
+							ne = forward[nf].net;
+							no = forward[nf].node;
+							po = forward[nf].point;
 
-                     if (zo == fzo && ne == fne && no == fno && po == fpo)
-                        continue;
+							if (zo == fzo && ne == fne && no == fno && po == fpo)
+								continue;
 
-                     if (!get_bbs_record (zo, ne, no, po))
-                        dpw[0] = '\0';
-                     else
-                        strcpy (dpw, nodelist.pw_tic);
+							if (!get_bbs_record (zo, ne, no, po))
+								dpw[0] = '\0';
+							else
+								strcpy (dpw, nodelist.pw_tic);
 
-                     rewind (fp);
-                     seen = 0;
+							rewind (fp);
+							seen = 0;
 
-                     while (fgets (linea, 1020, fp) != NULL) {
-                        while (strlen (linea) > 0 && (linea[strlen (linea) - 1] == 0x0D || linea[strlen (linea) - 1] == 0x0A))
-                           linea[strlen (linea) - 1] = '\0';
+							while (fgets (linea, 1020, fp) != NULL) {
+								while (strlen (linea) > 0 && (linea[strlen (linea) - 1] == 0x0D || linea[strlen (linea) - 1] == 0x0A))
+									linea[strlen (linea) - 1] = '\0';
 
-                        p = strtok (linea, " ");
-                        if (stricmp (p, "Seenby"))
-                           continue;
+								p = strtok (linea, " ");
+								if (stricmp (p, "Seenby"))
+									continue;
 
-                        p = strtok (NULL, " ");
-                        ozo = config->alias[0].zone;
-                        one = config->alias[0].net;
-                        ono = opo = 0;
-                        parse_netnode (p, &ozo, &one, &ono, &opo);
+								p = strtok (NULL, " ");
+								ozo = config->alias[0].zone;
+								one = config->alias[0].net;
+								ono = opo = 0;
+								parse_netnode (p, &ozo, &one, &ono, &opo);
 
-                        if (zo == ozo && ne == one && no == ono && po == opo) {
-                           seen = 1;
-                           break;
-                        }
-                     }
+								if (zo == ozo && ne == one && no == ono && po == opo) {
+									seen = 1;
+									break;
+								}
+							}
 
-                     p = "Normal";
+							p = "Normal";
 
-                     if (!seen && p != NULL) {
-                        rewind (fp);
+							if (!seen && p != NULL) {
+								rewind (fp);
 
-                        status_line ("+Sending %s to %d:%d/%d.%d %s", name, zo, ne, no, po, p);
-                        if (po) {
-                           sprintf (filename, "%s%04X%04X.PNT", HoldAreaNameMungeCreate (zo), ne, no);
-                           mkdir (filename);
-                        }
+								status_line ("+Sending %s to %d:%d/%d.%d %s", name, zo, ne, no, po, p);
+								if (po) {
+									sprintf (filename, "%s%04X%04X.PNT", HoldAreaNameMungeCreate (zo), ne, no);
+									mkdir (filename);
+								}
 
-                        do {
-                           pos = time (NULL) % 1000000L;
-                           if (po)
-                              sprintf (filename, "%s%04X%04X.PNT\\TK%06lu.TIC", HoldAreaNameMungeCreate (zo), ne, no, pos);
-                           else
-                              sprintf (filename, "%sTK%06lu.TIC", HoldAreaNameMungeCreate (zo), pos);
-                        } while (dexists (filename));
+								do {
+									pos = time (NULL) % 1000000L;
+									if (po)
+										sprintf (filename, "%s%04X%04X.PNT\\LB%06lu.TIC", HoldAreaNameMungeCreate (zo), ne, no, pos);
+									else
+										sprintf (filename, "%sLB%06lu.TIC", HoldAreaNameMungeCreate (zo), pos);
+								} while (dexists (filename));
 
-                        fpd = fopen (filename, "wb");
+								fpd = fopen (filename, "wb");
 
-                        seen = 0;
-                        path = 0;
+								seen = 0;
+								path = 0;
 
-                        while (fgets (linea, 1020, fp) != NULL) {
-                           while (strlen (linea) > 0 && (linea[strlen (linea) - 1] == 0x0D || linea[strlen (linea) - 1] == 0x0A))
-                              linea[strlen (linea) - 1] = '\0';
+								while (fgets (linea, 1020, fp) != NULL) {
+									while (strlen (linea) > 0 && (linea[strlen (linea) - 1] == 0x0D || linea[strlen (linea) - 1] == 0x0A))
+										linea[strlen (linea) - 1] = '\0';
 
-                           if (path == 1 && strnicmp (linea, "Path ", 5)) {
-                              fprintf (fpd, "Path %d:%d/%d %ld %s %s %02d %02d:%02d:%02d %d GMT\r\n", config->alias[0].zone, config->alias[0].net, config->alias[0].node, crc, wtext[tim->tm_wday], mtext[tim->tm_mon], tim->tm_mday, tim->tm_hour, tim->tm_min, tim->tm_sec, tim->tm_year + 1900);
-                              path = 2;
-                           }
+									if (path == 1 && strnicmp (linea, "Path ", 5)) {
+										if ((i = nodelist.tic_akainfo) > 0)
+											i--;
+										fprintf (fpd, "Path %d:%d/%d %ld %s %s %02d %02d:%02d:%02d %d GMT\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node, crc, wtext[tim->tm_wday], mtext[tim->tm_mon], tim->tm_mday, tim->tm_hour, tim->tm_min, tim->tm_sec, tim->tm_year + 1900);
+										path = 2;
+									}
 
-                           if (seen == 1 && strnicmp (linea, "Seenby ", 7)) {
-                              for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
-                                 if (config->alias[i].point)
-                                    fprintf (fpd, "Seenby %d:%d/%d.%d\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node, config->alias[i].point);
-                                 else
-                                    fprintf (fpd, "Seenby %d:%d/%d\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node);
-                              }
+									if (seen == 1 && strnicmp (linea, "Seenby ", 7)) {
+										for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
+										if (config->alias[i].zone == config->alias[nodelist.tic_akainfo-1].zone)
+											if (config->alias[i].point)
+												fprintf (fpd, "Seenby %d:%d/%d.%d\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node, config->alias[i].point);
+											else
+												fprintf (fpd, "Seenby %d:%d/%d\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node);
+										}
+										{ int nf;
+										for (nf = 0; nf < n_forw; nf++) {
 
-                              if (po)
-                                 fprintf (fpd, "Seenby %d:%d/%d.%d\r\n", zo, ne, no, po);
-                              else
-                                 fprintf (fpd, "Seenby %d:%d/%d\r\n", zo, ne, no);
+											int zos, nes, nos, pos;
 
-                              seen = 2;
-                           }
+											if (forward[nf].passive || forward[nf].send)
+												continue;
 
-                           if (!strnicmp (linea, "From ", 5)) {
-                              if ((i = nodelist.akainfo) > 0)
-                                 i--;
-                              fprintf (fpd, "From %d:%d/%d\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node);
-                           }
-                           else if (!strnicmp (linea, "Created by ", 11))
-                              fprintf (fpd, "Created by %s (C) Copyright Marco Maccaferri - 1989-95\r\n", VERSION);
-                           else if (!strnicmp (linea, "Pw ", 3))
-                              fprintf (fpd, "Pw %s\r\n", strupr (dpw));
-                           else
-                              fprintf (fpd, "%s\r\n", linea);
+											zos = forward[nf].zone;
+											nes = forward[nf].net;
+											nos = forward[nf].node;
+											pos = forward[nf].point;
 
-                           if (!strnicmp (linea, "Path ", 5))
-                              path = 1;
-                           else if (!strnicmp (linea, "Seenby ", 7))
-                              seen = 1;
-                        }
+											if (zos == fzo && nes == fne && nos == fno && pos == fpo)
+												continue;
 
-                        if (path == 0) {
-                           if ((i = nodelist.akainfo) > 0)
-                              i--;
-                           if (config->alias[i].point)
-                              fprintf (fpd, "Path %d:%d/%d.%d %ld %s %s %02d %02d:%02d:%02d %d GMT\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node, config->alias[i].point, crc, wtext[tim->tm_wday], mtext[tim->tm_mon], tim->tm_mday, tim->tm_hour, tim->tm_min, tim->tm_sec, tim->tm_year + 1900);
-                           else
-                              fprintf (fpd, "Path %d:%d/%d %ld %s %s %02d %02d:%02d:%02d %d GMT\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node, crc, wtext[tim->tm_wday], mtext[tim->tm_mon], tim->tm_mday, tim->tm_hour, tim->tm_min, tim->tm_sec, tim->tm_year + 1900);
-                        }
+											if (zos != zo)
+												continue;
 
-                        if (seen == 0) {
-                           for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
-                              if (config->alias[i].point)
-                                 fprintf (fpd, "Seenby %d:%d/%d.%d\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node, config->alias[i].point);
-                              else
-                                 fprintf (fpd, "Seenby %d:%d/%d\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node);
-                           }
+											if (pos)
+												fprintf (fpd, "Seenby %d:%d/%d.%d\r\n", zos, nes, nos, pos);
+											else
+												fprintf (fpd, "Seenby %d:%d/%d\r\n", zos, nes, nos);
+										}
+										}
 
-                           if (po)
-                              fprintf (fpd, "Seenby %d:%d/%d.%d\r\n", zo, ne, no, po);
-                           else
-                              fprintf (fpd, "Seenby %d:%d/%d\r\n", zo, ne, no);
-                        }
+										seen = 2;
+									}
+
+									if (!strnicmp (linea, "From ", 5)) {
+										if ((i = nodelist.tic_akainfo) > 0)
+											i--;
+										fprintf (fpd, "From %d:%d/%d\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node);
+									}
+									else if (!strnicmp (linea, "Created by ", 11))
+										fprintf (fpd, "Created by %s (C) Copyright Marco Maccaferri - 1989-95\r\n", VERSION);
+									else if (!strnicmp (linea, "Pw ", 3))
+										fprintf (fpd, "Pw %s\r\n", strupr (dpw));
+									else
+										  if (strnicmp(linea, "To ",3))
+											fprintf (fpd, "%s\r\n", linea);
+
+									if (!strnicmp (linea, "Path ", 5))
+										path = 1;
+									else if (!strnicmp (linea, "Seenby ", 7))
+										seen = 1;
+								}
+
+								if (path == 0) {
+									if ((i = nodelist.tic_akainfo) > 0)
+										i--;
+									if (config->alias[i].point)
+										fprintf (fpd, "Path %d:%d/%d.%d %ld %s %s %02d %02d:%02d:%02d %d GMT\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node, config->alias[i].point, crc, wtext[tim->tm_wday], mtext[tim->tm_mon], tim->tm_mday, tim->tm_hour, tim->tm_min, tim->tm_sec, tim->tm_year + 1900);
+									else
+										fprintf (fpd, "Path %d:%d/%d %ld %s %s %02d %02d:%02d:%02d %d GMT\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node, crc, wtext[tim->tm_wday], mtext[tim->tm_mon], tim->tm_mday, tim->tm_hour, tim->tm_min, tim->tm_sec, tim->tm_year + 1900);
+								}
+
+								if (seen == 0) {
+//									for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++){
+									if ((i = nodelist.tic_akainfo) > 0)
+										i--;
+										if (config->alias[i].point)
+											fprintf (fpd, "Seenby %d:%d/%d.%d\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node, config->alias[i].point);
+										else
+											fprintf (fpd, "Seenby %d:%d/%d\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node);
+//									}
+									{ int nf;
+									for (nf = 0; nf < n_forw; nf++) {
+
+										int zos, nes, nos, pos;
+
+										if (forward[nf].passive || forward[nf].send)
+											continue;
+
+										zos = forward[nf].zone;
+										nes = forward[nf].net;
+										nos = forward[nf].node;
+										pos = forward[nf].point;
+
+										if (zos == fzo && nes == fne && nos == fno && pos == fpo)
+											continue;
+
+										if (zos != zo)
+											continue;
+
+										if (pos)
+											fprintf (fpd, "Seenby %d:%d/%d.%d\r\n", zos, nes, nos, pos);
+										else
+											fprintf (fpd, "Seenby %d:%d/%d\r\n", zos, nes, nos);
+									}
+									}
+								//	if (po)
+								//		fprintf (fpd, "Seenby %d:%d/%d.%d\r\n", zo, ne, no, po);
+								//	else
+								//		fprintf (fpd, "Seenby %d:%d/%d\r\n", zo, ne, no);
+								}
 
 
-                        fclose (fpd);
+								fclose (fpd);
 
-                        if (po)
-                           sprintf (filename, "%s%04X%04X.PNT\\%08X.%cLO", HoldAreaNameMungeCreate (zo), ne, no, po, check_route_flag (zo, ne, no, po));
-                        else
-                           sprintf (filename, "%s%04X%04X.%cLO", HoldAreaNameMungeCreate (zo), ne, no, check_route_flag (zo, ne, no, 0));
+								if (po)
+									sprintf (filename, "%s%04X%04X.PNT\\%08X.%cLO", HoldAreaNameMungeCreate (zo), ne, no, po, check_route_flag (zo, ne, no, po));
+								else
+									sprintf (filename, "%s%04X%04X.%cLO", HoldAreaNameMungeCreate (zo), ne, no, check_route_flag (zo, ne, no, 0));
 
-                        fpd = fopen (filename, "at");
-                        fprintf (fpd, "%s%s\n", dpath, name);
-                        if (po)
-                           fprintf (fpd, "^%s%04X%04X.PNT\\TK%06lu.TIC\n", HoldAreaNameMungeCreate (zo), ne, no, pos);
-                        else
-                           fprintf (fpd, "^%sTK%06lu.TIC\n", HoldAreaNameMungeCreate (zo), pos);
-                        fclose (fpd);
+								fpd = fopen (filename, "at");
+								fprintf (fpd, "%s%s\n", dpath, name);
+								if (po)
+									fprintf (fpd, "^%s%04X%04X.PNT\\LB%06lu.TIC\n", HoldAreaNameMungeCreate (zo), ne, no, pos);
+								else
+									fprintf (fpd, "^%sLB%06lu.TIC\n", HoldAreaNameMungeCreate (zo), pos);
+								fclose (fpd);
 
-                        prints (10, 65, YELLOW|_BLACK, "            ");
-                        sprintf (linea, "%d / %d", nrec, ++nsent);
-                        prints (10, 65, YELLOW|_BLACK, linea);
-                     }
-                  }
-               }
-            }
-         }
+								prints (10, 65, YELLOW|_BLACK, "            ");
+								sprintf (linea, "%d / %d", nrec, ++nsent);
+								prints (10, 65, YELLOW|_BLACK, linea);
+							}
+						}
+					}
+				}
+			}
 
-         fclose (fp);
+			fclose (fp);
 
-         if (found) {
-            sprintf (filename, "%s%s", inpath, blk.ff_name);
-            status_line ("+Deleting %s", filename);
-            unlink (filename);
-         }
-         else
-            rename_bad_tics (inpath, blk.ff_name);
+			if (found) {
+				sprintf (filename, "%s%s", inpath, blk.ff_name);
+				status_line ("+Deleting %s", filename);
+				unlink (filename);
+			}
+			else
+				rename_bad_tics (inpath, blk.ff_name);
 
-         wputs ("\n");
-      }
-   }
+			wputs ("\n");
+		}
+	}
 
-   fclose (fpcfg);
-   wr->srow--;
-   wclose ();
+	fclose (fpcfg);
+	wr->srow--;
+	wclose ();
 
-   free (descr);
-   free (linea);
+	free (descr);
+	free (linea);
 
-   if (!fi)
-      status_line (" No inbound TIC's to process");
+	if (!fi)
+		status_line (" No inbound TIC's to process");
 
-   free (forward);
-   idle_system ();
+	free (forward);
+	idle_system ();
 }
 
 /*
 
-                  if (stricmp (pw, dpw)) {
-                     status_line ("!Bad password from %d:%d/%d.%d", fzo, fne, fno, fpo);
-                     found = -1;
-                  }
-                  else {
-                     p = strtok (NULL, " ");
-                     if (strlen (p) > 9)
-                        p[9] = '\0';
-                     strcpy (dflag, p);
-                     found = 1;
-                  }
+						if (stricmp (pw, dpw)) {
+							status_line ("!Bad password from %d:%d/%d.%d", fzo, fne, fno, fpo);
+							found = -1;
+						}
+						else {
+							p = strtok (NULL, " ");
+							if (strlen (p) > 9)
+								p[9] = '\0';
+							strcpy (dflag, p);
+							found = 1;
+						}
 
-                  break;
-               }
+						break;
+					}
 */
 
 static void rename_bad_tics (path, name)
 char *path, *name;
 {
-   char filename[80], linea[80];
+	char filename[80], linea[80], c;
 
-   name[8] = '\0';
-   sprintf (filename, "%s%s.TIC", path, name);
-   sprintf (linea, "%s%s.BAD", path, name);
-   rename (filename, linea);
-   name[8] = 'T';
+	c=name[8];
+	name[8] = '\0';
+	sprintf (filename, "%s%s.TIC", path, name);
+	sprintf (linea, "%s%s.BAD", path, name);
+
+	rename (filename, linea);
+
+	status_line("!Renamed %s to %s",filename,linea);
+
+//   name[8] = 'T';
+	name[8] = c;
 }
 
 //  2:332/402.0 Q 43 SYSOP_CHAT.ITA
@@ -805,7 +879,7 @@ void rescan_areas (void)
 
    wh = wopen (12, 0, 24, 79, 0, LGREY|_BLACK, LCYAN|_BLACK);
    wactiv (wh);
-   wtitle ("RESCAN ECHOMAIL", TLEFT, LCYAN|_BLACK);
+	wtitle ("RESCAN ECHOMAIL", TLEFT, LCYAN|_BLACK);
    wprints (0, 0, YELLOW|_BLACK, " Num.  Area tag               Base         Forward to");
    printc (12, 0, LGREY|_BLACK, 'Ã');
    printc (12, 52, LGREY|_BLACK, 'Á');
@@ -839,7 +913,7 @@ void rescan_areas (void)
       if (type == 'S' || type == 'M')
          strcpy (sys.msg_path, p);
       else if (type == 'Q' || type == 'P' || type == 'G')
-         board = atoi (p);
+			board = atoi (p);
 
       if ((tag = strtok (NULL, " ")) == NULL)
          continue;
@@ -873,63 +947,63 @@ void rescan_areas (void)
 
       if (type == 'Q')
          quick_rescan_echomail (board, zo, ne, no, po, 0);
-      else if (type == 'G')
-         quick_rescan_echomail (board, zo, ne, no, po, 1);
-      else if (type == 'S') {
-         sys.squish = 1;
-         squish_scan_message_base (0, sys.msg_path, 0);
-         if (sq_ptr != NULL) {
-            while (MsgLock (sq_ptr) == -1)
-               ;
-            squish_rescan_echomail (sys.echotag, zo, ne, no, po);
+		else if (type == 'G')
+			quick_rescan_echomail (board, zo, ne, no, po, 1);
+		else if (type == 'S') {
+			sys.squish = 1;
+			squish_scan_message_base (0, sys.msg_path, 0);
+			if (sq_ptr != NULL) {
+				while (MsgLock (sq_ptr) == -1)
+					;
+				squish_rescan_echomail (sys.echotag, zo, ne, no, po);
 
-            MsgUnlock (sq_ptr);
-            MsgCloseArea (sq_ptr);
-            sq_ptr = NULL;
-         }
-      }
-      else if (type == 'M') {
-         scan_message_base (0, 0);
-         fido_rescan_echomail (sys.echotag, zo, ne, no, po);
-      }
-      else if (type == 'P')
-         pip_rescan_echomail (board, sys.echotag, zo, ne, no, po);
+				MsgUnlock (sq_ptr);
+				MsgCloseArea (sq_ptr);
+				sq_ptr = NULL;
+			}
+		}
+		else if (type == 'M') {
+			scan_message_base (0, 0);
+			fido_rescan_echomail (sys.echotag, zo, ne, no, po);
+		}
+		else if (type == 'P')
+			pip_rescan_echomail (board, sys.echotag, zo, ne, no, po);
 
-      if (adjtime) {
-         gettime (&timep);
-         getdate (&datep);
+		if (adjtime) {
+			gettime (&timep);
+			getdate (&datep);
 
-         fd = open (linea, O_RDWR|O_BINARY);
-         if (fd != -1) {
-            if (filelength (fd) == 0L) {
-               close (fd);
-               unlink (linea);
-            }
-            else {
-               read (fd, (char *)&pkthdr, sizeof (struct _pkthdr2));
-               pkthdr.hour = timep.ti_hour;
-               pkthdr.minute = timep.ti_min;
-               pkthdr.second = timep.ti_sec;
-               pkthdr.year = datep.da_year;
-               pkthdr.month = datep.da_mon - 1;
-               pkthdr.day = datep.da_day;
-               lseek (fd, 0L, SEEK_SET);
-               write (fd, (char *)&pkthdr, sizeof (struct _pkthdr2));
-               close (fd);
-            }
-         }
-      }
-   }
+			fd = open (linea, O_RDWR|O_BINARY);
+			if (fd != -1) {
+				if (filelength (fd) == 0L) {
+					close (fd);
+					unlink (linea);
+				}
+				else {
+					read (fd, (char *)&pkthdr, sizeof (struct _pkthdr2));
+					pkthdr.hour = timep.ti_hour;
+					pkthdr.minute = timep.ti_min;
+					pkthdr.second = timep.ti_sec;
+					pkthdr.year = datep.da_year;
+					pkthdr.month = datep.da_mon - 1;
+					pkthdr.day = datep.da_day;
+					lseek (fd, 0L, SEEK_SET);
+					write (fd, (char *)&pkthdr, sizeof (struct _pkthdr2));
+					close (fd);
+				}
+			}
+		}
+	}
 
-   if (sq_ptr != NULL) {
-      MsgUnlock (sq_ptr);
-      MsgCloseArea (sq_ptr);
-      sq_ptr = NULL;
-   }
+	if (sq_ptr != NULL) {
+		MsgUnlock (sq_ptr);
+		MsgCloseArea (sq_ptr);
+		sq_ptr = NULL;
+	}
 
-   if (aidx != NULL)
-      free (aidx);
-   if (akainfo != NULL)
+	if (aidx != NULL)
+		free (aidx);
+	if (akainfo != NULL)
       free (akainfo);
 
    fclose (fp);
@@ -948,69 +1022,91 @@ struct _msgzone {
 
 void track_inbound_messages (FILE *fpd, struct _msg *msgt, int fzone)
 {
-   if (!(msgt->attr & MSGLOCAL)) {
-      if (fzone == 0)
-         fzone = config->alias[0].zone;
-      if (!get_bbs_record (fzone, msgt->orig_net, msgt->orig, 0)) {
-         status_line ("!Unlisted node: %d:%d/%d", fzone, msgt->orig_net, msgt->orig);
-         mprintf (fpd, "==========================================================================\r\n");
-         mprintf (fpd, "WARNING [%s]: The originating address on this message was\r\n", VERSION);
-         mprintf (fpd, "=not= listed in the NodeList at %d:%d/%d.  Please ensure that you do\r\n", config->alias[0].zone, config->alias[0].net, config->alias[0].node);
-         mprintf (fpd, "not send a reply via this system, as it will be bounced as undeliverable.\r\n");
-         mprintf (fpd, "==========================================================================\r\n");
-      }
-   }
+	int i;
+	if (!(msgt->attr & MSGLOCAL)) {
+		if (fzone == 0)
+			fzone = config->alias[0].zone;
+		for (i = 0;i < MAX_ALIAS && config->alias[i].net; i++)
+			if (config->alias[i].zone == fzone && config->alias[i].net == msgt->orig_net && config->alias[i].node == msgt->orig)
+				break;
+		if (i < MAX_ALIAS && config->alias[i].net)
+			return;
+		if (!get_bbs_record (fzone, msgt->orig_net, msgt->orig, 0)) {
+			status_line ("!Unlisted node: %d:%d/%d", fzone, msgt->orig_net, msgt->orig);
+			mprintf (fpd, "==========================================================================\r\n");
+			mprintf (fpd, "WARNING [%s]: The originating address on this message was\r\n", VERSION);
+			mprintf (fpd, "=not= listed in the NodeList at %d:%d/%d.  Please ensure that you do\r\n", config->alias[0].zone, config->alias[0].net, config->alias[0].node);
+			mprintf (fpd, "not send a reply via this system, as it will be bounced as undeliverable.\r\n");
+			mprintf (fpd, "==========================================================================\r\n");
+		}
+	}
 }
 
 int track_outbound_messages (FILE *fpd, struct _msg *msgt, int fzone, int fpoint, int tzone, int tpoint)
 {
-   FILE *fp;
-   int i, aka, m;
-   char filename[80], buffer[2050];
-   struct _msg tmsg;
-   struct _msgzone mz;
+	FILE *fp;
+	int i, aka, m;
+	char filename[80], buffer[2050];
+	struct _msg tmsg;
+	struct _msgzone mz;
 
-   if (fzone == 0)
-      fzone = config->alias[0].zone;
-   if (tzone == 0)
-      tzone = config->alias[0].zone;
+    if (fzone == 0)
+		fzone = config->alias[0].zone;
+	if (tzone == 0)
+		tzone = config->alias[0].zone;
 
-   if (get_bbs_record (tzone, msgt->dest_net, msgt->dest, 0))
-      return (1);
+	if (get_bbs_record (tzone, msgt->dest_net, msgt->dest, 0))
+		return (1);
 
-   for (i = 0;i < MAX_ALIAS && config->alias[i].net; i++)
-      if (config->alias[i].zone == fzone && config->alias[i].net == msgt->orig_net && config->alias[i].node == msgt->orig)
-         break;
-   if (i < MAX_ALIAS && config->alias[i].net)
-      return (1);
+/*	for (i = 0;i < MAX_ALIAS && config->alias[i].net; i++)
+		if (config->alias[i].zone == fzone && config->alias[i].net == msgt->orig_net && config->alias[i].node == msgt->orig)
+			break;
+	if (i < MAX_ALIAS && config->alias[i].net)
+		return (1);
+*/
+// Inizia mio patch
+	for (i = 0;i < MAX_ALIAS && config->alias[i].net; i++)
+		if (config->alias[i].zone == tzone && config->alias[i].net == msgt->dest_net && config->alias[i].node == msgt->dest)
+			break;
+	if (i < MAX_ALIAS && config->alias[i].net)
+		return (1);
 
-   if (!get_bbs_record (fzone, msgt->orig_net, msgt->orig, 0))
-      return (0);
+	for (i = 0;i < MAX_ALIAS && config->alias[i].net; i++)
+		if (config->alias[i].zone == fzone && config->alias[i].net == msgt->orig_net && config->alias[i].node == msgt->orig)
+			break;
+	if (!(i < MAX_ALIAS && config->alias[i].net)){
+		if (!get_bbs_record (fzone, msgt->orig_net, msgt->orig, 0))
+			return (0);
+		}
+// Fino qui.
+/* 		if (!get_bbs_record (fzone, msgt->orig_net, msgt->orig, 0))
+			return (0);
+*/
 
-   for (i = 0;i < MAX_ALIAS && config->alias[i].net; i++)
-      if (config->alias[i].zone == fzone)
-         break;
-   if (i < MAX_ALIAS && config->alias[i].net)
-      aka = i;
-   else
-      aka = 0;
+	for (i = 0;i < MAX_ALIAS && config->alias[i].net; i++)
+		if (config->alias[i].zone == fzone)
+			break;
+	if (i < MAX_ALIAS && config->alias[i].net)
+		aka = i;
+	else
+		aka = 0;
 
-   memset (&tmsg, 0, sizeof (struct _msg));
-   sprintf (filename, "%s%d.MSG", sys.msg_path, ++last_msg);
+	memset (&tmsg, 0, sizeof (struct _msg));
+	sprintf (filename, "%s%d.MSG", sys.msg_path, ++last_msg);
 
-   status_line ("!Destination node %d:%d/%d unlisted", tzone, msgt->dest_net, msgt->dest);
+	status_line ("!Destination node %d:%d/%d unlisted", tzone, msgt->dest_net, msgt->dest);
 
-   fp = fopen (filename, "wb");
-   if (fp == NULL)
-        return (0);
+	fp = fopen (filename, "wb");
+	if (fp == NULL)
+		  return (0);
 
-   tmsg.attr |= MSGPRIVATE;
+	tmsg.attr |= MSGPRIVATE;
 
-   if (get_bbs_record (fzone, msgt->orig_net, msgt->orig, 0)) {
-      mz.dest_zone = fzone;
-      tmsg.dest_net = msgt->orig_net;
-      tmsg.dest = msgt->orig;
-      mz.dest_point = fpoint;
+	if (get_bbs_record (fzone, msgt->orig_net, msgt->orig, 0)) {
+		mz.dest_zone = fzone;
+		tmsg.dest_net = msgt->orig_net;
+		tmsg.dest = msgt->orig;
+		mz.dest_point = fpoint;
    }
    else {
       mz.dest_zone = config->alias[0].zone;

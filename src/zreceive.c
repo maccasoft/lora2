@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <io.h>
 #include <string.h>
@@ -233,6 +251,7 @@ register int length;
                /*-----------------------------------*/
                status_line (msgtxt[M_NO_CARRIER]);
                CLEAR_INBOUND ();
+               something_wrong=1;
                return c;
 
             default:
@@ -240,6 +259,7 @@ register int length;
                /* Something bizarre                 */
                /*-----------------------------------*/
                z_message (msgtxt[M_DEBRIS]);
+               something_wrong=1;
                CLEAR_INBOUND ();
                return c;
             }                                    /* switch */
@@ -250,6 +270,7 @@ register int length;
       }                                          /* while(1) */
 
    z_message (msgtxt[M_LONG_PACKET]);
+   something_wrong=1;
    return ERROR;
 }                                                /* RZ_ReceiveData */
 
@@ -331,6 +352,7 @@ register int length;
                /* Timeout                           */
                /*-----------------------------------*/
                z_message (msgtxt[M_TIMEOUT]);
+               something_wrong=1;
                return c;
 
             case RCDO:
@@ -338,6 +360,7 @@ register int length;
                /* No carrier                        */
                /*-----------------------------------*/
                status_line (msgtxt[M_NO_CARRIER]);
+               something_wrong=1;
                CLEAR_INBOUND ();
                return c;
 
@@ -346,6 +369,7 @@ register int length;
                /* Something bizarre                 */
                /*-----------------------------------*/
                z_message (msgtxt[M_DEBRIS]);
+               something_wrong=1;
                CLEAR_INBOUND ();
                return c;
             }                                    /* switch */
@@ -356,6 +380,7 @@ register int length;
       }                                          /* while(1) */
 
    z_message (msgtxt[M_LONG_PACKET]);
+   something_wrong=1;
    return ERROR;
 }                                                /* RZ_ReceiveData */
 
@@ -472,6 +497,7 @@ AGAIN:
 
          case RCDO:
             sptr = &msgtxt[M_NO_CARRIER][1];
+            something_wrong=1;
             CLEAR_INBOUND ();
             goto Err;
          }                                       /* switch */
@@ -480,6 +506,7 @@ AGAIN:
    sptr = msgtxt[M_TIMEOUT];
 
 Err:
+   something_wrong=1;
    if (sptr != NULL)
       sprintf (e_input, msgtxt[M_Z_INITRECV], sptr);
    status_line (e_input);
@@ -522,6 +549,7 @@ FILE *xferinfo;
                case ZCOMPL:
                   return OK;
                default:
+                  something_wrong=1;
                   return ERROR;
                case ZFILE:
                   break;
@@ -611,6 +639,7 @@ NxtHdr:
 
                case RCDO:
                   sptr = &msgtxt[M_NO_CARRIER][1];
+                  something_wrong=1;
                   CLEAR_INBOUND ();
                   goto Err;
 
@@ -641,8 +670,10 @@ NxtHdr:
                   /* End of frame          */
                   /*-----------------------*/
                   n = 10;
-                  if (RZ_SaveToDisk (&rxbytes) == ERROR)
+                  if (RZ_SaveToDisk (&rxbytes) == ERROR){
+                     something_wrong=1;
                      return ERROR;
+                  }
                   Z_PutLongIntoHeader (rxbytes);
                   Z_SendHexHeader (ZACK, Txhdr);
                   goto NxtHdr;
@@ -652,8 +683,10 @@ NxtHdr:
                   /* Zack expected         */
                   /*-----------------------*/
                   n = 10;
-                  if (RZ_SaveToDisk (&rxbytes) == ERROR)
+                  if (RZ_SaveToDisk (&rxbytes) == ERROR){
+                     something_wrong=1;
                      return ERROR;
+                  }
                   Z_PutLongIntoHeader (rxbytes);
                   Z_SendHexHeader (ZACK, Txhdr);
                   goto MoreData;
@@ -663,8 +696,10 @@ NxtHdr:
                   /* Non-stop              */
                   /*-----------------------*/
                   n = 10;
-                  if (RZ_SaveToDisk (&rxbytes) == ERROR)
+                  if (RZ_SaveToDisk (&rxbytes) == ERROR){
+                     something_wrong=1;
                      return ERROR;
+                  }
                   goto MoreData;
 
                case GOTCRCE:
@@ -672,8 +707,10 @@ NxtHdr:
                   /* Header to follow      */
                   /*-----------------------*/
                   n = 10;
-                  if (RZ_SaveToDisk (&rxbytes) == ERROR)
+                  if (RZ_SaveToDisk (&rxbytes) == ERROR){
+                     something_wrong=1;
                      return ERROR;
+                  }
                   goto NxtHdr;
                }                                 /* switch */
 
@@ -751,6 +788,7 @@ NxtHdr:
             return c;
 
          case ERROR:
+            something_wrong=1;
             /*-----------------------------------------*/
             /* Too much garbage in header search error */
             /*-----------------------------------------*/
@@ -779,6 +817,7 @@ Err:
       sprintf (e_input, msgtxt[M_Z_RZ], sptr);
       status_line (e_input);
    }
+   something_wrong=1;
    return ERROR;
 }                                                /* RZ_ReceiveFile */
 
@@ -820,6 +859,7 @@ static int RZ_GetHeader ()
    if (filesize + 10240 > DiskAvail)
       {
       status_line (msgtxt[M_OUT_OF_DISK_SPACE]);
+      something_wrong=1;
       return ERROR;
       }
 
@@ -880,6 +920,7 @@ static int RZ_GetHeader ()
          {                                       /* If file already exists...      */
          if ((Outfile = fopen (Filename, "rb")) == NULL)
             {
+            something_wrong=1;
             return ERROR;
             }
          fstat (fileno (Outfile), &f);
@@ -887,10 +928,11 @@ static int RZ_GetHeader ()
          if (caller || (filesize == f.st_size && filetime == f.st_mtime))
             {
             status_line (msgtxt[M_ALREADY_HAVE], Filename);
+            something_wrong=1;
             return ZSKIP;
             }
          i = strlen (Filename) - 1;
-         if (!overwrite || is_arcmail (Filename, i) || is_mailpkt (Filename, i))
+         if ((!overwrite) || (is_arcmail (Filename, i)))
             {
             unique_name (Filename);
             }
@@ -908,11 +950,13 @@ static int RZ_GetHeader ()
       }
    if ((Outfile = sh_fopen (Filename, p, SH_DENYRW)) == NULL)
       {
+      something_wrong=1;
       return ERROR;
       }
    if (isatty (fileno (Outfile)))
       {
       fclose (Outfile);
+      something_wrong=1;
       return (ERROR);
       }
 
@@ -995,6 +1039,7 @@ long *rxbytes;
          CLEAR_INBOUND ();
       send_can ();
       status_line (msgtxt[M_KBD_MSG]);
+      something_wrong=1;
       return ERROR;
       }
 
@@ -1067,6 +1112,7 @@ long *rxbytes;
    return OK;
 
 oops:
+   something_wrong=1;
    return ERROR;
 }
 
@@ -1094,6 +1140,7 @@ static void RZ_AckBibi ()
 
          case TIMEOUT:
          case RCDO:
+            something_wrong=1;
             return;
          }                                       /* switch */
       }                                          /* for */
@@ -1114,6 +1161,11 @@ int n;
 
    (void) strcpy (c, p);
    (void) strupr (c);
+
+   if ((c[n] == 'C') && (c[n-1] == 'I') && (c[n-2] == 'T') && (c[n-3] == '.')) {
+      got_arcmail = 1;
+      return (0);
+   }
 
    for (i = n - 11; i < n - 3; i++) {
       if ((!isdigit (c[i])) && ((c[i] > 'F') || (c[i] < 'A')))

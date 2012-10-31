@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 /*
 ** RPN Engine for LoraBBS 2.3x
 **
@@ -134,30 +152,30 @@ void rpnInit (void)
 */
 void rpnProcessChar(int c)
 {
-   short tmp;
-   long ltmp;
+	short tmp;
+	long ltmp;
 
-   /*
-   ** Cifre da 0 a 9
-   */
-   if ((c >= '0') && (c <= '9')) {
-      if (acc_reset) {
-         PUSH(acc);
-         acc = 0;
-         acc_reset = FALSE;
-      }
-      /*
-      ** Un modo come un altro per evitare l'overflow
-      */
-      ltmp = (long)acc * 10 + c - '0';
-      acc =  ltmp > 32767L ? 32767 : ltmp & 0xFFFF;
-      return;
-   }
-   switch (c) {
-      /*
-      ** Interazione diretta con lo stack
-      */
-      case ',':       /* Inserimento accumulatore nello stack                     */
+	/*
+	** Cifre da 0 a 9
+	*/
+	if ((c >= '0') && (c <= '9')) {
+		if (acc_reset) {
+			PUSH(acc);
+			acc = 0;
+			acc_reset = FALSE;
+		}
+		/*
+		** Un modo come un altro per evitare l'overflow
+		*/
+		ltmp = (long)acc * 10 + c - '0';
+		acc =  ltmp > 32767L ? 32767 : ltmp & 0xFFFF;
+		return;
+	}
+	switch (c) {
+		/*
+		** Interazione diretta con lo stack
+		*/
+		case ',':       /* Inserimento accumulatore nello stack                     */
 		PUSH(acc);
 		acc = 0;
 		acc_reset = FALSE;
@@ -191,6 +209,7 @@ void rpnProcessChar(int c)
 	case '*':	/* Moltiplicazione dello stack per l'accumulatore           */
 		acc = ((long)acc * POP()) & 0xFFFF;
 		acc_reset = TRUE;
+		break;
 	case '/':	/* Divisione tra lo stack e l'accumulatore                  */
 		if (acc == 0) {
 			acc = POP() < 0 ? SHRT_MIN : SHRT_MAX;
@@ -338,34 +357,34 @@ void rpnProcessChar(int c)
 		}
 		acc_reset = TRUE;
 		break;
-      case 'c':       /* C[acc] <-- stack                                         */
-         tmp = POP();
-         if ((acc >= 0) && (acc < MAXCOUNTER)) {
-            if (tmp < 0)
-               usr.counter[--acc] = 0;
-            else if (tmp > 255)
-               usr.counter[--acc] = tmp;
-            else
-               usr.counter[--acc] = tmp;
-         }
-         acc_reset = TRUE;
-         break;
+		case 'c':       /* C[acc] <-- stack                                         */
+			tmp = POP();
+			if ((acc >= 0) && (acc < MAXCOUNTER)) {
+				if (tmp < 0)
+					usr.counter[--acc] = 0;
+				else if (tmp > 255)
+					usr.counter[--acc] = tmp;
+				else
+					usr.counter[--acc] = tmp;
+			}
+			acc_reset = TRUE;
+			break;
 	/*
 	** Interazione con i dati del record utente
 	*/
-      case 'U':       /* Carica un campo del record utente : acc <-- U[acc]       */
-         acc = get_usr(acc);
-         acc_reset = TRUE;
-         break;
-      case 'u':       /* Memorizza in record utente : U[acc] <-- stack            */
-         set_usr(acc, POP());
-         acc_reset = TRUE;
-         break;
-      /*
-      ** Posizione cursore
-      */
-      case 'P':
-         acc = (vy << 8) | vx;
+		case 'U':       /* Carica un campo del record utente : acc <-- U[acc]       */
+			acc = get_usr(acc);
+			acc_reset = TRUE;
+			break;
+		case 'u':       /* Memorizza in record utente : U[acc] <-- stack            */
+			set_usr(acc, POP());
+			acc_reset = TRUE;
+			break;
+		/*
+		** Posizione cursore
+		*/
+		case 'P':
+			acc = (vy << 8) | vx;
          acc_reset = TRUE;
          break;
       case 'p':
@@ -393,9 +412,9 @@ void rpnProcessChar(int c)
 
 char *rpnProcessString (char *p)
 {
-   while (*p && *p >= 32 && *p != 0x0A && *p != 0x0D)
-      rpnProcessChar (*p++);
-   p--;
+	while (*p && *p >= 32 && *p != 0x0A && *p != 0x0D && *p != 'E')
+		rpnProcessChar (*p++);
+	if (*p != 'E') p--;                   // E significa Exit, non riportare p
    return (p);
 }
 

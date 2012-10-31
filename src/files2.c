@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <alloc.h>
 #include <stdio.h>
 #include <io.h>
@@ -26,9 +44,9 @@
 #include "exec.h"
 
 typedef struct {
-   char name[13];
-   word area;
-   long datpos;
+	char name[13];
+	word area;
+	long datpos;
 } FILEIDX;
 
 extern char no_description, no_check, no_external, no_precheck;
@@ -59,6 +77,7 @@ typedef unsigned int uint;
 
 #define ARCHIVE_arc       0x00 /* An .ARC                                 */
 #define ARCHIVE_lzh       0x01 /* A .LZH                                  */
+#define COPYBUFFER  8192
 
 static void Read_LzhArc(int ,int);
 static int Zip_Scan_For_Header(char *);
@@ -68,25 +87,28 @@ static void Read_Arj(int);
 static void Read_Sqz(int);
 static void Read_Rar(int fd);
 
+int tagged_kb;
+int tagged_dnl;
+
 char *memstr(char *, char *, int, int);
 
 static char *my_strtok (char *s1, char *s2)
 {
-    static char *Ss;
-    char *tok, *sp;
+	 static char *Ss;
+	 char *tok, *sp;
 
-    if (s1 != NULL)
-       Ss = s1;
+	 if (s1 != NULL)
+		 Ss = s1;
 
-    while (*Ss) {
-        for (sp = s2; *sp; sp++)
-            if (*sp == *Ss)
-                break;
-        if (*sp == 0)
-            break;
-        Ss++;
-    }
-    if (*Ss == 0)
+	 while (*Ss) {
+		  for (sp = s2; *sp; sp++)
+				if (*sp == *Ss)
+					 break;
+		  if (*sp == 0)
+				break;
+		  Ss++;
+	 }
+	 if (*Ss == 0)
         return (NULL);
     tok = Ss;
     while (*Ss) {
@@ -97,7 +119,7 @@ static char *my_strtok (char *s1, char *s2)
             }
         Ss++;
     }
-    return (tok);
+	 return (tok);
 }
 
 void display_contents (void)
@@ -130,7 +152,7 @@ void display_contents (void)
             strcpy (p, ".LZH");
             sprintf (an, "%s%s", sys.filepath, filename);
 
-            if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
+				if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
                strcpy (p, ".LHA");
                sprintf (an, "%s%s", sys.filepath, filename);
 
@@ -151,7 +173,7 @@ void display_contents (void)
                            sprintf (an, "%s%s", sys.filepath, filename);
 
                            if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
-                              m_print (bbstxt[B_ARC_NOTFOUND]);
+										m_print (bbstxt[B_ARC_NOTFOUND]);
                               return;
                            }
                         }
@@ -163,7 +185,7 @@ void display_contents (void)
       }
    }
 
-   m_print(bbstxt[B_SEARCH_ARCHIVE],strupr(filename));
+	m_print(bbstxt[B_SEARCH_ARCHIVE],strupr(filename));
 
    read(arcfile,buffer,SEEK_SIZE-1);
    lseek(arcfile,0L,SEEK_SET);
@@ -343,7 +365,7 @@ static void Read_Zip(int zipfile)
       if (read(zipfile,buffer,SEEK_SIZE)==-1)
         return;
 
-      found_header=Zip_Scan_For_Header(buffer);
+		found_header=Zip_Scan_For_Header(buffer);
     }
   }
 
@@ -540,7 +562,7 @@ struct _arj_header {
    byte version;
    byte min_to_extract;
    byte host_os;
-   byte arj_flags;
+	byte arj_flags;
    byte method;
    byte file_type;
    byte reserved;
@@ -815,7 +837,7 @@ static void Read_Rar(int fd)
       m_print (bbstxt[B_LZHARC_END]);
 
       if (total_uncompressed)
-          m_print (bbstxt[B_LZHARC_END_FORMAT],
+			 m_print (bbstxt[B_LZHARC_END_FORMAT],
              total_uncompressed,
              total_compressed,
              (int)(100-((total_compressed*100)/total_uncompressed)));
@@ -827,398 +849,541 @@ static void Read_Rar(int fd)
 void display_external_protocol (int id)
 {
    int fd;
-   char filename[80];
-   PROTOCOL prot;
+	char filename[80];
+	PROTOCOL prot;
 
-   sprintf (filename, "%sPROTOCOL.DAT", config->sys_path);
-   fd = sh_open (filename, O_RDONLY|O_BINARY, SH_DENYWR, S_IREAD|S_IWRITE);
-   lseek (fd, (long)(id - 10) * sizeof (PROTOCOL), SEEK_SET);
-   read (fd, &prot, sizeof (PROTOCOL));
-   close (fd);
+	sprintf (filename, "%sPROTOCOL.DAT", config->sys_path);
+	fd = sh_open (filename, O_RDONLY|O_BINARY, SH_DENYWR, S_IREAD|S_IWRITE);
+	lseek (fd, (long)(id - 10) * sizeof (PROTOCOL), SEEK_SET);
+	read (fd, &prot, sizeof (PROTOCOL));
+	close (fd);
 
-   m_print (bbstxt[B_PROTOCOL], prot.name);
+	m_print (bbstxt[B_PROTOCOL], prot.name);
 }
 
 void general_external_protocol (char *name, char *path, int id, int global, int dl)
 {
-   FILE *fp, *fp2;
-   int fd, *varr, i;
-   char dir[80], filename[150], *p, ext[5], stringa[60], isupld, *fnam;
-   char cpath[80], killafter = 0;
-   long started, bytes;
-   struct ffblk blk;
-   struct _sys tsys;
-   PROTOCOL prot;
+	FILE *fp, *fp2, *fp3,*fp4,*fp5;
+	int fd, *varr, i;
+	char dir[80], filename[150], *p, ext[5], stringa[60], isupld, *fnam,*copybuf;
+	char cpath[80], killafter = 0, old_filename[150];
+	long started, bytes,length,blocks,j;
+	struct ffblk blk;
+	struct _sys tsys;
+	PROTOCOL prot;
 
-   if (global == -1) {
-      global = 0;
-      killafter = 1;
-   }
+	if (global == -1) {
+		global = 0;
+		killafter = 1;
+	}
 
-   sprintf (filename, "%sPROTOCOL.DAT", config->sys_path);
-   if ((fd = sh_open (filename, O_RDONLY|O_BINARY, SH_DENYWR, S_IREAD|S_IWRITE)) == -1)
-      return;
+	sprintf (filename, "%sPROTOCOL.DAT", config->sys_path);
+	if ((fd = sh_open (filename, O_RDONLY|O_BINARY, SH_DENYWR, S_IREAD|S_IWRITE)) == -1)
+		return;
 
-   lseek (fd, (long)(id - 10) * sizeof (PROTOCOL), SEEK_SET);
-   read (fd, &prot, sizeof (PROTOCOL));
-   close (fd);
+	lseek (fd, (long)(id - 10) * sizeof (PROTOCOL), SEEK_SET);
+	read (fd, &prot, sizeof (PROTOCOL));
+	close (fd);
 
-   if (prot.log_name[0]) {
-      strcpy (filename, prot.log_name);
-      translate_filenames (filename, 0, NULL);
-      unlink (filename);
-   }
+	if (prot.log_name[0]) {
+		strcpy (filename, prot.log_name);
+		translate_filenames (filename, 0, NULL);
+		unlink (filename);
+	}
 
-   if (prot.ctl_name[0]) {
-      strcpy (filename, prot.ctl_name);
-      translate_filenames (filename, 0, NULL);
-      if ((fp = fopen (filename, "wt")) == NULL)
-         return;
+	if (prot.ctl_name[0]) {
+		strcpy (filename, prot.ctl_name);
+		translate_filenames (filename, 0, NULL);
+		if ((fp = fopen (filename, "wt")) == NULL)
+			return;
 
-      if (name != NULL) {
-         while (get_string (name, dir) != NULL) {
-            sprintf (filename, "%s%s", path, dir);
+		if (name != NULL) {
 
-            if (findfirst(filename,&blk,0)) {
-               sprintf (filename, "%sSYSFILE.DAT", config->sys_path);
-               fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
+			int global_found = 0;
 
-               if (global) {
-                  while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
-                     if (usr.priv < tsys.file_priv)
-                        continue;
-                     if ((usr.flags & tsys.file_flags) != tsys.file_flags)
-                        continue;
-                     if (usr.priv < tsys.download_priv)
-                        continue;
-                     if((usr.flags & tsys.download_flags) != tsys.download_flags)
-                        continue;
+			while (get_string (name, dir) != NULL) {
+				sprintf (filename, "%s%s", path, dir);
 
-                     sprintf (filename, "%s%s", tsys.filepath, dir);
+				if (findfirst(filename,&blk,0)) {
+					sprintf (filename, "%sSYSFILE.DAT", config->sys_path);
+					fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
 
-                     if (!findfirst (filename, &blk, 0))
-                        break;
-                  }
-               }
+					if (global) {
+						while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
+							if (usr.priv < tsys.file_priv)
+								continue;
+							if ((usr.flags & tsys.file_flags) != tsys.file_flags)
+								continue;
+							if (usr.priv < tsys.download_priv)
+								continue;
+							if((usr.flags & tsys.download_flags) != tsys.download_flags)
+								continue;
 
-               close (fd);
-            }
+							sprintf (filename, "%s%s", tsys.filepath, dir);
 
-            strcpy (stringa, prot.dl_ctl_string);
-            strsrep (stringa, "%1", filename);
-            fprintf (fp, "%s\n", stringa);
-         }
-      }
-      else {
-         sprintf (filename, "%sEXTRN%d.LST", config->sys_path, line_offset);
-         if ((fp2 = fopen (filename, "rt")) != NULL) {
-            while (fgets (filename, 145, fp2) != NULL) {
-               filename[145] = '\0';
-               if (filename[0]) {
-                  while (filename[strlen (filename) - 1] == 0x0D || filename[strlen (filename) - 1] == 0x0A)
-                     filename[strlen (filename) - 1] = '\0';
-               }
+							if (!findfirst (filename, &blk, 0))
+								{
+									global_found = 1;
+									break;
+								}
+						}
+					}
 
-               strcpy (stringa, prot.dl_ctl_string);
-               strsrep (stringa, "%1", filename);
-               fprintf (fp, "%s\n", stringa);
-            }
+					close (fd);
+				}
+				if(global_found && tsys.cdrom&&config->cdrom_swap&&!offline_reader){
 
-            fclose (fp2);
+					char t_name[20];
+					struct ftime ft;
+					FILE *fp1;
+					int c;
 
-            sprintf (filename, "%sEXTRN%d.LST", config->sys_path, line_offset);
-            unlink (filename);
-         }
-      }
+					strcpy (old_filename,filename);
+					fp1 = fopen(old_filename,"rb");
+					if(!fp1) {
+						status_line("!Unable to open %s",old_filename);
+						return;
+					}
+					sprintf (filename, "%scdrom%d", config->sys_path, line_offset);
+					mkdir (filename);
+					fnsplit (old_filename, NULL, NULL, t_name, ext);
+						 strcat(t_name,ext);
+					sprintf (filename, "%scdrom%d\\%s", config->sys_path, line_offset,t_name);
+					fp2 = fopen(filename,"wb");
+					if(!fp2) {
+						status_line("!Unable to open %s",filename);
+						return;
+					}
+					length=filelength(fileno(fp1));
+					blocks=length/(COPYBUFFER);
+					copybuf=malloc(COPYBUFFER);
+					for(j=0;j<blocks;j++){
+						fread(copybuf,COPYBUFFER,1,fp1);
+						fwrite(copybuf,COPYBUFFER,1,fp2);
+					}
+					fread(copybuf,length%COPYBUFFER,1,fp1);
+					fwrite(copybuf,length%COPYBUFFER,1,fp2);
+/*					while((c=fgetc(fp1))!=EOF)
+						fputc((char)c,fp2);
+*/
+					getftime(fileno(fp1),&ft);
+					setftime(fileno(fp2),&ft);
+                    free (copybuf);
+                    fclose(fp1);
+					fclose(fp2);
+					status_line("+Copied %s -> %s",old_filename,filename);
+					sprintf (old_filename, "%scdrom%d\\cdrom_g.tmp", config->sys_path, line_offset);
+					fp1=fopen(old_filename,"wt");
+					if(!fp1)
+						status_line("!Unable to open %s global temp file",old_filename);
+					else {
+						fprintf(fp1,"%s\n",filename);
+						fclose (fp1);
+					}
+				}
 
-      fclose (fp);
+				strcpy (stringa, prot.dl_ctl_string);
+				strsrep (stringa, "%1", filename);
+				fprintf (fp, "%s\n", stringa);
+			}
+		}
+		else {
+			sprintf (filename, "%sCDROM%d.LST", config->flag_dir, line_offset);
+			fp5=fopen(filename,"wt");
+			sprintf (filename, "%sEXTRN%d.LST", config->sys_path, line_offset);
+			if ((fp2 = fopen (filename, "rt")) != NULL) {
 
-      if (dl)
-         strcpy (filename, prot.dl_command);
-      else
-         strcpy (filename, prot.ul_command);
-   }
-   else {
-      sprintf (stringa, "%s%s", path, name);
-      if (dl) {
-         strcpy (filename, prot.dl_command);
-         strsrep (filename, "%1", stringa);
-      }
-      else
-         strcpy (filename, prot.ul_command);
-   }
+				int cdrom = 0;
 
-   if (!dl) {
-      path[strlen (path) - 1] = '\0';
-      strsrep (filename, "%1", path);
-      strsrep (filename, "%v", path);
-      path[strlen (path)] = '\\';
-      strsrep (filename, "%2", name);
-   }
+				while (fgets (filename, 145, fp2) != NULL) {
+					filename[145] = '\0';
+					if (filename[0]) {
+						while (filename[strlen (filename) - 1] == 0x0D || filename[strlen (filename) - 1] == 0x0A)
+							filename[strlen (filename) - 1] = '\0';
+						  }
+					p=strtok(filename," ");
+					if(p)
+						p=strtok(NULL," ");
+					if(p){
+						if(strstr(p,"**CDROM**")) {
 
-   varr = ssave ();
-   cclrscrn(LGREY|_BLACK);
-   showcur();
-   fclose (logf);
+							char temp_name[80], name[80], ext[5];
+							int c=0;
+							struct ftime ft;
 
-   if (prot.disable_fossil)
-      MDM_DISABLE ();
+							if(!(fp3=fopen(filename,"rb"))){
+								status_line("!Unable to open %s",filename);
+								fclose(fp5);
+								fclose(fp2);
+								sprintf (filename, "%sCDROM%d.LST", config->flag_dir, line_offset);
+								unlink(filename);
+								return;
+							}
+							sprintf (temp_name, "%scdrom%d", config->sys_path, line_offset);
+							mkdir (temp_name);
+							fnsplit(filename,NULL,NULL,name,ext);
+							strcat(name,ext);
+							sprintf (temp_name, "%scdrom%d\\%s", config->sys_path, line_offset,name);
+							if(!(fp4=fopen(temp_name,"wb"))){
+								status_line("!Unable to open %s",temp_name);
+								fclose(fp5);
+								fclose(fp2);
+								fclose(fp3);
+								sprintf (filename, "%sCDROM%d.LST", config->flag_dir, line_offset);
+								unlink(filename);
+								return;
+							}
+							length=filelength(fileno(fp3));
+							blocks=length/(COPYBUFFER);
+							copybuf=malloc(COPYBUFFER);
+							for(j=0;j<blocks;j++){
+								fread(copybuf,COPYBUFFER,1,fp3);
+								fwrite(copybuf,COPYBUFFER,1,fp4);
+							}
+							fread(copybuf,length%COPYBUFFER,1,fp3);
+							fwrite(copybuf,length%COPYBUFFER,1,fp4);/*							while((c=fgetc(fp3))!=EOF)
+								fputc((char)c,fp4);
+*/								
+							getftime(fileno(fp3),&ft);
+							setftime(fileno(fp4),&ft);
+                            free (copybuf);
+                            fclose(fp3);
+							fclose(fp4);
+							status_line("+Copied %s -> %s",filename,temp_name);
+							cdrom++;
+							strcpy (stringa, prot.dl_ctl_string);
+							strsrep (stringa, "%1", temp_name);
+							fprintf (fp, "%s\n", stringa);
+							fprintf(fp5,"%s\n",temp_name);
+						}
+					}
 
-   if (!dl && prot.change_to_dl) {
-      getcwd (cpath, 79);
-      path[strlen (path) - 1] = '\0';
-      if (path[1] == ':')
-         setdisk (toupper (path[0]) - 'A');
-      chdir (path);
-      path[strlen (path)] = '\\';
-   }
+					else{
+						strcpy (stringa, prot.dl_ctl_string);
+						strsrep (stringa, "%1", filename);
+						fprintf (fp, "%s\n", stringa);
+					}
+				}
 
-   translate_filenames (filename, 0, NULL);
-   spawn_program (registered, filename);
+				fclose (fp5);
+					 if(!cdrom){
+						  sprintf (filename, "%sCDROM%d.LST", config->flag_dir, line_offset);
+						  unlink(filename);
+					 }
 
-   com_install (com_port);
-   if (!config->lock_baud)
-      com_baud (rate);
+				fclose (fp2);
+				sprintf (filename, "%sEXTRN%d.LST", config->sys_path, line_offset);
+				unlink (filename);
+			}
+		}
 
-   if (!dl && prot.change_to_dl) {
-      setdisk (toupper (cpath[0]) - 'A');
-      chdir (cpath);
-   }
+		fclose (fp);
 
-   if (varr != NULL)
-      srestore (varr);
+		if (dl)
+			strcpy (filename, prot.dl_command);
+		else
+			strcpy (filename, prot.ul_command);
+	}
+	else {
+		sprintf (stringa, "%s%s", path, name);
+		if (dl) {
+			strcpy (filename, prot.dl_command);
+			strsrep (filename, "%1", stringa);
+		}
+		else
+			strcpy (filename, prot.ul_command);
+	}
 
-   open_logfile ();
-   wactiv (mainview);
+	if (!dl) {
+		path[strlen (path) - 1] = '\0';
+		strsrep (filename, "%1", path);
+		strsrep (filename, "%v", path);
+		path[strlen (path)] = '\\';
+		strsrep (filename, "%2", name);
+	}
 
-   if (prot.ctl_name[0]) {
-      strcpy (filename, prot.ctl_name);
-      translate_filenames (filename, 0, NULL);
-      unlink (filename);
-   }
+	varr = ssave ();
+	cclrscrn(LGREY|_BLACK);
+	showcur();
+	fclose (logf);
 
-   if (!emulator) {
-      m_print (bbstxt[B_TWO_CR]);
+	if (prot.disable_fossil)
+		MDM_DISABLE ();
 
-      if (prot.log_name[0]) {
-         strcpy (filename, prot.log_name);
-         translate_filenames (filename, 0, NULL);
-         fp = fopen (filename, "rt");
-         if (fp == NULL) {
-            m_print (bbstxt[B_TRANSFER_ABORT]);
-            return;
-         }
+	if (!dl && prot.change_to_dl) {
+		getcwd (cpath, 79);
+		path[strlen (path) - 1] = '\0';
+		if (path[1] == ':')
+			setdisk (toupper (path[0]) - 'A');
+		chdir (path);
+		path[strlen (path)] = '\\';
+	}
 
-         sprintf (filename, "XFER%d", line_offset);
-         fp2 = fopen (filename, "w+t");
-         isupld = 0;
+	translate_filenames (filename, 0, NULL);
+	status_line ("Dspawn: %s",filename);
+	spawn_program (registered, filename);
+//	unlink(stringa);
+//	unlink(filename); //non sono mica sicuro :-))
 
-         while (fgets (filename, 145, fp) != NULL) {
-            filename[145] = '\0';
-            if (filename[0]) {
-               while (filename[strlen (filename) -1] == 0x0D || filename[strlen (filename) -1] == 0x0A)
-                  filename[strlen (filename) -1] = '\0';
-            }
+	status_line("Dstringa %s filename %s",stringa,filename);
 
-            if ((p = my_strtok (filename, " ")) != NULL)
-               if (!strcmp (p, prot.ul_keyword)) {
-                  i = prot.filename - 1;
-                  for (;;) {
-                     if ((p = my_strtok (NULL, " ")) == NULL)
-                        break;
-                     if (i-- == 0)
-                        break;
-                  }
-                  if (i == 0 && p != NULL) {
-                     fprintf (fp2, "%s\n", strupr (p));
-                     isupld = 1;
-                  }
-               }
-         }
+	com_install (com_port);
+	if (!config->lock_baud)
+		com_baud (rate);
 
-         timer (10);
-         fclose (fp2);
+	if (!dl && prot.change_to_dl) {
+		setdisk (toupper (cpath[0]) - 'A');
+		chdir (cpath);
+	}
 
-         rewind (fp);
+	if (varr != NULL)
+		srestore (varr);
 
-         while (fgets (filename, 145, fp) != NULL) {
-            filename[145] = '\0';
-            if (filename[0]) {
-               while (filename[strlen (filename) -1] == 0x0D || filename[strlen (filename) -1] == 0x0A)
-                  filename[strlen (filename) -1] = '\0';
-            }
+	open_logfile ();
+	wactiv (mainview);
 
-            if ((p = my_strtok (filename, " ")) == NULL)
-               continue;
+	if (prot.ctl_name[0]) {
 
-            if (!strcmp (p, prot.ul_keyword)) {
-               i = 1;
-               fnam = NULL;
+		FILE *fp1;
 
-               if (!prot.size)
-                  prot.size = 2;
-               if (!prot.cps)
-                  prot.cps = 5;
-               if (!prot.filename)
-                  prot.filename = 11;
+		strcpy (filename, prot.ctl_name);
+		translate_filenames (filename, 0, NULL);
+		unlink (filename);
+		sprintf (filename, "%scdrom%d\\cdrom_g.tmp", config->sys_path, line_offset);
+		fp1=fopen(filename,"rt");
+		if(fp1){
+			while (fgets (old_filename, 145, fp1) != NULL){
+				unlink(old_filename);
+				status_line("+Removed %s",old_filename);
+			}
+			fclose(fp1);
+			unlink(filename);
+		}
+	}
 
-               while ((p = my_strtok (NULL, " ")) != NULL) {
-                  i++;
+	if (!emulator) {
+		m_print (bbstxt[B_TWO_CR]);
 
-                  if (i == prot.size) {
-                     bytes = atol (p);
+		if (prot.log_name[0]) {
+			strcpy (filename, prot.log_name);
+			translate_filenames (filename, 0, NULL);
+			fp = fopen (filename, "rt");
+			if (fp == NULL) {
+				m_print (bbstxt[B_TRANSFER_ABORT]);
+				return;
+			}
+
+			sprintf (filename, "XFER%d", line_offset);
+			fp2 = fopen (filename, "w+t");
+			isupld = 0;
+
+			while (fgets (filename, 145, fp) != NULL) {
+				filename[145] = '\0';
+				if (filename[0]) {
+					while (filename[strlen (filename) -1] == 0x0D || filename[strlen (filename) -1] == 0x0A)
+						filename[strlen (filename) -1] = '\0';
+				}
+
+				if ((p = my_strtok (filename, " ")) != NULL)
+					if (!strcmp (p, prot.ul_keyword)) {
+						i = prot.filename - 1;
+						for (;;) {
+							if ((p = my_strtok (NULL, " ")) == NULL)
+								break;
+							if (i-- == 0)
+								break;
+						}
+						if (i == 0 && p != NULL) {
+							fprintf (fp2, "%s\n", strupr (p));
+							isupld = 1;
+						}
+					}
+			}
+
+			timer (10);
+			fclose (fp2);
+
+			rewind (fp);
+
+			while (fgets (filename, 145, fp) != NULL) {
+				filename[145] = '\0';
+				if (filename[0]) {
+					while (filename[strlen (filename) -1] == 0x0D || filename[strlen (filename) -1] == 0x0A)
+						filename[strlen (filename) -1] = '\0';
+				}
+
+				if ((p = my_strtok (filename, " ")) == NULL)
+					continue;
+
+				if (!strcmp (p, prot.ul_keyword)) {
+					i = 1;
+					fnam = NULL;
+
+					if (!prot.size)
+						prot.size = 2;
+					if (!prot.cps)
+						prot.cps = 5;
+					if (!prot.filename)
+						prot.filename = 11;
+
+					while ((p = my_strtok (NULL, " ")) != NULL) {
+						i++;
+
+						if (i == prot.size) {
+							bytes = atol (p);
 //                     usr.upld += (int)(bytes / 1024L) + 1;
 //                     usr.n_upld++;
-                  }
-                  else if (i == prot.cps)
-                     cps = atoi (p);
-                  else if (i == prot.filename)
-                     fnam = p;
-               }
+						}
+						else if (i == prot.cps)
+							cps = atoi (p);
+						else if (i == prot.filename)
+							fnam = p;
+					}
 
-               if (fnam != NULL) {
-                  p = fnam;
+					if (fnam != NULL) {
+						p = fnam;
 
-                  started = (cps * 1000L) / ((long) rate);
-                  status_line ((char *) msgtxt[M_CPS_MESSAGE], cps, bytes, started);
-                  status_line ("%s-%c %s%s", msgtxt[M_FILE_RECEIVED], prot.hotkey, path, strupr (p));
+						started = (cps * 1000L) / ((long) rate);
+						status_line ((char *) msgtxt[M_CPS_MESSAGE], cps, bytes, started);
+						status_line ("%s-%c %s%s", msgtxt[M_FILE_RECEIVED], prot.hotkey, path, strupr (p));
 
-                  if (!no_description) {
-                     fnsplit (p, NULL, NULL, dir, ext);
-                     strcat (dir, ext);
+						if (!no_description) {
+							fnsplit (p, NULL, NULL, dir, ext);
+							strcat (dir, ext);
 
-                     if (!check_file_description (dir, path)) {
-                        do {
-                           m_print(bbstxt[B_DESCRIBE],strupr(dir));
-                           CLEAR_INBOUND ();
-                           input(stringa,54);
-                           if (!CARRIER)
-                              break;
-                        } while (strlen(stringa) < 5);
+							if (!check_file_description (dir, path)) {
+								do {
+									m_print(bbstxt[B_DESCRIBE],strupr(dir));
+									CLEAR_INBOUND ();
+									input(stringa,54);
+									if (!CARRIER)
+										break;
+								} while (strlen(stringa) < 5);
 
-                        sprintf (filename, "%sFILES.BBS", path);
-                        fp2 = fopen (filename, "at");
-                        sprintf (filename, "%c  0%c ", config->dl_counter_limits[0], config->dl_counter_limits[1]);
-                        fprintf (fp2, "%-12s %s%s\n", dir, config->keep_dl_count ? filename : "", stringa);
-                        if (config->put_uploader)
-                           fprintf (fp2, bbstxt[B_UPLOADER_NAME], usr.name);
-                        fclose (fp2);
-                     }
-                  }
+								sprintf (filename, "%sFILES.BBS", path);
+								fp2 = fopen (filename, "at");
+								sprintf (filename, "%c  0%c ", config->dl_counter_limits[0], config->dl_counter_limits[1]);
+								fprintf (fp2, "%-12s %s%s\n", dir, config->keep_dl_count ? filename : "", stringa);
+								if (config->put_uploader)
+									fprintf (fp2, bbstxt[B_UPLOADER_NAME], usr.name);
+								fclose (fp2);
+							}
+						}
 
-                  if (function_active == 3)
-                     f3_status ();
-               }
-            }
-            else if (!strcmp (p, prot.dl_keyword)) {
-               i = 1;
-               fnam = NULL;
+						if (function_active == 3)
+							f3_status ();
+					}
+				}
+				else if (!strcmp (p, prot.dl_keyword)) {
+					i = 1;
+					fnam = NULL;
 
-               if (!prot.size)
-                  prot.size = 2;
-               if (!prot.cps)
+					if (!prot.size)
+						prot.size = 2;
+					if (!prot.cps)
+						prot.cps = 5;
+					if (!prot.filename)
+						prot.filename = 11;
+
+					while ((p = my_strtok (NULL, " ")) != NULL) {
+						i++;
+
+						if (i == prot.size) {
+							bytes = atol (p);
+							usr.dnld += (int)(bytes / 1024L) + 1;
+							usr.dnldl += (int)(bytes / 1024L) + 1;
+							usr.n_dnld++;
+						}
+						else if (i == prot.cps)
+							cps = atoi (p);
+						else if (i == prot.filename)
+							fnam = p;
+					}
+
+					if (fnam != NULL) {
+						p = fnam;
+						sprintf (filename, "%s%s", (strchr (p, '\\') == NULL) ? sys.filepath : "", strupr (p));
+						if (config->keep_dl_count)
+							update_filestat (filename);
+						download_report (filename, 2, NULL);
+
+						started = (cps * 1000L) / ((long) rate);
+						status_line ((char *) msgtxt[M_CPS_MESSAGE], cps, bytes, started);
+						status_line ("+DL-%c %s%s", prot.hotkey, (strchr (p, '\\') == NULL) ? sys.filepath : "", strupr (p));
+
+						if (killafter)
+							file_kill (1, p);
+
+						if (function_active == 3)
+							f3_status ();
+					}
+				}
+			}
+
+			fclose (fp);
+
+			sprintf (filename, "XFER%d", line_offset);
+			if ((fp2 = fopen (filename, "rt")) != NULL) {
+				if (isupld && !no_check) {
+					fseek (fp2, 0L, SEEK_SET);
+					check_uploads (fp2, path);
+				}
+
+				rewind (fp2);
+
+				while (fgets (filename, 78, fp2) != NULL) {
+					filename[strlen (filename) - 1] = '\0';
+					if (!findfirst (filename, &blk, 0)) {
+						usr.upld += (int)(blk.ff_fsize / 1024L) + 1;
+						usr.n_upld++;
+
+						if (function_active == 3)
+							f3_status ();
+					}
+				}
+
+				fclose (fp2);
+				sprintf (filename, "XFER%d", line_offset);
+				unlink (filename);
+			}
+
+			strcpy (filename, prot.log_name);
+			translate_filenames (filename, 0, NULL);
+			unlink (filename);
+		}
+
+		m_print(bbstxt[B_TRANSFER_OK]);
+	}
+	else {
+		if (prot.log_name[0]) {
+			strcpy (filename, prot.log_name);
+			translate_filenames (filename, 0, NULL);
+			fp = fopen (filename, "rt");
+			if (fp == NULL)
+				return;
+
+			while (fgets (filename, 145, fp) != NULL) {
+				filename[145] = '\0';
+				if (filename[0]) {
+					while (filename[strlen (filename) -1] == 0x0D || filename[strlen (filename) -1] == 0x0A)
+						filename[strlen (filename) -1] = '\0';
+				}
+
+				if ((p = my_strtok (filename, " ")) == NULL)
+					continue;
+
+				if (!strcmp (p, prot.ul_keyword)) {
+					i = 1;
+					fnam = NULL;
+
+					if (!prot.size)
+						prot.size = 2;
+					if (!prot.cps)
                   prot.cps = 5;
                if (!prot.filename)
                   prot.filename = 11;
 
-               while ((p = my_strtok (NULL, " ")) != NULL) {
-                  i++;
-
-                  if (i == prot.size) {
-                     bytes = atol (p);
-                     usr.dnld += (int)(bytes / 1024L) + 1;
-                     usr.dnldl += (int)(bytes / 1024L) + 1;
-                     usr.n_dnld++;
-                  }
-                  else if (i == prot.cps)
-                     cps = atoi (p);
-                  else if (i == prot.filename)
-                     fnam = p;
-               }
-
-               if (fnam != NULL) {
-                  p = fnam;
-                  sprintf (filename, "%s%s", (strchr (p, '\\') == NULL) ? sys.filepath : "", strupr (p));
-                  if (config->keep_dl_count)
-                     update_filestat (filename);
-                  download_report (filename, 2, NULL);
-
-                  started = (cps * 1000L) / ((long) rate);
-                  status_line ((char *) msgtxt[M_CPS_MESSAGE], cps, bytes, started);
-                  status_line ("+DL-%c %s%s", prot.hotkey, (strchr (p, '\\') == NULL) ? sys.filepath : "", strupr (p));
-
-                  if (killafter)
-                     file_kill (1, p);
-
-                  if (function_active == 3)
-                     f3_status ();
-               }
-            }
-         }
-
-         fclose (fp);
-
-         sprintf (filename, "XFER%d", line_offset);
-         if ((fp2 = fopen (filename, "rt")) != NULL) {
-            if (isupld && !no_check) {
-               fseek (fp2, 0L, SEEK_SET);
-               check_uploads (fp2, path);
-            }
-
-            rewind (fp2);
-
-            while (fgets (filename, 78, fp2) != NULL) {
-               filename[strlen (filename) - 1] = '\0';
-               if (!findfirst (filename, &blk, 0)) {
-                  usr.upld += (int)(blk.ff_fsize / 1024L) + 1;
-                  usr.n_upld++;
-
-                  if (function_active == 3)
-                     f3_status ();
-               }
-            }
-
-            fclose (fp2);
-            unlink (filename);
-         }
-
-         strcpy (filename, prot.log_name);
-         translate_filenames (filename, 0, NULL);
-         unlink (filename);
-      }
-
-      m_print(bbstxt[B_TRANSFER_OK]);
-   }
-   else {
-      if (prot.log_name[0]) {
-         strcpy (filename, prot.log_name);
-         translate_filenames (filename, 0, NULL);
-         fp = fopen (filename, "rt");
-         if (fp == NULL)
-            return;
-
-         while (fgets (filename, 145, fp) != NULL) {
-            filename[145] = '\0';
-            if (filename[0]) {
-               while (filename[strlen (filename) -1] == 0x0D || filename[strlen (filename) -1] == 0x0A)
-                  filename[strlen (filename) -1] = '\0';
-            }
-
-            if ((p = my_strtok (filename, " ")) == NULL)
-               continue;
-
-            if (!strcmp (p, prot.ul_keyword)) {
-               i = 1;
-               fnam = NULL;
-
-               if (!prot.size)
-                  prot.size = 2;
-               if (!prot.cps)
-                  prot.cps = 5;
-               if (!prot.filename)
-                  prot.filename = 11;
-
-               while ((p = my_strtok (NULL, " ")) != NULL) {
+					while ((p = my_strtok (NULL, " ")) != NULL) {
                   i++;
 
                   if (i == prot.size) {
@@ -1242,7 +1407,7 @@ void general_external_protocol (char *name, char *path, int id, int global, int 
             }
             else if (!strcmp (p, prot.dl_keyword)) {
                i = 1;
-               fnam = NULL;
+					fnam = NULL;
 
                if (!prot.size)
                   prot.size = 2;
@@ -1251,7 +1416,7 @@ void general_external_protocol (char *name, char *path, int id, int global, int 
                if (!prot.filename)
                   prot.filename = 11;
 
-               while ((p = my_strtok (NULL, " ")) != NULL) {
+					while ((p = my_strtok (NULL, " ")) != NULL) {
                   i++;
 
                   if (i == prot.size) {
@@ -1351,7 +1516,7 @@ char *path;
          }
 
          if (!found) {
-            if ((fpi = sh_fopen ("CDROM.IDX", "rb", SH_DENYNONE)) != NULL) {
+				if ((fpi = sh_fopen ("CDROM.IDX", "rb", SH_DENYNONE)) != NULL) {
                while (fread (&fidx, sizeof (FILEIDX), 1, fpi) == 1) {
                   prep_match (fidx.name, our_wildcard);
                   if (!match (our_wildcard, their_wildcard)) {
@@ -1398,7 +1563,7 @@ char *path;
    m_print (bbstxt[B_TWO_CR]);
 
    if (fp != NULL)
-      fclose (fp);
+		fclose (fp);
 
 //   close (fd);
    rewind (xferinfo);
@@ -1431,7 +1596,7 @@ retry:
 
       do {
          i = read (fd, (char *)&usridx, sizeof(struct _usridx) * MAX_INDEX);
-         m = i / sizeof (struct _usridx);
+			m = i / sizeof (struct _usridx);
 
          for (i = 0; i < m; i++)
             if (usridx[i].id == crc) {
@@ -1464,7 +1629,7 @@ retry:
       goto retry;
    }
 
-   sprintf (filename, "%s%08lx", config->boxpath, crc);
+	sprintf (filename, "%s%08lx", config->boxpath, crc);
    mkdir (filename);
    strcat (filename, "\\");
 
@@ -1490,14 +1655,14 @@ void download_filebox (int godown)
    if (!usr.havebox)
       return;
 
-   sprintf (filename, "%s%08lx\\*.*", config->boxpath, usr.id);
+	sprintf (filename, "%s%08lx\\*.*", config->boxpath, usr.id);
    if (!findfirst (filename, &blk, 0))
       do {
          if (!strcmp (blk.ff_name, "."))
             continue;
          else if (!strcmp (blk.ff_name, ".."))
             continue;
-         else if (!stricmp (blk.ff_name, "FILES.BBS"))
+			else if (!stricmp (blk.ff_name, "FILES.BBS"))
             continue;
          else if (!stricmp (blk.ff_name, "FILES.BAK"))
             continue;
@@ -1513,7 +1678,7 @@ void download_filebox (int godown)
       return;
    }
 
-   sprintf (filename, "%s%08lx\\", config->boxpath, usr.id);
+	sprintf (filename, "%s%08lx\\", config->boxpath, usr.id);
 
    m_print (bbstxt[B_FILELIST1]);
    m_print (bbstxt[B_FILELIST2]);
@@ -1521,7 +1686,7 @@ void download_filebox (int godown)
    filebox_list (filename);
 
    if (godown) {
-      m_print (bbstxt[B_ASK_TO_DOWNLOAD]);
+		m_print (bbstxt[B_ASK_TO_DOWNLOAD]);
       if (yesno_question (DEF_YES) == DEF_NO)
          return;
 
@@ -1530,9 +1695,9 @@ void download_filebox (int godown)
 
       m_print (bbstxt[B_FB_DELETE_AFTER]);
       if (yesno_question (DEF_YES) == DEF_YES)
-         download_file (filename, -1);
+			download_file (filename, -1);
       else
-         download_file (filename, -2);
+			download_file (filename, -2);
 
       sys.freearea = i;
    }
@@ -1562,8 +1727,8 @@ void filebox_list (char *path)
    while (*path == ' ' && *path != '\0')
       path++;
 
-   sprintf(filename,"%sFILES.BBS",path);
-   fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
+	sprintf(filename,"%sFILES.BBS",path);
+	fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
 
    // Se il file e' di 0 bytes non importa leggere altro
    if (fd == -1 || filelength (fd) == 0L) {
@@ -1574,7 +1739,7 @@ void filebox_list (char *path)
 
    line = 3;
 
-   // Alloca il buffer che andra' a contenere l'intero files.bbs per
+	// Alloca il buffer che andra' a contenere l'intero files.bbs per
    // l'area corrente. Se non riesce ad allocarselo scrive una linea
    // nel log con le informazioni utili (spero) per il debugging.
    if ((fbuf = (char *)malloc ((unsigned int)filelength (fd) + 1)) == NULL) {
@@ -1587,7 +1752,7 @@ void filebox_list (char *path)
       return;
    }
 
-   // Lettura di tutto il files.bbs nel buffer allocato.
+	// Lettura di tutto il files.bbs nel buffer allocato.
    read (fd, fbuf, (unsigned int)filelength (fd));
    fbuf[(unsigned int)filelength (fd)] = '\0';
    close (fd);
@@ -1596,13 +1761,13 @@ void filebox_list (char *path)
    // prosegue (scandir si occupa di segnalare nel log gli errori.
    if ((de = scandir (path, &nnd)) == NULL) {
       free (fbuf);
-      return;
+		return;
    }
 
-   // La scansione del files.bbs avviene in memoria. Tenendo conto che
+	// La scansione del files.bbs avviene in memoria. Tenendo conto che
    // ogni linea e' separata almeno da un \r (CR, 0x0D) si puo' utilizzare
-   // la strtok, trattando l'intero buffer come un insieme di token.
-   if ((p = strtok (fbuf, "\r")) != NULL)
+	// la strtok, trattando l'intero buffer come un insieme di token.
+	if ((p = strtok (fbuf, "\r")) != NULL)
       do {
          // Nel caso di \r\n (EOL) e' necessario saltare il \n per evitare
          // problemi nel riconoscimento dei files.
@@ -1629,7 +1794,7 @@ void filebox_list (char *path)
 
             if ((line = more_question (line)) == 0 || !CARRIER)
                break;
-         }
+			}
          else if (*p == ' ') {
             if (p[1] == '>' || p[1] == '|') {
                if (sys.no_filedate)
@@ -1695,7 +1860,7 @@ void filebox_list (char *path)
                break;
 
             while (p[m] != '\0') {
-               z = 0;
+					z = 0;
                while (p[m] != '\0' && z < (sys.no_filedate ? 56 : 48))
                   desc[z++] = p[m++];
                if (p[m] != '\0')
@@ -1717,7 +1882,7 @@ void filebox_list (char *path)
             if (line == 0)
                break;
          }
-      } while ((p = strtok (NULL, "\r")) != NULL);
+		} while ((p = strtok (NULL, "\r")) != NULL);
 
    free (de);
    free (fbuf);
@@ -1728,7 +1893,7 @@ void filebox_list (char *path)
 void filebox_list (path)
 char *path;
 {
-   FILE *fp;
+	FILE *fp;
    int m, i, yr, mo, dy, line;
    char buffer[260], filename[80], name[14], comment[60];
    struct ffblk blk;
@@ -1739,7 +1904,7 @@ char *path;
    while (*path == ' ' && *path != '\0')
       path++;
 
-   sprintf(filename,"%sFILES.BBS",path);
+	sprintf(filename,"%sFILES.BBS",path);
    if ((fp = fopen(filename,"rt")) == NULL)
       return;
 
@@ -1761,7 +1926,7 @@ char *path;
       else if (buffer[0] == ' ') {
          if (buffer[1] == '>') {
             if (sys.no_filedate)
-               m_print (bbstxt[B_FILES_XNODATE], &buffer[2]);
+					m_print (bbstxt[B_FILES_XNODATE], &buffer[2]);
             else
                m_print (bbstxt[B_FILES_XDATE], &buffer[2]);
          }
@@ -1827,43 +1992,43 @@ char *path;
                comment[i++] = buffer[m++];
             if (buffer[m] != '\0')
                while (buffer[m] != ' ') {
-                  m--;
+						m--;
                   i--;
                }
-            comment[i]='\0';
+				comment[i]='\0';
 
-            if (sys.no_filedate)
-               m_print (bbstxt[B_FILES_XNODATE], comment);
-            else
-               m_print (bbstxt[B_FILES_XDATE], comment);
+				if (sys.no_filedate)
+					m_print (bbstxt[B_FILES_XNODATE], comment);
+				else
+					m_print (bbstxt[B_FILES_XDATE], comment);
 
-            if ((line=more_question(line)) == 0 || !CARRIER)
-               break;
-         }
+				if ((line=more_question(line)) == 0 || !CARRIER)
+					break;
+			}
 
-         if (buffer[m] != '\0')
-            break;
-      }
-   }
+			if (buffer[m] != '\0')
+				break;
+		}
+	}
 
-   fclose(fp);
+	fclose(fp);
 }
 */
 
 void update_filestat (char *rqname)
 {
-   FILE *fp1, *fp2;
-   char name[14], buff[255], file1[81], file2[81];
-   char drive[80], path[80], fname[16], ext[6];
-   int m, z;
-   struct _sys tsys;
+	FILE *fp1, *fp2;
+	char name[14], buff[255], file1[81], file2[81];
+	char drive[80], path[80], fname[16], ext[6];
+	int m, z;
+	struct _sys tsys;
 
    if (rqname == NULL || *rqname == '\0')
       return;
 
    strupr (rqname);
-   fnsplit (rqname, path, drive, fname, ext);
-   strcat (path, drive);
+	fnsplit (rqname, path, drive, fname, ext);
+	strcat (path, drive);
    strcat (fname, ext);
    strupr (fname);
 
@@ -1883,21 +2048,21 @@ void update_filestat (char *rqname)
       if (tsys.filelist[0])
          strcpy (file1, tsys.filelist);
       else
-         sprintf (file1, "%sFILES.BBS", path);
+			sprintf (file1, "%sFILES.BBS", path);
    }
    else
       sprintf (file1, "%sFILES.BBS", path);
 
    m = sh_open (file1, SH_DENYWR, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
    if (m == -1)
-      return;
+		return;
    fp1 = fdopen (m, "rt");
 
-   sprintf (file1, "%sFILE%d.$$$", path, config->line_offset);
+	sprintf (file1, "%sFILE%d.$$$", path, config->line_offset);
    unlink (file1);
    if ((fp2 = fopen (file1, "wt")) == NULL) {
-      fclose (fp1);
-      return;
+		fclose (fp1);
+		return;
    }
 
    while (fgets (buff, 250, fp1) != NULL) {
@@ -1907,200 +2072,283 @@ void update_filestat (char *rqname)
       while (buff[m] != ' ' && m < 12)
          name[m] = buff[m++];
       name[m] = '\0';
-      strupr (name);
+		strupr (name);
 
-      while (buff[m] == ' ')
-         m++;
+		while (buff[m] == ' ')
+			m++;
 
-      if (!stricmp (fname, name)) {
-         if (buff[m] == config->dl_counter_limits[0] && buff[m + 4] == config->dl_counter_limits[1]) {
-            sscanf (&buff[m + 1], "%3d", &z);
-            z = z + 1;
-            m += 6;
-         }
-         else
-            z = 1;
+		if (!stricmp (fname, name)) {
+			if (buff[m] == config->dl_counter_limits[0] && buff[m + 4] == config->dl_counter_limits[1]) {
+				sscanf (&buff[m + 1], "%3d", &z);
+				z = z + 1;
+				m += 6;
+			}
+			else
+				z = 1;
 
-         fprintf (fp2, "%-12.12s %c%3d%c %s\n", name, config->dl_counter_limits[0], z, config->dl_counter_limits[1], &buff[m]);
-      }
-      else
-         fprintf (fp2, "%s\n", buff);
-   }
+			fprintf (fp2, "%-12.12s %c%3d%c %s\n", name, config->dl_counter_limits[0], z, config->dl_counter_limits[1], &buff[m]);
+		}
+		else
+			fprintf (fp2, "%s\n", buff);
+	}
 
-   fclose (fp1);
-   fclose (fp2);
+	fclose (fp1);
+	fclose (fp2);
 
-   sprintf (file1, "%sFILES.BBS", path);
-   sprintf (file2, "%sFILE%d.$$$", path, config->line_offset);
-   unlink (file1);
-   rename (file2, file1);
+	sprintf (file1, "%sFILES.BBS", path);
+	sprintf (file2, "%sFILE%d.$$$", path, config->line_offset);
+	unlink (file1);
+	rename (file2, file1);
 }
 
 void tag_files (int only_one)
 {
-   FILE *fp;
-   int fd, i, byte_sec, min, sec;
-   char filename[80], *root, name[80], firstflag;
-   struct ffblk blk;
-   struct _sys tsys;
+	FILE *fp;
+	int fd, i, byte_sec, min, sec;
+	char filename[80], *root, name[80] ,temp_name[80], firstflag;
+	struct ffblk blk;
+	struct _sys tsys;
 
-   fp = NULL;
-   firstflag = 1;
 
-   if (!cmd_string[0]) {
-      ask_for_filename (name, 1);
-      if (!name[0] || !CARRIER)
-         return;
-   }
-   else {
-      strcpy (name, cmd_string);
-      cmd_string[0] = '\0';
-   }
+	fp = NULL;
+	firstflag = 1;
 
-   for (;;) {
-      if ((root = my_strtok (name, " ")) == NULL)
-         return;
+	if (!cmd_string[0]) {
+		ask_for_filename (name, 1);
+		if (!name[0] || !CARRIER)
+			return;
+	}
+	else {
+		strcpy (name, cmd_string);
+		cmd_string[0] = '\0';
+	}
 
-      do {
-         sprintf (filename, "%s%s", sys.filepath, root);
+	for (;;) {
+		if ((root = my_strtok (name, " ")) == NULL)
+			return;
 
-         if (findfirst (filename, &blk, 0)) {
-            i = 0;
+		do {
 
-            if (!only_one) {
-               sprintf (filename, "%sSYSFILE.DAT", config->sys_path);
-               fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
+			int tt=-1;
 
-               while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
-                  if (usr.priv < tsys.file_priv || tsys.no_global_search)
-                     continue;
-                  if((usr.flags & tsys.file_flags) != tsys.file_flags)
-                     continue;
-                  if (usr.priv < tsys.download_priv)
-                     continue;
-                  if((usr.flags & tsys.download_flags) != tsys.download_flags)
-                     continue;
+			if(sys.filepath&&(*sys.filepath)){
+				sprintf (filename, "%s%s", sys.filepath, root);
+				tt=findfirst (filename, &blk, 0);
+			}
 
-                  sprintf (filename, "%s%s", tsys.filepath, root);
+			if (tt) {
+				i = 0;
 
-                  if (findfirst(filename, &blk, 0))
-                     continue;
+				if (!only_one) {
+					sprintf (filename, "%sSYSFILE.DAT", config->sys_path);
+					fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
 
-                  do {
-                     if (fp == NULL) {
-                        sprintf (filename, "F-TAG%d.TMP", config->line_offset);
-                        if ((fp = fopen (filename, "at")) == NULL)
-                           break;
-                     }
+					while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
+						if (usr.priv < tsys.file_priv || tsys.no_global_search)
+							continue;
+						if((usr.flags & tsys.file_flags) != tsys.file_flags)
+							continue;
+						if (usr.priv < tsys.download_priv)
+							continue;
+						if((usr.flags & tsys.download_flags) != tsys.download_flags)
+							continue;
 
-                     fprintf (fp, "%s%s %ld\n", tsys.filepath, blk.ff_name, blk.ff_fsize);
+						sprintf (filename, "%s%s", tsys.filepath, root);
 
-                     byte_sec = (int)(rate / 11);
-                     i = (int)((blk.ff_fsize + (blk.ff_fsize / 1024)) / byte_sec);
-                     min = i / 60;
-                     sec = i - min * 60;
+						if (findfirst(filename, &blk, 0)||!(*tsys.filepath))
+							continue;
 
-                     if (firstflag) {
-                        m_print (bbstxt[B_ONE_CR]);
-                        firstflag = 0;
-                     }
-                     m_print (bbstxt[B_TAG_CONFIRM], blk.ff_name, min, sec, blk.ff_fsize);
+						if (!tsys.freearea && !usr.xfer_prior){
 
-                     i = 1;
-                  } while (!findnext (&blk));
-               }
+							if ((((blk.ff_fsize) / 1024) + usr.dnldl + tagged_kb) > config->class[usr_class].max_dl) {
+								status_line (":Dnld req. would exceed limit (%s)", blk.ff_name);
+								read_system_file ("TODAYK");
+								continue;
+							}
 
-               close (fd);
-            }
+							if(config->class[usr_class].ratio && !name[0] && usr.n_dnld >= config->class[usr_class].start_ratio) {
+								int rp;
+								rp = usr.upld ? (((blk.ff_fsize/1024)+usr.dnld+tagged_kb)/usr.upld) : ((blk.ff_fsize/1024)+usr.dnld+tagged_kb);
+								if (rp > (long)config->class[usr_class].ratio) {
+									status_line (":Dnld req. would exceed ratio");
+									read_system_file ("RATIO");
+									continue;
+								}
+							}
 
-            if (only_one || !i) {
-               if (firstflag) {
-                  m_print (bbstxt[B_ONE_CR]);
-                  firstflag = 0;
-               }
-               m_print (bbstxt[B_TAG_FILENOTFOUND], strupr (root));
-            }
-         }
-         else
-            do {
-               if (fp == NULL) {
-                  sprintf (filename, "F-TAG%d.TMP", config->line_offset);
-                  if ((fp = fopen (filename, "at")) == NULL)
-                     break;
-               }
+							{
+								int byte_sec,min;
+								byte_sec = (int)(rate / 10);
+								min = (int)((blk.ff_fsize+(usr.dnldl*1024)+(tagged_kb*1024)) / byte_sec) / 60;
+								if (min>time_remain()){
+									status_line (":Dnld req. would exceed limit");
+									read_system_file ("NOTIME");
+									continue;
+								}
+							}
+						}
 
-               fprintf (fp, "%s%s %ld\n", sys.filepath, blk.ff_name, blk.ff_fsize);
+						if (!tsys.freearea) tagged_kb += (blk.ff_fsize/1024);
 
-               byte_sec = (int)(rate / 11);
-               i = (int)((blk.ff_fsize + (blk.ff_fsize / 1024)) / byte_sec);
-               min = i / 60;
-               sec = i - min * 60;
+						do {
+							if (fp == NULL) {
+								sprintf (filename, "F-TAG%d.TMP", config->line_offset);
+								if ((fp = fopen (filename, "at")) == NULL)
+									break;
+							}
 
-               if (firstflag) {
-                  m_print (bbstxt[B_ONE_CR]);
-                  firstflag = 0;
-               }
-               m_print (bbstxt[B_TAG_CONFIRM], blk.ff_name, min, sec, blk.ff_fsize);
-            } while (!findnext (&blk));
-      } while ((root = my_strtok (NULL, " ")) != NULL);
+							sprintf(temp_name,"%s%s %ld", tsys.filepath, blk.ff_name, blk.ff_fsize);
 
-      ask_for_filename (name, 1);
-      if (!name[0] || !CARRIER)
-         break;
+							if(tsys.cdrom&&config->cdrom_swap&&!offline_reader)
+								strcat(temp_name," **CDROM**");
 
-      firstflag = 1;
-   }
+								strcat(temp_name,"\n");
 
-   if (fp != NULL)
-      fclose (fp);
+
+							fprintf (fp, "%s",temp_name);
+
+							byte_sec = (int)(rate / 11);
+							i = (int)((blk.ff_fsize + (blk.ff_fsize / 1024)) / byte_sec);
+							min = i / 60;
+							sec = i - min * 60;
+
+							if (firstflag) {
+								m_print (bbstxt[B_ONE_CR]);
+								firstflag = 0;
+							}
+							m_print (bbstxt[B_TAG_CONFIRM], blk.ff_name, min, sec, blk.ff_fsize);
+
+							i = 1;
+						} while (!findnext (&blk));
+					}
+
+					close (fd);
+				}
+
+				if (only_one || !i) {
+					if (firstflag) {
+						m_print (bbstxt[B_ONE_CR]);
+						firstflag = 0;
+					}
+					m_print (bbstxt[B_TAG_FILENOTFOUND], strupr (root));
+				}
+			}
+			else
+				do {
+					if (fp == NULL) {
+						sprintf (filename, "F-TAG%d.TMP", config->line_offset);
+						if ((fp = fopen (filename, "at")) == NULL)
+							break;
+					}
+					if (!sys.freearea && !usr.xfer_prior){
+
+						if ((((blk.ff_fsize) / 1024) + usr.dnldl + tagged_kb) > config->class[usr_class].max_dl) {
+							status_line (":Dnld req. would exceed limit (%s)", blk.ff_name);
+							read_system_file ("TODAYK");
+							continue;
+						}
+
+						if(config->class[usr_class].ratio && !name[0] && usr.n_dnld >= config->class[usr_class].start_ratio) {
+							int rp;
+							rp = usr.upld ? (((blk.ff_fsize/1024)+usr.dnld+tagged_kb)/usr.upld) : ((blk.ff_fsize/1024)+usr.dnld+tagged_kb);
+							if (rp > (long)config->class[usr_class].ratio) {
+								status_line (":Dnld req. would exceed ratio");
+								read_system_file ("RATIO");
+								continue;
+							}
+						}
+
+						{
+							int byte_sec,min;
+							byte_sec = (int)(rate / 10);
+							min = (int)((blk.ff_fsize+(usr.dnldl*1024)+(tagged_kb*1024)) / byte_sec)/60;
+							if (min>time_remain()){
+								status_line (":Dnld req. would exceed limit");
+								read_system_file ("NOTIME");
+								continue;
+							}
+						}
+					}
+					sprintf(temp_name,"%s%s %ld", sys.filepath, blk.ff_name, blk.ff_fsize);
+
+					if(sys.cdrom&&config->cdrom_swap&&!offline_reader)
+						strcat(temp_name," **CDROM**");
+
+					strcat(temp_name,"\n");
+					fprintf (fp, "%s",temp_name);
+
+					if (!sys.freearea) tagged_kb += (blk.ff_fsize/1024);
+
+					byte_sec = (int)(rate / 11);
+					i = (int)((blk.ff_fsize + (blk.ff_fsize / 1024)) / byte_sec);
+					min = i / 60;
+					sec = i - min * 60;
+
+					if (firstflag) {
+						m_print (bbstxt[B_ONE_CR]);
+						firstflag = 0;
+					}
+					m_print (bbstxt[B_TAG_CONFIRM], blk.ff_name, min, sec, blk.ff_fsize);
+				} while (!findnext (&blk));
+		} while ((root = my_strtok (NULL, " ")) != NULL);
+
+		ask_for_filename (name, 1);
+		if (!name[0] || !CARRIER)
+			break;
+
+		firstflag = 1;
+	}
+
+	if (fp != NULL)
+		fclose (fp);
 }
 
 void list_tagged_files (int remove)
 {
-   FILE *fp;
-   int nfiles, line, m;
-   char name[14], buff[128], *p, *q, fok;
-   long pos;
+	FILE *fp;
+	int nfiles, line, m;
+	char name[14], buff[128], *p, *q, fok;
+	long pos;
 
-   sprintf (buff, "F-TAG%d.TMP", config->line_offset);
-   if ((fp = fopen (buff, "r+t")) == NULL) {
-      m_print (bbstxt[B_NOTAGGED_FILES]);
-      timer (20);
-      return;
-   }
+	sprintf (buff, "F-TAG%d.TMP", config->line_offset);
+	if ((fp = fopen (buff, "r+t")) == NULL) {
+		m_print (bbstxt[B_NOTAGGED_FILES]);
+		timer (20);
+		return;
+	}
 
-   do {
-      fok = 0;
-      nfiles = 0;
-      line = 4;
-      rewind (fp);
+	do {
+		fok = 0;
+		nfiles = 0;
+		line = 4;
+		rewind (fp);
 
-      while (fgets (buff, 120, fp) != NULL) {
-         while (buff[strlen (buff) -1] == 0x0D || buff[strlen (buff) -1] == 0x0A)
-            buff[strlen (buff) -1] = '\0';
+		while (fgets (buff, 120, fp) != NULL) {
+			while (buff[strlen (buff) -1] == 0x0D || buff[strlen (buff) -1] == 0x0A)
+				buff[strlen (buff) -1] = '\0';
 
-         if (buff[0] == ';')
-            continue;
+			if (buff[0] == ';')
+				continue;
 
-         p = strtok (buff, " ");
-         for (q = name; *p; ) {
-            if ((*p == '/') || (*p == '\\') || (*p == ':'))
-               q = name;
-            else
-               *q++ = toupper (*p);
-            p++;
-         }
+			p = strtok (buff, " ");
+			for (q = name; *p; ) {
+				if ((*p == '/') || (*p == '\\') || (*p == ':'))
+					q = name;
+				else
+					*q++ = toupper (*p);
+				p++;
+			}
 
-         *q = '\0';
-         p = strtok (NULL, " ");
+			*q = '\0';
+			p = strtok (NULL, " ");
 
-         // Scrive l'header della lista solo se ci sono files all'interno.
+			// Scrive l'header della lista solo se ci sono files all'interno.
          if (!fok) {
-            m_print (bbstxt[B_TAGGEDLIST_HEADER]);
+				m_print (bbstxt[B_TAGGEDLIST_HEADER]);
             fok = 1;
          }
 
-         m_print (bbstxt[B_TAGGEDLIST_FORMAT], ++nfiles, name, atol (p) / 1024L);
+			m_print (bbstxt[B_TAGGEDLIST_FORMAT], ++nfiles, name, atol (p) / 1024L);
          if ((line = more_question (line)) == 0 || !CARRIER)
             break;
       }
@@ -2112,7 +2360,7 @@ void list_tagged_files (int remove)
          }
          else {
             if (!get_command_word (buff, 3)) {
-               m_print (bbstxt[B_TAGGEDLIST_ASKREMOVE]);
+					m_print (bbstxt[B_TAGGEDLIST_ASKREMOVE]);
                chars_input (buff, 3, INPUT_FIELD);
             }
 
@@ -2120,7 +2368,7 @@ void list_tagged_files (int remove)
             if (!m || m > nfiles || !CARRIER || time_remain () <= 0)
                return;
 
-            nfiles = 0;
+				nfiles = 0;
             rewind (fp);
             pos = ftell (fp);
 
@@ -2133,298 +2381,378 @@ void list_tagged_files (int remove)
                   continue;
                }
 
-               if (++nfiles == m) {
-                  fseek (fp, pos, SEEK_SET);
-                  fputc (';', fp);
-                  break;
-               }
+					if (++nfiles == m) {
+						fseek (fp, pos, SEEK_SET);
+						fputc (';', fp);
+						break;
+					}
 
-               pos = ftell (fp);
-            }
-         }
-      }
-   } while (remove && fok);
+					pos = ftell (fp);
+				}
+			}
+		}
+	} while (remove && fok);
 
-   fclose (fp);
+	fclose (fp);
 
-   // Se non ci sono piu' files taggati, cancella il file con la lista.
-   if (!fok) {
-      sprintf (buff, "F-TAG%d.TMP", config->line_offset);
-      unlink (buff);
-   }
+	// Se non ci sono piu' files taggati, cancella il file con la lista.
+	if (!fok) {
+		sprintf (buff, "F-TAG%d.TMP", config->line_offset);
+		unlink (buff);
+	}
 }
 
 int download_tagged_files (char *fname)
 {
-   FILE *fp, *fpx;
-   int i, m, nfiles, byte_sec, min, sec, protocol;
-   char filename[80], name[14], buff[128], *p, *q, logoffafter;
-   long fl, rp, t;
+	FILE *fp, *fpx, *fp1, *fp2;
+	int i, m, nfiles, byte_sec, min, sec, protocol,is_cdrom=0;
+	char filename[80], name[14], buff[128], *p, *q, logoffafter,ext[5],*copybuf;
+	char old_filename[80],filename1[80];
+	long fl, rp, t,j,length,blocks;
+	tagged_dnl=1;
 
-   sprintf (filename, "F-TAG%d.TMP", config->line_offset);
-   if ((fp = fopen (filename, "rt")) == NULL)
-      return (0);
+	sprintf (filename, "F-TAG%d.TMP", config->line_offset);
+	if ((fp = fopen (filename, "rt")) == NULL)
+		return (0);
 
-   // Se fname e' diverso da NULL significa che c'e' un file in piu' da
-   // prendere oltre a quello del QWK: viene aggiunto alla lista dei files
-   // da prelevare.
-   if (fname != NULL) {
-      fclose (fp);
+	// Se fname e' diverso da NULL significa che c'e' un file in piu' da
+	// prendere oltre a quello del QWK: viene aggiunto alla lista dei files
+	// da prelevare.
 
-      fp = fopen (filename, "at");
-      fprintf (fp, "%s 0\n", fname);
-      fclose (fp);
+	_splitpath(fname,NULL,NULL,buff,NULL);
 
-      if ((fp = fopen (filename, "rt")) == NULL)
-         return (0);
-   }
+	if (buff[0] != NULL) {
+		fclose (fp);
 
-   logoffafter = 0;
-   nfiles = 0;
-   fl = 0L;
-   filename[0] = '\0';
+		fp = fopen (filename, "at");
+		fprintf (fp, "%s 0\n", fname);
+		fclose (fp);
 
-   while (fgets (buff, 120, fp) != NULL) {
-      while (buff[strlen (buff) -1] == 0x0D || buff[strlen (buff) -1] == 0x0A)
-         buff[strlen (buff) -1] = '\0';
+		if ((fp = fopen (filename, "rt")) == NULL)
+			return (0);
+	}
 
-      if (buff[0] == ';')
-         continue;
+	buff[0]=0;
 
-      p = strtok (buff, " ");
-      for (q = name; *p; ) {
-         if ((*p == '/') || (*p == '\\') || (*p == ':'))
-            q = name;
-         else
-            *q++ = toupper (*p);
-         p++;
-      }
+	logoffafter = 0;
+	nfiles = 0;
+	fl = 0L;
+	filename[0] = '\0';
 
-      *q = '\0';
-      p = strtok (NULL, " ");
+	while (fgets (buff, 120, fp) != NULL) {
+		while (buff[strlen (buff) -1] == 0x0D || buff[strlen (buff) -1] == 0x0A)
+			buff[strlen (buff) -1] = '\0';
 
-      if (strlen (filename) + strlen (name) + 1 < 70) {
-         if (nfiles)
-            strcat (filename, " ");
-         strcat (filename, name);
-         fl += atol (p);
-         nfiles++;
-      }
-      else {
-         m_print (bbstxt[B_FILE_MASK], strupr (filename));
-         filename[0] = '\0';
-         strcpy (filename, name);
-         fl += atol (p);
-         nfiles++;
-      }
-   }
+		if (buff[0] == ';')
+			continue;
 
-   if (!strlen (filename)) {
-      fclose (fp);
-      sprintf (filename, "F-TAG%d.TMP", config->line_offset);
-      unlink (filename);
-      return (0);
-   }
+		p = strtok (buff, " ");
+		for (q = name; *p; ) {
+			if ((*p == '/') || (*p == '\\') || (*p == ':'))
+				q = name;
+			else
+				*q++ = toupper (*p);
+			p++;
+		}
 
-   m_print (bbstxt[B_TAG_PENDING]);
-   if (yesno_question (DEF_YES) == DEF_NO)
-      return (0);
+		*q = '\0';
+		p = strtok (NULL, " ");
 
-   if (user_status != UPLDNLD)
-      set_useron_record (UPLDNLD, 0, 0);
+		if (strlen (filename) + strlen (name) + 1 < 70) {
+			if (nfiles)
+				strcat (filename, " ");
+			strcat (filename, name);
+			fl += atol (p);
+			nfiles++;
+		}
+		else {
+			m_print (bbstxt[B_FILE_MASK], strupr (filename));
+			filename[0] = '\0';
+			strcpy (filename, name);
+			fl += atol (p);
+			nfiles++;
+		}
+	}
 
-   read_system_file ("PREDNLD");
+	if (!strlen (filename)) {
+		fclose (fp);
+		sprintf (filename, "F-TAG%d.TMP", config->line_offset);
+		unlink (filename);
+		return (0);
+	}
 
-   if ((protocol = selprot ()) == 0) {
-      fclose (fp);
-      return (1);
-   }
+	m_print (bbstxt[B_TAG_PENDING]);
+	if (yesno_question (DEF_YES) == DEF_NO)
+		return (0);
 
-   cls ();
+	if (user_status != UPLDNLD)
+		set_useron_record (UPLDNLD, 0, 0);
 
-   m_print (bbstxt[B_FILE_MASK], strupr (filename));
-   m_print (bbstxt[B_LEN_MASK], fl);
+	read_system_file ("PREDNLD");
 
-   byte_sec = (int)(rate / 11);
-   i = (int)((fl + (fl / 1024)) / byte_sec);
-   min = i / 60;
-   sec = i - min * 60;
+	if ((protocol = selprot ()) == 0) {
+		fclose (fp);
+		return (1);
+	}
 
-   m_print (bbstxt[B_TOTAL_TIME], min, sec);
-   if (protocol >= 10)
-      display_external_protocol (protocol);
-   else
-      m_print (bbstxt[B_PROTOCOL], &protocols[protocol - 1][1]);
+	cls ();
 
-   if(((fl/1024) + usr.dnldl) > config->class[usr_class].max_dl && !usr.xfer_prior) {
-      fclose (fp);
-      sprintf (filename, "F-TAG%d.TMP", config->line_offset);
-      unlink (filename);
-      status_line (":Dnld req. would exceed limit");
-      read_system_file ("TODAYK");
-      return (1);
-   }
+	m_print (bbstxt[B_FILE_MASK], strupr (filename));
+	m_print (bbstxt[B_LEN_MASK], fl);
 
-   if (min > time_remain() && !sys.freearea && !usr.xfer_prior) {
-      fclose (fp);
-      sprintf (filename, "F-TAG%d.TMP", config->line_offset);
-      unlink (filename);
-      status_line (":Dnld req. would exceed limit");
-      read_system_file ("NOTIME");
-      return (1);
-   }
+	byte_sec = (int)(rate / 11);
+	i = (int)((fl + (fl / 1024)) / byte_sec);
+	min = i / 60;
+	sec = i - min * 60;
 
-   m_print (bbstxt[B_DL_CONFIRM]);
-   if (usr.hotkey)
-      cmd_input (filename, 1);
-   else
-      chars_input (filename, 1, 0);
+	m_print (bbstxt[B_TOTAL_TIME], min, sec);
+	if (protocol >= 10)
+		display_external_protocol (protocol);
+	else
+		m_print (bbstxt[B_PROTOCOL], &protocols[protocol - 1][1]);
 
-   if (toupper (filename[0]) == 'A') {
-      m_print(bbstxt[B_TRANSFER_ABORT]);
-      goto abort_xfer;
-   }
+	if(((fl/1024) + usr.dnldl) > config->class[usr_class].max_dl && !usr.xfer_prior) {
+		fclose (fp);
+		sprintf (filename, "F-TAG%d.TMP", config->line_offset);
+		unlink (filename);
+		status_line (":Dnld req. would exceed limit");
+		read_system_file ("TODAYK");
+		return (1);
+	}
 
-   if (toupper (filename[0]) == '!')
-      logoffafter = 1;
-   else
-      logoffafter = 0;
+	if (min > time_remain() && !sys.freearea && !usr.xfer_prior) {
+		fclose (fp);
+		sprintf (filename, "F-TAG%d.TMP", config->line_offset);
+		unlink (filename);
+		status_line (":Dnld req. would exceed limit");
+		read_system_file ("NOTIME");
+		return (1);
+	}
 
-   m_print (bbstxt[B_READY_TO_SEND]);
-   m_print (bbstxt[B_CTRLX_ABORT]);
+	m_print (bbstxt[B_DL_CONFIRM]);
+	if (usr.hotkey)
+		cmd_input (filename, 1);
+	else
+		chars_input (filename, 1, 0);
 
-   if (local_mode) {
-      sysop_error();
-      m = 0;
-      goto abort_xfer;
-   }
+	if (toupper (filename[0]) == 'A') {
+		m_print(bbstxt[B_TRANSFER_ABORT]);
+		goto abort_xfer;
+	}
 
-   rewind (fp);
-   i = 0;
-   download_report (NULL, 1, NULL);
+	if (toupper (filename[0]) == '!')
+		logoffafter = 1;
+	else
+		logoffafter = 0;
 
-   if (protocol >= 10) {
-      sprintf (filename, "%sEXTRN%d.LST", config->sys_path, line_offset);
-      fpx = fopen (filename, "wt");
-   }
+	m_print (bbstxt[B_READY_TO_SEND]);
+	m_print (bbstxt[B_CTRLX_ABORT]);
 
-   while (fgets (buff, 120, fp) != NULL) {
-      while (buff[strlen (buff) -1] == 0x0D || buff[strlen (buff) -1] == 0x0A)
-         buff[strlen (buff) -1] = '\0';
+	if (local_mode) {
+		sysop_error();
+		m = 0;
+		goto abort_xfer;
+	}
 
-      p = strtok (buff, " ");
-      if (p == NULL || *p == ';')
-         continue;
 
-      if (protocol == 1 || protocol == 2 || protocol == 3 || protocol == 6) {
-         timer (10);
-         m = 0;
+	rewind (fp);
+	i = 0;
+	download_report (NULL, 1, NULL);
 
-         switch (protocol) {
-            case 1:
-               m = fsend (p, 'X');
-               break;
-            case 2:
-               m = fsend (p, 'Y');
-               break;
-            case 3:
-               m = send_Zmodem (p, NULL, i, 0);
-               break;
-            case 6:
-               m = fsend (p, 'S');
-               break;
-         }
+	if (protocol >= 10) {
+		sprintf (filename, "%sEXTRN%d.LST", config->sys_path, line_offset);
+		fpx = fopen (filename, "wt");
+	}
 
-         if (!m) {
-            download_report (p, 3, NULL);
-            break;
-         }
+	while (fgets (buff, 120, fp) != NULL) {
+		while (buff[strlen (buff) -1] == 0x0D || buff[strlen (buff) -1] == 0x0A)
+			buff[strlen (buff) -1] = '\0';
 
-         if (config->keep_dl_count)
-            update_filestat (p);
-         download_report (p, 2, NULL);
-         i++;
+			if(strstr(buff,"**CDROM**"))
+				is_cdrom=1;
+			else
+				is_cdrom=0;
 
-         p = strtok (NULL, " ");
+		p = strtok (buff, " ");
+		if (p == NULL || *p == ';')
+			continue;
 
-         if (atol (p)) {
-            usr.dnld += (int)(atol (p) / 1024L) + 1;
-            usr.dnldl += (int)(atol (p) / 1024L) + 1;
-            usr.n_dnld++;
+		if (protocol == 1 || protocol == 2 || protocol == 3 || protocol == 6) {
+			timer (10);
+			m = 0;
+			strcpy(filename1,p);
+			if(is_cdrom) {
 
-            if (function_active == 3)
-               f3_status ();
-         }
-      }
-      else if (protocol == 4 || protocol == 5 || protocol >= 10)
-         fprintf (fpx, "%s\n", p);
-   }
+				int c;
+				char t_name[20];
+				struct ftime ft;
 
-   if (protocol >= 10) {
-      fclose (fpx);
-      general_external_protocol (NULL, NULL, protocol, 0, 1);
-   }
-   else {
-      if (protocol == 3)
-         send_Zmodem (NULL, NULL, ((i) ? END_BATCH : NOTHING_TO_DO), 0);
-      else if (protocol == 6)
-         fsend (NULL, 'S');
-   }
+				strcpy (old_filename,filename1);
+				fp1 = fopen(old_filename,"rb");
+				if(!fp1) {
+					status_line("!Unable to open %s",old_filename);
+					return(1);
+				}
+				fnsplit(old_filename,NULL,NULL,t_name,ext);
+				strcat(t_name,ext);
+				sprintf (filename1, "%scdrom%d", config->sys_path, line_offset);
+				mkdir (filename1);
+				sprintf (filename1, "%scdrom%d\\%s", config->sys_path, line_offset,t_name);
+				fp2 = fopen(filename1,"wb");
+				if(!fp2) {
+					status_line("!Unable to open %s",filename1);
+					return(1);
+				}
+				length=filelength(fileno(fp1));
+				blocks=length/(COPYBUFFER);
+				copybuf=malloc(COPYBUFFER);
+				for(j=0;j<blocks;j++){
+					fread(copybuf,COPYBUFFER,1,fp1);
+					fwrite(copybuf,COPYBUFFER,1,fp2);
+				}
+				fread(copybuf,length%COPYBUFFER,1,fp1);
+				fwrite(copybuf,length%COPYBUFFER,1,fp2);/*				while((c=fgetc(fp1))!=EOF)
+					fputc((char)c,fp2);
+*/					
+				getftime(fileno(fp1),&ft);
+				setftime(fileno(fp2),&ft);
+                free (copybuf);
+                fclose(fp1);
+				fclose(fp2);
+				status_line("+copied %s -> %s",old_filename,filename1);
+			}
+			switch (protocol) {
+				case 1:
+					m = fsend (filename1, 'X');
+					break;
+				case 2:
+					m = fsend (filename1, 'Y');
+					break;
+				case 3:
+					m = send_Zmodem (filename1, NULL, i, 0);
+					break;
+				case 6:
+					m = fsend (filename1, 'S');
+					break;
+			}
+
+			if(is_cdrom){
+				unlink(filename1);
+					 status_line("+Removed %s",filename1);
+			}
+
+			if (!m) {
+				download_report (p, 3, NULL);
+				break;
+			}
+
+			if (config->keep_dl_count)
+				update_filestat (p);
+			download_report (p, 2, NULL);
+			i++;
+
+			p = strtok (NULL, " ");
+
+			if (atol (p)) {
+				usr.dnld += (int)(atol (p) / 1024L) + 1;
+				usr.dnldl += (int)(atol (p) / 1024L) + 1;
+				usr.n_dnld++;
+
+				if (function_active == 3)
+					f3_status ();
+			}
+		}
+		else if (protocol == 4 || protocol == 5 || protocol >= 10){
+
+			fprintf (fpx, "%s", p);
+			if(is_cdrom) fprintf (fpx," **CDROM**\n");
+			else fprintf(fpx,"\n");
+		}
+	}
+
+	if (protocol >= 10) {
+		char temp_name[80];
+
+		fclose (fpx);
+		general_external_protocol (NULL, NULL, protocol, 0, 1);
+		sprintf (temp_name, "%sCDROM%d.LST", config->flag_dir, line_offset);
+		fpx = fopen(temp_name,"rt");
+		  if(fpx) {
+				while (fgets (filename, 145, fpx) != NULL) {
+					 filename[145] = '\0';
+					 p = strtok(filename," ");
+					 if(p){
+								while (p[strlen (p) - 1] == 0x0D || p[strlen (p) - 1] == 0x0A)
+									 p[strlen (p) - 1] = '\0';
+						status_line("+Deleting %s",p);
+						unlink(p);
+					 }
+				}
+				fclose(fpx);
+				unlink(temp_name);
+		  }
+	}
+	else {
+		if (protocol == 3)
+			send_Zmodem (NULL, NULL, ((i) ? END_BATCH : NOTHING_TO_DO), 0);
+		else if (protocol == 6)
+			fsend (NULL, 'S');
+	}
 
 abort_xfer:
-   wactiv (mainview);
+	wactiv (mainview);
 
-   fclose (fp);
+	fclose (fp);
 
-   download_report (NULL, 4, NULL);
+	download_report (NULL, 4, NULL);
 
-   sprintf (filename, "F-TAG%d.TMP", config->line_offset);
-   unlink (filename);
+	sprintf (filename, "F-TAG%d.TMP", config->line_offset);
+	unlink (filename);
 
-   if (logoffafter) {
-      rp = time (NULL) + 10L;
-      do {
-         m = -1;
-         m_print (bbstxt[B_DL_LOGOFF], (int)(rp - time (NULL)));
-         t = time (NULL);
-         while (time (NULL) == t && CARRIER) {
-            release_timeslice ();
-            if ((m = toupper (m_getch ())) == 'A')
-               break;
-         }
-         if (m == 'A')
-            break;
-      } while (time (NULL) < rp && CARRIER);
+	if (logoffafter) {
+		rp = time (NULL) + 10L;
+		do {
+			m = -1;
+			m_print (bbstxt[B_DL_LOGOFF], (int)(rp - time (NULL)));
+			t = time (NULL);
+			while (time (NULL) == t && CARRIER) {
+				release_timeslice ();
+				if ((m = toupper (m_getch ())) == 'A')
+					break;
+			}
+			if (m == 'A')
+				break;
+		} while (time (NULL) < rp && CARRIER);
 
-      if (m != 'A') {
-         read_system_file ("FGOODBYE");
+		if (m != 'A') {
+			read_system_file ("FGOODBYE");
 
-         hidecur();
-         terminating_call();
-         get_down(aftercaller_exit, 2);
-      }
-   }
+			hidecur();
+			terminating_call();
+			get_down(aftercaller_exit, 2);
+		}
+	}
 
-   return (1);
+	return (1);
 }
 
 void check_virus (char *rqname)
 {
-   int *varr;
-   char drive[80], path[80], fname[16], ext[6], complete[140], *p;
+	int *varr;
+	char drive[80], path[80], fname[16], ext[6], complete[140], *p;
 
-   strcpy (complete, config->upload_check);
-   if ((p = strtok (complete, " ")) == NULL)
-      return;
-   if (strchr (p, '.') == NULL)
-      strcat (p, ".*");
-   if (!dexists (p))
-      return;
+	strcpy (complete, config->upload_check);
+	if ((p = strtok (complete, " ")) == NULL)
+		return;
+	if (strchr (p, '.') == NULL)
+		strcat (p, ".*");
+	if (!dexists (p))
+		return;
 
-   strupr (rqname);
-   fnsplit (rqname, path, drive, fname, ext);
-   strcat (path, drive);
-   strupr (fname);
+	strupr (rqname);
+	fnsplit (rqname, path, drive, fname, ext);
+	strcat (path, drive);
+	strupr (fname);
    strupr (ext);
 
    strcpy (complete, config->upload_check);

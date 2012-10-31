@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <io.h>
 #include <share.h>
@@ -288,7 +306,7 @@ void manager_nodelist ()
    int wh, i;
    char string[80];
 
-   wh = wopen (6, 16, 20, 57, 1, LCYAN|_BLACK, CYAN|_BLACK);
+   wh = wopen (0, 16, 23, 57, 1, LCYAN|_BLACK, CYAN|_BLACK);
    wactiv (wh);
    wshadow (DGREY|_BLACK);
    wtitle (" Nodelist ", TRIGHT, YELLOW|_BLUE);
@@ -312,9 +330,18 @@ void manager_nodelist ()
       wmenuitem ( 9, 1," List 8  ", 'L', 87, 0, NULL, 0, 0);
       wmenuitem (10, 1," List 9  ", 'L', 88, 0, NULL, 0, 0);
       wmenuitem (11, 1," List 10 ", 'L', 89, 0, NULL, 0, 0);
-      wmenuend (i, M_VERT, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
+      wmenuitem (12, 1," List 11 ", 'L', 90, 0, NULL, 0, 0);
+      wmenuitem (13, 1," List 12 ", 'L', 91, 0, NULL, 0, 0);
+      wmenuitem (14, 1," List 13 ", 'L', 92, 0, NULL, 0, 0);
+      wmenuitem (15, 1," List 14 ", 'L', 93, 0, NULL, 0, 0);
+      wmenuitem (16, 1," List 15 ", 'L', 94, 0, NULL, 0, 0);
+      wmenuitem (17, 1," List 16 ", 'L', 95, 0, NULL, 0, 0);
+      wmenuitem (18, 1," List 17 ", 'L', 96, 0, NULL, 0, 0);
+      wmenuitem (19, 1," List 18 ", 'L', 97, 0, NULL, 0, 0);
+      wmenuitem (20, 1," List 19 ", 'L', 98, 0, NULL, 0, 0);
+      wmenuitem (21, 1," List 20 ", 'L', 99, 0, NULL, 0, 0);      wmenuend (i, M_VERT, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
-      for (i = 0; i < 10; i++) {
+      for (i = 0; i < MAXNL; i++) {
          wprints (i + 2, 12, CYAN|_BLACK, config.nl[i].list_name);
          wprints (i + 2, 26, CYAN|_BLACK, config.nl[i].diff_name);
 //         wprints (i + 2, 40, CYAN|_BLACK, config.nl[i].arc_name);
@@ -537,6 +564,7 @@ void manager_nodes ()
 		wprints ( 9,  1, LGREY|_BLACK," Phone           ");
 		wprints (10,  1, LGREY|_BLACK," Dial Prefix     ");
 		wprints (11,  1, LGREY|_BLACK," Capabilities    ");
+		wprints (10, 33, LGREY|_BLACK," Min. baud rate  ");
 		wprints (12,  1, LGREY|_BLACK," Echomail aka    ");
 		wprints (13,  1, LGREY|_BLACK," Areafix Level   ");
 		wprints (14,  1, LGREY|_BLACK," ÃÄ A Flag       ");
@@ -576,41 +604,41 @@ void manager_nodes ()
 			if (ni.janus)
 				string[3] = 'J';
 			wprints (11, 19, CYAN|_BLACK, string);
-			if (ni.aka) {
-				sprintf (string, "%u:%u/%u.%u", config.alias[ni.aka - 1].zone, config.alias[ni.aka - 1].net, config.alias[ni.aka - 1].node, config.alias[ni.aka - 1].point);
-				wprints (12, 19, CYAN|_BLACK, string);
-			}
-			else
-				wprints (12, 19, CYAN|_BLACK, "Default");
+			sprintf (string,"%ld",ni.min_baud_rate);
+			wprints (10, 51, CYAN|_BLACK, string);
+			if (ni.aka == 0)
+				ni.aka++;
+			sprintf (string, "%u:%u/%u.%u", config.alias[ni.aka - 1].zone, config.alias[ni.aka - 1].net, config.alias[ni.aka - 1].node, config.alias[ni.aka - 1].point);
+			wprints (12, 19, CYAN|_BLACK, string);
+
 			sprintf (string, "%d", ni.afx_level);
 			wprints (13, 19, CYAN|_BLACK, string);
 			wprints (14, 19, CYAN|_BLACK, get_flagA_text ((ni.afx_flags >> 24) & 0xFF));
 			wprints (15, 19, CYAN|_BLACK, get_flagB_text ((ni.afx_flags >> 16) & 0xFF));
 			wprints (16, 19, CYAN|_BLACK, get_flagC_text ((ni.afx_flags >> 8) & 0xFF));
 			wprints (17, 19, CYAN|_BLACK, get_flagD_text (ni.afx_flags & 0xFF));
-			if (ni.tic_aka) {
-				sprintf (string, "%u:%u/%u.%u", config.alias[ni.tic_aka - 1].zone, config.alias[ni.tic_aka - 1].net, config.alias[ni.tic_aka - 1].node, config.alias[ni.tic_aka - 1].point);
-				wprints (12, 51, CYAN|_BLACK, string);
-			}
-			else
-            wprints (12, 51, CYAN|_BLACK, "Default");
-         sprintf (string, "%d", ni.tic_level);
-         wprints (13, 51, CYAN|_BLACK, string);
-         wprints (14, 51, CYAN|_BLACK, get_flagA_text ((ni.tic_flags >> 24) & 0xFF));
-         wprints (15, 51, CYAN|_BLACK, get_flagB_text ((ni.tic_flags >> 16) & 0xFF));
+			if (ni.tic_aka == 0 )
+				ni.tic_aka++;
+			sprintf (string, "%u:%u/%u.%u", config.alias[ni.tic_aka - 1].zone, config.alias[ni.tic_aka - 1].net, config.alias[ni.tic_aka - 1].node, config.alias[ni.tic_aka - 1].point);
+			wprints (12, 51, CYAN|_BLACK, string);
+
+			sprintf (string, "%d", ni.tic_level);
+			wprints (13, 51, CYAN|_BLACK, string);
+			wprints (14, 51, CYAN|_BLACK, get_flagA_text ((ni.tic_flags >> 24) & 0xFF));
+			wprints (15, 51, CYAN|_BLACK, get_flagB_text ((ni.tic_flags >> 16) & 0xFF));
 			wprints (16, 51, CYAN|_BLACK, get_flagC_text ((ni.tic_flags >> 8) & 0xFF));
-         wprints (17, 51, CYAN|_BLACK, get_flagD_text (ni.tic_flags & 0xFF));
+			wprints (17, 51, CYAN|_BLACK, get_flagD_text (ni.tic_flags & 0xFF));
 		}
 
-      start_update ();
-      i = getxch ();
-      if ( (i & 0xFF) != 0 )
-         i &= 0xFF;
+		start_update ();
+		i = getxch ();
+		if ( (i & 0xFF) != 0 )
+			i &= 0xFF;
 
-      switch (i) {
+		switch (i) {
 			// PgDn
-         case 0x5100:
-            if (readed)
+			case 0x5100:
+				if (readed)
 					read (fd, (char *)&ni, sizeof (NODEINFO));
 				break;
 
@@ -811,386 +839,417 @@ void manager_nodes ()
 static void edit_single_node (nip)
 NODEINFO *nip;
 {
-   int wh1, wh, i = 1, m, mx;
-   char string[128], packs[10][12], *akas[MAX_ALIAS + 2];
-   NODEINFO ni;
+	int wh1, wh, i = 1, m, mx;
+	char string[128], packs[10][12], *akas[MAX_ALIAS + 2], temp[42];
+	NODEINFO ni;
 
-   memcpy ((char *)&ni, (char *)nip, sizeof (NODEINFO));
+	memcpy ((char *)&ni, (char *)nip, sizeof (NODEINFO));
 
-   gotoxy_ (24, 1);
-   clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "ESC-Exit/Save  ENTER-Edit");
-   prints (24, 1, YELLOW|_BLACK, "ESC");
-   prints (24, 16, YELLOW|_BLACK, "ENTER");
+	gotoxy_ (24, 1);
+	clreol_ ();
+	prints (24, 1, LGREY|_BLACK, "ESC-Exit/Save  ENTER-Edit");
+	prints (24, 1, YELLOW|_BLACK, "ESC");
+	prints (24, 16, YELLOW|_BLACK, "ENTER");
 
 continue_editing:
-   do {
-      stop_update ();
-      wclear ();
+	do {
+		stop_update ();
+		wclear ();
 
-      wmenubegc ();
-      wmenuitem ( 1,  1, " Address         ", 0, 1, 0, NULL, 0, 0);
-      wmenuitem ( 2,  1, " System          ", 0, 11, 0, NULL, 0, 0);
-      wmenuitem ( 3,  1, " Sysop Name      ", 0, 10, 0, NULL, 0, 0);
-      wmenuitem ( 4,  1, " Packer          ", 0, 3, 0, NULL, 0, 0);
-      wmenuitem ( 4, 33, " Mailer aka      ", 0, 26, 0, NULL, 0, 0);
-      wmenuitem ( 5,  1, " Session Pw      ", 0, 4, 0, NULL, 0, 0);
-      wmenuitem ( 6,  1, " Packet Pw (OUT) ", 0, 5, 0, NULL, 0, 0);
-      wmenuitem ( 6, 33, " Packet Pw (IN)  ", 0, 25, 0, NULL, 0, 0);
-      wmenuitem ( 7,  1, " Areafix Pw      ", 0, 6, 0, NULL, 0, 0);
-      wmenuitem ( 8,  1, " TIC Pw          ", 0, 14, 0, NULL, 0, 0);
-      wmenuitem ( 9,  1, " Phone           ", 0, 8, 0, NULL, 0, 0);
-      wmenuitem (10,  1, " Dial Prefix     ", 0, 9, 0, NULL, 0, 0);
-      wmenuitem (11,  1, " Capabilities    ", 0, 12, 0, NULL, 0, 0);
-      wmenuitem (12,  1, " Echomail aka    ", 0, 13, 0, NULL, 0, 0);
-      wmenuitem (13,  1, " Areafix Level   ", 0, 2, 0, NULL, 0, 0);
-      wmenuitem (14,  1, " ÃÄ A Flag       ", 0, 15, 0, NULL, 0, 0);
-      wmenuitem (15,  1, " ÃÄ B Flag       ", 0, 16, 0, NULL, 0, 0);
-      wmenuitem (16,  1, " ÃÄ C Flag       ", 0, 17, 0, NULL, 0, 0);
-      wmenuitem (17,  1, " ÀÄ D Flag       ", 0, 18, 0, NULL, 0, 0);
-      wmenuitem (12, 33, " TIC aka         ", 0, 19, 0, NULL, 0, 0);
-      wmenuitem (13, 33, " TIC Level       ", 0, 20, 0, NULL, 0, 0);
-      wmenuitem (14, 33, " ÃÄ A Flag       ", 0, 21, 0, NULL, 0, 0);
-      wmenuitem (15, 33, " ÃÄ B Flag       ", 0, 22, 0, NULL, 0, 0);
-      wmenuitem (16, 33, " ÃÄ C Flag       ", 0, 23, 0, NULL, 0, 0);
-      wmenuitem (17, 33, " ÀÄ D Flag       ", 0, 24, 0, NULL, 0, 0);
-      wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
+		wmenubegc ();
+		wmenuitem ( 1,  1, " Address         ", 0,  1, 0, NULL, 0, 0);
+		wmenuitem ( 2,  1, " System          ", 0, 11, 0, NULL, 0, 0);
+		wmenuitem ( 3,  1, " Sysop Name      ", 0, 10, 0, NULL, 0, 0);
+		wmenuitem ( 4,  1, " Packer          ", 0,  3, 0, NULL, 0, 0);
+		wmenuitem ( 4, 33, " Mailer aka      ", 0, 26, 0, NULL, 0, 0);
+		wmenuitem ( 5,  1, " Session Pw      ", 0,  4, 0, NULL, 0, 0);
+		wmenuitem ( 6,  1, " Packet Pw (OUT) ", 0,  5, 0, NULL, 0, 0);
+		wmenuitem ( 6, 33, " Packet Pw (IN)  ", 0, 25, 0, NULL, 0, 0);
+		wmenuitem ( 7,  1, " Areafix Pw      ", 0,  6, 0, NULL, 0, 0);
+		wmenuitem ( 8,  1, " TIC Pw          ", 0, 14, 0, NULL, 0, 0);
+		wmenuitem ( 9,  1, " Phone           ", 0,  8, 0, NULL, 0, 0);
+		wmenuitem (10,  1, " Dial Prefix     ", 0,  9, 0, NULL, 0, 0);
+		wmenuitem (11,  1, " Capabilities    ", 0, 12, 0, NULL, 0, 0);
+		wmenuitem (10, 33, " Min. baud rate  ", 0, 27, 0, NULL, 0, 0);
+		wmenuitem (12,  1, " Echomail aka    ", 0, 13, 0, NULL, 0, 0);
+		wmenuitem (13,  1, " Areafix Level   ", 0,  2, 0, NULL, 0, 0);
+		wmenuitem (14,  1, " ÃÄ A Flag       ", 0, 15, 0, NULL, 0, 0);
+		wmenuitem (15,  1, " ÃÄ B Flag       ", 0, 16, 0, NULL, 0, 0);
+		wmenuitem (16,  1, " ÃÄ C Flag       ", 0, 17, 0, NULL, 0, 0);
+		wmenuitem (17,  1, " ÀÄ D Flag       ", 0, 18, 0, NULL, 0, 0);
+		wmenuitem (12, 33, " TIC aka         ", 0, 19, 0, NULL, 0, 0);
+		wmenuitem (13, 33, " TIC Level       ", 0, 20, 0, NULL, 0, 0);
+		wmenuitem (14, 33, " ÃÄ A Flag       ", 0, 21, 0, NULL, 0, 0);
+		wmenuitem (15, 33, " ÃÄ B Flag       ", 0, 22, 0, NULL, 0, 0);
+		wmenuitem (16, 33, " ÃÄ C Flag       ", 0, 23, 0, NULL, 0, 0);
+		wmenuitem (17, 33, " ÀÄ D Flag       ", 0, 24, 0, NULL, 0, 0);
+		wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
-      sprintf (string, "%u:%u/%u.%u", ni.zone, ni.net, ni.node, ni.point);
-      wprints (1, 19, CYAN|_BLACK, string);
-      wprints (2, 19, CYAN|_BLACK, ni.system);
-      wprints (3, 19, CYAN|_BLACK, ni.sysop_name);
-      wprints (4, 19, CYAN|_BLACK, config.packers[ni.packer].id);
-      sprintf (string, "%u:%u/%u.%u", config.alias[ni.mailer_aka].zone, config.alias[ni.mailer_aka].net, config.alias[ni.mailer_aka].node, config.alias[ni.mailer_aka].point);
-      wprints (4, 51, CYAN|_BLACK, string);
-      wprints (5, 19, CYAN|_BLACK, ni.pw_session);
-      wprints (6, 19, CYAN|_BLACK, ni.pw_packet);
-      wprints (6, 51, CYAN|_BLACK, ni.pw_inbound_packet);
-      wprints (7, 19, CYAN|_BLACK, ni.pw_areafix);
-      wprints (8, 19, CYAN|_BLACK, ni.pw_tic);
-      wprints (9, 19, CYAN|_BLACK, ni.phone);
-      sprintf (string, "%d", ni.modem_type);
-      wprints (10, 19, CYAN|_BLACK, string);
-      strcpy (string, "----");
-      if (ni.remap4d)
-         string[0] = 'M';
-      if (ni.wazoo)
-         string[1] = 'W';
-      if (ni.emsi)
-         string[2] = 'E';
-      if (ni.janus)
-         string[3] = 'J';
-      wprints (11, 19, CYAN|_BLACK, string);
-      if (ni.aka) {
-         sprintf (string, "%u:%u/%u.%u", config.alias[ni.aka - 1].zone, config.alias[ni.aka - 1].net, config.alias[ni.aka - 1].node, config.alias[ni.aka - 1].point);
-         wprints (12, 19, CYAN|_BLACK, string);
-      }
-      else
-         wprints (12, 19, CYAN|_BLACK, "Default");
-      sprintf (string, "%d", ni.afx_level);
-      wprints (13, 19, CYAN|_BLACK, string);
-      wprints (14, 19, CYAN|_BLACK, get_flagA_text ((ni.afx_flags >> 24) & 0xFF));
-      wprints (15, 19, CYAN|_BLACK, get_flagB_text ((ni.afx_flags >> 16) & 0xFF));
-      wprints (16, 19, CYAN|_BLACK, get_flagC_text ((ni.afx_flags >> 8) & 0xFF));
-      wprints (17, 19, CYAN|_BLACK, get_flagD_text (ni.afx_flags & 0xFF));
-      if (ni.tic_aka) {
-         sprintf (string, "%u:%u/%u.%u", config.alias[ni.tic_aka - 1].zone, config.alias[ni.tic_aka - 1].net, config.alias[ni.tic_aka - 1].node, config.alias[ni.tic_aka - 1].point);
-         wprints (12, 51, CYAN|_BLACK, string);
-      }
-      else
-         wprints (12, 51, CYAN|_BLACK, "Default");
-      sprintf (string, "%d", ni.tic_level);
-      wprints (13, 51, CYAN|_BLACK, string);
-      wprints (14, 51, CYAN|_BLACK, get_flagA_text ((ni.tic_flags >> 24) & 0xFF));
-      wprints (15, 51, CYAN|_BLACK, get_flagB_text ((ni.tic_flags >> 16) & 0xFF));
-      wprints (16, 51, CYAN|_BLACK, get_flagC_text ((ni.tic_flags >> 8) & 0xFF));
-      wprints (17, 51, CYAN|_BLACK, get_flagD_text (ni.tic_flags & 0xFF));
+		sprintf (string, "%u:%u/%u.%u", ni.zone, ni.net, ni.node, ni.point);
+		wprints (1, 19, CYAN|_BLACK, string);
+		wprints (2, 19, CYAN|_BLACK, ni.system);
+		wprints (3, 19, CYAN|_BLACK, ni.sysop_name);
+		wprints (4, 19, CYAN|_BLACK, config.packers[ni.packer].id);
+		sprintf (string, "%u:%u/%u.%u", config.alias[ni.mailer_aka].zone, config.alias[ni.mailer_aka].net, config.alias[ni.mailer_aka].node, config.alias[ni.mailer_aka].point);
+		wprints (4, 51, CYAN|_BLACK, string);
+		wprints (5, 19, CYAN|_BLACK, ni.pw_session);
+		wprints (6, 19, CYAN|_BLACK, ni.pw_packet);
+		wprints (6, 51, CYAN|_BLACK, ni.pw_inbound_packet);
+		wprints (7, 19, CYAN|_BLACK, ni.pw_areafix);
+		wprints (8, 19, CYAN|_BLACK, ni.pw_tic);
+		wprints (9, 19, CYAN|_BLACK, ni.phone);
+		sprintf (string, "%d", ni.modem_type);
+		wprints (10, 19, CYAN|_BLACK, string);
+		strcpy (string, "----");
+		if (ni.remap4d)
+			string[0] = 'M';
+		if (ni.wazoo)
+			string[1] = 'W';
+		if (ni.emsi)
+			string[2] = 'E';
+		if (ni.janus)
+			string[3] = 'J';
+		wprints (11, 19, CYAN|_BLACK, string);
+		sprintf (string,"%ld",ni.min_baud_rate);
+		wprints (10, 51, CYAN|_BLACK, string);
 
-      start_update ();
-      i = wmenuget ();
+		if (ni.aka == 0)
+			ni.aka++;
+		sprintf (string, "%u:%u/%u.%u", config.alias[ni.aka - 1].zone, config.alias[ni.aka - 1].net, config.alias[ni.aka - 1].node, config.alias[ni.aka - 1].point);
+		wprints (12, 19, CYAN|_BLACK, string);
 
-      switch (i) {
-         case 1:
-            sprintf (string, "%u:%u/%u.%u", ni.zone, ni.net, ni.node, ni.point);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (1, 19, string, "???????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               parse_netnode (strbtrim (string), (int *)&ni.zone, (int *)&ni.net, (int *)&ni.node, (int *)&ni.point);
-            break;
+		sprintf (string, "%d", ni.afx_level);
+		wprints (13, 19, CYAN|_BLACK, string);
+		wprints (14, 19, CYAN|_BLACK, get_flagA_text ((ni.afx_flags >> 24) & 0xFF));
+		wprints (15, 19, CYAN|_BLACK, get_flagB_text ((ni.afx_flags >> 16) & 0xFF));
+		wprints (16, 19, CYAN|_BLACK, get_flagC_text ((ni.afx_flags >> 8) & 0xFF));
+		wprints (17, 19, CYAN|_BLACK, get_flagD_text (ni.afx_flags & 0xFF));
 
-         case 2:
-            sprintf (string, "%d", ni.afx_level);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (13, 19, string, "???", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               ni.afx_level = atoi (strbtrim (string));
-            break;
+		if (ni.tic_aka == 0)
+			ni.tic_aka++;
+		sprintf (string, "%u:%u/%u.%u", config.alias[ni.tic_aka - 1].zone, config.alias[ni.tic_aka - 1].net, config.alias[ni.tic_aka - 1].node, config.alias[ni.tic_aka - 1].point);
+		wprints (12, 51, CYAN|_BLACK, string);
 
-         case 3:
-            wh = wopen (6, 32, 19, 45, 1, LCYAN|_BLACK, CYAN|_BLACK);
-            wactiv (wh);
+		sprintf (string, "%d", ni.tic_level);
+		wprints (13, 51, CYAN|_BLACK, string);
+		wprints (14, 51, CYAN|_BLACK, get_flagA_text ((ni.tic_flags >> 24) & 0xFF));
+		wprints (15, 51, CYAN|_BLACK, get_flagB_text ((ni.tic_flags >> 16) & 0xFF));
+		wprints (16, 51, CYAN|_BLACK, get_flagC_text ((ni.tic_flags >> 8) & 0xFF));
+		wprints (17, 51, CYAN|_BLACK, get_flagD_text (ni.tic_flags & 0xFF));
+
+		start_update ();
+		i = wmenuget ();
+
+		switch (i) {
+			case 1:
+				sprintf (string, "%u:%u/%u.%u", ni.zone, ni.net, ni.node, ni.point);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (1, 19, string, "???????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					parse_netnode (strbtrim (string), (int *)&ni.zone, (int *)&ni.net, (int *)&ni.node, (int *)&ni.point);
+				break;
+
+			case 2:
+				sprintf (string, "%d", ni.afx_level);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (13, 19, string, "???", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					ni.afx_level = atoi (strbtrim (string));
+				break;
+
+			case 3:
+				wh = wopen (6, 32, 19, 45, 1, LCYAN|_BLACK, CYAN|_BLACK);
+				wactiv (wh);
+				wshadow (DGREY|_BLACK);
+				wtitle (" Packer ", TRIGHT, YELLOW|_BLUE);
+				stop_update ();
+				wmenubegc ();
+				for (m = 0; m < 10; m++) {
+					sprintf (packs[m], " %-8.8s ", config.packers[m].id);
+					wmenuitem (m + 1, 1, packs[m], 0, m + 20, 0, NULL, 0, 0);
+				}
+				wmenuend (ni.packer + 20, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
+				start_update ();
+				i = wmenuget ();
+				wclose ();
+				if (i != -1)
+					ni.packer = i - 20;
+				i = 3;
+				break;
+
+			case 4:
+				strcpy (string, ni.pw_session);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (5, 19, string, "???????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (ni.pw_session, strbtrim (string));
+				break;
+
+			case 5:
+				strcpy (string, ni.pw_packet);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (6, 19, string, "????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (ni.pw_packet, strbtrim (string));
+				break;
+
+			case 6:
+				strcpy (string, ni.pw_areafix);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (7, 19, string, "???????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (ni.pw_areafix, strbtrim (string));
+				break;
+
+			case 8:
+				strcpy (string, ni.phone);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (9, 19, string, "?????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (ni.phone, strbtrim (string));
+				break;
+
+			case 9:
+				sprintf (string, "%d", ni.modem_type);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (10, 19, string, "?????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					ni.modem_type = atoi (strbtrim (string));
+				break;
+
+			case 10:
+				strcpy (string, ni.sysop_name);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (3, 19, string, "???????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (ni.sysop_name, strbtrim (string));
+				break;
+
+			case 11:
+				strcpy (string, ni.system);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (2, 19, string, "???????????????????????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (ni.system, strbtrim (string));
+				break;
+
+			case 12:
+				i = 51;
+				wh = wopen (9, 32, 16, 56, 1, LCYAN|_BLACK, CYAN|_BLACK);
+				wactiv (wh);
+				wshadow (DGREY|_BLACK);
+				wtitle (" Capabilities ", TRIGHT, YELLOW|_BLUE);
+				do {
+					stop_update ();
+					wclear ();
+
+					wmenubegc ();
+					wmenuitem ( 1, 1, " Remap to point ", 0, 51, 0, NULL, 0, 0);
+					wmenuitem ( 2, 1, " WaZOO          ", 0, 53, 0, NULL, 0, 0);
+					wmenuitem ( 3, 1, " EMSI           ", 0, 54, 0, NULL, 0, 0);
+					wmenuitem ( 4, 1, " Janus          ", 0, 55, 0, NULL, 0, 0);
+					wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
+
+					wprints (1, 18, CYAN|_BLACK, ni.remap4d ? "Yes" : "No");
+					wprints (2, 18, CYAN|_BLACK, ni.wazoo ? "Yes" : "No");
+					wprints (3, 18, CYAN|_BLACK, ni.emsi ? "Yes" : "No");
+					wprints (4, 18, CYAN|_BLACK, ni.janus ? "Yes" : "No");
+
+					start_update ();
+					i = wmenuget ();
+					switch (i) {
+						case 51:
+							ni.remap4d ^= 1;
+							break;
+
+						case 53:
+							ni.wazoo ^= 1;
+							break;
+
+						case 54:
+							ni.emsi ^= 1;
+							break;
+
+						case 55:
+							ni.janus ^= 1;
+							break;
+					}
+				} while (i != -1);
+
+				wclose ();
+				i = 12;
+				break;
+
+
+			case 13:
+				mx = 0;
+				for (m = 0; m <= MAX_ALIAS && config.alias[m].net; m++) {
+               /* MM */
+               sprintf (temp, "%d:%d/%d.%d", config.alias[m].zone, config.alias[m].net, config.alias[m].node, config.alias[m].point);
+               sprintf (string, " %-18.18s ", temp);
+               /* MM*/					akas[m] = (char *)malloc (strlen (string) + 1);
+					strcpy (akas[m], string);
+					if (strlen (string) > mx)
+						mx = strlen (string);
+				}
+				akas[m] = NULL;
+				/* MM */ // Modificata la gestione del wpickstr, la finestra e'
+                     // a dimensione fissa e non viene piu' calcolata come prima.
+                     // Se necessario aumentare le dimensioni di wopen w wpickstr
+            wh1 = wopen (10, 25, 20, 48, 1, LCYAN|_BLACK, CYAN|_BLACK);
+            wactiv (wh1);
             wshadow (DGREY|_BLACK);
-            wtitle (" Packer ", TRIGHT, YELLOW|_BLUE);
-            stop_update ();
-            wmenubegc ();
-            for (m = 0; m < 10; m++) {
-               sprintf (packs[m], " %-8.8s ", config.packers[m].id);
-               wmenuitem (m + 1, 1, packs[m], 0, m + 20, 0, NULL, 0, 0);
-            }
-            wmenuend (ni.packer + 20, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
-            start_update ();
-            i = wmenuget ();
-            wclose ();
-            if (i != -1)
-               ni.packer = i - 20;
-            i = 3;
-            break;
+            wtitle (" AKAs ", TRIGHT, YELLOW|_BLUE);
+            m = wpickstr (12, 27, 18, 46, 5, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY, akas, ni.aka - 1, NULL);
+            /* MM */
+            if (m != -1)
+					ni.aka = m+1;
+				wclose ();
+				for (m = 0; m <= MAX_ALIAS && config.alias[m].net; m++)
+					free (akas[m]);
+				break;
 
-         case 4:
-            strcpy (string, ni.pw_session);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (5, 19, string, "???????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (ni.pw_session, strbtrim (string));
-            break;
+			case 14:
+				strcpy (string, ni.pw_tic);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (8, 19, string, "???????????????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (ni.pw_tic, strbtrim (string));
+				break;
 
-         case 5:
-            strcpy (string, ni.pw_packet);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (6, 19, string, "????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (ni.pw_packet, strbtrim (string));
-            break;
+			case 15:
+				ni.afx_flags = window_get_flags (8, 34, 1, ni.afx_flags);
+				break;
 
-         case 6:
-            strcpy (string, ni.pw_areafix);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (7, 19, string, "???????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (ni.pw_areafix, strbtrim (string));
-            break;
+			case 16:
+				ni.afx_flags = window_get_flags (8, 34, 2, ni.afx_flags);
+				break;
 
-         case 8:
-            strcpy (string, ni.phone);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (9, 19, string, "?????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (ni.phone, strbtrim (string));
-            break;
+			case 17:
+				ni.afx_flags = window_get_flags (8, 34, 3, ni.afx_flags);
+				break;
 
-         case 9:
-            sprintf (string, "%d", ni.modem_type);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (10, 19, string, "?????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               ni.modem_type = atoi (strbtrim (string));
-            break;
+			case 18:
+				ni.afx_flags = window_get_flags (8, 34, 4, ni.afx_flags);
+				break;
 
-         case 10:
-            strcpy (string, ni.sysop_name);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (3, 19, string, "???????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (ni.sysop_name, strbtrim (string));
-            break;
 
-         case 11:
-            strcpy (string, ni.system);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (2, 19, string, "???????????????????????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (ni.system, strbtrim (string));
-            break;
-
-         case 12:
-            i = 51;
-            wh = wopen (9, 32, 16, 56, 1, LCYAN|_BLACK, CYAN|_BLACK);
-            wactiv (wh);
+			case 19:
+				mx = 0;
+				for (m = 0; m <= MAX_ALIAS && config.alias[m].net; m++) {
+               /* MM */
+               sprintf (temp, "%d:%d/%d.%d", config.alias[m].zone, config.alias[m].net, config.alias[m].node, config.alias[m].point);
+               sprintf (string, " %-18.18s ", temp);
+               /* MM */					akas[m] = (char *)malloc (strlen (string) + 1);
+					strcpy (akas[m], string);
+					if (strlen (string) > mx)
+						mx = strlen (string);
+				}
+				akas[m] = NULL;
+            /* MM */ // Modificata la gestione del wpickstr, la finestra e'
+                     // a dimensione fissa e non viene piu' calcolata come prima.
+                     // Se necessario aumentare le dimensioni di wopen w wpickstr
+            wh1 = wopen (10, 25, 20, 48, 1, LCYAN|_BLACK, CYAN|_BLACK);
+            wactiv (wh1);
             wshadow (DGREY|_BLACK);
-            wtitle (" Capabilities ", TRIGHT, YELLOW|_BLUE);
-            do {
-               stop_update ();
-               wclear ();
+            wtitle (" AKAs ", TRIGHT, YELLOW|_BLUE);
+            m = wpickstr (12, 27, 18, 46, 5, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY, akas, ni.tic_aka - 1, NULL);
+            /* MM */				if (m != -1)
+					ni.tic_aka = m+1;
+				wclose ();
+				for (m = 0; m <= MAX_ALIAS && config.alias[m].net; m++)
+					free (akas[m]);
+				break;
 
-               wmenubegc ();
-               wmenuitem ( 1, 1, " Remap to point ", 0, 51, 0, NULL, 0, 0);
-               wmenuitem ( 2, 1, " WaZOO          ", 0, 53, 0, NULL, 0, 0);
-               wmenuitem ( 3, 1, " EMSI           ", 0, 54, 0, NULL, 0, 0);
-               wmenuitem ( 4, 1, " Janus          ", 0, 55, 0, NULL, 0, 0);
-               wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
+			case 20:
+				sprintf (string, "%d", ni.tic_level);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (13, 51, string, "???", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					ni.tic_level = atoi (strbtrim (string));
+				break;
 
-               wprints (1, 18, CYAN|_BLACK, ni.remap4d ? "Yes" : "No");
-               wprints (2, 18, CYAN|_BLACK, ni.wazoo ? "Yes" : "No");
-               wprints (3, 18, CYAN|_BLACK, ni.emsi ? "Yes" : "No");
-               wprints (4, 18, CYAN|_BLACK, ni.janus ? "Yes" : "No");
+			case 21:
+				ni.tic_flags = window_get_flags (8, 46, 1, ni.tic_flags);
+				break;
 
-               start_update ();
-               i = wmenuget ();
-               switch (i) {
-                  case 51:
-                     ni.remap4d ^= 1;
-                     break;
+			case 22:
+				ni.tic_flags = window_get_flags (8, 46, 2, ni.tic_flags);
+				break;
 
-                  case 53:
-                     ni.wazoo ^= 1;
-                     break;
+			case 23:
+				ni.tic_flags = window_get_flags (8, 46, 3, ni.tic_flags);
+				break;
 
-                  case 54:
-                     ni.emsi ^= 1;
-                     break;
+			case 24:
+				ni.tic_flags = window_get_flags (8, 46, 4, ni.tic_flags);
+				break;
 
-                  case 55:
-                     ni.janus ^= 1;
-                     break;
-               }
-            } while (i != -1);
+			case 25:
+				strcpy (string, ni.pw_inbound_packet);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				winpdef (6, 51, string, "????????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					strcpy (ni.pw_inbound_packet, strbtrim (string));
+				break;
 
-            wclose ();
-            i = 12;
-            break;
-
-         case 13:
-            mx = 0;
-            akas[0] = " Default ";
-            for (m = 1; m <= MAX_ALIAS && config.alias[m - 1].net; m++) {
-               sprintf (string, " %d:%d/%d.%d ", config.alias[m - 1].zone, config.alias[m - 1].net, config.alias[m - 1].node, config.alias[m - 1].point);
-               akas[m] = (char *)malloc (strlen (string) + 1);
-               strcpy (akas[m], string);
-               if (strlen (string) > mx)
-                  mx = strlen (string);
-            }
-            akas[m] = NULL;
-            wh1 = wopen (10, 28, m + 11, mx + 31, 1, LCYAN|_BLACK, LCYAN|_BLACK);
+			case 26:
+				mx = 0;
+				for (m = 0; m < MAX_ALIAS && config.alias[m].net; m++) {
+               /* MM */
+               sprintf (temp, "%d:%d/%d.%d", config.alias[m].zone, config.alias[m].net, config.alias[m].node, config.alias[m].point);
+               sprintf (string, " %-18.18s ", temp);
+               /* MM */					akas[m] = (char *)malloc (strlen (string) + 1);
+					strcpy (akas[m], string);
+					if (strlen (string) > mx)
+						mx = strlen (string);
+				}
+				akas[m] = NULL;
+            /* MM */ // Modificata la gestione del wpickstr, la finestra e'
+                     // a dimensione fissa e non viene piu' calcolata come prima.
+                     // Se necessario aumentare le dimensioni di wopen w wpickstr
+            wh1 = wopen (10, 25, 20, 48, 1, LCYAN|_BLACK, CYAN|_BLACK);
             wactiv (wh1);
-            wtitle (" Aka ", TRIGHT, YELLOW|_BLUE);
-            m = wpickstr (11, 30, m + 10, mx + 30, 5, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY, akas, ni.aka, NULL);
-            if (m != -1)
-               ni.aka = m;
-            wclose ();
-            for (m = 1; m <= MAX_ALIAS && config.alias[m - 1].net; m++)
-               free (akas[m]);
-            break;
+            wshadow (DGREY|_BLACK);
+            wtitle (" AKAs ", TRIGHT, YELLOW|_BLUE);
+            m = wpickstr (12, 27, 18, 46, 5, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY, akas, ni.mailer_aka - 1, NULL);
+            /* MM */				if (m != -1)
+					ni.mailer_aka = m;
+				wclose ();
+				for (m = 0; m < MAX_ALIAS && config.alias[m].net; m++)
+					free (akas[m]);
+				break;
 
-         case 14:
-            strcpy (string, ni.pw_tic);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (8, 19, string, "???????????????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (ni.pw_tic, strbtrim (string));
-            break;
+			case 27:
+				sprintf (string, "%ld", ni.min_baud_rate);
+				winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+				wprints (10, 51, CYAN|_BLACK, string);
+				winpdef (10, 51, string, "??????", 0, 2, NULL, 0);
+				if (winpread () != W_ESCPRESS)
+					ni.min_baud_rate = atoi (strbtrim (string));
+				break;
+		}
 
-         case 15:
-            ni.afx_flags = window_get_flags (8, 34, 1, ni.afx_flags);
-            break;
+		hidecur ();
+	} while (i != -1);
 
-         case 16:
-            ni.afx_flags = window_get_flags (8, 34, 2, ni.afx_flags);
-            break;
+	if (memcmp ((char *)&ni, (char *)nip, sizeof (NODEINFO))) {
+		wh = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
+		wactiv (wh);
+		wshadow (DGREY|_BLACK);
 
-         case 17:
-            ni.afx_flags = window_get_flags (8, 34, 3, ni.afx_flags);
-            break;
+		wcenters (1, BLACK|_LGREY, "Save changes (Y/n) ?  ");
 
-         case 18:
-            ni.afx_flags = window_get_flags (8, 34, 4, ni.afx_flags);
-            break;
+		strcpy (string, "Y");
+		winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+		winpdef (1, 24, string, "?", 0, 2, NULL, 0);
 
-         case 19:
-            mx = 0;
-            akas[0] = " Default ";
-            for (m = 1; m <= MAX_ALIAS && config.alias[m - 1].net; m++) {
-               sprintf (string, " %d:%d/%d.%d ", config.alias[m - 1].zone, config.alias[m - 1].net, config.alias[m - 1].node, config.alias[m - 1].point);
-               akas[m] = (char *)malloc (strlen (string) + 1);
-               strcpy (akas[m], string);
-               if (strlen (string) > mx)
-                  mx = strlen (string);
-            }
-            akas[m] = NULL;
-            wh1 = wopen (10, 48, m + 11, mx + 51, 1, LCYAN|_BLACK, LCYAN|_BLACK);
-            wactiv (wh1);
-            wtitle (" Aka ", TRIGHT, YELLOW|_BLUE);
-            m = wpickstr (11, 50, m + 10, mx + 50, 5, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY, akas, ni.tic_aka, NULL);
-            if (m != -1)
-               ni.tic_aka = m;
-            wclose ();
-            for (m = 1; m <= MAX_ALIAS && config.alias[m - 1].net; m++)
-               free (akas[m]);
-            break;
+		i = winpread ();
+		wclose ();
+		hidecur ();
 
-         case 20:
-            sprintf (string, "%d", ni.tic_level);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (13, 51, string, "???", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               ni.tic_level = atoi (strbtrim (string));
-            break;
-
-         case 21:
-            ni.tic_flags = window_get_flags (8, 46, 1, ni.tic_flags);
-            break;
-
-         case 22:
-            ni.tic_flags = window_get_flags (8, 46, 2, ni.tic_flags);
-            break;
-
-         case 23:
-            ni.tic_flags = window_get_flags (8, 46, 3, ni.tic_flags);
-            break;
-
-         case 24:
-            ni.tic_flags = window_get_flags (8, 46, 4, ni.tic_flags);
-            break;
-
-         case 25:
-            strcpy (string, ni.pw_inbound_packet);
-            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (6, 51, string, "????????", 0, 2, NULL, 0);
-            if (winpread () != W_ESCPRESS)
-               strcpy (ni.pw_inbound_packet, strbtrim (string));
-            break;
-
-         case 26:
-            mx = 0;
-            for (m = 0; m < MAX_ALIAS && config.alias[m].net; m++) {
-               sprintf (string, " %d:%d/%d.%d ", config.alias[m].zone, config.alias[m].net, config.alias[m].node, config.alias[m].point);
-               akas[m] = (char *)malloc (strlen (string) + 1);
-               strcpy (akas[m], string);
-               if (strlen (string) > mx)
-                  mx = strlen (string);
-            }
-            akas[m] = NULL;
-            wh1 = wopen (10, 48, m + 11, mx + 51, 1, LCYAN|_BLACK, LCYAN|_BLACK);
-            wactiv (wh1);
-            wtitle (" Aka ", TRIGHT, YELLOW|_BLUE);
-            m = wpickstr (11, 50, m + 10, mx + 50, 5, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY, akas, ni.aka, NULL);
-            if (m != -1)
-               ni.mailer_aka = m;
-            wclose ();
-            for (m = 0; m < MAX_ALIAS && config.alias[m].net; m++)
-               free (akas[m]);
-            break;
-      }
-
-      hidecur ();
-   } while (i != -1);
-
-   if (memcmp ((char *)&ni, (char *)nip, sizeof (NODEINFO))) {
-      wh = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
-      wactiv (wh);
-      wshadow (DGREY|_BLACK);
-
-      wcenters (1, BLACK|_LGREY, "Save changes (Y/n) ?  ");
-
-      strcpy (string, "Y");
-      winpbeg (BLACK|_LGREY, BLACK|_LGREY);
-      winpdef (1, 24, string, "?", 0, 2, NULL, 0);
-
-      i = winpread ();
-      wclose ();
-      hidecur ();
-
-      if (i == W_ESCPRESS)
-         goto continue_editing;
+		if (i == W_ESCPRESS)
+			goto continue_editing;
 
       if (toupper (string[0]) == 'Y')
          memcpy ((char *)nip, (char *)&ni, sizeof (NODEINFO));
@@ -1213,7 +1272,7 @@ NODEINFO *oni;
 {
    int wh, i, x = 0;
    char string[80], **array, addr[50];
-   NODEINFO ni;
+	NODEINFO ni;
    long pos;
 
    i = (int)(filelength (fd) / sizeof (NODEINFO));
@@ -1267,19 +1326,20 @@ NODEINFO *oni;
    free (array);
 
    gotoxy_ (24, 1);
-   clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New Node  L-List  D-Delete");
-   prints (24, 1, YELLOW|_BLACK, "PgUp/PgDn");
-   prints (24, 26, YELLOW|_BLACK, "E");
-   prints (24, 34, YELLOW|_BLACK, "A");
-   prints (24, 50, YELLOW|_BLACK, "L");
-   prints (24, 58, YELLOW|_BLACK, "D");
+	clreol_ ();
+	prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New Node  C-Copy  L-List  D-Delete");
+	prints (24, 1, YELLOW|_BLACK, "PgUp/PgDn");
+	prints (24, 26, YELLOW|_BLACK, "E");
+	prints (24, 34, YELLOW|_BLACK, "A");
+	prints (24, 50, YELLOW|_BLACK, "C");
+	prints (24, 58, YELLOW|_BLACK, "L");
+	prints (24, 66, YELLOW|_BLACK, "D");
 }
 
 void manager_translation ()
 {
-   int fd, wh, i = 1, saved, fdi, wh1, wh2, m;
-   char string[128], readed, filename[80];
+	int fd, wh, i = 1, saved, fdi, wh1, wh2, m;
+	char string[128], readed, filename[80];
    long pos;
    ACCOUNT ai, bai;
 

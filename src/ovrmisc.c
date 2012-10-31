@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
@@ -253,41 +271,46 @@ void unique_name (fname)
 char *fname;
 {
    static char suffix[] = ".001";
-   register char *p;
-   register int n;
+	char *p,a_reached=0;
+	int n;
 
-   if (dexists (fname)) {                /* If file already exists...      */
-      p = fname;
-      while (*p && *p != '.')
-         p++;                            /* ...find the extension, if any  */
+	if (dexists (fname)) {                /* If file already exists...      */
+		p = fname;
+		while (*p && *p != '.')
+			p++;                            /* ...find the extension, if any  */
 
-      for (n = 0; n < 4; n++) {          /* ...fill it out if neccessary   */
-         if (!*p) {
-            *p = suffix[n];
-            *(++p) = '\0';
-         }
-         else
-            p++;
-      }
+		for (n = 0; n < 4; n++) {          /* ...fill it out if neccessary   */
+			if (!*p) {
+				*p = suffix[n];
+				*(++p) = '\0';
+			}
+			else
+				p++;
+		}
 
-      while (dexists (fname)) {          /* ...If 'file.ext' exists suffix++ */
-         p = fname + strlen (fname) - 1;
-         for (n = 3; n--;) {
-            if (!isdigit (*p))
-               *p = '0';
-            if (++(*p) <= '9')
-               break;
-            else {
-               if (*p < 'A')
-                  *p = 'A';
-               else if (++(*p) <= 'Z')
-                  break;
-               else
-                  *p-- = '0';
-            }                                    /* for */
-         }                                       /* while */
-      }                                          /* if exist */
-   }
+		while (dexists (fname)) {          /* ...If 'file.ext' exists suffix++ */
+			p = fname + strlen (fname) - 1;
+			for (n = 3; n--;) {
+				if (!isdigit (*p)&&!a_reached)
+					*p = '0';
+				if (++(*p) <= '9')
+					break;
+				else {
+					if (*p < 'A') {
+						*p = 'A';
+						a_reached=1;
+						break;
+					}
+					else if (*p <= 'Z')
+						break;
+					else {
+						*p-- = '0';
+						a_reached=0;
+					}
+				}                                    /* for */
+			}                                       /* while */
+		}                                          /* if exist */
+	}
 }                                                /* unique_name */
 
 int check_failed (fname, theirname, info, ourname)
@@ -445,7 +468,7 @@ int force;
 
    // Verifica che il file node.idx sia accessibile in lettura/scrittura
    // nel caso non lo sia, signfica che un altro task lo sta usando per
-   // ricompilare la nodelist, per cui esce immediatamente.
+	// ricompilare la nodelist, per cui esce immediatamente.
    sprintf (filename, "%sNODE.IDX", config->net_info);
    if ((i = sopen (filename, O_RDWR|O_BINARY|O_CREAT, SH_DENYRW, S_IREAD|S_IWRITE)) == -1 && errno == EACCES)
       return;
@@ -779,7 +802,8 @@ int zone, net, node, point;
             strcpy (nodelist.name, ni.system);
          if (ni.phone[0])
             strcpy (nodelist.phone, ni.phone);
-         nodelist.akainfo = ni.aka;
+			nodelist.akainfo = ni.aka;
+			nodelist.tic_akainfo = ni.tic_aka;
          r = 1;
          break;
       }
@@ -922,7 +946,7 @@ struct _pkthdr2 *pkthdr;
 
    while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO))
       if (pkthdr->dest_zone == ni.zone && pkthdr->dest_net == ni.net && pkthdr->dest_node == ni.node && pkthdr->dest_point == ni.point) {
-         strcpy (pkthdr->password, strupr(ni.pw_packet));
+			strncpy (pkthdr->password, strupr(ni.pw_packet),8);
          break;
       }
 
@@ -1085,20 +1109,20 @@ char *random_origins (void)
 int yesno_question(def)
 int def;
 {
-   char stringa[MAX_CMDLEN], c, bigyes[4], bigno[4], rescode[50];
+	char stringa[MAX_CMDLEN], c, bigyes[4], bigno[4], rescode[50];
 
    sprintf(bigyes, "%c/%c", toupper(bbstxt[B_YES][0]), tolower(bbstxt[B_NO][0]));
    sprintf(bigno, "%c/%c", tolower(bbstxt[B_YES][0]), toupper(bbstxt[B_NO][0]));
 
    if (!(def & NO_MESSAGE)) {
-      sprintf (rescode, " [%s", (def & DEF_YES) ? bigyes : bigno);
-      strcat (rescode, (def & EQUAL) ? "/=" : "");
-      strcat (rescode, (def & DOWN_FILES) ? "/d" : "");
-      strcat (rescode, (def & TAG_FILES) ? "/t" : "");
-      strcat (rescode, (def & QUESTION) ? "/?" : "");
-      strcat (rescode, "]?  ");
+		sprintf (rescode, " [%s", (def & DEF_YES) ? bigyes : bigno);
+		strcat (rescode, (def & EQUAL) ? "/=" : "");
+		strcat (rescode, (def & DOWN_FILES) ? "/d" : "");
+		strcat (rescode, (def & TAG_FILES) ? "/t" : "");
+		strcat (rescode, (def & QUESTION) ? "/?" : "");
+		strcat (rescode, "]?  ");
 
-      m_print (rescode);
+		m_print (rescode);
    }
    else
       m_print (" ");
@@ -1179,11 +1203,11 @@ void press_enter()
 {
    char stringa[2];
 
-   m_print("%s", bbstxt[B_PRESS_ENTER]);
+	m_print("%s", bbstxt[B_PRESS_ENTER]);
    chars_input(stringa,0,INPUT_NOLF);
 
    m_print("\r");
-   space (strlen (bbstxt[B_PRESS_ENTER]) + 1);
+	space (strlen (bbstxt[B_PRESS_ENTER]) + 1);
    m_print("\r");
    restore_last_color ();
 }
@@ -1308,40 +1332,40 @@ void check_new_netmail (void)
 
    if (config->newmail_flash) {
       if (check_new_messages (config->netmail_dir))
-         prints (23, 54, YELLOW|_BLACK|BLINK, "MAIL");
-      else
-         prints (23, 54, YELLOW|_BLACK, "    ");
-   }
-   else
-      prints (23, 54, YELLOW|_BLACK, "    ");
+			prints (23, 54, YELLOW|_BLACK, "MAIL");
+		else
+			prints (23, 54, YELLOW|_BLACK, "    ");
+	}
+	else
+		prints (23, 54, YELLOW|_BLACK, "    ");
 
-   if (config->mymail_flash) {
-      if (check_new_messages (config->my_mail))
-         prints (23, 59, YELLOW|_BLACK|BLINK, "PERSONAL");
-      else
-         prints (23, 59, YELLOW|_BLACK, "        ");
-   }
-   else
-      prints (23, 59, YELLOW|_BLACK, "        ");
+	if (config->mymail_flash) {
+		if (check_new_messages (config->my_mail))
+			prints (23, 59, YELLOW|_BLACK, "PERSONAL");
+		else
+			prints (23, 59, YELLOW|_BLACK, "        ");
+	}
+	else
+		prints (23, 59, YELLOW|_BLACK, "        ");
 
-   sprintf (filename, "%sRCVFAX.FLG", config->sys_path);
-   if (dexists (filename))
-      prints (23, 68, YELLOW|_BLACK|BLINK, "FAX");
-   else
-      prints (23, 68, YELLOW|_BLACK, "   ");
+	sprintf (filename, "%sRCVFAX.FLG", config->sys_path);
+	if (dexists (filename))
+		prints (23, 68, YELLOW|_BLACK, "FAX");
+	else
+		prints (23, 68, YELLOW|_BLACK, "   ");
 }
 
 int montday[] = { 0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
 int daysleft (struct date *d1, struct date *d2)
 {
-   int i, diff = 0, m;
+	int i, diff = 0, m;
 
-   if (d1->da_year < 90)
-      d1->da_year += 2000;
-   else
-      d1->da_year += 1900;
-   if (d2->da_year < 90)
+	if (d1->da_year < 90)
+		d1->da_year += 2000;
+	else
+		d1->da_year += 1900;
+	if (d2->da_year < 90)
       d2->da_year += 2000;
    else
       d2->da_year += 1900;

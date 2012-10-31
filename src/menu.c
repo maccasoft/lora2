@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <ctype.h>
 #include <alloc.h>
@@ -807,8 +825,8 @@ int process_menu_option (int flag_type, char *argument)
          }
          break;
       case _ED_SAVE:
-         if (sys.quick_board)
-            quick_save_message(NULL);
+			if (sys.quick_board||sys.gold_board)
+				quick_save_message(NULL);
          else if (sys.pip_board)
             pip_save_message(NULL);
          else if (sys.squish)
@@ -907,25 +925,25 @@ int process_menu_option (int flag_type, char *argument)
       case _MSG_NONSTOP:
          read_nonstop();
          break;
-      case _MSG_PARENT:
-         read_parent ();
-         break;
-      case _MSG_CHILD:
-         read_reply ();
-         break;
-      case _MSG_SCAN:
-         if (scan_mailbox())
-         {
-            v = active;
-            active = 4;
-            i = -1;
-            mail_read_forward (0);
-            allow_reply = 1;
-            gosub_menu ("READMAIL");
-         }
-         break;
-      case _MSG_INQ:
-         message_inquire ();
+		case _MSG_PARENT:
+			read_parent ();
+			break;
+		case _MSG_CHILD:
+			read_reply ();
+			break;
+		case _MSG_SCAN:
+			if (scan_mailbox())
+			{
+				v = active;
+				active = 4;
+				i = -1;
+				mail_read_forward (0);
+				allow_reply = 1;
+				gosub_menu ("READMAIL");
+			}
+			break;
+		case _MSG_INQ:
+			message_inquire ();
          break;
       case _GOSUB_MENU:
          if (!get_menu_password (cmd[i].argument))
@@ -1067,7 +1085,10 @@ int process_menu_option (int flag_type, char *argument)
          fullread_change();
          break;
       case _ONLINE_MESSAGE:
-         send_online_message();
+         if (stristr (argument, "/H"))
+            send_online_message (1);
+         else
+            send_online_message (0);
          break;
       case _MAIL_END:
          if (st != NULL)
@@ -1109,7 +1130,10 @@ int process_menu_option (int flag_type, char *argument)
          first_time = 1;
          break;
       case _ONLINE_USERS:
-         online_users(1);
+         if (stristr (argument, "/H") != NULL)
+            online_users (1, 1);
+         else
+            online_users (1, 0);
          break;
       case _MAIL_LIST:
          if (active == 4)
@@ -1215,7 +1239,7 @@ int process_menu_option (int flag_type, char *argument)
          show_account ();
          break;
       case _BANK_DEPOSIT:
-         deposit_time ();
+			deposit_time ();
          break;
       case _BANK_WITHDRAW:
          withdraw_time ();

@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <dos.h>
 #include <conio.h>
@@ -1980,84 +1998,100 @@ retry3:
          }
 
          release_timeslice ();
-         if (kbmhit ())
-            break;
+			if (kbmhit ())
+				break;
 
-         if ((i = modem_response ()) != -1) {
-            switch (i) {
-               case 1:
-                  rate = 300;
-                  break;
-               case 5:
-                  rate = 1200;
-                  break;
-               case 11:
-                  rate = 2400;
-                  break;
-               case 18:
-                  rate = 4800;
-                  break;
-               case 16:
-                  rate = 7200;
-                  break;
-               case 12:
-                  rate = 9600;
-                  break;
-               case 17:
-                  rate = 12000;
-                  break;
-               case 15:
-                  rate = 14400;
-                  break;
-               case 19:
-                  rate = 16800;
-                  break;
-               case 13:
-                  rate = 19200;
-                  break;
-               case 14:
-                  rate = 38400U;
-                  break;
-               case 20:
-                  rate = 57600U;
-                  break;
-               case 21:
-                  rate = 21600;
-                  break;
-               case 22:
-                  rate = 28800;
-                  break;
-            }
+			if ((i = modem_response ()) != -1) {
+				switch (i) {
+					case 1:
+						rate = 300;
+						break;
+					case 5:
+						rate = 1200;
+						break;
+					case 11:
+						rate = 2400;
+						break;
+					case 18:
+						rate = 4800;
+						break;
+					case 16:
+						rate = 7200;
+						break;
+					case 12:
+						rate = 9600;
+						break;
+					case 17:
+						rate = 12000;
+						break;
+					case 15:
+						rate = 14400;
+						break;
+					case 19:
+						rate = 16800;
+						break;
+					case 13:
+						rate = 19200;
+						break;
+					case 14:
+						rate = 38400U;
+						break;
+					case 20:
+						rate = 57600U;
+						break;
+					case 21:
+						rate = 21600;
+						break;
+					case 22:
+						rate = 28800;
+						break;
+					case 28:
+						rate = 24000;
+						break;
+					case 29:
+						rate = 26400;
+						break;
+					case 30:
+						rate = 31200;
+						break;
+					case 31:
+						rate = 33600;
+						break;
+				}
 
-            switch (i) {
-               case 1:
-               case 5:
-               case 11:
-               case 18:
-               case 16:
-               case 12:
-               case 17:
-               case 15:
-               case 19:
-               case 13:
-               case 14:
-               case 20:
-               case 21:
-               case 22:
-               case 40:
-                  wclose ();
-                  setkbloop (NULL);
+				switch (i) {
+					case 1:
+					case 5:
+					case 11:
+					case 18:
+					case 16:
+					case 12:
+					case 17:
+					case 15:
+					case 19:
+					case 13:
+					case 14:
+					case 20:
+					case 21:
+					case 22:
+					case 28:
+					case 29:
+					case 30:
+					case 31:
+					case 40:
+						wclose ();
+						setkbloop (NULL);
 
-                  wopen (10, 22, 14, 57, 3, LCYAN|_BLACK, LCYAN|_BLACK);
-                  wshadow (LGREY|_BLACK);
-                  sprintf (string, "Connect at %u bps", rate);
-                  wcenters (1, LGREY|_BLACK, string);
-                  timer (15);
-                  wclose ();
-                  return;
-            }
+						wopen (10, 22, 14, 57, 3, LCYAN|_BLACK, LCYAN|_BLACK);
+						wshadow (LGREY|_BLACK);
+						sprintf (string, "Connect at %u bps", rate);
+						wcenters (1, LGREY|_BLACK, string);
+						timer (15);
+						wclose ();
+						return;
+				}
 
-            break;
+				break;
          }
       }
 

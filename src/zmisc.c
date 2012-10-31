@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <string.h>
 
@@ -65,17 +83,17 @@ int tenths;
 {
    long timeout, timerset ();
 
-   if (CHAR_AVAIL ())
+   if (PEEKBYTE () >= 0)
       return (MODEM_IN ());
 
    timeout = timerset (tenths * 10);
 
    do
       {
-      if (CHAR_AVAIL ())
+      if (PEEKBYTE () >= 0)
          return MODEM_IN ();
 
-      if (!CARRIER)
+      if (!(MODEM_STATUS () & carrier_mask))
          return RCDO;
 
       if (local_kbd == 0x1B)
@@ -199,8 +217,8 @@ int Z_GetHeader (hdr)
 byte *hdr;
 {
 
-   int c;
-   long n;
+   register int c;
+   register int n;
    int cancount;
 
 #ifdef DEBUG

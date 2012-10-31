@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <sys\types.h>
 #include <sys\stat.h>
 #include <stdio.h>
@@ -527,79 +545,80 @@ void Janus(void) {
                }
                break;
 
-            /*---------------------------------------------------------------*/
-            /* Receiver says "let's try that again."                         */
-            /*---------------------------------------------------------------*/
-            case RPOSPKT:
-               if (xstate == XSENDBLK || xstate == XRCVEOFACK) {
-                  if (*((long *)(Rxbuf+sizeof(txpos))) != last_rpostime) {
-                     last_rpostime = *((long *)(Rxbuf+sizeof(txpos)));
-                     xmit_retry = 0L;
-                     CLEAR_OUTBOUND();
-                     errno = 0;
-                     txpos = lasttx = *((long *)Rxbuf);
-                     lseek(Txfile, lasttx, SEEK_SET);
-                     if (j_error(msgtxt[M_SEEK_MSG],Txfname))
-                        goto giveup;
-                     status_line(msgtxt[M_SYNCHRONIZING],txpos);
-                     txblklen >>= 2;
-                     if (txblklen < 64)
-                        txblklen = 64;
-                     goodbytes = 0;
-                     goodneeded += 1024;
-                     if (goodneeded > 8192)
-                        goodneeded = 8192;
-                     xstate = XSENDBLK;
-                  }
-               }
-               break;
+				/*---------------------------------------------------------------*/
+				/* Receiver says "let's try that again."                         */
+				/*---------------------------------------------------------------*/
+				case RPOSPKT:
+					if (xstate == XSENDBLK || xstate == XRCVEOFACK) {
+						if (*((long *)(Rxbuf+sizeof(txpos))) != last_rpostime) {
+							last_rpostime = *((long *)(Rxbuf+sizeof(txpos)));
+							xmit_retry = 0L;
+							CLEAR_OUTBOUND();
+							errno = 0;
+							txpos = lasttx = *((long *)Rxbuf);
+							lseek(Txfile, lasttx, SEEK_SET);
+							if (j_error(msgtxt[M_SEEK_MSG],Txfname))
+								goto giveup;
+							status_line(msgtxt[M_SYNCHRONIZING],txpos);
+							txblklen >>= 2;
+							if (txblklen < 64)
+								txblklen = 64;
+							goodbytes = 0;
+							goodneeded += 1024;
+							if (goodneeded > 8192)
+								goodneeded = 8192;
+							xstate = XSENDBLK;
+						}
+					}
+					break;
 
-            /*---------------------------------------------------------------*/
-            /* Debris from end of previous Janus session; ignore it          */
-            /*---------------------------------------------------------------*/
-            case HALTACKPKT:
-               break;
+				/*---------------------------------------------------------------*/
+				/* Debris from end of previous Janus session; ignore it          */
+				/*---------------------------------------------------------------*/
+				case HALTACKPKT:
+					break;
 
-            /*---------------------------------------------------------------*/
-            /* Abort the transfer and quit                                   */
-            /*---------------------------------------------------------------*/
-            default:
-               j_status(msgtxt[M_UNKNOWN_PACKET],pkttype);
-               /* fallthrough */
-            case HALTPKT:
+				/*---------------------------------------------------------------*/
+				/* Abort the transfer and quit                                   */
+				/*---------------------------------------------------------------*/
+				default:
+					j_status(msgtxt[M_UNKNOWN_PACKET],pkttype);
+					/* fallthrough */
+				case HALTPKT:
 giveup:        j_status(msgtxt[M_SESSION_ABORT]);
-               if (Txfname[0])
-                  getfname(ABORT_XFER);
-               if (rstate == RRCVBLK) {
-                  TotalBytes += (Rxpos-rxstpos);
-                  rxclose(FAILED_XFER);
-               }
-               goto abortxfer;
+					something_wrong=1;
+					if (Txfname[0])
+						getfname(ABORT_XFER);
+					if (rstate == RRCVBLK) {
+						TotalBytes += (Rxpos-rxstpos);
+						rxclose(FAILED_XFER);
+					}
+					goto abortxfer;
 
-         }                                    /* switch (pkttype)  */
-      }                                       /* while (pkttype)  */
-   } while (xstate || rstate);
+			}                                    /* switch (pkttype)  */
+		}                                       /* while (pkttype)  */
+	} while (xstate || rstate);
 
-   /*------------------------------------------------------------------------*/
-   /* All done; make sure other end is also finished (one way or another)    */
-   /*------------------------------------------------------------------------*/
+	/*------------------------------------------------------------------------*/
+	/* All done; make sure other end is also finished (one way or another)    */
+	/*------------------------------------------------------------------------*/
 breakout:
-   if (!jfsent && !emsi)
-      j_status(msgtxt[M_NOTHING_TO_SEND], remote_zone,remote_net,remote_node,remote_point);
+	if (!jfsent && !emsi)
+		j_status(msgtxt[M_NOTHING_TO_SEND], remote_zone,remote_net,remote_node,remote_point);
 abortxfer:
-   through(&TotalBytes,&starttime);
-   endbatch();
-   close_janus_filetransfer();
-   unlink(ReqTmp);
+	through(&TotalBytes,&starttime);
+	endbatch();
+	close_janus_filetransfer();
+	unlink(ReqTmp);
 
-   /*------------------------------------------------------------------------*/
-   /* Release allocated memory                                               */
-   /*------------------------------------------------------------------------*/
+	/*------------------------------------------------------------------------*/
+	/* Release allocated memory                                               */
+	/*------------------------------------------------------------------------*/
 freemem:
-   if (Txfname)
-      free(Txfname);
-   if (Rxfname)
-      free(Rxfname);
+	if (Txfname)
+		free(Txfname);
+	if (Rxfname)
+		free(Rxfname);
 //   if (!emsi)
 //      flag_file (CLEAR_FLAG, called_zone, called_net, called_node, 1);
 //   set_prior (4);                               /* Always High                                     */
@@ -616,16 +635,16 @@ freemem:
 /* modified until FNACKPKT is received.                                      */
 /*****************************************************************************/
 static void getfname(word xfer_flag) {
-   static byte point4d, floflag, bad_xfers, outboundname[PATHLEN];
-   static long floname_pos;
-   static FILE *flofile;
-   static int have_lock, whichaka = 0;
-   char *holdname;
+	static byte point4d, floflag, bad_xfers, outboundname[PATHLEN];
+	static long floname_pos;
+	static FILE *flofile;
+	static int have_lock, whichaka = 0;
+	char *holdname;
 
-   char *p;
-   int i, v;
-   long curr_pos;
-   struct stat f;
+	char *p;
+	int i, v;
+	long curr_pos;
+	struct stat f;
 
    /*------------------------------------------------------------------------*/
    /* Initialize static variables on first call of the batch                 */

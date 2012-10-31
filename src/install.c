@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <conio.h>
 #include <stdlib.h>
@@ -129,12 +147,17 @@ void main (int argc, char *argv[])
    hidecur ();
    clrscr ();
 
+//#ifdef __OS2__
+//   cprintf ("          LoraBBS-OS/2 v%s - The Computer-Based Information System\r\n", INSTALL_VERSION);
+//#else
+//   cprintf ("          LoraBBS-DOS v%s - The Computer-Based Information System\r\n", INSTALL_VERSION);
+//#endif
 #ifdef __OS2__
-   cprintf ("          LoraBBS-OS/2 v%s - The Computer-Based Information System\r\n", INSTALL_VERSION);
+   cprintf ("          LoraBBS-OS/2 v%s - The Computer-Based Information System\r\n", "2.99.41");
 #else
-   cprintf ("          LoraBBS-DOS v%s - The Computer-Based Information System\r\n", INSTALL_VERSION);
+   cprintf ("          LoraBBS-DOS v%s - The Computer-Based Information System\r\n", "2.99.41");
 #endif
-   cprintf ("        CopyRight (c) 1989-95 by Marco Maccaferri. All Rights Reserved\r\n");
+   cprintf ("        CopyRight (c) 1997-97 by Marco Maccaferri. All Rights Reserved\r\n");
    cprintf ("컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴");
    gotoxy (1, 24);
    cprintf ("컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴");

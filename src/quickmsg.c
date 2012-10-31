@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -108,7 +126,7 @@ char goldbase;
 
          if (gmsgt.board != board)
             continue;
-         if (gmsgt.msgattr & Q_RECKILL)
+			if (gmsgt.msgattr & Q_RECKILL)
             continue;
          if ((gmsgt.msgattr & Q_PRIVATE) && stricmp (pascal_string (gmsgt.whofrom), usr.name) && stricmp (pascal_string (gmsgt.whoto), usr.name) 
          && stricmp (pascal_string (gmsgt.whofrom), usr.handle) && stricmp (pascal_string (gmsgt.whoto), usr.handle) && usr.priv < SYSOP)
@@ -123,7 +141,7 @@ char goldbase;
 
          if (msgt.board != board)
             continue;
-         if (msgt.msgattr & Q_RECKILL)
+			if (msgt.msgattr & Q_RECKILL)
             continue;
          if ((msgt.msgattr & Q_PRIVATE) && stricmp (pascal_string (msgt.whofrom), usr.name) && stricmp (pascal_string (msgt.whoto), usr.name) 
 			&& stricmp (pascal_string (msgt.whofrom), usr.handle) && stricmp (pascal_string (msgt.whoto), usr.handle) && usr.priv < SYSOP)
@@ -203,7 +221,7 @@ char goldbase;
 
          if (gmsgt.board != board)
             continue;
-         if (gmsgt.msgattr & Q_RECKILL)
+			if (gmsgt.msgattr & Q_RECKILL)
             continue;
          if ((gmsgt.msgattr & Q_PRIVATE) && stricmp (pascal_string (gmsgt.whofrom), usr.name) && stricmp (pascal_string (gmsgt.whoto), usr.name) 
          && stricmp (pascal_string (gmsgt.whofrom), usr.handle) && stricmp(pascal_string (gmsgt.whoto), usr.handle)&& usr.priv < SYSOP)
@@ -222,7 +240,7 @@ char goldbase;
 
          if (msgt.board != board)
             continue;
-         if (msgt.msgattr & Q_RECKILL)
+			if (msgt.msgattr & Q_RECKILL)
             continue;
          if ((msgt.msgattr & Q_PRIVATE) && stricmp(pascal_string(msgt.whofrom),usr.name) && stricmp(pascal_string(msgt.whoto),usr.name) 
          && stricmp(pascal_string(msgt.whofrom),usr.handle) && stricmp(pascal_string(msgt.whoto),usr.handle) && usr.priv < SYSOP)
@@ -345,7 +363,7 @@ char goldbase;
 		if (!strnicmp (&gmsgt.whofrom[1], usr.name, gmsgt.whofrom[0]) || !strnicmp (&gmsgt.whoto[1], usr.name, gmsgt.whoto[0]) ||
 		!strnicmp (&gmsgt.whofrom[1], usr.handle, gmsgt.whofrom[0]) || !strnicmp (&gmsgt.whoto[1], usr.handle, gmsgt.whoto[0]) || usr.priv == SYSOP) {
 			gmsgt.msgattr |= Q_RECKILL;
-			gmsgt.msgnum = 0;
+//			gmsgt.msgnum = 0;
 			lseek (fd, (long)sizeof (struct _gold_msghdr) * msgidx[msg_num], SEEK_SET);
 			write (fd, (char *)&gmsgt, sizeof (struct _gold_msghdr));
 
@@ -353,12 +371,12 @@ char goldbase;
 			fdidx = sh_open (filename, SH_DENYNONE, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
 			lseek (fdidx, (long)msgidx[msg_num] * sizeof (struct _msgidx), SEEK_SET);
 			read (fdidx, (char *)&gidx, sizeof (struct _gold_msgidx));
-			idx.msgnum = 0;
+			gidx.msgnum = -1;
 			lseek (fdidx, (long)msgidx[msg_num] * sizeof (struct _gold_msgidx), SEEK_SET);
 			write (fdidx, (char *)&gidx, sizeof (struct _gold_msgidx));
-         close (fdidx);
+			close (fdidx);
 
-         sprintf (filename, "%sMSGTOIDX.DAT", fido_msgpath);
+			sprintf (filename, "%sMSGTOIDX.DAT", fido_msgpath);
          fdto = sh_open (filename, SH_DENYNONE, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
          lseek (fdto, (long)msgidx[msg_num] * 36L, SEEK_SET);
          write (fdto, "\x0B* Deleted *                        ", 36);
@@ -381,8 +399,8 @@ char goldbase;
 
       if (!strnicmp (&msgt.whofrom[1], usr.name, msgt.whofrom[0]) || !strnicmp (&msgt.whoto[1], usr.name, msgt.whoto[0]) ||
       !strnicmp (&msgt.whofrom[1], usr.handle, msgt.whofrom[0]) || !strnicmp (&msgt.whoto[1], usr.handle, msgt.whoto[0]) || usr.priv == SYSOP) {
-         msgt.msgattr |= Q_RECKILL;
-         msgt.msgnum = 0;
+			msgt.msgattr |= Q_RECKILL;
+//			msgt.msgnum = 0;  NON TESTATO!
          lseek (fd, (long)sizeof (struct _msghdr) * msgidx[msg_num], SEEK_SET);
          write (fd, (char *)&msgt, sizeof (struct _msghdr));
 
@@ -390,24 +408,24 @@ char goldbase;
          fdidx = sh_open (filename, SH_DENYNONE, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
          lseek (fdidx, (long)msgidx[msg_num] * sizeof (struct _msgidx), SEEK_SET);
          read (fdidx, (char *)&idx, sizeof (struct _msgidx));
-         idx.msgnum = 0;
-         lseek (fdidx, (long)msgidx[msg_num] * sizeof (struct _msgidx), SEEK_SET);
-         write (fdidx, (char *)&idx, sizeof (struct _msgidx));
-         close (fdidx);
+			idx.msgnum = -1;
+			lseek (fdidx, (long)msgidx[msg_num] * sizeof (struct _msgidx), SEEK_SET);
+			write (fdidx, (char *)&idx, sizeof (struct _msgidx));
+			close (fdidx);
 
-         sprintf (filename, "%sMSGTOIDX.BBS", fido_msgpath);
-         fdto = sh_open (filename, SH_DENYNONE, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
-         lseek (fdto, (long)msgidx[msg_num] * 36L, SEEK_SET);
-         write (fdto, "\x0B* Deleted *                        ", 36);
+			sprintf (filename, "%sMSGTOIDX.BBS", fido_msgpath);
+			fdto = sh_open (filename, SH_DENYNONE, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+			lseek (fdto, (long)msgidx[msg_num] * 36L, SEEK_SET);
+			write (fdto, "\x0B* Deleted *                        ", 36);
 			close (fdto);
 
-         close (fd);
+			close (fd);
 
-         return (1);
-      }
+			return (1);
+		}
 
-      close (fd);
-   }
+		close (fd);
+	}
 
    return (0);
 }
@@ -461,7 +479,7 @@ char qwk, goldbase;
 
          if (gmsgt.board != board)
             continue;
-         if (gmsgt.msgattr & Q_RECKILL)
+			if (gmsgt.msgattr & Q_RECKILL)
             continue;
          if ((gmsgt.msgattr & Q_PRIVATE) && stricmp (pascal_string (gmsgt.whofrom), usr.name) && stricmp (pascal_string (gmsgt.whoto), usr.name)
          && stricmp (pascal_string (gmsgt.whofrom), usr.handle) && stricmp (pascal_string (gmsgt.whoto), usr.handle) && usr.priv < SYSOP)
@@ -473,7 +491,7 @@ char qwk, goldbase;
 
          if (msgt.board != board)
             continue;
-         if (msgt.msgattr & Q_RECKILL)
+			if (msgt.msgattr & Q_RECKILL)
             continue;
          if ((msgt.msgattr & Q_PRIVATE) && stricmp (pascal_string (msgt.whofrom), usr.name) && stricmp (pascal_string (msgt.whoto), usr.name) 
          && stricmp (pascal_string (msgt.whofrom), usr.handle) && stricmp (pascal_string (msgt.whoto), usr.handle) && usr.priv < SYSOP)
@@ -664,116 +682,118 @@ char qwk, goldbase;
 int quick_save_message2 (txt, f1, f2, f3, f4)
 FILE *txt, *f1, *f2, *f3, *f4;
 {
-   FILE *fp;
-   word i, dest, m, nb, x, hh, mm, dd, mo, aa;
-   char text[258], buffer[258];
-   long gdest;
-   struct _msgidx idx;
-   struct _msghdr hdr;
-   struct _msgtoidx toidx;
-   struct _gold_msgidx gidx;
-   struct _gold_msghdr ghdr;
+	FILE *fp;
+	word i, dest, m, nb, x, hh, mm, dd, mo, aa;
+	char text[258], buffer[258];
+	long gdest;
+	struct _msgidx idx;
+	struct _msghdr hdr;
+	struct _msgtoidx toidx;
+	struct _gold_msgidx gidx;
+	struct _gold_msghdr ghdr;
 
-   memset ((char *)&toidx, 0, sizeof (struct _msgtoidx));
+	memset ((char *)&toidx, 0, sizeof (struct _msgtoidx));
 
-   memcpy (&toidx.string[1], msg.to, strlen (msg.to));
-   toidx.string[0] = strlen (msg.to);
-   if (fwrite ((char *)&toidx, sizeof (struct _msgtoidx), 1, f2) != 1)
-      return (0);
+	memcpy (&toidx.string[1], msg.to, strlen (msg.to));
+	toidx.string[0] = strlen (msg.to);
+	if (fwrite ((char *)&toidx, sizeof (struct _msgtoidx), 1, f2) != 1)
+		return (0);
 
-   if (sys.gold_board) {
+	if (sys.gold_board) {
       memset ((char *)&gidx, 0, sizeof (struct _gold_msgidx));
       memset ((char *)&ghdr, 0, sizeof (struct _gold_msghdr));
 
       gdest = gmsginfo.highmsg + 1;
       if (gmsginfo.highmsg > gdest) {
-         status_line ("!QuickBBS exceeds 65535 messages");
-         return (0);
-      }
+			status_line ("!Gold-base exceeds msgnum limit");
+			return (0);
+		}
 
-      gidx.msgnum = gdest;
-      gidx.board = sys.gold_board;
-      if (fwrite ((char *)&gidx, sizeof (struct _gold_msgidx), 1, f1) != 1)
-         return (0);
-   }
-   else {
-      memset ((char *)&idx, 0, sizeof (struct _msgidx));
-      memset ((char *)&hdr, 0, sizeof (struct _msghdr));
+		gidx.msgnum = gdest;
+		gidx.board = sys.gold_board;
+		if (fwrite ((char *)&gidx, sizeof (struct _gold_msgidx), 1, f1) != 1)
+			return (0);
+	}
+	else {
+		memset ((char *)&idx, 0, sizeof (struct _msgidx));
+		memset ((char *)&hdr, 0, sizeof (struct _msghdr));
 
-      dest = msginfo.highmsg + 1;
-      if (msginfo.highmsg == 65535U) {
-         status_line ("!Hudson-base exceeds 65535 messages");
-         return (0);
-      }
+		dest = msginfo.highmsg + 1;
+		if (msginfo.highmsg == 65535U) {
+			status_line ("!Hudson-base exceeds 65535 messages");
+			return (0);
+		}
 
-      idx.msgnum = dest;
+		idx.msgnum = dest;
 		idx.board = sys.quick_board;
-      if (fwrite ((char *)&idx, sizeof (struct _msgidx), 1, f1) != 1)
-         return (0);
-   }
+		if (fwrite ((char *)&idx, sizeof (struct _msgidx), 1, f1) != 1){
+			status_line("!Problems with quick msgidx file");
+			return (0);
+		}
+	}
 
-   fp = f3;
+	fp = f3;
 
-   if (sys.gold_board)
-      ghdr.startblock = ftell (fp) / 256L;
-   else {
-      i = (word)(ftell (fp) / 256L);
-      hdr.startblock = i;
-   }
+	if (sys.gold_board)
+		ghdr.startblock = ftell (fp) / 256L;
+	else {
+		i = (word)(ftell (fp) / 256L);
+		hdr.startblock = i;
+	}
 
-   i = 0;
-   m = 1;
-   nb = 1;
+	i = 0;
+	m = 1;
+	nb = 1;
 
-   memset (text, 0, 256);
+	memset (text, 0, 256);
 
-   do {
-      memset (buffer, 0, 256);
-      i = mread (buffer, 1, 255, txt);
-      for (x = 0; x < i; x++) {
-         if (buffer[x] == 0x1A)
-            buffer[x] = ' ';
-      }
-      buffer[i] = '\0';
-      write_pascal_string (buffer, text, &m, &nb, fp);
-   } while (i == 255);
+	do {
+		memset (buffer, 0, 256);
+		i = mread (buffer, 1, 255, txt);
+		for (x = 0; x < i; x++) {
+			if (buffer[x] == 0x1A)
+				buffer[x] = ' ';
+		}
+		buffer[i] = '\0';
+		write_pascal_string (buffer, text, &m, &nb, fp);
+	} while (i == 255);
 
-   *text = m - 1;
-   if (fwrite (text, 256, 1, fp) != 1)
-      return (0);
+	*text = m - 1;
+	if (fwrite (text, 256, 1, fp) != 1)
+		return (0);
 
-   if (sys.public)
-      msg.attr &= ~MSGPRIVATE;
-   else if (sys.private)
-      msg.attr |= MSGPRIVATE;
+	if (sys.public)
+		msg.attr &= ~MSGPRIVATE;
+	else if (sys.private)
+		msg.attr |= MSGPRIVATE;
 
-   sscanf (msg.date, "%2d %3s %2d %2d:%2d", &dd, buffer, &aa, &hh, &mm);
-   buffer[3] = '\0';
-   for (mo = 0; mo < 12; mo++) {
-      if (!stricmp (buffer, mtext[mo]))
+	sscanf (msg.date, "%2d %3s %2d %2d:%2d", &dd, buffer, &aa, &hh, &mm);
+	buffer[3] = '\0';
+	for (mo = 0; mo < 12; mo++) {
+		if (!stricmp (buffer, mtext[mo]))
 			break;
-   }
-   if (mo == 12)
-      mo = 0;
+	}
+	if (mo == 12)
+		mo = 0;
 
-   if (sys.gold_board) {
-      ghdr.numblocks = nb;
-      ghdr.msgnum = gdest;
-      ghdr.prevreply = msg.reply;
-      ghdr.nextreply = msg.up;
-      ghdr.timesread = 0;
-      ghdr.destnet = msg.dest_net;
-      ghdr.destnode = msg.dest;
-      ghdr.orignet = msg.orig_net;
-      ghdr.orignode = msg.orig;
-      ghdr.destzone = msg_tzone;
-      ghdr.origzone = msg_fzone;
-      ghdr.cost = msg.cost;
+	if (sys.gold_board) {
+		ghdr.numblocks = nb;
+		ghdr.msgnum = gdest;
+		ghdr.prevreply = msg.reply;
+		ghdr.nextreply = msg.up;
+		ghdr.timesread = 0;
+		ghdr.destnet = msg.dest_net;
+		ghdr.destnode = msg.dest;
+		ghdr.orignet = msg.orig_net;
+		ghdr.orignode = msg.orig;
+		ghdr.destzone = msg_tzone;
+		ghdr.origzone = msg_fzone;
+		ghdr.cost = msg.cost;
 
-      if (msg.attr & MSGPRIVATE)
-         ghdr.msgattr |= Q_PRIVATE;
+		if (msg.attr & MSGPRIVATE)
+			ghdr.msgattr |= Q_PRIVATE;
 
-      if (sys.echomail && (msg.attr & MSGSENT))
+		if (sys.echomail && (msg.attr & MSGSENT))
          ghdr.msgattr &= ~Q_LOCAL;
       else {
          ghdr.msgattr &= ~Q_LOCAL;
@@ -802,7 +822,7 @@ FILE *txt, *f1, *f2, *f3, *f4;
    }
    else {
       hdr.numblocks = nb;
-      hdr.msgnum = dest;
+		hdr.msgnum = dest;
       hdr.prevreply = msg.reply;
       hdr.nextreply = msg.up;
       hdr.timesread = 0;
@@ -986,9 +1006,9 @@ int goldbase;
 
          if (read (f1, (char *)&gmsghdr, sizeof (struct _gold_msghdr)) != sizeof (struct _gold_msghdr))
             break;
-         sprintf (wrp, "%ld / %ld", gmsghdr.msgnum, gmsginfo.totalmsgs);
+			sprintf (wrp, "%ld / %ld", gmsghdr.msgnum, gmsginfo.totalmsgs);
 
-         if ( !(gmsghdr.msgnum % 60) )
+			if ( !(gmsghdr.msgnum % 60) )
 				time_release ();
       }
       else {
@@ -1000,9 +1020,9 @@ int goldbase;
 
          if (read (f1, (char *)&msghdr, sizeof (struct _msghdr)) != sizeof (struct _msghdr))
             break;
-         sprintf (wrp, "%d / %d", msghdr.msgnum, msginfo.totalmsgs);
+			sprintf (wrp, "%d / %d", msghdr.msgnum, msginfo.totalmsgs);
 
-         if ( !(msghdr.msgnum % 60) )
+			if ( !(msghdr.msgnum % 60) )
             time_release ();
 		}
 
@@ -1011,13 +1031,13 @@ int goldbase;
       if (goldbase) {
          if ( !(gmsghdr.msgattr & 32) )
             continue;
-         if (gmsghdr.msgattr & Q_RECKILL)
+			if (gmsghdr.msgattr & Q_RECKILL)
             continue;
       }
       else {
          if ( !(msghdr.msgattr & 32) )
             continue;
-         if (msghdr.msgattr & Q_RECKILL)
+			if (msghdr.msgattr & Q_RECKILL)
             continue;
       }
 
@@ -1085,8 +1105,8 @@ int goldbase;
          if (!found)
             continue;
 
-         for (i = 0; i < maxnodes; i++)
-            forward[i].reset = forward[i].export = 0;
+			for (i = 0; i < maxnodes; i++)
+				forward[i].receiveonly = forward[i].sendonly = forward[i].passive = forward[i].private = forward[i].reset = forward[i].export = 0;
 
          z = config->alias[sys.use_alias].zone;
          ne = config->alias[sys.use_alias].net;
@@ -1792,8 +1812,8 @@ int quick_rescan_echomail (int board, int zone, int net, int node, int point, in
       if (goldboard) {
          if (read (f1, (char *)&gmsghdr, sizeof (struct _gold_msghdr)) != sizeof (struct _gold_msghdr))
             break;
-         sprintf (wrp, "%ld / %ld", gmsghdr.msgnum, gmsginfo.totalmsgs);
-         if ( !(gmsghdr.msgnum % 60))
+			sprintf (wrp, "%ld / %ld", gmsghdr.msgnum, gmsginfo.totalmsgs);
+			if ( !(gmsghdr.msgnum % 60))
             time_release ();
       }
       else {
@@ -1885,11 +1905,11 @@ int quick_rescan_echomail (int board, int zone, int net, int node, int point, in
       prints (8, 65, YELLOW|_BLACK, wrp);
 
       if (goldboard) {
-         sprintf (wrp, "%5ld  %-22.22s GoldBase     ", gmsghdr.msgnum, sys.echotag);
+			sprintf (wrp, "%5ld  %-22.22s GoldBase     ", gmsghdr.msgnum, sys.echotag);
          fseek (f2, 256L * gmsghdr.startblock, SEEK_SET);
       }
       else {
-         sprintf (wrp, "%5d  %-22.22s QuickBBS     ", msghdr.msgnum, sys.echotag);
+			sprintf (wrp, "%5d  %-22.22s QuickBBS     ", msghdr.msgnum, sys.echotag);
          fseek (f2, 256L * msghdr.startblock, SEEK_SET);
       }
       wputs (wrp);

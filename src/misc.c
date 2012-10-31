@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <ctype.h>
 #include <dos.h>
@@ -36,6 +54,7 @@
 #include "version.h"
 
 char *firstchar(char *, char *, int);
+extern char *emsi_data_packet;
 
 #ifdef __OS2__
 void pokeb (unsigned segment, unsigned offset, unsigned char value);
@@ -505,7 +524,7 @@ void parse_netnode2 (char *netnode, int *zo, int *ne, int *no, int *po)
    else if (!stricmp (p, "ALL")) {
       *net = -1;
       *node = -1;
-      *point = -1;
+      *point = 0;
       return;
    }
 
@@ -818,79 +837,79 @@ int m_getch (void)
          time_release ();
       else {
          i = local_kbd;
-         local_kbd = -1;
-         return (i);
-      }
-   }
+			local_kbd = -1;
+			return (i);
+		}
+	}
 
-   return (-1);
+	return (-1);
 }
 
 int get_emsi_field (char *s)
 {
-   char c;
-   int i = 0, start = 0, value;
-   long t;
+	char c;
+	int i = 0, start = 0, value;
+	long t;
 
-   t = timerset (100);
+	t = timerset (100);
 
-   while (CARRIER && !timeup (t)) {
-      while (PEEKBYTE () == -1) {
-         if (!CARRIER || timeup (t))
-            return (0);
-      }
+	while (CARRIER && !timeup (t)) {
+		while (PEEKBYTE () == -1) {
+			if (!CARRIER || timeup (t))
+				return (0);
+		}
 
-      c = (char)TIMED_READ (1);
-      t = timerset (100);
+		c = (char)TIMED_READ (1);
+		t = timerset (100);
 
-      if (!start && c != '{')
-         continue;
+		if (!start && c != '{')
+			continue;
 
-      if (c == '{' && !start) {
-         start = 1;
-         continue;
-      }
+		if (c == '{' && !start) {
+			start = 1;
+			continue;
+		}
 
-      if (c == '}' && start) {
-         if (PEEKBYTE () != '}')
-            break;
-         else
-            c = (char)TIMED_READ (1);
-      }
+		if (c == '}' && start) {
+			if (PEEKBYTE () != '}')
+				break;
+			else
+				c = (char)TIMED_READ (1);
+		}
 
-      if (c == ']') {
-         if (PEEKBYTE () == ']')
-            c = (char)TIMED_READ (1);
-      }
+		if (c == ']') {
+			if (PEEKBYTE () == ']')
+				c = (char)TIMED_READ (1);
+		}
 
-      if (c == '\\') {
-         if ((c = (char)TIMED_READ (1)) != '\\') {
-            c = toupper (c);
-            value = (c >= 'A') ? (c - 55) : (c - '0');
-            value *= 16;
-            c = (char)TIMED_READ (1);
-            c = toupper (c);
-            value += (c >= 'A') ? (c - 55) : (c - '0');
-            c = (char)value;
-         }
-      }
+		if (c == '\\') {
+			if ((c = (char)TIMED_READ (1)) != '\\') {
+				c = toupper (c);
+				value = (c >= 'A') ? (c - 55) : (c - '0');
+				value *= 16;
+				c = (char)TIMED_READ (1);
+				c = toupper (c);
+				value += (c >= 'A') ? (c - 55) : (c - '0');
+				c = (char)value;
+			}
+		}
 
-      s[i++] = c;
-   }
+		s[i++] = c;
+	}
 
-   s[i] = '\0';
-   return (1);
+	s[i] = '\0';
+	return (1);
 }
 
 #define x32crc(c,crc) (cr3tab[((int) crc ^ c) & 0xff] ^ ((crc >> 8) & 0x00FFFFFFL))
 
 unsigned long get_buffer_crc (void *buffer, int length)
 {
-   int i;
-   unsigned long crc = 0xFFFFFFFFL;
-   unsigned char *b;
+	int i;
+	unsigned long crc = 0xFFFFFFFFL;
+	unsigned char *b;
 
-   b = (unsigned char *)buffer;
+	b = (unsigned char *)buffer;
 
    for (i = 0; i < length; i++)
       crc = x32crc (*b++, crc);

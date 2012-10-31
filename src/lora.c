@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <dos.h>
 #include <signal.h>
@@ -146,7 +164,7 @@ char **argv;
       ;
 
    events = 0L;
-   clocks = 0L;
+	clocks = 0L;
    verfile = 0L;
 
    minf.def_zone = config->alias[0].zone;
@@ -286,7 +304,7 @@ long fmem;
                   unlink ("RESCAN.NOW");
                   display_outbound_info (outinfo);
                   events = 0L;
-                  clocks = 0L;
+						clocks = 0L;
                   to = 0L;
                   old_event = -1;
                   function_active = 99;
@@ -309,6 +327,7 @@ long fmem;
                sprintf (buffer, "%sLEXIT*.*", config->sys_path);
                if (!findfirst (buffer, &blk, 0))
                   do {
+                     i = m = 0;
                      sscanf (blk.ff_name, "LEXIT%d.%d", &i, &m);
                      if (i == line_offset || i == 0) {
                         unlink (blk.ff_name);
@@ -326,9 +345,9 @@ long fmem;
         }
 
          else if (timeup(to)) {
-            if (!answer_flag && !terminal) {
-               CLEAR_INBOUND ();
-               initialize_modem ();
+				if (!answer_flag && !terminal) {
+					CLEAR_INBOUND ();
+					initialize_modem ();
             }
             to = timerset (30000);
          }
@@ -345,13 +364,13 @@ long fmem;
                   blank_progress ();
                blankto = timerset (20);
                time_release ();
-               release_timeslice ();
+					release_timeslice ();
             }
          }
 
          else {
             time_release ();
-            release_timeslice ();
+				release_timeslice ();
          }
 
          if (local_kbd != -1) {
@@ -434,7 +453,7 @@ long fmem;
                   hidecur ();
                   events = 0L;
                   to = 0L;
-                  clocks = 0L;
+						clocks = 0L;
                   blankto = timerset (0);
                   blankto += blank_timer * 6000L;
                   verfile = 0L;
@@ -463,10 +482,10 @@ long fmem;
 
                // ALT-L Lock keyboard
                case 0x2600:
-                  keyboard_password ();
-                  if (locked && password != NULL && registered)
-                     prints (23, 5, YELLOW|_BLACK, "Keyboard locked - Enter password to unlock");
-                  break;
+						keyboard_password ();
+						if (locked && password != NULL && registered)
+							prints (23, 43, YELLOW|_BLACK, "LOCKED  ");
+						break;
 
                // Up arrow
                case 0x4800:
@@ -498,7 +517,7 @@ long fmem;
                   i = (int) (((unsigned) local_kbd) >> 8);
                   status_line (msgtxt[M_FUNCTION_KEY], (i - 0x67) * 10);
                   get_down ((i - 0x67) * 10, 3);
-                  break;
+						break;
             }
 
             local_kbd = -1;
@@ -531,7 +550,7 @@ long fmem;
    else if (rate == -1) {
       // E' stato ricevuto un CONNECT FAX
       if (mdm_flags == NULL) {
-         status_line("#Connect FAX%s%s", "", "");
+			status_line("#Connect FAX%s%s", "", "");
          mdm_flags = "";
       }
       else
@@ -668,58 +687,59 @@ void resume_blanked_screen ()
    if (blanked)
       stop_blanking ();
    else {
-      blankto = timerset (0);
-      blankto += blank_timer * 6000L;
-   }
+		blankto = timerset (0);
+		blankto += blank_timer * 6000L;
+	}
 }
 
 void time_release (void)
 {
-   int sc, i, ch, hh, mm, ss, scanc;
-   char cmdname[40];
-   long t;
-   struct time timep;
-   struct tm *tp, tpt;
+	int sc, i, ch, hh, mm, ss, scanc;
+	char cmdname[40];
+	long t;
+	struct time timep;
+	struct tm *tp, tpt;
 
-   if (!emulator && local_mode != 2) {
-      if (kbmhit ()) {
-         ch = getxch ();
+//	if (!emulator && local_mode != 3) {
+	if (!emulator) {
+		if (kbmhit ()) {
+			ch = getxch ();
 
-         // Se lo schermo e' in blank-mode, ripristina lo schermo del mailer e
-         // ritorna immediatamente. Qualunque tasto premuto ha il solo effetto di
-         // fermare lo screen blanker se e' attivo.
-         if (blanked) {
-            resume_blanked_screen ();
-            return;
-         }
+			// Se lo schermo e' in blank-mode, ripristina lo schermo del mailer e
+			// ritorna immediatamente. Qualunque tasto premuto ha il solo effetto di
+			// fermare lo screen blanker se e' attivo.
+			if (blanked) {
+				resume_blanked_screen ();
+				return;
+			}
 
-         if ( !(ch & 0xFF) ) {
-            if (locked && registered && password != NULL && ch != 0x2500)
-               ch = -1;
-         }
-         else if (locked && registered && password != NULL && !local_mode) {
-            ch &= 0xFF;
+			if ( !(ch & 0xFF) ) {
+				if (locked && registered && password != NULL && ch != 0x2500)
+					ch = -1;
+			}
+			else if (locked && registered && password != NULL && !local_mode) {
+				ch &= 0xFF;
 
-            if (ch == password[posit]) {
-               locked = (password[++posit] == '\0') ? 0 : 1;
-               if (!locked) {
-                  if (function_active == 4)
-                     f4_status ();
-                  else if (!caller) {
-                     wfill (23, 1, 23, 51, ' ', YELLOW|_BLACK);
-                     prints (23, 17, YELLOW|_BLACK, "Press ESC for menu");
-                  }
-               }
-            }
-            else
-               posit = 0;
+				if (ch == password[posit]) {
+					locked = (password[++posit] == '\0') ? 0 : 1;
+					if (!locked) {
+						if (function_active == 4)
+							f4_status ();
+						else if (!caller) {
+							 prints (23, 43, YELLOW|_BLACK, "UNLOCKED");
+//							 (23, 43, 23, 50, ' ', YELLOW|_BLACK);
+						}
+					}
+				}
+				else
+					posit = 0;
 
-            ch = -1;
-         }
-         else {
-            scanc = (ch & 0xFF00) >> 8;
-            ch &= 0xFF;
-         }
+				ch = -1;
+			}
+			else {
+				scanc = (ch & 0xFF00) >> 8;
+				ch &= 0xFF;
+			}
 
          if (ch != -1) {
             if (caller) {
@@ -742,8 +762,8 @@ void time_release (void)
                      else if (usr.priv == WORTHY)
                         usr.priv = PRIVIL;
                      else if (usr.priv == PRIVIL)
-                        usr.priv = FAVORED;
-                     else if (usr.priv == FAVORED)
+								usr.priv = FAVORED;
+							else if (usr.priv == FAVORED)
                         usr.priv = EXTRA;
                      else if (usr.priv == EXTRA)
                         usr.priv = CLERK;
@@ -775,10 +795,10 @@ void time_release (void)
                         usr.priv = NORMAL;
                      else if (usr.priv == PRIVIL)
                         usr.priv = WORTHY;
-                     else if (usr.priv == FAVORED)
+							else if (usr.priv == FAVORED)
                         usr.priv = PRIVIL;
                      else if (usr.priv == EXTRA)
-                        usr.priv = FAVORED;
+								usr.priv = FAVORED;
                      else if (usr.priv == CLERK)
                         usr.priv = EXTRA;
                      else if (usr.priv == ASSTSYSOP)
@@ -870,134 +890,158 @@ void time_release (void)
                   case 0x6800:
                   case 0x6900:
                   case 0x6A00:
-                  case 0x6B00:
-                  case 0x6C00:
-                  case 0x6D00:
-                  case 0x6E00:
-                  case 0x6F00:
-                  case 0x7000:
-                  case 0x7100:
-                     i = (int) (((unsigned) ch) >> 8);
-                     sprintf (cmdname, "ALTF%d", (i - 0x67) * 10);
-                     read_system_file (cmdname);
-                     break;
+						case 0x6B00:
+						case 0x6C00:
+						case 0x6D00:
+						case 0x6E00:
+						case 0x6F00:
+						case 0x7000:
+						case 0x7100:
+							i = (int) (((unsigned) ch) >> 8);
+							sprintf (cmdname, "ALTF%d", (i - 0x67) * 10);
+							read_system_file (cmdname);
+							break;
 
-                  default:
-                     local_kbd = ch;
-                     break;
-               }
-            }
-            else if (ch != -1)
-               local_kbd = ch;
-         }
-      }
+						default:
+							local_kbd = ch;
+							break;
+					}
+				}
+				else if (ch != -1)
+					local_kbd = ch;
+			}
+		}
 
-      if (timeup (clocks)) {
-         clocks = timerset (97);
+		if (timeup (clocks)) {
+			clocks = timerset (97);
 
-         if (caller && snooping) {
-            if (local_mode != 2) {
-               hidecur ();
-               i = whandle();
-               wactiv (status);
+			if (caller && snooping) {
+				if (local_mode != 2) {
+					hidecur ();
+					i = whandle();
+					wactiv (status);
 
-               gettime ((struct time *)&timep);
-               sprintf (cmdname, "%02d%c%02d", timep.ti_hour % 24, interpoint, timep.ti_min % 60);
-               wprints (0, 73, BLACK|_LGREY, cmdname);
-               interpoint = (interpoint == ':') ? ' ' : ':';
+					gettime ((struct time *)&timep);
+					sprintf (cmdname, "%02d%c%02d", timep.ti_hour % 24, interpoint, timep.ti_min % 60);
+					wprints (0, 73, BLACK|_LGREY, cmdname);
+					interpoint = (interpoint == ':') ? ' ' : ':';
 
-               if (function_active == 1) {
-                  sc = time_remain ();
-                  sprintf (cmdname, "%d mins ", sc);
-                  wprints (1, 26, BLACK|_LGREY, cmdname);
-               }
-               else if ( function_active == 4 ) {
-                  sc = time_to_next (0);
-                  if (old_event != cur_event && !blanked) {
-                     wgotoxy (1, 1);
-                     wdupc (' ', 34);
-                     old_event = cur_event;
-                  }
+					if (function_active == 1) {
+						sc = time_remain ();
+						sprintf (cmdname, "%d mins ", sc);
+						wprints (1, 26, BLACK|_LGREY, cmdname);
+					}
+					else if ( function_active == 4 ) {
+						sc = time_to_next (0);
+						if (old_event != cur_event && !blanked) {
+							wgotoxy (1, 1);
+							wdupc (' ', 34);
+							old_event = cur_event;
+						}
 
-                  if ( next_event >= 0 ) {
-                     sprintf (cmdname, msgtxt[M_NEXT_EVENT], next_event + 1, sc / 60, sc % 60);
-                     wprints (1, 1, BLACK|_LGREY, cmdname);
-                  }
-                  else
-                     wprints(1, 1, BLACK|_LGREY, msgtxt[M_NONE_EVENTS]);
-               }
+						if ( next_event >= 0 ) {
+							sprintf (cmdname, msgtxt[M_NEXT_EVENT], next_event + 1, sc / 60, sc % 60);
+							wprints (1, 1, BLACK|_LGREY, cmdname);
+						}
+						else
+							wprints(1, 1, BLACK|_LGREY, msgtxt[M_NONE_EVENTS]);
+					}
 
-               wactiv (i);
-               showcur ();
-            }
-         }
-         else {
-            if (!blanked) {
-               t = time (NULL);
-               tp = localtime (&t);
-               sprintf (cmdname, "%s, %s %d %d", wtext[tp->tm_wday], mday[tp->tm_mon], tp->tm_mday, tp->tm_year + 1900);
-               prints (2, 54 + ((25 - strlen (cmdname)) / 2), YELLOW|_BLACK, cmdname);
-               sprintf (cmdname, "%02d:%02d:%02d", tp->tm_hour % 24, tp->tm_min % 60, tp->tm_sec % 60);
-               prints (3, 54 + ((25 - strlen (cmdname)) / 2), YELLOW|_BLACK, cmdname);
+					wactiv (i);
+					showcur ();
+				}
+			}
+			else {
+				if (!blanked) {
+					t = time (NULL);
+					tp = localtime (&t);
+					sprintf (cmdname, "%s, %s %d %d", wtext[tp->tm_wday], mday[tp->tm_mon], tp->tm_mday, tp->tm_year + 1900);
+					prints (2, 54 + ((25 - strlen (cmdname)) / 2), YELLOW|_BLACK, cmdname);
+					sprintf (cmdname, "%02d:%02d:%02d", tp->tm_hour % 24, tp->tm_min % 60, tp->tm_sec % 60);
+					prints (3, 54 + ((25 - strlen (cmdname)) / 2), YELLOW|_BLACK, cmdname);
 
-               if (elapsed) {
-                  t -= elapsed;
-                  sprintf (cmdname, "%02ld:%02ld  ", t / 60L, t % 60L);
-                  prints (6, 65, YELLOW|_BLACK, cmdname);
-               }
+					if (elapsed) {
+						t -= elapsed;
+						sprintf (cmdname, "%02ld:%02ld  ", t / 60L, t % 60L);
+						prints (6, 65, YELLOW|_BLACK, cmdname);
+					}
 
-               if (timeout) {
-                  t = (timeout - timerset (0)) / 100;
-                  if (t < 0L)
-                     t = 0L;
-                  sprintf (cmdname, "%02ld:%02ld", t / 60L, t % 60L);
-                  prints (to_row, 65, YELLOW|_BLACK, cmdname);
-               }
-               else if (function_active == 99) {
-                  sc = time_to_next (0);
-                  t = time (NULL);
-                  tp = localtime (&t);
+					if (timeout) {
+						t = (timeout - timerset (0)) / 100;
+						if (t < 0L)
+							t = 0L;
+						sprintf (cmdname, "%02ld:%02ld", t / 60L, t % 60L);
+						prints (to_row, 65, YELLOW|_BLACK, cmdname);
+					}
+					else if (function_active == 99) {
+						sc = time_to_next (0);
+						t = time (NULL);
+						tp = localtime (&t);
 
-                  if (old_event != cur_event) {
-                     old_event = cur_event;
-                     if (!blanked) {
-                        prints (9, 65, YELLOW|_BLACK, "              ");
+						if (old_event != cur_event) {
+							old_event = cur_event;
+							if (!blanked) {
+								prints (9, 65, YELLOW|_BLACK, "              ");
 
-                        if (cur_event >= 0) {
-                           sprintf (cmdname, "%d / %02d:%02d", cur_event + 1, e_ptrs[cur_event]->minute / 60, e_ptrs[cur_event]->minute % 60);
-                           prints (9, 65, YELLOW|_BLACK, cmdname);
-                        }
-                        else
-                           prints (9, 65, YELLOW|_BLACK, "None");
+								if (cur_event >= 0) {
+									sprintf (cmdname, "%d / %02d:%02d", cur_event + 1, e_ptrs[cur_event]->minute / 60, e_ptrs[cur_event]->minute % 60);
+									prints (9, 65, YELLOW|_BLACK, cmdname);
+								}
+								else
+									prints (9, 65, YELLOW|_BLACK, "None");
 
-                        prints (7, 65, YELLOW|_BLACK, "              ");
+								prints (7, 65, YELLOW|_BLACK, "              ");
 
-                        if (next_event >= 0) {
-                           tpt.tm_hour = tp->tm_hour + (sc / 60);
-                           tpt.tm_min = tp->tm_min + (sc % 60);
-                           if (tpt.tm_min >= 60) {
-                              tpt.tm_min -= 60;
-                              tpt.tm_hour++;
-                           }
+								if (next_event >= 0) {
+									tpt.tm_hour = tp->tm_hour + (sc / 60);
+									tpt.tm_min = tp->tm_min + (sc % 60);
+									if (tpt.tm_min >= 60) {
+										tpt.tm_min -= 60;
+										tpt.tm_hour++;
+									}
 
-                           sprintf (cmdname, "%d / %02d:%02d", next_event + 1, tpt.tm_hour % 24, tpt.tm_min % 60);
-                           prints (7, 65, YELLOW|_BLACK, cmdname);
-                        }
-                        else
-                           prints (7, 65, YELLOW|_BLACK, "None");
-                     }
-                  }
+									sprintf (cmdname, "%d / %02d:%02d", next_event + 1, tpt.tm_hour % 24, tpt.tm_min % 60);
+									prints (7, 65, YELLOW|_BLACK, cmdname);
+								}
+								else
+									prints (7, 65, YELLOW|_BLACK, "None");
 
-                  if (cur_event >= 0) {
-                     t = sc * 60L - tp->tm_sec;
-                     ss = (int)(t % 60);
-                     mm = (int)(t / 60) % 60;
-                     hh = (int)(t / 3600) % 24;
-                     sprintf (cmdname, "%02d:%02d:%02d", hh, mm, ss);
-                     prints (8, 65, YELLOW|_BLACK, cmdname);
-                  }
-               }
-            }
+                                    whline (22, 0, 30, 0, LGREY|_BLACK);
+									prints (22, 1, LCYAN|_BLACK, "EVENT: ");
+									sprintf (cmdname,"%s",e_ptrs[cur_event]->cmd);
+                                    cmdname[22]=0;
+									if(!cmdname[0])
+										strcpy(cmdname,"N/A");
+									prints (22, 8, LGREEN|_BLACK, cmdname);
+
+								if(e_ptrs[cur_event]->behavior & MAT_BBS)
+									prints (23, 2, YELLOW|_BLACK, "HUMANS OK");
+								else
+									prints (23, 2, YELLOW|_BLACK, "MAIL ONLY");
+
+								if(e_ptrs[cur_event]->behavior & MAT_NOREQ)
+									prints (23, 13, YELLOW|_BLACK, "NO FREQ");
+								else
+									prints (23, 13, YELLOW|_BLACK, "FREQ OK");
+
+								if(e_ptrs[cur_event]->behavior & MAT_NOOUT)
+									prints (23, 22, YELLOW|_BLACK, "NO OUTC.");
+								else
+									prints (23, 22, YELLOW|_BLACK, "CALL OUT");
+
+							}
+						}
+
+						if (cur_event >= 0) {
+							t = sc * 60L - tp->tm_sec;
+							ss = (int)(t % 60);
+							mm = (int)(t / 60) % 60;
+							hh = (int)(t / 3600) % 24;
+							sprintf (cmdname, "%02d:%02d:%02d", hh, mm, ss);
+							prints (8, 65, YELLOW|_BLACK, cmdname);
+						}
+					}
+				}
          }
       }
    }
@@ -1008,54 +1052,54 @@ void time_release (void)
    else if (have_ddos)
       ddos_pause ();
    else if (have_tv)
-      tv_pause ();
-   else if (have_ml)
-      ml_pause ();
-   else if (have_os2)
-      os2_pause ();
-   else
-     msdos_pause ();
+		tv_pause ();
+	else if (have_ml)
+		ml_pause ();
+	else if (have_os2)
+		os2_pause ();
+	else
+	  msdos_pause ();
 #else
-   DosSleep (5L);
+	DosSleep (5L);
 #endif
 }
 
 static int execute_events (void)
 {
-   int i, rc;
-   char filename[80];
-   struct ffblk blk;
+	int i, rc;
+	char filename[80];
+	struct ffblk blk;
 
-   i = 1;
+	i = 1;
 
-   if (events == 0L) {
-      find_event ();
+	if (events == 0L) {
+		find_event ();
 
-      if (cur_event >= 0) {
-         if ( (call_list[next_call].type & MAIL_WILLGO) || !(e_ptrs[cur_event]->behavior & MAT_NOOUT))
-            events = random_time (e_ptrs[cur_event]->wait_time);
-      }
-      else if (cur_event < 0)
-         events = timerset (500);
-   }
+		if (cur_event >= 0) {
+			if ( (call_list[next_call].type & MAIL_WILLGO) || !(e_ptrs[cur_event]->behavior & MAT_NOOUT))
+				events = random_time (e_ptrs[cur_event]->wait_time);
+		}
+		else if (cur_event < 0)
+			events = timerset (500);
+	}
 
-   if (timeup (events) && events > 0L) {
-      events = 0L;
+	if (timeup (events) && events > 0L) {
+		events = 0L;
 
-      if (answer_flag || nopoll)
-         return (1);
+		if (answer_flag || nopoll)
+			return (1);
 
-      if (next_call < 0)
-         next_call = 0;
-      if (next_call >= max_call)
-         next_call = 0;
+		if (next_call < 0)
+			next_call = 0;
+		if (next_call >= max_call)
+			next_call = 0;
 
-      for (;next_call < max_call; next_call++) {
-         if (!(call_list[next_call].type & MAIL_WILLGO)) {
-            if ((e_ptrs[cur_event]->behavior & MAT_NOOUT))
-               continue;
-            if ((call_list[next_call].type & MAIL_CRASH) && (e_ptrs[cur_event]->behavior & MAT_NOCM))
-               continue;
+		for (;next_call < max_call; next_call++) {
+			if (!(call_list[next_call].type & MAIL_WILLGO)) {
+				if ((e_ptrs[cur_event]->behavior & MAT_NOOUT))
+					continue;
+				if ((call_list[next_call].type & MAIL_CRASH) && (e_ptrs[cur_event]->behavior & MAT_NOCM))
+					continue;
             if (!(call_list[next_call].type & MAIL_CRASH) && (e_ptrs[cur_event]->behavior & MAT_CM))
                continue;
             if (!(call_list[next_call].type & (MAIL_CRASH|MAIL_DIRECT|MAIL_NORMAL)))
@@ -1077,7 +1121,7 @@ static int execute_events (void)
                } while (!findnext (&blk));
             if (!rc) {
                for (i = next_call + 1; i < max_call; i++)
-                  memcpy (&call_list[i - 1], &call_list[i], sizeof (struct _call_list));
+						memcpy (&call_list[i - 1], &call_list[i], sizeof (struct _call_list));
                max_call--;
                if (next_call >= max_call)
                   next_call = -1;
@@ -1088,7 +1132,7 @@ static int execute_events (void)
             }
          }
 
-         if (bad_call(call_list[next_call].net,call_list[next_call].node,0,0))
+			if (bad_call(call_list[next_call].net,call_list[next_call].node,0,0))
             continue;
          else {
             if (flag_file (TEST_AND_SET, call_list[next_call].zone, call_list[next_call].net, call_list[next_call].node, call_list[next_call].point, 0))
@@ -1252,7 +1296,7 @@ static int execute_events (void)
    if (!i) {
       old_event = -1;
       events = 0L;
-      clocks = 0L;
+		clocks = 0L;
       blankto = timerset (0);
       blankto += blank_timer * 6000L;
    }
@@ -1422,7 +1466,7 @@ static int execute_events (void)
    if (!i) {
       old_event = -1;
       events = 0L;
-      clocks = 0L;
+		clocks = 0L;
       blankto = timerset (0);
       blankto += blank_timer * 6000L;
    }
@@ -1623,7 +1667,7 @@ static void snake_screen_blanker (int init)
       elemx[2][0] = x[2] = 60;
       elemy[2][0] = y[2] = 12;
       prints (y[0] - 1, x[0] - 1, LGREEN|_BLACK, "€€");
-      prints (y[1] - 1, x[1] - 1, LRED|_BLACK, "€€");
+		prints (y[1] - 1, x[1] - 1, LRED|_BLACK, "€€");
       prints (y[2] - 1, x[2] - 1, BLUE|_BLACK, "€€");
    }
    // Eliminazione dello screen blanker
@@ -1675,7 +1719,7 @@ static void snake_screen_blanker (int init)
                if (m == 0)
                   prints (elemy[m][i] - 1, elemx[m][i] - 1, LGREEN|_BLACK, "€€");
                else if (m == 1)
-                  prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "€€");
+						prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "€€");
                else
                   prints (elemy[m][i] - 1, elemx[m][i] - 1, BLUE|_BLACK, "€€");
             }
@@ -1683,7 +1727,7 @@ static void snake_screen_blanker (int init)
                if (m == 0)
                   prints (elemy[m][i] - 1, elemx[m][i] - 1, LGREEN|_BLACK, "≤≤");
                else if (m == 1)
-                  prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "≤≤");
+						prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "≤≤");
                else
                   prints (elemy[m][i] - 1, elemx[m][i] - 1, BLUE|_BLACK, "≤≤");
             }
@@ -1691,7 +1735,7 @@ static void snake_screen_blanker (int init)
                if (m == 0)
                   prints (elemy[m][i] - 1, elemx[m][i] - 1, LGREEN|_BLACK, "±±");
                else if (m == 1)
-                  prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "±±");
+						prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "±±");
                else
                   prints (elemy[m][i] - 1, elemx[m][i] - 1, BLUE|_BLACK, "±±");
             }
@@ -1699,7 +1743,7 @@ static void snake_screen_blanker (int init)
                if (m == 0)
                   prints (elemy[m][i] - 1, elemx[m][i] - 1, LGREEN|_BLACK, "∞∞");
                else if (m == 1)
-                  prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "∞∞");
+						prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "∞∞");
                else
                   prints (elemy[m][i] - 1, elemx[m][i] - 1, BLUE|_BLACK, "∞∞");
             }

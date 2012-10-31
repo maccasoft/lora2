@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -11,6 +29,8 @@
 #include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
+
+extern short tcpip;
 
 static byte last_color = 0x07;
 
@@ -28,10 +48,10 @@ void cls (void)
 
    if (usr.ansi || usr.avatar) {
       if (!local_mode) {
-         if (usr.ansi && !usr.formfeed)
-            ansi_print ("\x1B[2J\x1B[1;1f");
-         else
-            BUFFER_BYTE (CTRLL);
+			if (usr.ansi && (!usr.formfeed || tcpip))
+				ansi_print ("\x1B[2J\x1B[1;1f");
+			else
+				BUFFER_BYTE (CTRLL);
       }
       if (snooping)
          wclear ();
@@ -194,8 +214,8 @@ int y, x;
       UNBUFFER_BYTES ();
    }
    if (snooping && (usr.avatar || usr.ansi))
-      wgotoxy (y-1, x-1);
-}
+		wgotoxy ( y ? y-1 : y ,  x ? x-1 : x);
+	}
 
 void cup(y)
 int y;

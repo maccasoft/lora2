@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <conio.h>
 #include <string.h>
@@ -32,7 +50,7 @@ void build_node_queue (int zone, int net, int node, int point, int i);
 void pack_outbound (int);
 void change_type (int, int, int, int, char, char);
 void generate_echomail_status (FILE *, int, int, int, int, int);
-int utility_add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr);
+int utility_add_echomail_link (char *area, int zo, int ne, int no, int po, FILE *fpr,int f_flags);
 int utility_add_tic_link (char *area, int zo, int ne, int no, int po, FILE *fp);
 void fido_save_message2 (FILE *, char *);
 int no_dups(int, int, int, int);
@@ -100,7 +118,7 @@ void keyboard_password (void)
       return;
 
    wopen (11, 15, 13, 66, 0, LGREY|_BLACK, LCYAN|_BLACK);
-   wtitle ("LOCK KEYBOARD (Verification)", TLEFT, LCYAN|_BLACK);
+	wtitle ("LOCK KEYBOARD (Verification)", TLEFT, LCYAN|_BLACK);
    wshadow (DGREY|_BLACK);
 
    wprints (0, 1, YELLOW|_BLACK, "Password:");
@@ -134,7 +152,7 @@ void keyboard_password (void)
 void file_attach ()
 {
    FILE *fp;
-   int i, wh, zo, ne, no, po, nfiles, err;
+	int i, wh, zo, ne, no, po, nfiles, err;
    word m;
    char string[50], filename[80], *p, pri, selpri[4];
    char drive[MAXDRIVE], dir[MAXDIR], file[MAXFILE], ext[MAXEXT];
@@ -168,7 +186,7 @@ void file_attach ()
    if (!get_bbs_record (zo, ne, no, po))
       if (!get_bbs_record (zo, ne, no, 0)) {
          wh = wopen (11, 20, 15, 58, 0, RED|_BLACK, LGREY|_BLACK);
-         wactiv (wh);
+			wactiv (wh);
          sprintf (string, "Node %d:%d/%d.%d not found!", zo, ne, no, po);
          wcenters (1, YELLOW|_BLACK, string);
          timer (20);
@@ -236,7 +254,7 @@ reenter:
 
 //   wfill (4, 0, 7, 56, ' ', LCYAN|_BLACK);
 
-   m = nodelist.rate * 300;
+	m = nodelist.rate * 300;
    if (m > rate || m == 0)
       m = rate;
 
@@ -270,7 +288,7 @@ reenter:
    }
    else
       sprintf (filename, "%s%04X%04X.%cLO", HoldAreaNameMungeCreate (zo), ne, no, pri);
-   fp = fopen (filename, "at");
+	fp = fopen (filename, "at");
 
    p = strtok (strbtrim (string), " ");
    fnsplit (string, drive, dir, file, ext);
@@ -293,7 +311,7 @@ reenter:
       po = 0;
    i = no_dups (zo, ne, no, po);
    if (max_call <= i) {
-      memset (&call_list[i], 0, sizeof (struct _call_list));
+		memset (&call_list[i], 0, sizeof (struct _call_list));
       max_call = i + 1;
    }
 
@@ -400,7 +418,7 @@ void manual_poll ()
 
    i = no_dups (zo, ne, no, 0);
    if (max_call <= i) {
-      memset (&call_list[i], 0, sizeof (struct _call_list));
+		memset (&call_list[i], 0, sizeof (struct _call_list));
       max_call = i + 1;
    }
 //   call_list[i].zone = zo;
@@ -545,7 +563,7 @@ void file_request ()
 
    i = no_dups (zo, ne, no, 0);
    if (max_call <= i) {
-      memset (&call_list[i], 0, sizeof (struct _call_list));
+		memset (&call_list[i], 0, sizeof (struct _call_list));
       max_call = i + 1;
    }
 
@@ -1043,7 +1061,7 @@ void request_echomail_link ()
    msg_fzone = config->alias[0].zone;
    if (config->alias[0].point && config->alias[0].fakenet) {
       msg.orig = config->alias[0].point;
-      msg.orig_net = config->alias[0].fakenet;
+		msg.orig_net = config->alias[0].fakenet;
       msg_fpoint = 0;
    }
    else {
@@ -1080,24 +1098,24 @@ void request_echomail_link ()
 
 void new_echomail_link ()
 {
-   FILE *fp;
-   int i, wh, zo, ne, no, po;
-   char string[50], filename[80], *p, selpri[4], *a;
+	FILE *fp;
+	int i, wh, zo, ne, no, po,f_flags=0;
+	char string[50], filename[80], *p,*p1, selpri[4], *a;
 
-   wh = wopen (11, 15, 13, 65, 0, LGREY|_BLACK, LCYAN|_BLACK);
-   wactiv (wh);
-   wtitle ("NEW ECHOMAIL LINK", TLEFT, LCYAN|_BLACK);
+	wh = wopen (11, 15, 13, 65, 0, LGREY|_BLACK, LCYAN|_BLACK);
+	wactiv (wh);
+	wtitle ("NEW ECHOMAIL LINK", TLEFT, LCYAN|_BLACK);
 
-   wprints (0, 1, YELLOW|_BLACK, "Address:");
-   winpbeg (BLACK|_LGREY, BLACK|_LGREY);
-   winpdef (0, 10, string, "??????????????????????????????????????", 0, 0, NULL, 0);
-   i = winpread ();
-   strtrim (string);
+	wprints (0, 1, YELLOW|_BLACK, "Address:");
+	winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+	winpdef (0, 10, string, "??????????????????????????????????????", 0, 0, NULL, 0);
+	i = winpread ();
+	strtrim (string);
 
-   hidecur ();
-   wclose ();
+	hidecur ();
+	wclose ();
 
-   if (i == W_ESCPRESS || !string[0])
+	if (i == W_ESCPRESS || !string[0])
       return;
 
    zo = config->alias[0].zone;
@@ -1111,7 +1129,7 @@ void new_echomail_link ()
       wh = wopen (11, 20, 15, 60, 0, RED|_BLACK, LGREY|_BLACK);
       wactiv (wh);
       sprintf (string, "Node %d:%d/%d.%d not found!", zo, ne, no, po);
-      wcenters (1, YELLOW|_BLACK, string);
+		wcenters (1, YELLOW|_BLACK, string);
       timer (20);
       wclose ();
       return;
@@ -1131,7 +1149,7 @@ void new_echomail_link ()
    wactiv (wh);
    wtitle ("NEW ECHOMAIL LINK", TLEFT, RED|_LGREY);
    whline (2, 0, 58, 0, RED|_LGREY);
-   wprints (0, 1, BLUE|_LGREY, nodelist.name);
+	wprints (0, 1, BLUE|_LGREY, nodelist.name);
    sprintf (string, "%u:%u/%u.%u", zo, ne, no, po);
    wprints (0, 56 - strlen (string), BLUE|_LGREY, string);
    wprints (1, 1, BLUE|_LGREY, nodelist.city);
@@ -1145,7 +1163,7 @@ void new_echomail_link ()
 
    winpbeg (BLUE|_CYAN, BLUE|_CYAN);
    winpdef (3, 10, string, "??????????????????????????????????????????????", 0, 0, NULL, 0);
-   wprints (4, 1, WHITE|_LGREY, "Priority:   (Normal/Crash/Hold)");
+	wprints (4, 1, WHITE|_LGREY, "Priority:   (Normal/Crash/Hold)");
    i = winpread ();
    strtrim (string);
 
@@ -1179,7 +1197,7 @@ void new_echomail_link ()
    strcpy (msg.from, VERSION);
    strcpy (msg.subj, "New echomail link");
    msg.attr = MSGLOCAL;
-   if (selpri[0] == 'C')
+	if (selpri[0] == 'C')
       msg.attr |= MSGCRASH;
    else if (selpri[0] == 'H')
       msg.attr |= MSGHOLD;
@@ -1212,58 +1230,65 @@ void new_echomail_link ()
 
    mprintf (fp, "Following is a summary from %d:%d/%d.%d of changes in Echomail topology:\r\n\r\n", msg_fzone, msg.orig_net, msg.orig, msg_fpoint);
 
-   p = strtok (strbtrim (string), " ");
-   a = strtok (NULL, "");
+	p = strtok (strbtrim (string), " ");
+	p1 = strtok (NULL," ");
+	a = strtok (NULL, "");
 
-   do {
-      i = utility_add_echomail_link (p, zo, ne, no, po, fp);
-      if (i == 1) {
-         if (*p != '-')
-            mprintf (fp, "Area %s has been added.\r\n", strupr (p));
-         else
-            mprintf (fp, "Area %s has been removed.\r\n", strupr (p));
-      }
-      else if (i == -1)
-         mprintf (fp, "Area %s not found.\r\n", strupr (p));
-      else if (i == -2)
-         mprintf (fp, "Area %s never linked.\r\n", strupr (p));
-      else if (i == -3)
-         mprintf (fp, "Area %s already linked.\r\n", strupr (p));
-      else if (i == -4)
-         mprintf (fp, "Area %s not linked: level too low.\r\n", strupr (p));
+	do {
+		if (*p1=='P'||*p1=='p') f_flags=1;
+		else f_flags=0;
+		i = utility_add_echomail_link (p, zo, ne, no, po, fp,f_flags);
+		if (i == 1) {
+			if (*p != '-') {
+				mprintf (fp, "Area %s has been added.", strupr (p));
+				if(f_flags) mprintf(fp," - Linked as private\r\n");
+				else mprintf(fp,"\r\n");
+			}
+			else
+				mprintf (fp, "Area %s has been removed.\r\n", strupr (p));
+		}
+		else if (i == -1)
+			mprintf (fp, "Area %s not found.\r\n", strupr (p));
+		else if (i == -2)
+			mprintf (fp, "Area %s never linked.\r\n", strupr (p));
+		else if (i == -3)
+			mprintf (fp, "Area %s already linked.\r\n", strupr (p));
+		else if (i == -4)
+			mprintf (fp, "Area %s not linked: level too low.\r\n", strupr (p));
 
-      p = strtok (a, " ");
-      a = strtok (NULL, "");
-   } while (p != NULL);
+		p = strtok (a, " ");
+		p1 = strtok (NULL," ");
+		a = strtok (NULL, "");
+	} while (p != NULL);
 
-   mprintf (fp, "\r\n", p);
-   mprintf (fp, "------------------------------------------------\r\n");
+	mprintf (fp, "\r\n", p);
+	mprintf (fp, "------------------------------------------------\r\n");
 
-   generate_echomail_status (fp, zo, ne, no, po, 2);
-   mprintf (fp, "\r\n", p);
-   mprintf(fp,msgtxt[M_TEAR_LINE],VERSION, registered ? "" : NOREG);
+	generate_echomail_status (fp, zo, ne, no, po, 2);
+	mprintf (fp, "\r\n", p);
+	mprintf(fp,msgtxt[M_TEAR_LINE],VERSION, registered ? "" : NOREG);
 
-   mseek (fp, 0L, SEEK_SET);
-   fido_save_message2 (fp, NULL);
-   mclose (fp);
+	mseek (fp, 0L, SEEK_SET);
+	fido_save_message2 (fp, NULL);
+	mclose (fp);
 
-   unlink (filename);
+	unlink (filename);
 }
 
 void new_tic_link ()
 {
-   FILE *fp;
-   int i, wh, zo, ne, no, po;
-   char string[50], filename[80], *p, selpri[4], *a;
+	FILE *fp;
+	int i, wh, zo, ne, no, po;
+	char string[50], filename[80], *p, selpri[4], *a;
 
-   wh = wopen (11, 15, 13, 65, 0, LGREY|_BLACK, LCYAN|_BLACK);
-   wactiv (wh);
-   wtitle ("NEW TIC LINK", TLEFT, LCYAN|_BLACK);
+	wh = wopen (11, 15, 13, 65, 0, LGREY|_BLACK, LCYAN|_BLACK);
+	wactiv (wh);
+	wtitle ("NEW TIC LINK", TLEFT, LCYAN|_BLACK);
 
-   wprints (0, 1, YELLOW|_BLACK, "Address:");
-   winpbeg (BLACK|_LGREY, BLACK|_LGREY);
-   winpdef (0, 10, string, "??????????????????????????????????????", 0, 0, NULL, 0);
-   i = winpread ();
+	wprints (0, 1, YELLOW|_BLACK, "Address:");
+	winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+	winpdef (0, 10, string, "??????????????????????????????????????", 0, 0, NULL, 0);
+	i = winpread ();
    strtrim (string);
 
    hidecur ();
@@ -1391,7 +1416,7 @@ void new_tic_link ()
       i = utility_add_tic_link (p, zo, ne, no, po, NULL);
       if (i == 1) {
          if (*p != '-')
-            mprintf (fp, "Area %s has been added.\r\n", strupr (p));
+				mprintf (fp, "Area %s has been added.\r\n", strupr (p));
          else
             mprintf (fp, "Area %s has been removed.\r\n", strupr (p));
       }
@@ -1663,7 +1688,7 @@ rescan:
                      memcpy (&string[39], " Busy", 5);
                      break;
                   case NO_ANSWER:
-                     memcpy (&string[39], " No Answer", 10);
+							memcpy (&string[39], " No Answer", 10);
                      break;
                   case VOICE:
                      memcpy (&string[39], " Voice", 6);
@@ -1698,7 +1723,7 @@ rescan:
 
          wh = wopen (7, 22, 19, 58, 3, RED|_BLACK, LCYAN|_BLACK);
          wactiv (wh);
-         wtitle ("OUTBOUND", TLEFT, LCYAN|_BLACK);
+			wtitle ("OUTBOUND", TLEFT, LCYAN|_BLACK);
          wshadow (DGREY|_BLACK);
 
          sprintf (string, "Mail for %d:%d/%d.%d", call_list[i].zone, call_list[i].net, call_list[i].node, call_list[i].point);
@@ -1717,7 +1742,27 @@ rescan:
          ch = wmenuget ();
 
          switch (ch) {
-            case 1:
+				case 1:
+					{
+						char string[10];
+						int i,wh1;
+
+						wh1 = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
+						wactiv (wh1);
+						wshadow (DGREY|_BLACK);
+
+						wcenters (1, BLACK|_LGREY, "Are you sure (Y/n) ?  ");
+
+						strcpy (string, "Y");
+						winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+						winpdef (1, 24, string, "?", 0, 2, NULL, 0);
+
+						i = winpread ();
+						wclose ();
+						hidecur ();
+						if (i == W_ESCPRESS) break;
+						if (toupper (string[0]) != 'Y') break;
+					}
                hold_area = HoldAreaNameMunge (call_list[i].zone);
                if (call_list[i].point)
                   sprintf (string, "%s%04x%04x.PNT\\%08x.*", hold_area, call_list[i].net, call_list[i].node, call_list[i].point);
@@ -1753,7 +1798,7 @@ rescan:
                   next_call--;
 
                for (i = last + 1; i < max_call; i++)
-                  memcpy (&call_list[i - 1], &call_list[i], sizeof (struct _call_list));
+						memcpy (&call_list[i - 1], &call_list[i], sizeof (struct _call_list));
                max_call--;
                if (last >= max_call)
                   last = max_call - 1;

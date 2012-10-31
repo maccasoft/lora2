@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <dos.h>
 #include <stdio.h>
 #include <string.h>
@@ -7,6 +25,8 @@
 #ifdef __OS2__
 #define INCL_DOS
 #define INCL_DOSDEVIOCTL
+#define ASYNC_SETBAUDRATE_XT                  0x0043
+#define ASYNC_GETBAUDRATE_XT                  0x0063
 #include <os2.h>
 #include <conio.h>
 #endif
@@ -35,19 +55,28 @@ extern long timeout;
 #define MSG_PEEK        0x2
 
 struct in_addr {
-   unsigned long  s_addr;
+	unsigned long  s_addr;
 };
 
+typedef struct _XT_BAUD_RATE
+{
+   unsigned long  current_baud;
+   unsigned char  current_fract;
+   unsigned long  min_baud;
+   unsigned char  min_fract;
+   unsigned long  max_baud;
+   unsigned char  max_fract;
+} XT_BAUD_RATE;
 struct sockaddr_in {
-   short          sin_family;
-   unsigned short sin_port;
-   struct in_addr sin_addr;
-   char           sin_zero[8];
+	short          sin_family;
+	unsigned short sin_port;
+	struct in_addr sin_addr;
+	char           sin_zero[8];
 };
 
 struct sockaddr {
-   unsigned short sa_family;              /* address family */
-   char           sa_data[14];            /* up to 14 bytes of direct address */
+	unsigned short sa_family;              /* address family */
+	char           sa_data[14];            /* up to 14 bytes of direct address */
 };
 
 int _pascal sock_init( void );
@@ -61,148 +90,222 @@ int __syscall soclose( int );
 char *tcpip_name (char *a)
 {
 #if defined (__OCC__) || defined (__TCPIP__)
-   int namelen;
-   struct sockaddr_in client;
+	int namelen;
+	struct sockaddr_in client;
 
-   namelen = sizeof (client);
-   getpeername (socket, (struct sockaddr *)&client, &namelen);
-   sprintf (a, "%ld.%ld.%ld.%ld", (client.sin_addr.s_addr & 0xFFL), (client.sin_addr.s_addr & 0xFF00L) >> 8, (client.sin_addr.s_addr & 0xFF0000L) >> 16, (client.sin_addr.s_addr & 0xFF000000L) >> 24);
+	namelen = sizeof (client);
+	getpeername (socket, (struct sockaddr *)&client, &namelen);
+	sprintf (a, "%ld.%ld.%ld.%ld", (client.sin_addr.s_addr & 0xFFL), (client.sin_addr.s_addr & 0xFF00L) >> 8, (client.sin_addr.s_addr & 0xFF0000L) >> 16, (client.sin_addr.s_addr & 0xFF000000L) >> 24);
 #endif
 
-   return (a);
+	return (a);
 }
 
 #else
 
 char *tcpip_name (char *a)
 {
-   return (a);
+	return (a);
 }
 #endif
 
 void initialize_modem (void)
 {
-   mdm_sendcmd (init);
-   if (init == config->init) {
-      mdm_sendcmd (config->init2);
-      mdm_sendcmd (config->init3);
-   }
+	mdm_sendcmd (init);
+	if (init == config->init) {
+		mdm_sendcmd (config->init2);
+		mdm_sendcmd (config->init3);
+	}
+
+	if (config->modem_OK_errorlevel) {
+		#define MODEM_STRING_LEN 90
+		int c, i=0,mdm_err=0;
+		static char stringa[MODEM_STRING_LEN];
+		long t1,t2;
+		stringa[0]=0;
+
+		t2 = timerset(2000);
+
+		while (!timeup(t2)&&!strstr(strupr(stringa),"OK")&&!mdm_err){
+
+			i=c=0;
+
+			while(c != 0x0D && !mdm_err && i < MODEM_STRING_LEN){
+				if (CHAR_AVAIL ())
+					c = MODEM_IN ();
+				else {
+					t1 = timerset (200);
+					while (!CHAR_AVAIL ()&&!mdm_err) {
+						if (timeup (t1)){
+							mdm_err=1;
+						}
+
+						release_timeslice ();
+					}
+					if (!mdm_err) c = MODEM_IN();
+					else c = 0x0D;
+				}
+
+				if (c < 0x20 || c == ' ')
+					continue;
+
+				if (c != 0x0D)
+					stringa[i++] = c;
+				else
+					stringa[i++] = 0;
+
+			}
+
+			stringa[i]=0;
+
+			if (!blanked&&strlen(stringa)>1){
+
+				if (emulator) {
+					c = stringa[46];
+					stringa[46] = '\0';
+					scrollbox (15, 11, 18, 69, 1, D_UP);
+					prints (18, 12, CYAN|_BLACK, strupr (stringa));
+					stringa[46] = c;
+				}
+				else {
+					c = stringa[26];
+					stringa[26] = '\0';
+					scrollbox (13, 53, 21, 78, 1, D_UP);
+					prints (21, 53 + ((26 - strlen (stringa)) / 2), CYAN|_BLACK, strupr (stringa));
+					stringa[26] = c;
+				}
+			}
+		}
+
+		if(!strstr(strupr(stringa),"OK")){
+			status_line("!Modem not responding - exit");
+			status_line("!exit with errorlevel %d",config->modem_OK_errorlevel);
+			local_mode=1;
+			get_down (config->modem_OK_errorlevel, 0);
+		}
+	}
 }
 
 int wait_for_connect(to)
 int to;
 {
-   int i;
-   long t1, brate;
+	int i;
+	long t1, brate;
 
-   if (config->modem_timeout)
-      t1 = timerset (config->modem_timeout * 100);
-   else
-      t1 = timerset (6000);
-   if (!to) {
-      timeout = t1;
-      to_row = 8;
-   }
-   brate = 0L;
+	if (config->modem_timeout)
+		t1 = timerset (config->modem_timeout * 100);
+	else
+		t1 = timerset (6000);
+	if (!to) {
+		timeout = t1;
+		to_row = 8;
+	}
+	brate = 0L;
 
-   do {
-      if (!to && local_kbd == ' ') {
-         local_kbd = -1;
-         if (!to) {
-            timeout = 0L;
-            return (ABORTED);
-         }
-         else
-            return (0);
-      }
+	do {
+		if (!to && local_kbd == ' ') {
+			local_kbd = -1;
+			if (!to) {
+				timeout = 0L;
+				return (ABORTED);
+			}
+			else
+				return (0);
+		}
 
-      if (!to && local_kbd != -1) {
-         if (local_kbd == 0x1B) {
-            timeout = 0L;
-            local_kbd = -1;
-            return (ABORTED);
-         }
+		if (!to && local_kbd != -1) {
+			if (local_kbd == 0x1B) {
+				timeout = 0L;
+				local_kbd = -1;
+				return (ABORTED);
+			}
 
-         local_kbd = -1;
-      }
+			local_kbd = -1;
+		}
 
-      if ((i = modem_response()) <= 0) {
-         time_release();
-         release_timeslice ();
-         if (to)
-            return (-1);
-      }
-      else {
-         switch(i) {
-         case 1:
-            brate = 300L;
-            break;
-         case 5:
-            brate = 1200L;
-            break;
-         case 11:
-            brate = 2400L;
-            break;
-         case 18:
-            brate = 4800L;
-            break;
-         case 16:
-            brate = 7200L;
-            break;
-         case 12:
-            brate = 9600L;
-            break;
-         case 17:
-            brate = 12000L;
-            break;
-         case 15:
-            brate = 14400L;
-            break;
-         case 19:
-            brate = 16800L;
-            break;
-         case 13:
-            brate = 19200L;
-            break;
-         case 14:
-            brate = 38400L;
-            break;
-         case 20:
-            brate = 57600L;
-            break;
-         case 21:
-            brate = 21600L;
-            break;
-         case 22:
-            brate = 28800L;
-            break;
-         case 23:
-            brate = 38000L;
-            break;
-         case 24:
-            brate = 56000L;
-            break;
-         case 25:
-            brate = 64000L;
-            break;
-         case 26:
-            brate = 128000L;
-            break;
-         case 27:
-            brate = 256000L;
-            break;
-         case 28:
-            brate = 24000L;
-            break;
-         case 29:
-            brate = 26400L;
-            break;
-         case 40:
-            brate = config->speed;
-            break;
-         case 50:
-            brate = -1;
-            break;
+		if ((i = modem_response()) <= 0) {
+			time_release();
+			release_timeslice ();
+			if (to)
+				return (-1);
+		}
+		else {
+			switch(i) {
+			case 1:
+				brate = 300L;
+				break;
+			case 5:
+				brate = 1200L;
+				break;
+			case 11:
+				brate = 2400L;
+				break;
+			case 18:
+				brate = 4800L;
+				break;
+			case 16:
+				brate = 7200L;
+				break;
+			case 12:
+				brate = 9600L;
+				break;
+			case 17:
+				brate = 12000L;
+				break;
+			case 15:
+				brate = 14400L;
+				break;
+			case 19:
+				brate = 16800L;
+				break;
+			case 13:
+				brate = 19200L;
+				break;
+			case 14:
+				brate = 38400L;
+				break;
+			case 20:
+				brate = 57600L;
+				break;
+			case 21:
+				brate = 21600L;
+				break;
+			case 22:
+				brate = 28800L;
+				break;
+			case 23:
+				brate = 38000L;
+				break;
+			case 24:
+				brate = 56000L;
+				break;
+			case 25:
+				brate = 64000L;
+				break;
+			case 26:
+				brate = 128000L;
+				break;
+			case 27:
+				brate = 256000L;
+				break;
+			case 28:
+				brate = 24000L;
+				break;
+			case 29:
+				brate = 26400L;
+				break;
+			case 30:
+				brate = 31200L;
+				break;
+			case 31:
+				brate = 33600L;
+				break;
+			case 40:
+				brate = config->speed;
+				break;
+			case 50:
+				brate = -1;
+				break;
          }
 
          if (brate) {
@@ -210,7 +313,7 @@ int to;
             if (brate != -1) {
                if (!lock_baud)
                   com_baud(brate);
-               MNP_Filter();
+					MNP_Filter();
             }
             timeout = 0L;
             return (1);
@@ -227,7 +330,7 @@ int to;
    timeout = 0L;
 
    if (!to)
-      return (TIMEDOUT);
+		return (TIMEDOUT);
    else
       return (0);
 }
@@ -241,265 +344,270 @@ int modem_response()
    int hours, mins, spcount = 0;
 
    mdm_flags = NULL;
-   if (!CHAR_AVAIL ())
+	if (!CHAR_AVAIL ())
       return(-1);
 
-   if (terminal)
-      return (terminal_response ());
+	if (terminal)
+		return (terminal_response ());
 
-   for (;;) {
-      if (CHAR_AVAIL ())
-         c = MODEM_IN ();
-      else {
-         t1 = timerset (100);
-         while (!CHAR_AVAIL ()) {
-            if (timeup (t1))
-               return (-1);
-            release_timeslice ();
-         }
-         c = MODEM_IN();
-      }
+	for (;;) {
+		if (CHAR_AVAIL ())
+			c = MODEM_IN ();
+		else {
+			t1 = timerset (100);
+			while (!CHAR_AVAIL ()) {
+				if (timeup (t1))
+					return (-1);
+				release_timeslice ();
+			}
+			c = MODEM_IN();
+		}
 
-      if (c == 0x0D)
-         break;
+		if (c == 0x0D)
+			break;
 
-      if (c < 0x20)
-         continue;
+		if (c < 0x20)
+			continue;
 
-      if (c == ' ' && i > 0 && stringa[i - 1] != ' ')
-         spcount++;
+		if (c == ' ' && i > 0 && stringa[i - 1] != ' ')
+			spcount++;
 
-      if ((c == '/' || c == '\\') && mdm_flags == NULL) {
-         c = '\0';
-         mdm_flags = (char *)&stringa[i+1];
-      }
-      else if (c == ' ' && spcount >= 2 && mdm_flags == NULL) {
-         c = '\0';
-         mdm_flags = (char *)&stringa[i+1];
-      }
-      else if (spcount == 1 && !isdigit (c))
-         spcount = 0;
+		if ((c == '/' || c == '\\') && mdm_flags == NULL) {
+			c = '\0';
+			mdm_flags = (char *)&stringa[i+1];
+		}
+		else if (c == ' ' && spcount >= 2 && mdm_flags == NULL) {
+			c = '\0';
+			mdm_flags = (char *)&stringa[i+1];
+		}
+		else if (spcount == 1 && !isdigit (c))
+			spcount = 0;
 
-      stringa[i++] = c;
+		stringa[i++] = c;
 
-      if (i >= MODEM_STRING_LEN)
-         break;
-   }
+		if (i >= MODEM_STRING_LEN)
+			break;
+	}
 
-   stringa[i] = '\0';
-   if (i < 2)
-      return (-1);
+	stringa[i] = '\0';
+	if (i < 2)
+		return (-1);
 
-   if (mdm_flags)
-      fancy_str (mdm_flags);
+	if (mdm_flags)
+		fancy_str (mdm_flags);
 
-   if (!blanked || !strnicmp (stringa, "CONNECT", 7) || !strnicmp(stringa,"RING",4)) {
-      resume_blanked_screen ();
+	if (!blanked || !strnicmp (stringa, "CONNECT", 7) || !strnicmp(stringa,"RING",4)) {
+		resume_blanked_screen ();
 
-      if (emulator) {
-         c = stringa[46];
-         stringa[46] = '\0';
-         scrollbox (15, 11, 18, 69, 1, D_UP);
-         prints (18, 12, CYAN|_BLACK, strupr (stringa));
-         stringa[46] = c;
-      }
-      else {
-         c = stringa[26];
-         stringa[26] = '\0';
-         scrollbox (13, 53, 21, 78, 1, D_UP);
-         prints (21, 53 + ((26 - strlen (stringa)) / 2), CYAN|_BLACK, strupr (stringa));
-         stringa[26] = c;
-      }
-   }
+		if (emulator) {
+			c = stringa[46];
+			stringa[46] = '\0';
+			scrollbox (15, 11, 18, 69, 1, D_UP);
+			prints (18, 12, CYAN|_BLACK, strupr (stringa));
+			stringa[46] = c;
+		}
+		else {
+			c = stringa[26];
+			stringa[26] = '\0';
+			scrollbox (13, 53, 21, 78, 1, D_UP);
+			prints (21, 53 + ((26 - strlen (stringa)) / 2), CYAN|_BLACK, strupr (stringa));
+			stringa[26] = c;
+		}
+	}
 
-   strupr (stringa);
-   if (config->fax_response[0] && !strnicmp (stringa, config->fax_response, strlen (config->fax_response)))
-      return (50);
+	strupr (stringa);
+	if (config->fax_response[0] && !strnicmp (stringa, config->fax_response, strlen (config->fax_response)))
+		return (50);
 
-   if (!strnicmp (stringa, "CONNECT", 7) || !strnicmp (stringa, "CARRIER", 7)) {
-      if(!stricmp (&stringa[7]," 300") || stringa[7] == '\0')
-         return (1);
-      else if(!stricmp (&stringa[7]," 1200"))
-         return (5);
-      else if(!stricmp (&stringa[7]," 1275") || !stricmp (&stringa[7], " 1200TX"))
-         return (10);
-      else if(!stricmp (&stringa[7]," 24000"))
-         return (28);
-      else if(!stricmp (&stringa[7]," 2400"))
-         return (11);
-      else if(!stricmp (&stringa[7]," 9600"))
-         return (12);
-      else if(!stricmp (&stringa[7]," FAST"))
-         return (12);
-      else if(!stricmp (&stringa[7]," 7200"))
-         return (16);
-      else if(!stricmp (&stringa[7]," 4800"))
-         return (18);
-      else if(!stricmp (&stringa[7]," 12000"))
-         return (17);
-      else if(!stricmp (&stringa[7]," 14400"))
-         return (15);
-      else if(!stricmp (&stringa[7]," 16800"))
-         return (19);
-      else if(!stricmp (&stringa[7]," 19200"))
-         return (13);
-      else if(!stricmp (&stringa[7]," 21600"))
-         return (21);
-      else if(!stricmp (&stringa[7]," 26400"))
-         return (29);
-      else if(!stricmp (&stringa[7]," 28800"))
-         return (22);
-      else if(!stricmp (&stringa[7]," 38000"))
-         return (23);
-      else if(!stricmp (&stringa[7]," 56000"))
-         return (24);
-      else if(!stricmp (&stringa[7]," 64000"))
-         return (25);
-      else if(!stricmp(&stringa[7]," 38400"))
-         return (14);
-      else if(!stricmp(&stringa[7]," 57600"))
-         return (20);
-      else if(!stricmp (&stringa[7]," 128000"))
-         return (26);
-      else if(!stricmp (&stringa[7]," 256000"))
-         return (27);
-      else if(!stricmp(&stringa[7]," FAX"))
-         return (50);
-      else
-         return (40);
-   }
-   else if(!stricmp(stringa,"OK"))
-      return(0);
-   else if(!stricmp(stringa,"NO CARRIER")) {
-      status_line(":%s", fancy_str(stringa));
-      answer_flag = 0;
-      return(3);
-   }
-   else if(!stricmp(stringa,"NO DIALTONE"))
-      return(6);
-   else if(!stricmp(stringa,"BUSY")) {
-      status_line(":%s", fancy_str(stringa));
-      return(7);
-   }
-   else if(!stricmp(stringa,"NO ANSWER")) {
-      status_line(":%s", fancy_str(stringa));
-      answer_flag=0;
-      return(8);
-   }
-   else if(!stricmp(stringa,"VOICE")) {
-      status_line(":%s", fancy_str(stringa));
-      answer_flag=0;
-      return(9);
-   }
-   else if(!strnicmp(stringa,"RING",4)) {
+	if (!strnicmp (stringa, "CONNECT", 7) || !strnicmp (stringa, "CARRIER", 7)) {
+		if(!stricmp (&stringa[7]," 300") || stringa[7] == '\0')
+			return (1);
+		else if(!stricmp (&stringa[7]," 1200"))
+			return (5);
+		else if(!stricmp (&stringa[7]," 1275") || !stricmp (&stringa[7], " 1200TX"))
+			return (10);
+		else if(!stricmp (&stringa[7]," 24000"))
+			return (28);
+		else if(!stricmp (&stringa[7]," 2400"))
+			return (11);
+		else if(!stricmp (&stringa[7]," 9600"))
+			return (12);
+		else if(!stricmp (&stringa[7]," FAST"))
+			return (12);
+		else if(!stricmp (&stringa[7]," 7200"))
+			return (16);
+		else if(!stricmp (&stringa[7]," 4800"))
+			return (18);
+		else if(!stricmp (&stringa[7]," 12000"))
+			return (17);
+		else if(!stricmp (&stringa[7]," 14400"))
+			return (15);
+		else if(!stricmp (&stringa[7]," 16800"))
+			return (19);
+		else if(!stricmp (&stringa[7]," 19200"))
+			return (13);
+		else if(!stricmp (&stringa[7]," 21600"))
+			return (21);
+		else if(!stricmp (&stringa[7]," 26400"))
+			return (29);
+		else if(!stricmp (&stringa[7]," 28800"))
+			return (22);
+		else if(!stricmp (&stringa[7]," 31200"))
+			return (30);
+		else if(!stricmp(&stringa[7]," 33600"))
+			return (31);
+		else if(!stricmp (&stringa[7]," 38000"))
+			return (23);
+		else if(!stricmp (&stringa[7]," 56000"))
+			return (24);
+		else if(!stricmp (&stringa[7]," 64000"))
+			return (25);
+		else if(!stricmp(&stringa[7]," 38400"))
+			return (14);
+		else if(!stricmp(&stringa[7]," 57600"))
+			return (20);
+		else if(!stricmp (&stringa[7]," 128000"))
+			return (26);
+		else if(!stricmp (&stringa[7]," 256000"))
+			return (27);
+		else if(!stricmp(&stringa[7]," FAX"))
+			return (50);
+		else
+			return (40);
+	}
+	else if(!stricmp(stringa,"OK"))
+		return(0);
+	else if(!stricmp(stringa,"NO CARRIER")||!stricmp(stringa,"NO CARRIER???")||!stricmp(stringa,"NO ANSWEROK???")) {
+		status_line(":%s", fancy_str(stringa));
+		answer_flag = 0;
+		return(3);
+	}
+	else if(!stricmp(stringa,"NO DIALTONE")||!stricmp(stringa,"NO DIAL TONE"))
+		return(6);
+
+	else if(!stricmp(stringa,"BUSY")||!stricmp(stringa,"BUSY???")||!stricmp(stringa,"NO ANSWER???")) {
+		status_line(":%s", fancy_str(stringa));
+		return(7);
+	}
+	else if(!stricmp(stringa,"NO ANSWER")) {
+		status_line(":%s", fancy_str(stringa));
+		answer_flag=0;
+		return(8);
+	}
+	else if(!stricmp(stringa,"VOICE")) {
+		status_line(":%s", fancy_str(stringa));
+		answer_flag=0;
+		return(9);
+	}
+	else if(!strnicmp(stringa,"RING",4)) {
 //      if (config->manual_answer && !answer_flag && registered != 2) {
-      if (config->manual_answer && !answer_flag) {
-         status_line(":%s", fancy_str(stringa));
-         if (config->limited_hours) {
-            dostime (&hours, &mins, &i, &i);
-            i = hours * 60 + mins;
-            if (config->start_time > config->end_time) {
-               if (i > config->end_time && i < config->start_time)
-                  return (-1);
-            }
-            else {
-               if (i < config->start_time || i > config->end_time)
-                  return (-1);
-            }
-         }
-         mdm_sendcmd( (config->answer[0] == '\0') ? "ATA|" : config->answer);
-         answer_flag=1;
-      }
-      else
-         status_line(":%s", fancy_str(stringa));
-      return(-1);
-   }
+		if (config->manual_answer && !answer_flag) {
+			status_line(":%s", fancy_str(stringa));
+			if (config->limited_hours) {
+				dostime (&hours, &mins, &i, &i);
+				i = hours * 60 + mins;
+				if (config->start_time > config->end_time) {
+					if (i > config->end_time && i < config->start_time)
+						return (-1);
+				}
+				else {
+					if (i < config->start_time || i > config->end_time)
+						return (-1);
+				}
+			}
+			mdm_sendcmd( (config->answer[0] == '\0') ? "ATA|" : config->answer);
+			answer_flag=1;
+		}
+		else
+			status_line(":%s", fancy_str(stringa));
+		return(-1);
+	}
 
-   return(-1);
+	return(-1);
 }
 
 int terminal_response()
 {
-   int c, flag;
-   long t1;
+	int c, flag;
+	long t1;
 
-   flag = 0;
+	flag = 0;
 
-   for (;;) {
-      if(PEEKBYTE() != -1)
-         c = MODEM_IN();
-      else {
-         t1 = timerset(100);
+	for (;;) {
+		if(PEEKBYTE() != -1)
+			c = MODEM_IN();
+		else {
+			t1 = timerset(100);
 
-         while(PEEKBYTE() == -1)
-            if(timeup(t1))
-               return (-1);
+			while(PEEKBYTE() == -1)
+				if(timeup(t1))
+					return (-1);
 
-         if(PEEKBYTE() != -1)
-            c = MODEM_IN();
-      }
+			if(PEEKBYTE() != -1)
+				c = MODEM_IN();
+		}
 
-      if(c == 0x0D) {
-         if (flag)
-            break;
-         flag = 1;
-      }
-   }
+		if(c == 0x0D) {
+			if (flag)
+				break;
+			flag = 1;
+		}
+	}
 
-   switch (speed) {
-   case 300:
-      return (1);
-   case 1200:
-      return (5);
-   case 2400:
-      return (11);
-   case 4800:
-      return (18);
-   case 7200:
-      return (16);
-   case 9600:
-      return (12);
-   case 12000:
-      return (17);
-   case 14400:
-      return (15);
-   case 16800:
-      return (19);
-   case 19200:
-      return (13);
-   case 38400U:
-      return (14);
-   }
+	switch (speed) {
+	case 300:
+		return (1);
+	case 1200:
+		return (5);
+	case 2400:
+		return (11);
+	case 4800:
+		return (18);
+	case 7200:
+		return (16);
+	case 9600:
+		return (12);
+	case 12000:
+		return (17);
+	case 14400:
+		return (15);
+	case 16800:
+		return (19);
+	case 19200:
+		return (13);
+	case 38400U:
+		return (14);
+	}
 
-   return(-1);
+	return(-1);
 }
 
 void mdm_sendcmd(value)
 char *value;
 {
-   register int i;
+	register int i;
 
-   SET_DTR_ON ();
-   if (value == NULL)
-      return;
+	SET_DTR_ON ();
+	if (value == NULL)
+		return;
 
-   for (i = 0; value[i]; i++)
-      switch (value[i]) {
-         case '|':
-            SENDBYTE ('\r');
-            timer (5);
-            break;
-         case '~':                           /* Long delay                */
-            empty_delay ();                  /* wait for buffer to clear  */
+	for (i = 0; value[i]; i++)
+		switch (value[i]) {
+			case '|':
+				SENDBYTE ('\r');
+				timer (5);
+				break;
+			case '~':                           /* Long delay                */
+				empty_delay ();                  /* wait for buffer to clear  */
             timer (10);                      /* then wait 1 second        */
             break;
          case 'v':                           /* Lower DTR                 */
-            empty_delay ();                  /* wait for buffer to clear, */
+				empty_delay ();                  /* wait for buffer to clear, */
             SET_DTR_OFF ();                  /* Turn off DTR              */
             timer (5);
             break;
          case '^':                           /* Raise DTR                 */
-            empty_delay ();                  /* wait for buffer to clear  */
+				empty_delay ();                  /* wait for buffer to clear  */
             SET_DTR_ON ();                   /* Turn on DTR               */
             timer (5);
             break;
@@ -530,7 +638,7 @@ void modem_hangup (void)
    if (CARRIER)
       status_line("!Unable to drop carrier");
 
-   CLEAR_INBOUND ();
+	CLEAR_INBOUND ();
    timer (5);
 
    answer_flag = 0;
@@ -542,9 +650,9 @@ int t;
    long t1;
    extern long timerset ();
 
-   if (!CHAR_AVAIL ()) {
+	if (!CHAR_AVAIL ()) {
       t1 = timerset ((unsigned int) (t * 100));
-      while (!CHAR_AVAIL ()) {
+		while (!CHAR_AVAIL ()) {
          if (timeup (t1))
             return (-1);
          if (!CARRIER)
@@ -587,7 +695,7 @@ void MNP_Filter ()
          {
          (void) TIMED_READ(0);
 
-         /* If we get an MNP or v.42 character, eat it and wait for clear line */
+			/* If we get an MNP or v.42 character, eat it and wait for clear line */
          if ((c != 0) && ((strchr (BadChars, c) != NULL) || (strchr (BadChars, c&0x7f) != NULL)))
             {
             t = timerset (50);
@@ -613,7 +721,7 @@ void FLUSH_OUTPUT ()
    if (local_mode || tcpip != 0)
       return;
 
-   UNBUFFER_BYTES ();
+	UNBUFFER_BYTES ();
    while (CARRIER && !OUT_EMPTY())
       time_release();
 }
@@ -779,51 +887,51 @@ int com_out_empty (void)
       else
          return (0);
    }
-   else
-      return (1);
+	else
+		return (1);
 }
 
 void UNBUFFER_BYTES (void)
 {
-   ULONG written, pos;
+	ULONG written, pos;
 
-   if (tcpip == 0) {
-      if (hfComHandle == NULLHANDLE)
-         return;
+	if (tcpip == 0) {
+		if (hfComHandle == NULLHANDLE)
+			return;
 
-      if (tpos) {
-         pos = 0;
-         do {
-            DosWrite (hfComHandle, (PVOID)&tBuff[pos], (long)tpos, &written);
-            if (written < tpos) {
-               pos += written;
-               tpos -= written;
-               DosSleep (1L);
-            }
-         } while (written < tpos);
-         tpos = 0;
-      }
-   }
+		if (tpos) {
+			pos = 0;
+			do {
+				DosWrite (hfComHandle, (PVOID)&tBuff[pos], (long)tpos, &written);
+				if (written < tpos) {
+					pos += written;
+					tpos -= written;
+					DosSleep (1L);
+				}
+			} while (written < tpos);
+			tpos = 0;
+		}
+	}
 #if defined (__OCC__) || defined (__TCPIP__)
-   else {
+	else {
 //      fwrite (tBuff, tpos, 1, stdout);
-      send (socket, tBuff, tpos, 0);
-      tpos = 0;
-   }
+		send (socket, tBuff, tpos, 0);
+		tpos = 0;
+	}
 #endif
 }
 
 void BUFFER_BYTE (unsigned char ch)
 {
-   if (tcpip == 0) {
-      if (hfComHandle == NULLHANDLE)
-         return;
-   }
+	if (tcpip == 0) {
+		if (hfComHandle == NULLHANDLE)
+			return;
+	}
 
-   if (tpos >= TSIZE)
-      UNBUFFER_BYTES ();
+	if (tpos >= TSIZE)
+		UNBUFFER_BYTES ();
 
-   tBuff[tpos++] = ch;
+	tBuff[tpos++] = ch;
 }
 
 void do_break (int a)
@@ -832,94 +940,96 @@ void do_break (int a)
 
 int PEEKBYTE (void)
 {
-   int i;
-   ULONG bytesRead;
-   RXQUEUE q;
+	int i;
+	ULONG bytesRead;
+	RXQUEUE q;
 
-   if (tcpip == 0) {
-      if (hfComHandle == NULLHANDLE)
-         return (-1);
+	if (tcpip == 0) {
+		if (hfComHandle == NULLHANDLE)
+			return (-1);
 
-      UNBUFFER_BYTES ();
+		UNBUFFER_BYTES ();
 
-      if (rpos >= Rbytes) {
-         rpos = Rbytes = 0;
+		if (rpos >= Rbytes) {
+			rpos = Rbytes = 0;
 
-         if (DevIOCtl (&q, sizeof (RXQUEUE), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
-            return (-1);
+			if (DevIOCtl (&q, sizeof (RXQUEUE), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
+				return (-1);
 
-         // if there is a byte or more waiting, then read one.
-         if (q.cch > 0) {
-            if (q.cch > RSIZE)
-               q.cch = RSIZE;
-            DosRead (hfComHandle, (PVOID)rbuf, (long)q.cch, &bytesRead);
-            Rbytes += bytesRead;
-         }
-      }
+			// if there is a byte or more waiting, then read one.
+			if (q.cch > 0) {
+				if (q.cch > RSIZE){
+//					status_line(">DEBUG: q.cch>RSIZE");
+					q.cch = RSIZE;
+				}
+				DosRead (hfComHandle, (PVOID)rbuf, (long)q.cch, &bytesRead);
+				Rbytes += bytesRead;
+			}
+		}
 
-      if (rpos < Rbytes)
-         return ((unsigned int)rbuf[rpos]);
-      else
-         return (-1);
-   }
+		if (rpos < Rbytes)
+			return ((unsigned int)rbuf[rpos]);
+		else
+			return (-1);
+	}
 #if defined (__OCC__) || defined (__TCPIP__)
-   else {
-      UNBUFFER_BYTES ();
+	else {
+		UNBUFFER_BYTES ();
 
-      if (rpos >= Rbytes) {
-         rpos = Rbytes = 0;
+		if (rpos >= Rbytes) {
+			rpos = Rbytes = 0;
 
-         i = 0;
-         if (ioctl (socket, FIONREAD, (char *)&i, sizeof (int *)) != 0)
-            return (-1);
+			i = 0;
+			if (ioctl (socket, FIONREAD, (char *)&i, sizeof (int *)) != 0)
+				return (-1);
 
-         // if there is a byte or more waiting, then read one.
-         if (i > 0)
-            Rbytes += recv (socket, rbuf, sizeof (rbuf), 0);
-      }
+			// if there is a byte or more waiting, then read one.
+			if (i > 0)
+				Rbytes += recv (socket, rbuf, sizeof (rbuf), 0);
+		}
 
-      if (rpos < Rbytes)
-         return ((unsigned int)rbuf[rpos]);
-      else
-         return (-1);
-   }
+		if (rpos < Rbytes)
+			return ((unsigned int)rbuf[rpos]);
+		else
+			return (-1);
+	}
 #endif
-}                    
+}
 
 static int check_byte_in (void)
 {
-   int i;
-   ULONG bytesRead;
-   RXQUEUE q;
+	int i;
+	ULONG bytesRead;
+	RXQUEUE q;
 
-   if (tcpip == 0) {
-      if (hfComHandle == NULLHANDLE)
-         return (-1);
+	if (tcpip == 0) {
+		if (hfComHandle == NULLHANDLE)
+			return (-1);
 
-      if (rpos >= Rbytes) {
-         rpos = Rbytes = 0;
+		if (rpos >= Rbytes) {
+			rpos = Rbytes = 0;
 
-         if (DevIOCtl (&q, sizeof (RXQUEUE), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
-            return (-1);
+			if (DevIOCtl (&q, sizeof (RXQUEUE), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
+				return (-1);
 
-         // if there is a byte or more waiting, then read one.
-         if (q.cch > 0) {
-            if (q.cch > RSIZE)
-               q.cch = RSIZE;
+			// if there is a byte or more waiting, then read one.
+			if (q.cch > 0) {
+				if (q.cch > RSIZE)
+					q.cch = RSIZE;
             DosRead (hfComHandle, (PVOID)rbuf, (long)q.cch, &bytesRead);
-            Rbytes += bytesRead;
+				Rbytes += bytesRead;
          }
       }
 
-      if (rpos < Rbytes)
+		if (rpos < Rbytes)
          return ((unsigned int)rbuf[rpos]);
-      else
+		else
          return (-1);
    }
 #if defined (__OCC__) || defined (__TCPIP__)
    else {
-      if (rpos >= Rbytes) {
-         rpos = Rbytes = 0;
+		if (rpos >= Rbytes) {
+			rpos = Rbytes = 0;
 
          i = 0;
          if (ioctl (socket, FIONREAD, (char *)&i, sizeof (int *)) != 0)
@@ -927,83 +1037,83 @@ static int check_byte_in (void)
 
          // if there is a byte or more waiting, then read one.
          if (i > 0)
-            Rbytes += recv (socket, rbuf, sizeof (rbuf), 0);
+				Rbytes += recv (socket, rbuf, sizeof (rbuf), 0);
       }
 
-      if (rpos < Rbytes)
+		if (rpos < Rbytes)
          return ((unsigned int)rbuf[rpos]);
       else
          return (-1);
    }
 #endif
-}                    
+}
 
 void CLEAR_OUTBOUND (void)
 {
    UINT data;
    char parm = 0;
-   
+
    if (tcpip == 0) {
       if (hfComHandle == NULLHANDLE)
          return;
 
-      DevIOCtl (&data, sizeof (data), &parm, sizeof (parm), DEV_FLUSHOUTPUT, IOCTL_GENERAL, hfComHandle);
-   }
+		DevIOCtl (&data, sizeof (data), &parm, sizeof (parm), DEV_FLUSHOUTPUT, IOCTL_GENERAL, hfComHandle);
+	}
 
-   tpos = 0;
+	tpos = 0;
 }
 
 void CLEAR_INBOUND (void)
 {
-   UINT data;
-   char parm = 0;
-   
-   if (tcpip == 0) {
-      if (hfComHandle == NULLHANDLE)
-         return;
+	UINT data;
+	char parm = 0;
 
-      DevIOCtl (&data, sizeof (data), &parm, sizeof (parm), DEV_FLUSHINPUT, IOCTL_GENERAL, hfComHandle);
-   }
+	if (tcpip == 0) {
+		if (hfComHandle == NULLHANDLE)
+			return;
 
-   rpos = Rbytes = 0;
+		DevIOCtl (&data, sizeof (data), &parm, sizeof (parm), DEV_FLUSHINPUT, IOCTL_GENERAL, hfComHandle);
+	}
+
+	rpos = Rbytes = 0;
 }
 
 void SENDBYTE (unsigned char c)
 {
-   ULONG written;
+	ULONG written;
 
-   if (tcpip == 0) {
-      if (hfComHandle == NULLHANDLE)
-         return;
+	if (tcpip == 0) {
+		if (hfComHandle == NULLHANDLE)
+			return;
 
-      UNBUFFER_BYTES ();
-      DosWrite (hfComHandle, (PVOID)&c, 1L, &written);
-   }
+		UNBUFFER_BYTES ();
+		DosWrite (hfComHandle, (PVOID)&c, 1L, &written);
+	}
 #if defined (__OCC__) || defined (__TCPIP__)
-   else {
-      UNBUFFER_BYTES ();
-      send (socket, (char *)&c, 1, 0);
-   }
+	else {
+		UNBUFFER_BYTES ();
+		send (socket, (char *)&c, 1, 0);
+	}
 #endif
 }
 
 int MODEM_STATUS (void)
 {
-   UINT result = 0;
-   UCHAR data = 0, socks[32];
+	UINT result = 0;
+	UCHAR data = 0, socks[32];
 
-   if (tcpip == 0) {
-      if (hfComHandle == NULLHANDLE)
-         return (0);
+	if (tcpip == 0) {
+		if (hfComHandle == NULLHANDLE)
+			return (0);
 
-      DevIOCtl (&data, sizeof (UCHAR), NULL, 0, ASYNC_GETMODEMINPUT, IOCTL_ASYNC, hfComHandle);
-      result = data;
+		DevIOCtl (&data, sizeof (UCHAR), NULL, 0, ASYNC_GETMODEMINPUT, IOCTL_ASYNC, hfComHandle);
+		result = data;
 
-      if (check_byte_in () >= 0)
-         result |= DATA_READY;
+		if (check_byte_in () >= 0)
+			result |= DATA_READY;
 
-      return (result);
-   }
+		return (result);
+	}
 #if defined (__OCC__) || defined (__TCPIP__)
    else {
       if (recv (socket, (char *)&socks, sizeof (socks), MSG_PEEK) == 0)
@@ -1027,39 +1137,39 @@ int MODEM_IN (void)
       if (hfComHandle == NULLHANDLE)
          return (-1);
 
-      UNBUFFER_BYTES ();
+		UNBUFFER_BYTES ();
 
-      if (rpos >= Rbytes)
+		if (rpos >= Rbytes)
          for (;;) {
-            rpos = Rbytes = 0;
+				rpos = Rbytes = 0;
 
             if (DevIOCtl (&data, sizeof (UINT), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
                return (-1);
 
             // if there is a byte or more waiting, then read one.
-            if (data > 0) {
+				if (data > 0) {
                if (data > RSIZE)
                   data = RSIZE;
                DosRead (hfComHandle, (PVOID)rbuf, (long)data, &bytesRead);
-               Rbytes += bytesRead;
+					Rbytes += bytesRead;
                break;
             }
             if (!CARRIER)
                break;
          }
 
-      if (rpos < Rbytes)
+		if (rpos < Rbytes)
          return ((unsigned int)rbuf[rpos++]);
       else
          return (-1);
    }
 #if defined (__OCC__) || defined (__TCPIP__)
    else {
-      UNBUFFER_BYTES ();
+		UNBUFFER_BYTES ();
 
-      if (rpos >= Rbytes) {
+		if (rpos >= Rbytes) {
          do {
-            rpos = Rbytes = 0;
+				rpos = Rbytes = 0;
 
             i = 0;
             if (ioctl (socket, FIONREAD, (char *)&i, sizeof (int *)) != 0)
@@ -1067,11 +1177,11 @@ int MODEM_IN (void)
 
             // if there is a byte or more waiting, then read one.
             if (i > 0)
-               Rbytes += recv (socket, rbuf, sizeof (rbuf), 0);
-         } while (Rbytes > 0 || !CARRIER);
+					Rbytes += recv (socket, rbuf, sizeof (rbuf), 0);
+			} while (Rbytes > 0 || !CARRIER);
       }
 
-      if (rpos < Rbytes)
+		if (rpos < Rbytes)
          return ((unsigned int)rbuf[rpos++]);
       else
          return (-1);
@@ -1105,7 +1215,7 @@ void SET_DTR_ON (void)
          return;
 
       ms.fbModemOn = RTS_ON|DTR_ON;
-      ms.fbModemOff = 255;
+		ms.fbModemOff = 255;
    
       DevIOCtl (&data, sizeof(data), &ms, sizeof(ms), ASYNC_SETMODEMCTRL, IOCTL_ASYNC, hfComHandle);
    }
@@ -1173,7 +1283,7 @@ void XON_DISABLE (void)
 
 void delay (unsigned int t)
 {
-   long t1;
+	long t1;
 
    t1 = timerset (t / 10);
    while (!timeup (t1))
@@ -1184,12 +1294,20 @@ void com_baud (long b)
 {
    ULONG dataWords = (unsigned long)b;
    LINECONTROL lc;
+   XT_BAUD_RATE rbr;
 
    if (tcpip == 0) {
       if (hfComHandle == NULLHANDLE)
          return;
-
-      DevIOCtl (NULL, 0, &dataWords, sizeof (ULONG), ASYNC_SETBAUDRATE, IOCTL_ASYNC, hfComHandle);
+      DevIOCtl (&rbr, sizeof(XT_BAUD_RATE), NULL, 0, ASYNC_GETBAUDRATE_XT, IOCTL_ASYNC, hfComHandle);
+      if(rbr.max_baud<dataWords){
+         status_line("!%ld baud rate not allowed by serial device. Set to %ld",dataWords,rbr.max_baud);
+         dataWords = rbr.max_baud;
+      }
+      if(dataWords>57600L)
+         DevIOCtl (NULL, 0, &dataWords, sizeof (ULONG), ASYNC_SETBAUDRATE_XT, IOCTL_ASYNC, hfComHandle);
+      else
+         DevIOCtl (NULL, 0, &dataWords, sizeof (ULONG), ASYNC_SETBAUDRATE, IOCTL_ASYNC, hfComHandle);
 
       lc.bDataBits = 8;
       lc.bStopBits = 0;
@@ -1207,7 +1325,7 @@ void set_prior (int pclass)
    static USHORT modem = 0;
    USHORT priority;
 
-   switch (pclass) {
+	switch (pclass) {
       case 2:
          if (regular)
             priority = regular;
@@ -1241,7 +1359,7 @@ void set_prior (int pclass)
                priority = modem = atoi (s);
             else
                priority = modem = 4;
-         }
+			}
          break;
 
       default:
@@ -1275,7 +1393,7 @@ QUEUE *alloc_queue (int size)
    QUEUE  *tmp;
 
    if ((tmp = (QUEUE *) malloc (sizeof (QUEUE) + size)) != (QUEUE *) 0) {
-      tmp->size = size;
+		tmp->size = size;
       tmp->head = 0;
       tmp->tail = 0;
       tmp->avail = size;
@@ -1309,7 +1427,7 @@ int de_queue (QUEUE *qp)
    if (qp->avail == qp->size)
       return (-1);
 
-   ch = *(qp->buf + tail);
+	ch = *(qp->buf + tail);
    if (++tail == qp->size)
       tail = 0;
 
@@ -1411,7 +1529,7 @@ int first_queue (QUEUE *qp)
                                           * to get to the divisor latches of 
                                           * the baud rate generator - must
                                           * be set to 0 to access the
-                                          * Receiver Buffer Register and
+														* Receiver Buffer Register and
                                           * the Transmit Holding Register
                                           */
 
@@ -1513,7 +1631,7 @@ void interrupt far dtr8250_isr (void)
                if (count++ > 14)
                   break;
             } while (inbyte (DTR_PORT_addr + LSR) & LSR_Data_Ready);
-            break;
+				break;
 
          case IIR_transmit:
             dtr8250_MSR_reg = inbyte ((DTR_PORT_addr + MSR));
@@ -1581,7 +1699,7 @@ int uart_type (void)
                outportb (p7, xbyte2);
                return (U16450);
             }
-            else
+				else
                return (U8250);
          }
          else
@@ -1707,7 +1825,7 @@ void UNBUFFER_BYTES (void)
 void BUFFER_BYTE (unsigned char ch)
 {
    if (en_queue ((QUEUE *)dtr8250_outqueue, ch) < 10)
-      UNBUFFER_BYTES ();
+		UNBUFFER_BYTES ();
 }
 
 void do_break (int a)
@@ -1892,11 +2010,12 @@ void com_baud (long b)
          break;
       default:
          return;
-   }
+	}
 
-   inregs.h.ah = 0x00;
-   inregs.h.al = i|NO_PARITY|STOP_1|BITS_8;
-   inregs.x.dx = com_port;
+	inregs.h.ah = 0x00;
+	inregs.h.al = i|NO_PARITY|STOP_1|BITS_8;
+	inregs.h.dh = 0x00;
+	inregs.h.dl = com_port;
    int86 (0x14, &inregs, &outregs);
 }
 

@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <dir.h>
@@ -41,53 +59,58 @@ void get_emsi_id (char *, int);
 int time_to_next_nonmail (void);
 void iemsi_handshake (void);
 int get_emsi_field (char *);
+int something_wrong=0;
+int sw_net=0,sw_node=0;
 
 int poll(max_tries, bad, zone, net, node)
 int max_tries, bad, zone, net, node;
 {
-   int fd, tries, i, j, wh, m;
-   char buffer[70], jan, waz, ems;
-   long t1, t2, tu;
-   NODEINFO ni;
+	int fd, tries, i, j, wh, m;
+	char buffer[70], jan, waz, ems,under_baud;
+	long t1, t2, tu, il;
+	NODEINFO ni;
+	sw_net=net;
+	sw_node=node;
+	something_wrong=0;
 
-   if (CARRIER) {
-      dial_system ();
+	if (CARRIER) {
+		dial_system ();
 
-      for (i = 0; i < max_call; i++) {
-         if (zone == call_list[i].zone && net == call_list[i].net && node == call_list[i].node && !call_list[i].point)
-            break;
-      }
+		for (i = 0; i < max_call; i++) {
+			if (zone == call_list[i].zone && net == call_list[i].net && node == call_list[i].node && !call_list[i].point)
+				break;
+		}
 
-      if (i >= max_call) {
-        call_list[i].zone = zone;
-        call_list[i].net = net;
-        call_list[i].node = node;
-        call_list[i].type |= MAIL_WILLGO;
-        max_call++;
-      }
+		if (i >= max_call) {
+		  call_list[i].zone = zone;
+		  call_list[i].net = net;
+		  call_list[i].node = node;
+		  call_list[i].type |= MAIL_WILLGO;
+		  max_call++;
+		}
 
-      next_call = i;
-      goto online_out;
-   }
+		next_call = i;
+		goto online_out;
+	}
 
-   if (!get_bbs_record(zone, net, node, 0))
-      return (0);
+	if (!get_bbs_record(zone, net, node, 0))
+		return (0);
 
-   if (bad && bad_call(net,node,0,0))
-      return (0);
+	if (bad && bad_call(net,node,0,0))
+		return (0);
 
-   jan = config->janus;
-   waz = config->wazoo;
-   ems = config->emsi;
-   set_protocol_flags (zone, net, node, 0);
+	jan = config->janus;
+	waz = config->wazoo;
+	ems = config->emsi;
+	set_protocol_flags (zone, net, node, 0);
 
-   function_active = 0;
-   dial_system ();
-   local_status ("Dialing");
-   sysinfo.today.outcalls++;
-   sysinfo.week.outcalls++;
-   sysinfo.month.outcalls++;
-   sysinfo.year.outcalls++;
+	function_active = 0;
+	dial_system ();
+	local_status ("Dialing");
+	sysinfo.today.outcalls++;
+	sysinfo.week.outcalls++;
+	sysinfo.month.outcalls++;
+	sysinfo.year.outcalls++;
 
 //   for (i=0; i < MAX_ALIAS; i++)
 //      if (zone && config->alias[i].zone == zone)
@@ -104,279 +127,298 @@ int max_tries, bad, zone, net, node;
 //   if (i < MAX_ALIAS)
 //      assumed = i;
 
-   assumed = 0;
+	assumed = 0;
 
-   sprintf (buffer, "%sNODES.DAT", config->net_info);
-   if ((fd = sh_open (buffer, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
-      return (0);
+	sprintf (buffer, "%sNODES.DAT", config->net_info);
+	if ((fd = sh_open (buffer, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+		return (0);
 
-   while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO))
-      if (zone == ni.zone && net == ni.net && node == ni.node && ni.point == 0) {
-         assumed = ni.mailer_aka;
-         break;
-      }
+	while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO))
+		if (zone == ni.zone && net == ni.net && node == ni.node && ni.point == 0) {
+			assumed = ni.mailer_aka;
+			break;
+		}
 
-   close (fd);
+	close (fd);
 
-   for (tries = 0; tries < max_tries; tries++) {
-      if (tries) {
-         modem_hangup ();
+	for (tries = 0; tries < max_tries; tries++) {
+		if (tries) {
+			modem_hangup ();
 
-         tu = timerset (300);
-         while (!timeup (tu)) {
-            if (local_kbd == 0x1B) {
-               local_kbd = -1;
-               i = 0;
-               modem_hangup ();
-               break;
-            }
-         }
-      }
+			tu = timerset (300);
+			while (!timeup (tu)) {
+				if (local_kbd == 0x1B) {
+					local_kbd = -1;
+					i = 0;
+					modem_hangup ();
+					break;
+				}
+			}
+		}
 
-      status_line(msgtxt[M_PROCESSING_NODE],zone,net,node,nodelist.name);
-      status_line(msgtxt[M_DIALING_NUMBER],nodelist.phone);
+		status_line(msgtxt[M_PROCESSING_NODE],zone,net,node,nodelist.name);
+		status_line(msgtxt[M_DIALING_NUMBER],nodelist.phone);
 
-      wh = wopen (13, 9, 20, 45, 3, RED|_LGREY, BLUE|_LGREY);
-      wactiv (wh);
-      wtitle (" Dialing ", TCENTER, RED|_LGREY);
+		wh = wopen (13, 9, 21, 45, 3, RED|_LGREY, BLUE|_LGREY);
+		wactiv (wh);
+		wtitle (" Dialing ", TCENTER, RED|_LGREY);
 
-      sprintf (buffer, "%d:%d/%d", zone, net, node);
-      wcenters (1, BLUE|_LGREY, buffer);
-      wcenters (2, BLUE|_LGREY, nodelist.name);
-      wcenters (3, BLUE|_LGREY, nodelist.phone);
+		sprintf (buffer, "%d:%d/%d", zone, net, node);
+		wcenters (1, BLUE|_LGREY, buffer);
+		wcenters (2, BLUE|_LGREY, nodelist.name);
+		wcenters (3, BLUE|_LGREY, nodelist.phone);
 
-      CLEAR_INBOUND();
-      CLEAR_OUTBOUND();
+		CLEAR_INBOUND();
+		CLEAR_OUTBOUND();
 
-      i = nodelist.rate * 300;
-      if ((long)i > speed)
-         i = (word)speed;
-      if (!config->lock_baud)
-         com_baud ((long)i);
-      rate = (long)i;
-      answer_flag = 1;
+		i = nodelist.rate * 300;
+		if ((long)i > speed)
+			i = (word)speed;
+		il=config->speed;
+//		if (!config->lock_baud)
+			com_baud (il);
+		rate = il;
+		answer_flag = 1;
 
-      sprintf (buffer, "%ld Baud", rate);
-      wcenters (4, BLUE|_LGREY, buffer);
+		sprintf (buffer, "%d Baud", i);
+		wcenters (4, BLUE|_LGREY, buffer);
 
-      if (nodelist.phone[0] == '\"') {
-         prints (7, 65, YELLOW|_BLACK, "ScriptExec");
-         i = do_script (nodelist.phone);
-      }
-      else {
-         prints (7, 65, YELLOW|_BLACK, "DialPhone");
-         dial_number (nodelist.modem, nodelist.phone);
-         prints (7, 65, YELLOW|_BLACK, "Waiting  ");
-         i = wait_for_connect(0);
-      }
+		if(ni.min_baud_rate){
+			sprintf (buffer, "Min. baud: %ld", ni.min_baud_rate);
+			wcenters (4, BLUE|_LGREY, buffer);
+		}
 
-      wclose ();
+		if (nodelist.phone[0] == '\"') {
+			prints (7, 65, YELLOW|_BLACK, "ScriptExec");
+			i = do_script (nodelist.phone);
+		}
+		else {
+			prints (7, 65, YELLOW|_BLACK, "DialPhone");
+			dial_number (nodelist.modem, nodelist.phone);
+			prints (7, 65, YELLOW|_BLACK, "Waiting  ");
+			i = wait_for_connect(0);
+		}
 
-      if (i == ABORTED)
-         status_line ("!Aborted by operator");
-      else if (i == TIMEDOUT)
-         status_line ("!Modem timeout");
+		wclose ();
 
-      if (i > 0)
-         break;
-      else {
-         prints (7, 65, YELLOW|_BLACK, "Hangup    ");
-         modem_hangup ();
-         prints (7, 65, YELLOW|_BLACK, "Modem init");
-         initialize_modem ();
-         if (local_kbd == 0x1B || local_kbd == ' ') {
-            local_kbd = -1;
-            break;
-         }
-      }
-   }
+		if (i == ABORTED)
+			status_line ("!Aborted by operator");
+		else if (i == TIMEDOUT)
+			status_line ("!Modem timeout");
+			under_baud=0;
+		if (i > 0 && rate < ni.min_baud_rate){
+			i = ABORTED;
+			under_baud=1;
+			status_line ("!Baud rate under minimum allowed - Hangup!");
+			status_line ("!Connect: %ld Minimum: %ld",rate,ni.min_baud_rate);
+		}
 
-   if (i <= 0) {
-      if (bad)
-         bad_call (net, node, 2, i);
+		if (i > 0)
+			break;
+		else {
+			prints (7, 65, YELLOW|_BLACK, "Hangup    ");
+			modem_hangup ();
+			prints (7, 65, YELLOW|_BLACK, "Modem init");
+			initialize_modem ();
+			if (local_kbd == 0x1B || local_kbd == ' ') {
+				local_kbd = -1;
+				break;
+			}
+		}
+	}
 
-      rate = config->speed;
-      if (!config->lock_baud)
-         com_baud (rate);
-      answer_flag = 0;
+	if (i <= 0) {
+		if (bad) {
+			if(under_baud)
+				bad_call (net, node, 1, i);
+			else
+				bad_call (net, node, 2, i);
+		}
 
-      config->janus = jan;
-      config->wazoo = waz;
-      config->emsi = ems;
+		rate = config->speed;
+		if (!config->lock_baud)
+			com_baud (rate);
+		answer_flag = 0;
 
-      idle_system ();
-      timeout = 0L;
-      function_active = 99;
-      return (i);
-   }
+		config->janus = jan;
+		config->wazoo = waz;
+		config->emsi = ems;
+
+		idle_system ();
+		timeout = 0L;
+		function_active = 99;
+		return (i);
+	}
 
 online_out:
 //   set_prior (4);
-   local_status ("Online    ");
+	local_status ("Online    ");
 
-   if (mdm_flags == NULL) {
-      status_line(msgtxt[M_READY_CONNECT], rate, "", "");
-      mdm_flags = "";
-   }
-   else
-      status_line(msgtxt[M_READY_CONNECT], rate, "/", mdm_flags);
+	if (mdm_flags == NULL) {
+		status_line(msgtxt[M_READY_CONNECT], rate, "", "");
+		mdm_flags = "";
+	}
+	else
+		status_line(msgtxt[M_READY_CONNECT], rate, "/", mdm_flags);
 
-   if (!lock_baud)
-      com_baud(rate);
+	if (!lock_baud)
+		com_baud(rate);
 
-   remote_zone = called_zone = zone;
-   remote_node = called_node = node;
-   remote_net = called_net = net;
-   remote_point = 0;
-   remote_capabilities = 0;
-   local_mode = snooping = 0;
+	remote_zone = called_zone = zone;
+	remote_node = called_node = node;
+	remote_net = called_net = net;
+	remote_point = 0;
+	remote_capabilities = 0;
+	local_mode = snooping = 0;
 
-   filepath = config->norm_filepath;
-   request_list = config->norm_okfile;
-   max_requests = config->norm_max_requests;
-   max_kbytes = config->norm_max_kbytes;
+	filepath = config->norm_filepath;
+	request_list = config->norm_okfile;
+	max_requests = config->norm_max_requests;
+	max_kbytes = config->norm_max_kbytes;
 
-   prints (7, 65, YELLOW|_BLACK, "Sync.  ");
+	prints (7, 65, YELLOW|_BLACK, "Sync.  ");
 
-   t1 = timerset(3000);
-   timeout = t1;
-   to_row = 8;
-   j = 'j';
+	t1 = timerset(3000);
+	timeout = t1;
+	to_row = 8;
+	j = 'j';
 
-   while(!timeup(t1) && CARRIER) {
-      SENDBYTE (32);
-      SENDBYTE (13);
-      SENDBYTE (32);
-      SENDBYTE (13);
+	while(!timeup(t1) && CARRIER) {
 
-      while (CARRIER && !OUT_EMPTY ())
-         time_release ();
+		SENDBYTE (32);
+		SENDBYTE (13);
+		SENDBYTE (32);
+		SENDBYTE (13);
 
-      t2 = timerset(300);
-      while (CARRIER && !timeup (t2) && !timeup (t1)) {
-         if (esc_pressed ())
-            goto end_mail;
+		while (CARRIER && !OUT_EMPTY ())
+			time_release ();
 
-         i = TIMED_READ(1);
+		t2 = timerset(300);
+		while (CARRIER && !timeup (t2) && !timeup (t1)) {
+			if (esc_pressed ())
+				goto end_mail;
 
-         if(i == YOOHOO)
-            continue;
+			i = TIMED_READ(1);
 
-         time_release ();
+			if(i == YOOHOO)
+				continue;
 
-         switch(i) {
-         case '*':
-            if (!config->emsi)
-               break;
-            get_emsi_id (buffer, 30);
-            if (!strnicmp (buffer, "**EMSI_REQA77E", 14)) {
-               m_print2 ("**EMSI_INQC816\r");
-               emsi_handshake (1);
-            }
-            break;
-         case ENQ:
-            if (!config->wazoo)
-               break;
+			time_release ();
 
-            if (send_YOOHOO(1)) {
-               WaZOO(1);
-               get_call_list();
-               goto  end_mail;
-            }
-            break;
-         case 0x00:
-         case 0x01:
-         case 'C':
-            if(j == 'C') {
-               TIMED_READ(1);
-               FTSC_sender(0);
-               goto end_mail;
-            }
-            break;
+			switch(i) {
+			case '*':
+				if (!config->emsi)
+					break;
+				get_emsi_id (buffer, 14);
+//				if (!strnicmp (buffer, "**EMSI_REQA77E", 14)) {
+				if (strstr (buffer, "EMSI_REQA77E")) {
+					m_print2 ("**EMSI_INQC816\r");
+					emsi_handshake (1);
+				}
+				break;
+			case ENQ:
+				if (!config->wazoo)
+					break;
 
-         case 0xFE:
-         case -2:
-            if(j == 0x01) {
-               FTSC_sender(0);
-               goto end_mail;
-            }
-            break;
+				if (send_YOOHOO(1)) {
+					WaZOO(1);
+					get_call_list();
+					goto  end_mail;
+				}
+				break;
+			case 0x00:
+			case 0x01:
+			case 'C':
+				if(j == 'C') {
+					TIMED_READ(1);
+					FTSC_sender(0);
+					goto end_mail;
+				}
+				break;
 
-         case 0xFF:
-         case -1:
-            if(j == 0x00) {
-               FTSC_sender(0);
-               goto end_mail;
-            }
-            break;
+			case 0xFE:
+			case -2:
+				if(j == 0x01) {
+					FTSC_sender(0);
+					goto end_mail;
+				}
+				break;
 
-         case NAK:
-            if(j == NAK) {
-               FTSC_sender(0);
-               goto end_mail;
-            }
-            break;
-         }
+			case 0xFF:
+			case -1:
+				if(j == 0x00) {
+					FTSC_sender(0);
+					goto end_mail;
+				}
+				break;
 
-         if((i != -1) && (i != 0xFF))
-            j = i;
-      }
+			case NAK:
+				if(j == NAK) {
+					FTSC_sender(0);
+					goto end_mail;
+				}
+				break;
+			}
 
-      if (config->emsi)
-         m_print2 ("**EMSI_INQC816\r**EMSI_INQC816\r");
+			if((i != -1) && (i != 0xFF))
+				j = i;
+		}
 
-      if (config->wazoo)
-         SENDBYTE (YOOHOO);
-      SENDBYTE (TSYNC);
-   }
+		if (config->emsi)
+			m_print2 ("**EMSI_INQC816\r**EMSI_INQC816\r");
+
+		if (config->wazoo)
+			SENDBYTE (YOOHOO);
+		SENDBYTE (TSYNC);
+	}
 
 bad_mail:
 //   set_prior (2);
 
-   config->janus = jan;
-   config->wazoo = waz;
-   config->emsi = ems;
+	config->janus = jan;
+	config->wazoo = waz;
+	config->emsi = ems;
 
-   status_line(msgtxt[M_NOBODY_HOME]);
+	status_line(msgtxt[M_NOBODY_HOME]);
 
-   if (bad)
-      bad_call (net, node, 1, TIMEDOUT);
+	if (bad)
+		bad_call (net, node, 1, TIMEDOUT);
 
-   modem_hangup ();
-   sysinfo.today.failed++;
-   sysinfo.week.failed++;
-   sysinfo.month.failed++;
-   sysinfo.year.failed++;
+	modem_hangup ();
+	sysinfo.today.failed++;
+	sysinfo.week.failed++;
+	sysinfo.month.failed++;
+	sysinfo.year.failed++;
 
-   idle_system ();
-   return (TIMEDOUT);
+	idle_system ();
+	return (TIMEDOUT);
 
 end_mail:
 //   set_prior (2);
 
-   config->janus = jan;
-   config->wazoo = waz;
-   config->emsi = ems;
+	config->janus = jan;
+	config->wazoo = waz;
+	config->emsi = ems;
 
-   for (i = 0; i < max_call; i++) {
-      if (zone == call_list[i].zone && net == call_list[i].net && node == call_list[i].node && !call_list[i].point)
-         break;
-   }
-   for (m = i + 1; m < max_call; m++, i++)
-      memcpy (&call_list[i], &call_list[m], sizeof (struct _call_list));
-   max_call--;
+	for (i = 0; i < max_call; i++) {
+		if (zone == call_list[i].zone && net == call_list[i].net && node == call_list[i].node && !call_list[i].point)
+			break;
+	}
+	for (m = i + 1; m < max_call; m++, i++)
+		memcpy (&call_list[i], &call_list[m], sizeof (struct _call_list));
+	max_call--;
 
-   idle_system ();
-   return(1);
+	idle_system ();
+	return(1);
 }
 
 int bad_call(bnet,bnode,rwd,flags)
 int bnet, bnode, rwd, flags;
 {
-        int res, i, j, mc, mnc;
+		  int res, i, j, mc, mnc;
 	struct ffblk bad_dta;
 	FILE *bad_wazoo;
-        char *p, *HoldName, fname[50], fname1[50];
+		  char *p, *HoldName, fname[50], fname1[50];
 
 	HoldName = hold_area;
 	sprintf (fname, "%s%04x%04x.$$?", HoldName, bnet, bnode);
@@ -482,9 +524,9 @@ int mail_session()
    int i, flag, oldsnoop;
    char buffer[30], *pwpos;
    long t1, t2;
-   char *emsi_req = "**EMSI_REQA77E\r", *iemsi_req = "**EMSI_IRQ8E08\r";
+	char *emsi_req = "**EMSI_REQA77E\r", *iemsi_req = "**EMSI_IRQ8E08\r";
 
-   if (cur_event >= 0 && (e_ptrs[cur_event]->behavior & MAT_NOMAIL24))
+	if (cur_event >= 0 && (e_ptrs[cur_event]->behavior & MAT_NOMAIL24))
       return (0);
 
    if (!config->mail_only[0])
@@ -515,7 +557,7 @@ int mail_session()
    function_active = 0;
    timeout = t1;
    to_row = 8;
-   local_status ("Connected");
+	local_status ("Connected");
    prints (7, 65, YELLOW|_BLACK, "Sync.");
 
    if (config->override_pwd[0])
@@ -561,7 +603,7 @@ int mail_session()
          case '*':
             if (!config->emsi)
                break;
-            get_emsi_id (buffer, 14);
+				get_emsi_id (buffer, 14);
 //            status_line (">DEBUG: get_emsi_id = '%s'", buffer);
 
             if (!strnicmp (buffer, "**EMSI_INQC816", 14))
@@ -710,7 +752,7 @@ int iemsi_session (void)
    oldsnoop = snooping;
    snooping = 0;
    remote_capabilities = 0;
-   find_event ();
+	find_event ();
 
    t2 = timerset (200);
    t1 = timerset (400);
@@ -719,7 +761,7 @@ int iemsi_session (void)
    function_active = 0;
    timeout = t1;
    to_row = 8;
-   local_status ("Connected");
+	local_status ("Connected");
    prints (7, 65, YELLOW|_BLACK, "Sync.");
 
    while (!timeup (t1) && CARRIER) {
@@ -732,7 +774,7 @@ int iemsi_session (void)
          case -1:
             break;
          case '*':
-            get_emsi_id (buffer, 12);
+				get_emsi_id (buffer, 12);
 
             if (!strnicmp (buffer, "**EMSI_ICI", 10)) {
                iemsi_handshake ();
@@ -745,7 +787,7 @@ int iemsi_session (void)
             break;
 
          case 0x0D:
-         case 0x1B:
+			case 0x1B:
             m_print2 ("\n\n");
             snooping = oldsnoop;
             return(0);
@@ -780,7 +822,7 @@ int width;
             return;
          lt = time (NULL);
          tim = localtime (&lt);
-         strcpy (asc1, asctime (tim));
+			strcpy (asc1, asctime (tim));
          asc1[strlen (asc1) - 1] = '\0';
          sprintf (buffer, "%s   (%d)   ", asc1, timezone / 3600L);
          tim = gmtime (&lt);
@@ -815,7 +857,7 @@ int poll_galileo (max_connect, max_tries)
 int max_connect, max_tries;
 {
    int tries, i, wh, yy, mm, dy, hh, ss, mi;
-   char buffer[85], stringa[85];
+	char buffer[85], stringa[85];
    long t1, tu;
    struct date dd;
    struct time dt;
@@ -824,7 +866,7 @@ int max_connect, max_tries;
    function_active = 0;
    dial_system ();
    local_kbd = -1;
-   local_status ("ClockSync");
+	local_status ("ClockSync");
 
    init = config->galileo_init;
    mdm_sendcmd (config->galileo_init);
@@ -850,7 +892,7 @@ int max_connect, max_tries;
       sysinfo.month.outcalls++;
       sysinfo.year.outcalls++;
 
-      status_line(msgtxt[M_DIALING_NUMBER],config->galileo);
+		status_line(msgtxt[M_DIALING_NUMBER],config->galileo);
 
       wh = wopen (13, 9, 20, 45, 3, RED|_LGREY, BLUE|_LGREY);
       wactiv (wh);
@@ -885,7 +927,7 @@ int max_connect, max_tries;
       else {
          prints (7, 65, YELLOW|_BLACK, "Hangup ");
          modem_hangup ();
-         if (i == ABORTED) {
+			if (i == ABORTED) {
             local_kbd = -1;
             break;
          }
@@ -904,14 +946,14 @@ int max_connect, max_tries;
    }
 
 online_out:
-   local_status ("Online");
+	local_status ("Online");
 
    if (mdm_flags == NULL) {
-      status_line(msgtxt[M_READY_CONNECT], rate, "", "");
+		status_line(msgtxt[M_READY_CONNECT], rate, "", "");
       mdm_flags = "";
    }
    else
-      status_line(msgtxt[M_READY_CONNECT], rate, "/", mdm_flags);
+		status_line(msgtxt[M_READY_CONNECT], rate, "/", mdm_flags);
 
    if (!lock_baud)
       com_baud(rate);
@@ -920,7 +962,7 @@ online_out:
    wactiv (wh);
    wtitle ("REMOTE CLOCK ADJUSTMENT", TLEFT, LCYAN|_BLACK);
    printc (12, 0, LGREY|_BLACK, 'Ã');
-   printc (12, 52, LGREY|_BLACK, 'Á');
+	printc (12, 52, LGREY|_BLACK, 'Á');
    printc (12, 79, LGREY|_BLACK, '´');
 
    wcenters (0, LGREY|_BLACK, "Ist. Galileo Ferraris");
@@ -955,7 +997,7 @@ online_out:
                dy = 1;
                if (++mm > 12) {
                   mm = 1;
-                  yy++;
+						yy++;
                }
             }
          }
@@ -983,14 +1025,14 @@ online_out:
          setdate (&dd);
          settime (&dt);
 
-         status_line ("+Remote clock: %02d-%02d-%02d %02d:%02d:%02d", dd.da_day, dd.da_mon, dd.da_year % 100, dt.ti_hour, dt.ti_min, dt.ti_sec);
+			status_line ("+Remote clock: %02d-%02d-%02d %02d:%02d:%02d", dd.da_day, dd.da_mon, dd.da_year % 100, dt.ti_hour, dt.ti_min, dt.ti_sec);
 
          wclose ();
          modem_hangup ();
-         status_line ("+Resync succesful");
+			status_line ("+Resync succesful");
 
          answer_flag = 0;
-         rate = config->speed;
+			rate = config->speed;
          if (!lock_baud)
             com_baud(rate);
 
@@ -1020,92 +1062,94 @@ online_out:
 
 void iemsi_handshake (void)
 {
-   int i, tries, miemsi = 0;
-   unsigned long crc;
-   char string[2048], *p, addr[20];
-   long t1, t2;
-   struct _usr iusr;
+	int i, fd, tries, miemsi = 0;
+	unsigned long crc;
+	char string[2048], *p, addr[20], *filename;
+	long t1, t2, ici;
+	struct _usr iusr;
+	struct _usridx usridx;
 
-   memset ((char *)&iusr, 0, sizeof (struct _usr));
-   prints (7, 65, YELLOW|_BLACK, "IEMSI/C1");
 
-   tries = 0;
-   t1 = timerset (1000);
-   t2 = timerset (6000);
+	memset ((char *)&iusr, 0, sizeof (struct _usr));
+	prints (7, 65, YELLOW|_BLACK, "IEMSI/C1");
+
+	tries = 0;
+	t1 = timerset (1000);
+	t2 = timerset (6000);
 
 resend:
-   if (tries++ > 6) {
-      status_line ("!IEMSI Error: too may tries");
-      return;
-   }
+	if (tries++ > 6) {
+		status_line ("!IEMSI Error: too may tries");
+		return;
+	}
 
-   if (tries > 1) {
-      m_print2 ("**EMSI_NAKEEC3\r");
-      t1 = timerset (1000);
+	if (tries > 1) {
+		m_print2 ("**EMSI_NAKEEC3\r");
+		t1 = timerset (1000);
 
-      while (CARRIER && !timeup (t1) && !timeup (t2)) {
-         if (PEEKBYTE () == '*') {
-            get_emsi_id (string, 10);
+		while (CARRIER && !timeup (t1) && !timeup (t2)) {
+			if (PEEKBYTE () == '*') {
+				get_emsi_id (string, 10);
             if (!strncmp (string, "**EMSI_ICI", 10) || !strncmp (string, "*EMSI_ICI", 9))
                break;
             if (!strncmp (string, "**EMSI_HBT", 10) || !strncmp (string, "**EMSI_ACK", 10))
                t1 = timerset (1000);
          }
          else if (PEEKBYTE () != -1) {
-            TIMED_READ(1);
+				TIMED_READ(1);
             time_release ();
-         }
+			}
       }
-   }
+	}
 
    if (!get_emsi_field (string))         // Name
-      goto resend;
+		goto resend;
    string[35] = '\0';
-   strcpy (iusr.name, fancy_str (strbtrim (string)));
-   if (iusr.name[strlen (iusr.name) - 1] == '.')
-      iusr.name[strlen (iusr.name) - 1] = '\0';
+	strcpy (iusr.name, fancy_str (strbtrim (string)));
+	if (iusr.name[strlen (iusr.name) - 1] == '.')
+		iusr.name[strlen (iusr.name) - 1] = '\0';
 
-   if (!get_emsi_field (string))         // Alias
-      goto resend;
-   string[35] = '\0';
-   strcpy (iusr.handle, fancy_str (string));
-   if (iusr.handle[strlen (iusr.handle) - 1] == '.')
-      iusr.handle[strlen (iusr.handle) - 1] = '\0';
+	if (!get_emsi_field (string))         // Alias
+		goto resend;
+	string[35] = '\0';
+	strcpy (iusr.handle, fancy_str (string));
+	if (iusr.handle[strlen (iusr.handle) - 1] == '.')
+		iusr.handle[strlen (iusr.handle) - 1] = '\0';
 
-   if (!get_emsi_field (string))         // Location
-      goto resend;
-   string[25] = '\0';
-   strcpy (iusr.city, string);
+	if (!get_emsi_field (string))         // Location
+		goto resend;
+	string[25] = '\0';
+	strcpy (iusr.city, string);
 
-   if (!get_emsi_field (string))         // Data#
-      goto resend;
-   string[19] = '\0';
-   strcpy (iusr.dataphone, string);
+	if (!get_emsi_field (string))         // Data#
+		goto resend;
+	string[19] = '\0';
+	strcpy (iusr.dataphone, string);
 
-   if (!get_emsi_field (string))         // Voice#
-      goto resend;
-   string[19] = '\0';
-   strcpy (iusr.voicephone, string);
+	if (!get_emsi_field (string))         // Voice#
+		goto resend;
+	string[19] = '\0';
+	strcpy (iusr.voicephone, string);
 
    if (!get_emsi_field (string))         // Password
-      goto resend;
+		goto resend;
    string[15] = '\0';
-   strcpy (iusr.pwd, strupr (string));
+	strcpy (iusr.pwd, strupr (string));
 
    if (!get_emsi_field (string))         // Birthdate
-      goto resend;
+		goto resend;
    string[9] = '\0';
-   strcpy (iusr.birthdate, string);
+	strcpy (iusr.birthdate, string);
 
    if (!get_emsi_field (string))         // CRTDEF
       goto resend;
 
    p = strtok (strupr (string), ",");
-   if (strcmp (p, "AVT0"))
+	if (strcmp (p, "AVT0"))
       iusr.color = iusr.avatar = 1;
    else if (strcmp (p, "ANSI"))
       iusr.color = iusr.ansi = 1;
-   else if (strcmp (p, "VT52") || strcmp (p, "VT100"))
+	else if (strcmp (p, "VT52") || strcmp (p, "VT100"))
       iusr.ansi = 1;
 
    p = strtok (NULL, ",");
@@ -1120,14 +1164,14 @@ resend:
    if (!get_emsi_field (string))         // Protocols
       goto resend;
 
-   if (!get_emsi_field (string))         // Capabilities
+	if (!get_emsi_field (string))         // Capabilities
       goto resend;
 
    strupr (string);
-   if (strstr (string, "ASCII8"))
+	if (strstr (string, "ASCII8"))
       iusr.ibmset = 1;
 
-   if (!get_emsi_field (string))         // Requests
+	if (!get_emsi_field (string))         // Requests
       goto resend;
 
    strupr (string);
@@ -1135,11 +1179,11 @@ resend:
       iusr.more = 1;
    if (strstr (string, "HOT"))
       iusr.hotkey = 1;
-   if (strstr (string, "CLR"))
+	if (strstr (string, "CLR"))
       iusr.formfeed = 1;
    if (strstr (string, "FSED"))
       iusr.use_lore = 0;
-   else
+	else
       iusr.use_lore = 1;
    if (strstr (string, "MAIL"))
       miemsi |= IEMSI_MAILCHECK;
@@ -1154,14 +1198,14 @@ resend:
    if (!get_emsi_field (string))         // Xlattbl
       goto resend;
 
-   prints (7, 65, YELLOW|_BLACK, "IEMSI/C2");
+	prints (7, 65, YELLOW|_BLACK, "IEMSI/C2");
 
-   strcpy (string, "{LoraBBS,");
+	strcpy (string, "{LoraBBS,");
    strcat (string, VNUM);
-   activation_key ();
+	activation_key ();
    if (registered) {
       sprintf (addr, ",%s%05u}{", serial_id[0] ? serial_id : "", serial_no);
-      strcat (string, addr);
+		strcat (string, addr);
    }
    else
       strcat (string, ",Demo}{");
@@ -1169,11 +1213,11 @@ resend:
    strcat (string, "}{");
    if (location != NULL)
       strcat (string, location);
-   strcat (string, "}{");
+	strcat (string, "}{");
    strcat (string, sysop);
    strcat (string, "}{");
    sprintf (addr, "%08lX", time (NULL) - timezone);
-   strcat (string, addr);
+	strcat (string, addr);
    strcat (string, "}{}{!}{}");
 
    sprintf (addr, "EMSI_ISI%04X", strlen (string));
@@ -1187,49 +1231,91 @@ resend:
    t1 = timerset (6000);
    timeout = t1;
    to_row = 8;
-   tries = 1;
+	tries = 1;
 
    for (;;) {
-      m_print2 ("**EMSI_ISI%04X%s", strlen (string), string);
+		m_print2 ("**EMSI_ISI%04X%s", strlen (string), string);
       CLEAR_INBOUND ();
-      m_print2 ("%08lX\r", crc);
+		m_print2 ("%08lX\r", crc);
       FLUSH_OUTPUT ();
 
-      if (tries++ > 10) {
-         modem_hangup ();
-         status_line ("!Trans. IEMSI failure");
+		if (tries++ > 10) {
+			modem_hangup ();
+			status_line ("!Trans. IEMSI failure");
          return;
       }
 
       t2 = timerset (1000);
 
-      while (!timeup (t1)) {
+		while (!timeup (t1)) {
          if (timeup (t2))
             break;
 
-         if (PEEKBYTE() == '*') {
-            get_emsi_id (addr, 14);
-            if (!strnicmp (addr, "**EMSI_ICI", 10) || !strnicmp (addr, "*EMSI_ICI", 9)) {
-               CLEAR_INBOUND ();
-               m_print2 ("**EMSI_ACKA490\r");
-               break;
-            }
-            if (!strnicmp (addr, "**EMSI_ACKA490", 14) || !strnicmp (addr, "*EMSI_ACKA490", 13))
-               break;
-            if (!strnicmp (addr, "**EMSI_NAKEEC3", 14) || !strnicmp (addr, "*EMSI_NAKEEC3", 13))
-               break;
-         }
-         else if (PEEKBYTE () != -1) {
-            TIMED_READ(10);
-            time_release ();
-         }
-      }
+			if (PEEKBYTE() == '*') {
+				get_emsi_id (addr, 14);
+				if (!strnicmp (addr, "**EMSI_ICI", 10) || !strnicmp (addr, "*EMSI_ICI", 9)) {
+					CLEAR_INBOUND ();
+					m_print2 ("**EMSI_ACKA490\r");
+					break;
+				}
+				if (!strnicmp (addr, "**EMSI_ACKA490", 14) || !strnicmp (addr, "*EMSI_ACKA490", 13))
+					break;
+				if (!strnicmp (addr, "**EMSI_NAKEEC3", 14) || !strnicmp (addr, "*EMSI_NAKEEC3", 13))
+					break;
+			}
+			else if (PEEKBYTE () != -1) {
+				TIMED_READ(10);
+				time_release ();
+			}
+		}
 
-      if (!strnicmp (addr, "**EMSI_ACKA490", 14) || !strnicmp (addr, "*EMSI_ACKA490", 13))
-         break;
-   }
+		if (!strnicmp (addr, "**EMSI_ACKA490", 14) || !strnicmp (addr, "*EMSI_ACKA490", 13))
+			break;
+	}
 
-   memcpy ((char *)&usr, (char *)&iusr, sizeof (struct _usr));
-   iemsi = miemsi | IEMSI_ON;
+	filename = string;
+
+	if (iusr.handle && stricmp (iusr.handle, iusr.name)) {
+		crc = crc_name (iusr.handle);
+		sprintf (filename, "%s.IDX", config->user_file);
+		fd = open (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+		while (read (fd, &usridx, sizeof (struct _usridx)) == sizeof (struct _usridx)) {
+			if (usridx.id == crc || usridx.alias_id == crc) {
+				status_line (":Invalid IEMSI alias '%s'", iusr.handle);
+				strcpy(iusr.handle,iusr.name);
+				break;
+			}
+		}
+		close (fd);
+
+	}
+
+	if (iusr.handle[0]){
+//		strcpy (usr.handle, iusr.handle);
+		iusr.alias_id = crc;
+		sprintf (filename, "%s.IDX", config->user_file);
+		fd = open (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+		while (read (fd, &usridx, sizeof (struct _usridx)) == sizeof (struct _usridx)) {
+			ici=tell(fd);
+			if (usridx.id == usr.id) {
+		 lseek(fd,(ici-(sizeof(struct _usridx))),SEEK_SET);
+				usridx.alias_id = crc;
+				write (fd, (char *)&usridx, sizeof (struct _usridx));
+				break;
+			}
+		}
+		close (fd);
+	}
+	memcpy ((char *)&usr, (char *)&iusr, sizeof (struct _usr));
+	iemsi = miemsi | IEMSI_ON;
 }
 
+unsigned long string_crc(char *string, unsigned long crc)
+{
+
+	int i;
+
+	for (i = 0; i < strlen (string); i++)
+		crc = Z_32UpdateCRC (string[i], crc);
+	return crc;
+}

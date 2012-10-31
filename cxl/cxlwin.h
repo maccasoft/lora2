@@ -9,6 +9,9 @@
    읕컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴켸
 */
 
+#if !defined(__CXLWIN_H__)
+#define __CXLWIN_H__
+
 #if defined(__TURBOC__)                     /* Turbo C */
     #if __STDC__
         #define _Cdecl
@@ -35,6 +38,10 @@
 typedef int     WINDOW;
 
 /*---------------------------[ function prototypes ]-------------------------*/
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 int      _Cdecl wactiv(WINDOW whandle);
 int      _Cdecl wborder(int btype);
@@ -120,10 +127,10 @@ char    *_Cdecl wpickfile(int srow,int scol,int erow,int ecol,int btype,
 int      _Cdecl wpickstr(int srow,int scol,int erow,int ecol,int btype,
                          int bordattr,int winattr,int barattr,char *strarr[],
                          int initelem,void (_Cdecl *open)(void));
-int      _Cdecl pickstrw(int srow,int scol,int erow,int ecol,int btype,int bordattr,
-                         int winattr,int barattr,char *strarr[],int initelem,
-                         void (*open)(void),
-                         char *(*insert)(int),int (*delete)(char *,int),void (*edit)(int));
+//int      _Cdecl pickstrw(int srow,int scol,int erow,int ecol,int btype,int bordattr,
+//                         int winattr,int barattr,char *strarr[],int initelem,
+//                         void (*open)(void),
+//                         char *(*insert)(int),int (*delete)(char *,int),void (*edit)(int));
 int      _Cdecl wprintc(int wrow,int wcol,int attr,int ch);
 int      _Cdecl wprintf(const char *format,...);
 int      _Cdecl wprints(int wrow,int wcol,int attr,char *str);
@@ -152,6 +159,10 @@ int      _Cdecl wunhide(WINDOW whandle);
 int      _Cdecl wunlink(WINDOW w);
 int      _Cdecl wvline(int wsrow,int wscol,int count,int btype,int attr);
 int      _Cdecl wwprints(WINDOW whandle,int wrow,int wcol,int attr,char *str);
+
+#ifdef __cplusplus
+}
+#endif
 
 /*-------------[ error codes returned from windowing functions ]-------------*/
 
@@ -464,3 +475,7 @@ struct _wrec_t {
 #define wmenuicurr()        (wmenumcurr()->citem)
 #define wsetesc(a)          (_winfo.esc=a)
 #define wtabwidth(a)        (_winfo.tabwidth=((a==0)?1:a))
+
+#endif
+
+

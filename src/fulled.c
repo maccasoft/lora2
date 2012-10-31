@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <conio.h>
 #include <string.h>
@@ -54,147 +72,151 @@ void display_screen (int toprow, int width, int len)
    int i, crow, m;
    char *p, linea[128], adjusted[26], *a;
 
-   p = txtptr;
-   crow = 0;
+	p = txtptr;
+	crow = 0;
 
-   for (i = 0; i < 26; i++) {
-      oldrow[i] = screenrow[i];
-      screenrow[i] = NULL;
-      adjusted[i] = 0;
-   }
+//	strcat(txtptr,"\n");// fix volante :-))
 
-   do {
-      if (crow && *p == '\n')
-         p++;
-      if (crow >= toprow)
-         screenrow[crow - toprow] = p;
+	for (i = 0; i < 26; i++) {
+		oldrow[i] = screenrow[i];
+		screenrow[i] = NULL;
+		adjusted[i] = 0;
+	}
 
-      i = 0;
-      while (i < width && *p != '\0' && *p != '\n')
-         linea[i++] = *p++;
-      linea[i] = '\0';
+	do {
+		if (crow && *p == '\n')
+			p++;
+		if (crow >= toprow)
+			screenrow[crow - toprow] = p;
 
-      if (i >= width && strchr (linea, ' ') != NULL) {
-         while (*p != ' ') {
-            p--;
-            i--;
-         }
-         linea[i] = '\0';
-         while (*p == ' ')
-            p++;
-      }
+		i = 0;
+		while (i < width && *p != '\0' && *p != '\n')
+			linea[i++] = *p++;
+		linea[i] = '\0';
 
-      if (crow >= toprow) {
-         if ((crow - toprow + 1) >= 26)
-            break;
-      }
+		if (i >= width && strchr (linea, ' ') != NULL) {
+			while (*p != ' ') {
+				p--;
+				i--;
+			}
+			linea[i] = '\0';
+			while (*p == ' ')
+				p++;
+		}
 
-      crow++;
-   } while (*p != '\0');
+		if (crow >= toprow) {
+			if ((crow - toprow + 1) >= 26)
+				break;
+		}
 
-   crow = -1;
+		crow++;
+	} while (*p != '\0');
 
-   for (i = 0; i < len; i++) {
-      if (screenrow[i] == NULL)
-         break;
-      if (ptr >= screenrow[i] && (ptr < screenrow[i + 1] || screenrow[i + 1] == NULL))
-         crow = i + 1;
+	crow = -1;
 
-      if (screenrow[i] != oldrow[i]) {
-         if (i && !adjusted[i - 1]) {
-            i--;
-            m = (int)(screenrow[i + 1] - screenrow[i]);
-            strncpy (linea, screenrow[i], m);
-            if (linea[m - 1] == '\n')
-               m--;
-            linea[m] = '\0';
-            gotoxy_s (1, i + 1);
-            del_line ();
+	for (i = 0; i < len; i++) {
+		if (screenrow[i] == NULL)
+			break;
+		if (ptr >= screenrow[i] && (ptr < screenrow[i + 1] || screenrow[i + 1] == NULL))
+			crow = i + 1;
 
-            if ((a = strchr (linea, '>')) == NULL)
-               change_attr (CYAN|_BLACK);
-            else if ((int)(linea - a) <= 5)
-               change_attr (YELLOW|_BLACK);
+		if (screenrow[i] != oldrow[i]) {
+			if (i && !adjusted[i - 1]) {
+				i--;
+				m = (int)(screenrow[i + 1] - screenrow[i]);
+				strncpy (linea, screenrow[i], m);
+				if (linea[m - 1] == '\n')
+					m--;
+				linea[m] = '\0';
+				gotoxy_s (1, i + 1);
+				del_line ();
 
-            m_print ("%s", linea);
-            i++;
-         }
+				if ((a = strchr (linea, '>')) == NULL)
+					change_attr (CYAN|_BLACK);
+				else if ((int)(linea - a) <= 5)
+					change_attr (YELLOW|_BLACK);
 
-         if (screenrow[i + 1] == NULL)
-            m = strlen (screenrow[i]);
-         else
-            m = (int)(screenrow[i + 1] - screenrow[i]);
-         strncpy (linea, screenrow[i], m);
-         if (linea[m - 1] == '\n')
-            m--;
-         linea[m] = '\0';
-         gotoxy_s (1, i + 1);
-         del_line ();
+				m_print ("%s", linea);
+				i++;
+			}
 
-         if ((a = strchr (linea, '>')) == NULL)
-            change_attr (CYAN|_BLACK);
-         else if ((int)(linea - a) <= 5)
-            change_attr (YELLOW|_BLACK);
+			if (screenrow[i + 1] == NULL)
+				m = strlen (screenrow[i]);
+			else
+				m = (int)(screenrow[i + 1] - screenrow[i]);
+			strncpy (linea, screenrow[i], m);
+			if (linea[m - 1] == '\n')
+				m--;
+			linea[m] = '\0';
+			gotoxy_s (1, i + 1);
+			del_line ();
 
-         m_print ("%s", linea);
-         adjusted[i] = 1;
-      }
-   }
-   if (crow == -1)
-      crow = i + 1;
+			if ((a = strchr (linea, '>')) == NULL)
+				change_attr (CYAN|_BLACK);
+			else if ((int)(linea - a) <= 5)
+				change_attr (YELLOW|_BLACK);
 
-   if (crow <= len) {
-      crow--;
+			m_print ("%s", linea);
+			adjusted[i] = 1;
+		}
+	}
+	if (crow == -1)
+		crow = i + 1;
 
-      if (screenrow[crow + 1] == NULL)
-         m = strlen (screenrow[crow]);
-      else
-         m = (int)(screenrow[crow + 1] - screenrow[crow]);
-      strncpy (linea, screenrow[crow], m);
-      if (linea[m - 1] == '\n')
-         m--;
-      linea[m] = '\0';
+	if (crow <= len) {
+		crow--;
 
-      if (cy != crow)
-         strcpy (editrow, linea);
+		if (screenrow[crow + 1] == NULL)
+			m = strlen (screenrow[crow]);
+		else
+			m = (int)(screenrow[crow + 1] - screenrow[crow]);
+		strncpy (linea, screenrow[crow], m);
+		if (linea[m - 1] == '\n')
+			m--;
+		linea[m] = '\0';
 
-      m = (int)(ptr - screenrow[crow]);
+		if (cy != crow)
+			strcpy (editrow, linea);
 
-      if (!adjusted[crow] && strcmp (editrow, linea)) {
-         if ((a = strchr (linea, '>')) == NULL)
-            change_attr (CYAN|_BLACK);
-         else if ((int)(linea - a) <= 5)
-            change_attr (YELLOW|_BLACK);
+		m = (int)(ptr - screenrow[crow]);
 
-         if (m) {
-            if (m < cx)
-               gotoxy_s (m, crow + 1);
-            m_print ("%s", &linea[m - 1]);
-         }
-         else {
-            gotoxy_s (m + 1, crow + 1);
-            m_print ("%s", &linea[m]);
-         }
+		if (!adjusted[crow] && strcmp (editrow, linea)) {
+			if ((a = strchr (linea, '>')) == NULL)
+				change_attr (CYAN|_BLACK);
+			else if ((int)(linea - a) <= 5)
+				change_attr (YELLOW|_BLACK);
 
-         del_line ();
-         strcpy (editrow, linea);
+			if (m) {
+				if (m < cx)
+					gotoxy_s (m, crow + 1);
+				m_print ("%s", &linea[m - 1]);
+			}
+			else {
+				gotoxy_s (m + 1, crow + 1);
+				m_print ("%s", &linea[m]);
+			}
 
-         if (linea[m] || m < cx)
-            gotoxy_s (m + 1, crow + 1);
-      }
-      else {
-         strcpy (editrow, linea);
-         gotoxy_s (m + 1, crow + 1);
-      }
-   }
+			del_line ();
+			strcpy (editrow, linea);
+
+			if (linea[m] || m < cx)
+				gotoxy_s (m + 1, crow + 1);
+		}
+		else {
+			strcpy (editrow, linea);
+			gotoxy_s (m + 1, crow + 1);
+		}
+	}
+
+//	txtptr[strlen(txtptr)-1]='\0';  // fix volante per eliminare piccolo bachetto..
 
 #ifdef __OS2__
-   UNBUFFER_BYTES ();
-   VioUpdate ();
+	UNBUFFER_BYTES ();
+	VioUpdate ();
 #endif
 
-   cx = m;
-   cy = crow;
+	cx = m;
+	cy = crow;
 }
 
 int readkey (void)
@@ -215,7 +237,7 @@ int readkey (void)
 
       if (local_kbd == -1) {
          c = (unsigned char)TIMED_READ(1);
-         if (c == 0x1B && TIMED_READ (5) == '[') {
+         if (c == 0x1B) {
 
 reread:
             switch (TIMED_READ (5)) {
@@ -243,6 +265,8 @@ reread:
                case 'K':
                   return (0x4F00);
 
+               case '[':
+               case 'O':
                case '0':
                case '1':
                case '2':
@@ -474,20 +498,20 @@ void edit_file (char *name, int len, int width)
             }
             else {
                strcpy (screenrow[cy], screenrow[cy + 1]);
+               for (i=cy;i<26;i++)
+                screenrow[i]=NULL;
                display_screen (startrow, width, len);
             }
             break;
 
          // Delete
          case 0x5300:
-            if (*ptr) {
+         case 0x7f:
+            if (ptr >= txtptr) {
                strcpy (ptr, &ptr[1]);
+               for (i = 0; i < 26; i++)
+                  screenrow[i] = NULL;
                display_screen (startrow, width, len);
-               for (i = cy + 1; i < 26; i++) {
-                  if (screenrow[i] == NULL)
-                     break;
-                  screenrow[i]--;
-               }
             }
             break;
 
@@ -688,6 +712,8 @@ void edit_file (char *name, int len, int width)
 
 void fullscreen_editor (void)
 {
+   char *p = "œ^X=Down  ^E=Up  ^S=Left  ^D=Right  ^Z=Save  ^K?=Help";
+
    cls();
 
    change_attr (BLUE|_LGREY);
@@ -698,8 +724,8 @@ void fullscreen_editor (void)
 
    change_attr (RED|_BLUE);
    del_line ();
-   cpos (5, (usr.width ? usr.width : 80) - 18);
-   m_print ("œ^Z=Save  ^K?=Help");
+   cpos (5, (usr.width ? usr.width : 80) - strlen (p) - 1 + 4);
+   m_print (p);
 
    change_attr (CYAN|_BLACK);
    m_print (bbstxt[B_ONE_CR]);

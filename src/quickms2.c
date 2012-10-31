@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
@@ -89,7 +107,7 @@ char upd;
          m /= sizeof (struct _gold_msgidx);
 
          for (x = 0; x < m; x++) {
-            if (gidx[x].board == gold_board && gidx[x].msgnum) {
+				if (gidx[x].board == gold_board && gidx[x].msgnum > 0) {
                msgidx[i++] = gnum_msg;
                gmsginfo.totalonboard[gold_board - 1]++;
             }
@@ -109,7 +127,7 @@ char upd;
          m /= sizeof (struct _msgidx);
 
          for (x = 0; x < m; x++) {
-            if (idx[x].board == board && idx[x].msgnum) {
+				if (idx[x].board == board && idx[x].msgnum > 0 ) {
                msgidx[i++] = tnum_msg;
                msginfo.totalonboard[board - 1]++;
             }
@@ -200,7 +218,7 @@ int quick_read_message (int msg_num, int flag, int fakenum)
       fseek (fp, (long)sizeof (struct _gold_msghdr) * absnum, SEEK_SET);
       fread ((char *)&gmsghdr, sizeof (struct _gold_msghdr), 1, fp);
 
-      if (gmsghdr.msgattr & Q_RECKILL)
+		if (gmsghdr.msgattr & Q_RECKILL)
          return (0);
 
       if (gmsghdr.msgattr & Q_PRIVATE)
@@ -243,7 +261,7 @@ int quick_read_message (int msg_num, int flag, int fakenum)
       fseek (fp, (long)sizeof (struct _msghdr) * absnum, SEEK_SET);
       fread ((char *)&msghdr, sizeof (struct _msghdr), 1, fp);
 
-      if (msghdr.msgattr & Q_RECKILL)
+		if (msghdr.msgattr & Q_RECKILL)
          return (0);
 
       if (msghdr.msgattr & Q_PRIVATE)
@@ -962,7 +980,7 @@ FILE *sm;
 
       fclose (fp);
 
-      if (gmsgt.msgattr & Q_RECKILL)
+		if (gmsgt.msgattr & Q_RECKILL)
          return (0);
 
       if (gmsgt.msgattr & Q_PRIVATE) {
@@ -982,7 +1000,7 @@ FILE *sm;
 
       fclose (fp);
 
-      if (msgt.msgattr & Q_RECKILL)
+		if (msgt.msgattr & Q_RECKILL)
          return (0);
 
       if (msgt.msgattr & Q_PRIVATE) {
@@ -1346,80 +1364,87 @@ void quick_save_message (char *txt)
    FILE *fp;
    word dest, m, nb, x;
    int fdinfo, i;
-   char filename[80], text[258], buffer[258];
-   long tempo, gdest;
-   struct tm *tim;
-   struct _msgidx idx;
-   struct _msghdr hdr;
+	char filename[80], text[258], buffer[258];
+	long tempo, gdest;
+	unsigned long crc;
+	struct tm *tim;
+	struct _msgidx idx;
+	struct _msghdr hdr;
    struct _msgtoidx toidx;
    struct _gold_msgidx gidx;
    struct _gold_msghdr ghdr;
 
-   memset ((char *)&toidx, 0, sizeof (struct _msgtoidx));
+	memset ((char *)&toidx, 0, sizeof (struct _msgtoidx));
 
-   m_print (bbstxt[B_SAVE_MESSAGE]);
-   quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
+	m_print (bbstxt[B_SAVE_MESSAGE]);
+	quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
 
-   if (sys.gold_board)
-      gdest = gmsginfo.highmsg + 1;
-   else
-      dest = msginfo.highmsg + 1;
+	// prima era qui
+	//if (sys.gold_board)
+	//	gdest = gmsginfo.highmsg + 1;
+	//else
+	//	dest = msginfo.highmsg + 1;
+	activation_key ();
+	m_print (" #%d ...", last_msg + 1);
 
-   activation_key ();
-   m_print (" #%d ...", last_msg + 1);
+	if (sys.gold_board) {
+		memset ((char *)&gidx, 0, sizeof (struct _gold_msgidx));
+		memset ((char *)&ghdr, 0, sizeof (struct _gold_msghdr));
 
-   if (sys.gold_board) {
-      memset ((char *)&gidx, 0, sizeof (struct _gold_msgidx));
-      memset ((char *)&ghdr, 0, sizeof (struct _gold_msghdr));
+		sprintf (filename, "%sMSGINFO.DAT", fido_msgpath);
+		fdinfo = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+		if (fdinfo == -1)
+			return;
+		read (fdinfo, (char *)&gmsginfo, sizeof (struct _gold_msginfo));
+		lseek (fdinfo, 0L, SEEK_SET);
 
-      sprintf (filename, "%sMSGINFO.DAT", fido_msgpath);
-      fdinfo = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
-      if (fdinfo == -1)
-         return;
-      read (fdinfo, (char *)&gmsginfo, sizeof (struct _gold_msginfo));
-      lseek (fdinfo, 0L, SEEK_SET);
+		gdest = gmsginfo.highmsg + 1;
 
-      sprintf (filename, "%sMSGIDX.DAT", fido_msgpath);
-      i = sh_open (filename, SH_DENYNONE, O_APPEND|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
-      if (i == -1)
-         return;
-      fp = fdopen (i, "ab");
+		sprintf (filename, "%sMSGIDX.DAT", fido_msgpath);
+		i = sh_open (filename, SH_DENYNONE, O_APPEND|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+		if (i == -1)
+			return;
+		fp = fdopen (i, "ab");
 
-      gidx.msgnum = gdest;
-      gidx.board = sys.gold_board;
+		gidx.msgnum = gdest;
+		gidx.board = sys.gold_board;
 
-      fwrite ((char *)&gidx, sizeof (struct _gold_msgidx), 1, fp);
-      fclose (fp);
+		fwrite ((char *)&gidx, sizeof (struct _gold_msgidx), 1, fp);
+		fclose (fp);
 
-      sprintf (filename, "%sMSGTOIDX.DAT", fido_msgpath);
-   }
-   else {
-      memset ((char *)&idx, 0, sizeof (struct _msgidx));
-      memset ((char *)&hdr, 0, sizeof (struct _msghdr));
+		sprintf (filename, "%sMSGTOIDX.DAT", fido_msgpath);
+	}
+	else {
+		memset ((char *)&idx, 0, sizeof (struct _msgidx));
+		memset ((char *)&hdr, 0, sizeof (struct _msghdr));
 
-      sprintf (filename, "%sMSGINFO.BBS", fido_msgpath);
-      fdinfo = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
-      if (fdinfo == -1)
-         return;
-      read (fdinfo, (char *)&msginfo, sizeof (struct _msginfo));
-      lseek (fdinfo, 0L, SEEK_SET);
+		sprintf (filename, "%sMSGINFO.BBS", fido_msgpath);
+		fdinfo = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+		if (fdinfo == -1)
+			return;
+		read (fdinfo, (char *)&msginfo, sizeof (struct _msginfo));
+		lseek (fdinfo, 0L, SEEK_SET);
 
-      sprintf (filename, "%sMSGIDX.BBS", fido_msgpath);
-      i = sh_open (filename, SH_DENYNONE, O_APPEND|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
-      if (i == -1)
-         return;
-      fp = fdopen (i, "ab");
+		dest = msginfo.highmsg + 1;
 
-      idx.msgnum = dest;
-      idx.board = sys.quick_board;
+		sprintf (filename, "%sMSGIDX.BBS", fido_msgpath);
+		i = sh_open (filename, SH_DENYNONE, O_APPEND|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+		if (i == -1)
+			return;
+		fp = fdopen (i, "ab");
 
-      fwrite ((char *)&idx, sizeof (struct _msgidx), 1, fp);
-      fclose (fp);
+		idx.msgnum = dest;
+		idx.board = sys.quick_board;
 
-      sprintf (filename, "%sMSGTOIDX.BBS", fido_msgpath);
-   }
+		fwrite ((char *)&idx, sizeof (struct _msgidx), 1, fp);
+		fclose (fp);
 
-   if ((i = sh_open (filename, SH_DENYNONE, O_APPEND|O_RDWR|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+		sprintf (filename, "%sMSGTOIDX.BBS", fido_msgpath);
+	}
+
+
+
+	if ((i = sh_open (filename, SH_DENYNONE, O_APPEND|O_RDWR|O_BINARY, S_IREAD|S_IWRITE)) == -1)
       return;
 
    strcpy (&toidx.string[1], msg.to);
@@ -1431,7 +1456,7 @@ void quick_save_message (char *txt)
    if (sys.gold_board)
       sprintf (filename, "%sMSGTXT.DAT", fido_msgpath);
    else
-      sprintf (filename, "%sMSGTXT.BBS", fido_msgpath);
+		sprintf (filename, "%sMSGTXT.BBS", fido_msgpath);
 
    i = sh_open (filename, SH_DENYNONE, O_APPEND|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
    if (i == -1)
@@ -1440,7 +1465,7 @@ void quick_save_message (char *txt)
 
    if (sys.gold_board)
       ghdr.startblock = filelength (fileno (fp)) / 256L;
-   else
+	else
       hdr.startblock = (word)(filelength (fileno (fp)) / 256L);
 
    i = 0;
@@ -1462,8 +1487,15 @@ void quick_save_message (char *txt)
 
    if (sys.echomail) {
       sprintf(buffer,msgtxt[M_PID], VERSION, registered ? "+" : NOREG);
-      write_pascal_string (buffer, text, &m, &nb, fp);
-      sprintf(buffer,msgtxt[M_MSGID], config->alias[sys.use_alias].zone, config->alias[sys.use_alias].net, config->alias[sys.use_alias].node, config->alias[sys.use_alias].point, time(NULL));
+		write_pascal_string (buffer, text, &m, &nb, fp);
+
+		crc = time (NULL);
+		crc = string_crc(msg.from,crc);
+		crc = string_crc(msg.to,crc);
+		crc = string_crc(msg.subj,crc);
+		crc = string_crc(msg.date,crc);
+
+		sprintf(buffer,msgtxt[M_MSGID], config->alias[sys.use_alias].zone, config->alias[sys.use_alias].net, config->alias[sys.use_alias].node, config->alias[sys.use_alias].point, crc);
       write_pascal_string (buffer, text, &m, &nb, fp);
    }
 
@@ -1550,7 +1582,7 @@ void quick_save_message (char *txt)
 
    if (sys.gold_board) {
       ghdr.numblocks = nb;
-      ghdr.msgnum = gdest;
+		ghdr.msgnum = gdest;
       ghdr.prevreply = msg.reply;
       ghdr.nextreply = msg.up;
       ghdr.timesread = 0;
@@ -1602,11 +1634,11 @@ void quick_save_message (char *txt)
       fwrite ((char *)&ghdr, sizeof (struct _gold_msghdr), 1, fp);
       fclose (fp);
 
-      write (fdinfo, (char *)&msginfo, sizeof (struct _msginfo));
+		write (fdinfo, (char *)&gmsginfo, sizeof (struct _gold_msginfo));
    }
    else {
       hdr.numblocks = nb;
-      hdr.msgnum = dest;
+		hdr.msgnum = dest;
       hdr.prevreply = msg.reply;
       hdr.nextreply = msg.up;
       hdr.timesread = 0;

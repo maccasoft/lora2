@@ -1,3 +1,21 @@
+
+// LoraBBS Version 2.41 Free Edition
+// Copyright (C) 1987-98 Marco Maccaferri
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
 #include <errno.h>
 #include <stdio.h>
 #include <io.h>
@@ -23,26 +41,31 @@ extern int errno = 0;
 #include "lprot.h"
 #include "sched.h"
 #include "version.h"
+#include "zmodem.h"
 
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
 #include <cxl\cxlstr.h>
 #include <cxl\cxlkey.h>
 
+#define UpdateCRC(c,crc) (cr3tab[((int) crc ^ c) & 0xff] ^ ((crc >> 8) & 0x00FFFFFFL))
+
 struct parse_list levels[] = {
-   TWIT, " Twit ",
-   DISGRACE, " Disgrace ",
-   LIMITED, " Limited ",
-   NORMAL, " Normal ",
-   WORTHY, " Worthy ",
-   PRIVIL, " Privel ",
-   FAVORED, " Favored ",
-   EXTRA, " Extra ",
-   CLERK, " Clerk ",
-   ASSTSYSOP, " Asst. Sysop ",
-   SYSOP, " Sysop ",
-   HIDDEN, " Hidden "
+	TWIT, " Twit ",
+	DISGRACE, " Disgrace ",
+	LIMITED, " Limited ",
+	NORMAL, " Normal ",
+	WORTHY, " Worthy ",
+	PRIVIL, " Privel ",
+	FAVORED, " Favored ",
+	EXTRA, " Extra ",
+	CLERK, " Clerk ",
+	ASSTSYSOP, " Asst. Sysop ",
+	SYSOP, " Sysop ",
+	HIDDEN, " Hidden "
 };
+
+
 
 struct _configuration config;
 
@@ -51,6 +74,8 @@ void update_message (void);
 void parse_netnode2 (char *netnode, int *zone, int *net, int *node, int *point);
 
 void mailonly_password (void);
+void setup_password (void);
+void setup_password_check (void);
 void create_route_file (void);
 void clear_window (void);
 void linehelp_window (void);
@@ -113,160 +138,201 @@ static void export_costfile (void);
 static void import_costfile (void);
 
 static long crc;
+static unsigned long cr3tab[] = {                /* CRC polynomial 0xedb88320 */
+   0x00000000L, 0x77073096L, 0xee0e612cL, 0x990951baL, 0x076dc419L, 0x706af48fL, 0xe963a535L, 0x9e6495a3L,
+   0x0edb8832L, 0x79dcb8a4L, 0xe0d5e91eL, 0x97d2d988L, 0x09b64c2bL, 0x7eb17cbdL, 0xe7b82d07L, 0x90bf1d91L,
+   0x1db71064L, 0x6ab020f2L, 0xf3b97148L, 0x84be41deL, 0x1adad47dL, 0x6ddde4ebL, 0xf4d4b551L, 0x83d385c7L,
+   0x136c9856L, 0x646ba8c0L, 0xfd62f97aL, 0x8a65c9ecL, 0x14015c4fL, 0x63066cd9L, 0xfa0f3d63L, 0x8d080df5L,
+   0x3b6e20c8L, 0x4c69105eL, 0xd56041e4L, 0xa2677172L, 0x3c03e4d1L, 0x4b04d447L, 0xd20d85fdL, 0xa50ab56bL,
+   0x35b5a8faL, 0x42b2986cL, 0xdbbbc9d6L, 0xacbcf940L, 0x32d86ce3L, 0x45df5c75L, 0xdcd60dcfL, 0xabd13d59L,
+   0x26d930acL, 0x51de003aL, 0xc8d75180L, 0xbfd06116L, 0x21b4f4b5L, 0x56b3c423L, 0xcfba9599L, 0xb8bda50fL,
+   0x2802b89eL, 0x5f058808L, 0xc60cd9b2L, 0xb10be924L, 0x2f6f7c87L, 0x58684c11L, 0xc1611dabL, 0xb6662d3dL,
+   0x76dc4190L, 0x01db7106L, 0x98d220bcL, 0xefd5102aL, 0x71b18589L, 0x06b6b51fL, 0x9fbfe4a5L, 0xe8b8d433L,
+   0x7807c9a2L, 0x0f00f934L, 0x9609a88eL, 0xe10e9818L, 0x7f6a0dbbL, 0x086d3d2dL, 0x91646c97L, 0xe6635c01L,
+   0x6b6b51f4L, 0x1c6c6162L, 0x856530d8L, 0xf262004eL, 0x6c0695edL, 0x1b01a57bL, 0x8208f4c1L, 0xf50fc457L,
+   0x65b0d9c6L, 0x12b7e950L, 0x8bbeb8eaL, 0xfcb9887cL, 0x62dd1ddfL, 0x15da2d49L, 0x8cd37cf3L, 0xfbd44c65L,
+   0x4db26158L, 0x3ab551ceL, 0xa3bc0074L, 0xd4bb30e2L, 0x4adfa541L, 0x3dd895d7L, 0xa4d1c46dL, 0xd3d6f4fbL,
+   0x4369e96aL, 0x346ed9fcL, 0xad678846L, 0xda60b8d0L, 0x44042d73L, 0x33031de5L, 0xaa0a4c5fL, 0xdd0d7cc9L,
+   0x5005713cL, 0x270241aaL, 0xbe0b1010L, 0xc90c2086L, 0x5768b525L, 0x206f85b3L, 0xb966d409L, 0xce61e49fL,
+   0x5edef90eL, 0x29d9c998L, 0xb0d09822L, 0xc7d7a8b4L, 0x59b33d17L, 0x2eb40d81L, 0xb7bd5c3bL, 0xc0ba6cadL,
+   0xedb88320L, 0x9abfb3b6L, 0x03b6e20cL, 0x74b1d29aL, 0xead54739L, 0x9dd277afL, 0x04db2615L, 0x73dc1683L,
+   0xe3630b12L, 0x94643b84L, 0x0d6d6a3eL, 0x7a6a5aa8L, 0xe40ecf0bL, 0x9309ff9dL, 0x0a00ae27L, 0x7d079eb1L,
+   0xf00f9344L, 0x8708a3d2L, 0x1e01f268L, 0x6906c2feL, 0xf762575dL, 0x806567cbL, 0x196c3671L, 0x6e6b06e7L,
+   0xfed41b76L, 0x89d32be0L, 0x10da7a5aL, 0x67dd4accL, 0xf9b9df6fL, 0x8ebeeff9L, 0x17b7be43L, 0x60b08ed5L,
+   0xd6d6a3e8L, 0xa1d1937eL, 0x38d8c2c4L, 0x4fdff252L, 0xd1bb67f1L, 0xa6bc5767L, 0x3fb506ddL, 0x48b2364bL,
+   0xd80d2bdaL, 0xaf0a1b4cL, 0x36034af6L, 0x41047a60L, 0xdf60efc3L, 0xa867df55L, 0x316e8eefL, 0x4669be79L,
+   0xcb61b38cL, 0xbc66831aL, 0x256fd2a0L, 0x5268e236L, 0xcc0c7795L, 0xbb0b4703L, 0x220216b9L, 0x5505262fL,
+   0xc5ba3bbeL, 0xb2bd0b28L, 0x2bb45a92L, 0x5cb36a04L, 0xc2d7ffa7L, 0xb5d0cf31L, 0x2cd99e8bL, 0x5bdeae1dL,
+   0x9b64c2b0L, 0xec63f226L, 0x756aa39cL, 0x026d930aL, 0x9c0906a9L, 0xeb0e363fL, 0x72076785L, 0x05005713L,
+   0x95bf4a82L, 0xe2b87a14L, 0x7bb12baeL, 0x0cb61b38L, 0x92d28e9bL, 0xe5d5be0dL, 0x7cdcefb7L, 0x0bdbdf21L,
+   0x86d3d2d4L, 0xf1d4e242L, 0x68ddb3f8L, 0x1fda836eL, 0x81be16cdL, 0xf6b9265bL, 0x6fb077e1L, 0x18b74777L,
+   0x88085ae6L, 0xff0f6a70L, 0x66063bcaL, 0x11010b5cL, 0x8f659effL, 0xf862ae69L, 0x616bffd3L, 0x166ccf45L,
+   0xa00ae278L, 0xd70dd2eeL, 0x4e048354L, 0x3903b3c2L, 0xa7672661L, 0xd06016f7L, 0x4969474dL, 0x3e6e77dbL,
+   0xaed16a4aL, 0xd9d65adcL, 0x40df0b66L, 0x37d83bf0L, 0xa9bcae53L, 0xdebb9ec5L, 0x47b2cf7fL, 0x30b5ffe9L,
+   0xbdbdf21cL, 0xcabac28aL, 0x53b39330L, 0x24b4a3a6L, 0xbad03605L, 0xcdd70693L, 0x54de5729L, 0x23d967bfL,
+   0xb3667a2eL, 0xc4614ab8L, 0x5d681b02L, 0x2a6f2b94L, 0xb40bbe37L, 0xc30c8ea1L, 0x5a05df1bL, 0x2d02ef8dL
+};
+
 
 static void pre_help(void)
 {
-   wshadow (LGREY|_BLACK);
-   wtitle (" Help ", TRIGHT, YELLOW|_BLUE);
+	wshadow (LGREY|_BLACK);
+	wtitle (" Help ", TRIGHT, YELLOW|_BLUE);
 }
 
 void main (argc, argv)
 int argc;
 char *argv[];
 {
-   int x, y, wh, i;       // , end = 0;
-   char string[80];
+	int x, y, wh, i;       // , end = 0;
+	char string[80];
 
-   if (argc > 1 && stricmp (argv[1], "EXPORT") && stricmp (argv[1], "IMPORT"))
-      read_config (argv[1]);
-   else
-      read_config ("CONFIG.DAT");
+	if (argc > 1 && stricmp (argv[1], "EXPORT") && stricmp (argv[1], "IMPORT"))
+		read_config (argv[1]);
+	else
+		read_config ("CONFIG.DAT");
 
 /*
-   for (i = 1; i < argc; i++) {
-      if (!stricmp (argv[i], "EXPORT")) {
-         export_config (argv[i + 1]);
-         end = 1;
-      }
-      if (!stricmp (argv[i], "IMPORT")) {
-         if (argc > 1 && stricmp (argv[1], "EXPORT") && stricmp (argv[1], "IMPORT"))
-	    import_config (argv[i + 1], argv[1]);
-         else
-            import_config (argv[i + 1], "CONFIG.DAT");
-         end = 1;
-      }
-   }
+	for (i = 1; i < argc; i++) {
+		if (!stricmp (argv[i], "EXPORT")) {
+			export_config (argv[i + 1]);
+			end = 1;
+		}
+		if (!stricmp (argv[i], "IMPORT")) {
+			if (argc > 1 && stricmp (argv[1], "EXPORT") && stricmp (argv[1], "IMPORT"))
+		 import_config (argv[i + 1], argv[1]);
+			else
+				import_config (argv[i + 1], "CONFIG.DAT");
+			end = 1;
+		}
+	}
 
-   if (end)
-      exit (0);
+	if (end)
+		exit (0);
 */
 
 #ifdef __OS2__
-   printf ("LSETUP-OS/2 v. %s", LSETUP_VERSION);
+	printf ("LSETUP-OS/2 v. %s", LSETUP_VERSION);
 #else
-   printf ("LSETUP-DOS v. %s", LSETUP_VERSION);
+	printf ("LSETUP-DOS v. %s", LSETUP_VERSION);
 #endif
 
-   videoinit ();
-   if (config.mono_attr)
-      setvparam (VP_MONO);
-   else
-      setvparam (VP_COLOR);
-   hidecur ();
-   x = wherex ();
-   y = wherey ();
+	videoinit ();
+	if (config.mono_attr)
+		setvparam (VP_MONO);
+	else
+		setvparam (VP_COLOR);
+	hidecur ();
+	x = wherex ();
+	y = wherey ();
 
 
-   /* initialize help system, help key = [F1] */
+	/* initialize help system, help key = [F1] */
 //   whelpdef ("LSETUP.HLP", 0x3B00, LCYAN|_BLACK, LGREY|_BLACK, WHITE|_BLACK, BLUE|_LGREY, pre_help);
 
-   wopen (0, 0, 24, 79, 5, LGREY|_BLACK, LGREY|_BLACK);
-   whline ( 1, 0, 80, 1, BLUE|_BLACK);
-   whline (23, 0, 80, 1, BLUE|_BLACK);
-   wfill (2, 0, 22, 79, '±', LGREY|_BLACK);
+	wopen (0, 0, 24, 79, 5, LGREY|_BLACK, LGREY|_BLACK);
+	whline ( 1, 0, 80, 1, BLUE|_BLACK);
+	whline (23, 0, 80, 1, BLUE|_BLACK);
+	wfill (2, 0, 22, 79, '±', LGREY|_BLACK);
 #ifdef __OS2__
-   sprintf (string, " Lora E-Mail System Setup OS/2 %s ", LSETUP_VERSION);
+	sprintf (string, " Lora E-Mail System Setup OS/2 %s ", LSETUP_VERSION);
 #else
-   sprintf (string, " Lora E-Mail System Setup DOS %s ", LSETUP_VERSION);
+	sprintf (string, " Lora E-Mail System Setup DOS %s ", LSETUP_VERSION);
 #endif
-   wcenters (11, BLACK|_LGREY, string);
-   wcenters (13, BLACK|_LGREY, " Copyright (C) 1989-95 Marco Maccaferri. All Rights Reserved ");
+	wcenters (11, BLACK|_LGREY, string);
+   wcenters (13, BLACK|_LGREY, " Copyright (C) 1989-96 Marco Maccaferri. All Rights Reserved ");
 #ifdef __OCC__
-   wcenters (14, BLACK|_LGREY, " Copyright (C) 1995 Old Colorado City Communications. All Rights Reserved ");
+	wcenters (14, BLACK|_LGREY, " Copyright (C) 1995 Old Colorado City Communications. All Rights Reserved ");
 #endif
+
+	if(config.setup_pwd) {
+		setup_password_check ();
+	}
 
 continue_editing:
 
-   wmenubegc ();
-   wmenuitem (0, 3, " File ", 'F', 100, M_HASPD, NULL, 0, 0);
-      wmenubeg (1, 3, 12, 25, 3, LCYAN|_BLACK, LCYAN|_BLACK, add_shadow);
-      wmenuitem (0, 0, " Registration        ", 0, 101, 0, registration_info, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (1, 0, " Write AREAS.BBS     ", 0, 103, 0, write_areasbbs, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (2, 0, " Write TIC.CFG       ", 0, 110, 0, write_ticcfg, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (3, 0, " Write ROUTE.CFG     ", 0, 107, 0, create_route_file, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (4, 0, " Write COST.CFG      ", 0, 109, 0, export_costfile, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (5, 0, " Import AREAS.BBS    ", 0, 105, 0, import_areasbbs, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (6, 0, " Import TIC.CFG      ", 0, 108, 0, import_tic, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (7, 0, " Import COST.CFG     ", 0, 110, 0, import_costfile, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (8, 0, " DOS shell           ", 0, 102, 0, shell_to_dos, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (9, 0, " Quit                ", 0, 106, M_CLALL, NULL, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuend (101, M_PD|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
-   wmenuitem (0, 11, " Global ", 'G', 200, M_HASPD, NULL, 0, 0);
-      wmenubeg (1, 11, 8, 30, 3, LCYAN|_BLACK, LCYAN|_BLACK, add_shadow);
-      wmenuitem (0, 0, " Site info        ", 0, 204, 0, site_info, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (1, 0, " Directory/Paths  ", 0, 202, 0, directory_setup, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (2, 0, " Addresses        ", 0, 203, 0, addresses, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (3, 0, " General          ", 0, 201, 0, global_general, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (4, 0, " Time adjustment  ", 0, 205, 0, general_time, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (5, 0, " Internet address ", 0, 206, 0, internet_info, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuend (204, M_PD|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
-   wmenuitem (0, 21, " Mailer ", 'M', 300, M_HASPD, NULL, 0, 0);
-      wmenubeg (1, 21, 11, 42, 3, LCYAN|_BLACK, LCYAN|_BLACK, add_shadow);
-      wmenuitem (0, 0, " Miscellaneous      ", 0, 301, 0, mailer_misc, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (1, 0, " Log                ", 0, 302, 0, mailer_log, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (2, 0, " File requests      ", 0, 303, 0, mailer_filerequest, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (3, 0, " Areafix            ", 0, 306, 0, mailer_areafix, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (4, 0, " TIC Processor      ", 0, 311, 0, mailer_tic, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (5, 0, " Ext. processing    ", 0, 307, 0, mailer_ext_processing, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (6, 0, " Message editor     ", 0, 308, 0, mailer_local_editor, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (7, 0, " Mail processing    ", 0, 309, 0, mail_processing, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (8, 0, " Mail-only password ", 0, 310, 0, mailonly_password, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuend (301, M_PD|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
-   wmenuitem (0, 31, " BBS ", 'B', 400, M_HASPD, NULL, 0, 0);
-      wmenubeg (1, 31, 12, 53, 3, LCYAN|_BLACK, LCYAN|_BLACK, add_shadow);
-      wmenuitem (0, 0, " Messages            ", 0, 401, 0, bbs_message, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (1, 0, " Files               ", 0, 402, 0, bbs_files, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (2, 0, " QWK setup           ", 0, 403, 0, qwk_setup, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (3, 0, " New users           ", 0, 404, 0, bbs_newusers, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (4, 0, " General options     ", 0, 405, 0, bbs_general, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (5, 0, " Limits              ", 0, 406, 0, edit_limits, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (6, 0, " Login limits        ", 0, 407, 0, bbs_login_limits, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (7, 0, " Paging hours        ", 0, 410, 0, bbs_paging_hours, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
-      wmenuitem (8, 0, " Language            ", 0, 408, 0, bbs_language, 0, 0);
-      wmenuiba (linehelp_window, clear_window);
+	wmenubegc ();
+	wmenuitem (0, 3, " File ", 'F', 100, M_HASPD, NULL, 0, 0);
+		wmenubeg (1, 3, 13, 25, 3, LCYAN|_BLACK, LCYAN|_BLACK, add_shadow);
+		wmenuitem (0, 0, " Registration        ", 0, 101, 0, registration_info, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (1, 0, " Write AREAS.BBS     ", 0, 103, 0, write_areasbbs, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (2, 0, " Write TIC.CFG       ", 0, 110, 0, write_ticcfg, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (3, 0, " Write ROUTE.CFG     ", 0, 107, 0, create_route_file, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (4, 0, " Write COST.CFG      ", 0, 109, 0, export_costfile, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (5, 0, " Import AREAS.BBS    ", 0, 105, 0, import_areasbbs, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (6, 0, " Import TIC.CFG      ", 0, 108, 0, import_tic, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (7, 0, " Import COST.CFG     ", 0, 110, 0, import_costfile, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (8, 0, " Setup password      ", 0, 111, 0, setup_password, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (9, 0, " DOS shell           ", 0, 102, 0, shell_to_dos, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (10, 0, " Quit                ", 0, 106, M_CLALL, NULL, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuend (101, M_PD|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
+	wmenuitem (0, 11, " Global ", 'G', 200, M_HASPD, NULL, 0, 0);
+		wmenubeg (1, 11, 8, 30, 3, LCYAN|_BLACK, LCYAN|_BLACK, add_shadow);
+		wmenuitem (0, 0, " Site info        ", 0, 204, 0, site_info, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (1, 0, " Directory/Paths  ", 0, 202, 0, directory_setup, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (2, 0, " Addresses        ", 0, 203, 0, addresses, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (3, 0, " General          ", 0, 201, 0, global_general, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (4, 0, " Time adjustment  ", 0, 205, 0, general_time, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (5, 0, " Internet address ", 0, 206, 0, internet_info, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuend (204, M_PD|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
+	wmenuitem (0, 21, " Mailer ", 'M', 300, M_HASPD, NULL, 0, 0);
+		wmenubeg (1, 21, 11, 42, 3, LCYAN|_BLACK, LCYAN|_BLACK, add_shadow);
+		wmenuitem (0, 0, " Miscellaneous      ", 0, 301, 0, mailer_misc, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (1, 0, " Log                ", 0, 302, 0, mailer_log, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (2, 0, " File requests      ", 0, 303, 0, mailer_filerequest, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (3, 0, " Areafix            ", 0, 306, 0, mailer_areafix, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (4, 0, " TIC Processor      ", 0, 311, 0, mailer_tic, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (5, 0, " Ext. processing    ", 0, 307, 0, mailer_ext_processing, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (6, 0, " Message editor     ", 0, 308, 0, mailer_local_editor, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (7, 0, " Mail processing    ", 0, 309, 0, mail_processing, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (8, 0, " Mail-only password ", 0, 310, 0, mailonly_password, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuend (301, M_PD|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
+	wmenuitem (0, 31, " BBS ", 'B', 400, M_HASPD, NULL, 0, 0);
+		wmenubeg (1, 31, 12, 53, 3, LCYAN|_BLACK, LCYAN|_BLACK, add_shadow);
+		wmenuitem (0, 0, " Messages            ", 0, 401, 0, bbs_message, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (1, 0, " Files               ", 0, 402, 0, bbs_files, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (2, 0, " QWK setup           ", 0, 403, 0, qwk_setup, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (3, 0, " New users           ", 0, 404, 0, bbs_newusers, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (4, 0, " General options     ", 0, 405, 0, bbs_general, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (5, 0, " Limits              ", 0, 406, 0, edit_limits, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (6, 0, " Login limits        ", 0, 407, 0, bbs_login_limits, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (7, 0, " Paging hours        ", 0, 410, 0, bbs_paging_hours, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
+		wmenuitem (8, 0, " Language            ", 0, 408, 0, bbs_language, 0, 0);
+		wmenuiba (linehelp_window, clear_window);
       wmenuitem (9, 0, " Ext. protocols      ", 0, 409, 0, bbs_protocol, 0, 0);
       wmenuiba (linehelp_window, clear_window);
       wmenuend (401, M_PD|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
@@ -277,7 +343,7 @@ continue_editing:
       wmenuitem (1, 0, " IEMSI Profile ", 0, 502, 0, terminal_iemsi, 0, 0);
       wmenuiba (linehelp_window, clear_window);
       wmenuend (501, M_PD|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
-   wmenuitem (0, 50, " Modem ", 'F', 600, M_HASPD, NULL, 0, 0);
+	wmenuitem (0, 50, " Modem ", 'F', 600, M_HASPD, NULL, 0, 0);
       wmenubeg (1, 50, 7, 68, 3, LCYAN|_BLACK, LCYAN|_BLACK, add_shadow);
       wmenuitem (0, 0, " Hardware        ", 0, 601, 0, modem_hardware, 0, 0);
       wmenuiba (linehelp_window, clear_window);
@@ -357,7 +423,7 @@ static void global_general ()
    wtitle (" General ", TRIGHT, YELLOW|_BLUE);
 
    do {
-      stop_update ();
+		stop_update ();
       wclear ();
 
       wmenubegc ();
@@ -382,13 +448,13 @@ static void global_general ()
          wprints (5, 24, CYAN|_BLACK, "Stars");
       else if (config.blanker_type == 2)
          wprints (5, 24, CYAN|_BLACK, "Snakes");
-      sprintf (string, "%d", config.line_offset);
+		sprintf (string, "%d", config.line_offset);
       wprints (6, 24, CYAN|_BLACK, string);
       wprints (7, 24, CYAN|_BLACK, config.multitask ? "Yes" : "No");
       sprintf (string, "%d", config.altx_errorlevel);
       wprints (8, 24, CYAN|_BLACK, string);
 
-      start_update ();
+		start_update ();
       i = wmenuget ();
 
       switch (i) {
@@ -417,7 +483,7 @@ static void global_general ()
          case 4:
             sprintf (string, "%d", config.blank_timer);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (4, 24, string, "?????", 0, 2, NULL, 0);
+				winpdef (4, 24, string, "?????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                config.blank_timer = atoi (string);
 	    break;
@@ -452,7 +518,7 @@ static void global_general ()
 
    } while (i != -1);
 
-   wclose ();
+	wclose ();
 }
 
 static void shell_to_dos ()
@@ -521,24 +587,45 @@ static void import_areasbbs ()
 
    wh = wopen (11, 7, 13, 73, 0, LGREY|_BLACK, LCYAN|_BLACK);
    wactiv (wh);
-   wtitle ("IMPORT AREAS.BBS", TLEFT, LCYAN|_BLACK);
+	wtitle ("IMPORT AREAS.BBS", TLEFT, LCYAN|_BLACK);
 
-   wprints (0, 1, YELLOW|_BLACK, "Filename");
-   if (config.areas_bbs[0])
-      strcpy (string, config.areas_bbs);
-   else
-      sprintf (string, "%sAREAS.BBS", config.sys_path);
-   winpbeg (BLACK|_LGREY, BLACK|_LGREY);
-   winpdef (0, 10, string, "?????????????????????????????????????????????????????", 0, 2, NULL, 0);
-   i = winpread ();
+	wprints (0, 1, YELLOW|_BLACK, "Filename");
+	if (config.areas_bbs[0])
+		strcpy (string, config.areas_bbs);
+	else
+		sprintf (string, "%sAREAS.BBS", config.sys_path);
+	winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+	winpdef (0, 10, string, "?????????????????????????????????????????????????????", 0, 2, NULL, 0);
+	i = winpread ();
 
-   hidecur ();
-   wclose ();
+	hidecur ();
+	wclose ();
 
-   if (i == W_ESCPRESS)
-      return;
+	if (i == W_ESCPRESS)
+		return;
+	{
+		char string[10];
+		int i,wh1;
 
-   strbtrim (string);
+		wh1 = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
+		wactiv (wh1);
+		wshadow (DGREY|_BLACK);
+
+		wcenters (1, BLACK|_LGREY, "Are you sure (Y/n) ?  ");
+
+		strcpy (string, "Y");
+		winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+		winpdef (1, 24, string, "?", 0, 2, NULL, 0);
+
+		i = winpread ();
+		wclose ();
+		hidecur ();
+		if (i == W_ESCPRESS) return;
+		if (toupper (string[0]) != 'Y') return;
+	}
+
+
+	strbtrim (string);
 
    fp = fopen (string, "rt");
    if (fp == NULL)
@@ -659,7 +746,7 @@ static void import_areasbbs ()
                else
                   strcpy (addr, "");
 
-               if (strlen (linea) + strlen (addr) >= 58) {
+					if (strlen (linea) + strlen (addr) >= 70) {
                   if (cf == 1) {
                      strcpy (sys.forward1, linea);
                      cf++;
@@ -789,7 +876,7 @@ static void import_areasbbs ()
 	    else
 	       strcpy (addr, "");
 
-	    if (strlen (linea) + strlen (addr) >= 58) {
+		 if (strlen (linea) + strlen (addr) >= 70) {
 	       if (cf == 1) {
 		  strcpy (sys.forward1, linea);
 		  cf++;
@@ -881,11 +968,11 @@ static void directory_setup ()
    wtitle (" Directory/Paths ", TRIGHT, YELLOW|_BLUE);
 
    do {
-      stop_update ();
+		stop_update ();
       wclear ();
 
       wmenubegc ();
-      wmenuitem ( 1,  1, " Main Directory     ", 0,  1, 0, NULL, 0, 0);
+		wmenuitem ( 1,  1, " Main Directory     ", 0,  1, 0, NULL, 0, 0);
       wmenuitem ( 2,  1, " Normal inbound     ", 0,  2, 0, NULL, 0, 0);
       wmenuitem ( 3,  1, " Know inbound       ", 0,  3, 0, NULL, 0, 0);
       wmenuitem ( 4,  1, " Prot inbound       ", 0,  4, 0, NULL, 0, 0);
@@ -916,7 +1003,7 @@ static void directory_setup ()
       wprints (13, 22, CYAN|_BLACK, config.flag_dir);
       wprints (14, 22, CYAN|_BLACK, config.boxpath);
 
-      start_update ();
+		start_update ();
       i = wmenuget ();
 
       switch (i) {
@@ -1107,7 +1194,7 @@ static void site_info ()
    wtitle (" Site info ", TRIGHT, YELLOW|_BLUE);
 
    do {
-      stop_update ();
+		stop_update ();
       wclear ();
 
       wmenubegc ();
@@ -1124,7 +1211,7 @@ static void site_info ()
       wprints (4, 16, CYAN|_BLACK, config.phone);
       wprints (5, 16, CYAN|_BLACK, config.flags);
 
-      start_update ();
+		start_update ();
       i = wmenuget ();
 
       switch (i) {
@@ -1192,7 +1279,7 @@ static void registration_info ()
    wtitle (" Registration ", TRIGHT, YELLOW|_BLUE);
 
    do {
-      stop_update ();
+		stop_update ();
       wclear ();
 
       wmenubegc ();
@@ -1206,7 +1293,7 @@ static void registration_info ()
 //      sprintf (string, "%lu", config.betakey);
 //      wprints (2, 21, CYAN|_BLACK, string);
 
-      start_update ();
+		start_update ();
       i = wmenuget ();
 
       switch (i) {
@@ -1226,7 +1313,7 @@ static void registration_info ()
 //            if (winpread () != W_ESCPRESS)
 //               config.keycode = atol (string);
 //            hidecur ();
-            break;
+				break;
 
 //         case 1012:
 //            sprintf (string, "%lu", config.betakey);
@@ -1248,18 +1335,19 @@ static void addresses ()
    int wh, i, x, y;
    char alias[MAX_ALIAS][20], fake[MAX_ALIAS][10];
 
-   wh = wopen (6, 4, 19, 75, 1, LCYAN|_BLACK, CYAN|_BLACK);
+   wh = wopen (1, 4, 23, 75, 1, LCYAN|_BLACK, CYAN|_BLACK);
    wactiv (wh);
    wshadow (DGREY|_BLACK);
    wtitle (" Addresses ", TRIGHT, YELLOW|_BLUE);
    i = 81;
 
    do {
-      stop_update ();
+		stop_update ();
       wclear ();
 
       wmenubegc ();
-      wmenuitem ( 1,  1," Main   ", 'N', 81, 0, NULL, 0, 0);
+
+		wmenuitem ( 1,  1," Main   ", 'N', 81, 0, NULL, 0, 0);
       wmenuitem ( 2,  1," Aka 1  ", 'S', 82, 0, NULL, 0, 0);
       wmenuitem ( 3,  1," Aka 2  ", 'S', 83, 0, NULL, 0, 0);
       wmenuitem ( 4,  1," Aka 3  ", 'S', 84, 0, NULL, 0, 0);
@@ -1269,22 +1357,41 @@ static void addresses ()
       wmenuitem ( 8,  1," Aka 7  ", 'S', 88, 0, NULL, 0, 0);
       wmenuitem ( 9,  1," Aka 8  ", 'S', 89, 0, NULL, 0, 0);
       wmenuitem (10,  1," Aka 9  ", 'S', 90, 0, NULL, 0, 0);
-      wmenuitem ( 1, 35," Aka 10 ", 'N', 91, 0, NULL, 0, 0);
-      wmenuitem ( 2, 35," Aka 11 ", 'S', 92, 0, NULL, 0, 0);
-      wmenuitem ( 3, 35," Aka 12 ", 'S', 93, 0, NULL, 0, 0);
-      wmenuitem ( 4, 35," Aka 13 ", 'S', 94, 0, NULL, 0, 0);
-      wmenuitem ( 5, 35," Aka 14 ", 'S', 95, 0, NULL, 0, 0);
-      wmenuitem ( 6, 35," Aka 15 ", 'S', 96, 0, NULL, 0, 0);
-      wmenuitem ( 7, 35," Aka 16 ", 'S', 97, 0, NULL, 0, 0);
-      wmenuitem ( 8, 35," Aka 17 ", 'S', 98, 0, NULL, 0, 0);
-      wmenuitem ( 9, 35," Aka 18 ", 'S', 99, 0, NULL, 0, 0);
-      wmenuitem (10, 35," Aka 19 ", 'S', 100, 0, NULL, 0, 0);
-      wmenuend (i, M_OMNI, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
+      wmenuitem (11,  1," Aka 10 ", 'S', 91, 0, NULL, 0, 0);
+      wmenuitem (12,  1," Aka 11 ", 'S', 92, 0, NULL, 0, 0);
+      wmenuitem (13,  1," Aka 12 ", 'S', 93, 0, NULL, 0, 0);
+      wmenuitem (14,  1," Aka 13 ", 'S', 94, 0, NULL, 0, 0);
+      wmenuitem (15,  1," Aka 14 ", 'S', 95, 0, NULL, 0, 0);
+      wmenuitem (16,  1," Aka 15 ", 'S', 96, 0, NULL, 0, 0);
+      wmenuitem (17,  1," Aka 16 ", 'S', 97, 0, NULL, 0, 0);
+      wmenuitem (18,  1," Aka 17 ", 'S', 98, 0, NULL, 0, 0);
+      wmenuitem (19,  1," Aka 18 ", 'S', 99, 0, NULL, 0, 0);
+      wmenuitem (20,  1," Aka 19 ", 'S', 100, 0, NULL, 0, 0);
+      wmenuitem ( 1, 35," Aka 20 ", 'N', 101, 0, NULL, 0, 0);
+      wmenuitem ( 2, 35," Aka 21 ", 'S', 102, 0, NULL, 0, 0);
+      wmenuitem ( 3, 35," Aka 22 ", 'S', 103, 0, NULL, 0, 0);
+      wmenuitem ( 4, 35," Aka 23 ", 'S', 104, 0, NULL, 0, 0);
+      wmenuitem ( 5, 35," Aka 24 ", 'S', 105, 0, NULL, 0, 0);
+      wmenuitem ( 6, 35," Aka 25 ", 'S', 106, 0, NULL, 0, 0);
+      wmenuitem ( 7, 35," Aka 26 ", 'S', 107, 0, NULL, 0, 0);
+      wmenuitem ( 8, 35," Aka 27 ", 'S', 108, 0, NULL, 0, 0);
+      wmenuitem ( 9, 35," Aka 28 ", 'S', 109, 0, NULL, 0, 0);
+      wmenuitem (10, 35," Aka 29 ", 'S', 110, 0, NULL, 0, 0);
+      wmenuitem (11, 35," Aka 30 ", 'S', 111, 0, NULL, 0, 0);
+      wmenuitem (12, 35," Aka 31 ", 'S', 112, 0, NULL, 0, 0);
+      wmenuitem (13, 35," Aka 32 ", 'S', 113, 0, NULL, 0, 0);
+      wmenuitem (14, 35," Aka 33 ", 'S', 114, 0, NULL, 0, 0);
+      wmenuitem (15, 35," Aka 34 ", 'S', 115, 0, NULL, 0, 0);
+      wmenuitem (16, 35," Aka 35 ", 'S', 116, 0, NULL, 0, 0);
+      wmenuitem (17, 35," Aka 36 ", 'S', 117, 0, NULL, 0, 0);
+      wmenuitem (18, 35," Aka 37 ", 'S', 118, 0, NULL, 0, 0);
+      wmenuitem (19, 35," Aka 38 ", 'S', 119, 0, NULL, 0, 0);
+      wmenuitem (20, 35," Aka 39 ", 'S', 120, 0, NULL, 0, 0);            wmenuend (i, M_OMNI, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
       x = 9;
       y = 1;
       for (i = 0; i < MAX_ALIAS; i++) {
-         if (i == 10) {
+         if (i == 20) {
             x = 44;
             y = 1;
          }
@@ -1297,12 +1404,13 @@ static void addresses ()
          y++;
       }
 
-      start_update ();
+		start_update ();
       i = wmenuget ();
-      if (i != W_ESCPRESS)
+//      if (i != W_ESCPRESS)
+      if (i != -1)
          input_alias (i - 81);
 
-   } while (i >= 81 && i <= 100);
+   } while (i >= 81 && i <= 120);
 
    wclose ();
 }
@@ -1312,8 +1420,8 @@ static void input_alias (int i)
    int x, d, y;
    char stringa[20], fake[20], *p;
 
-   y = (i % 10) + 1;
-   if (i >= 10)
+   y = (i % 20) + 1;
+   if (i >= 20)
       x = 44;
    else
       x = 9;
@@ -1544,10 +1652,10 @@ int num;
                winpdef (10, 25, stringa, "?????", 'N', 2, NULL, 0);
                winpread ();
                hidecur ();
-               config.class[num].ratio = atoi (stringa);
+					config.class[num].ratio = atoi (stringa);
                break;
             case 91:
-               sprintf (stringa, "%d", config.class[num].start_ratio);
+					sprintf (stringa, "%d", config.class[num].start_ratio);
                winpbeg (BLUE|_GREEN, BLUE|_GREEN);
                winpdef (11, 25, stringa, "?????", 'N', 2, NULL, 0);
                winpread ();
@@ -1565,78 +1673,81 @@ int num;
 static void read_config (name)
 char *name;
 {
-   int fd, fdi, i;
-   char filename[80], string[80];
-   NODEINFO ni;
-   EVENT sched;
+	int fd, fdi, i, fd_user, fd_old_user;
+	FILE *fdk;
+	char filename[80], string[128], *s;
+	NODEINFO ni;
+	EVENT sched;
+   struct _usr usr;
+   struct _usr_old usr_old;
 
-   memset ((char *)&config, 0, sizeof (struct _configuration));
+	memset ((char *)&config, 0, sizeof (struct _configuration));
 
-   fd = open (name, O_RDONLY|O_BINARY);
-   if (fd == -1) {
-      crc = get_config_crc ();
+	fd = open (name, O_RDONLY|O_BINARY);
+	if (fd == -1) {
+		crc = get_config_crc ();
 
-      strcpy (config.packers[0].id, "ZIP");
-      strcpy (config.packers[0].packcmd, "PKZIP -M %1 %2");
-      strcpy (config.packers[0].unpackcmd, "PKUNZIP -o -ed %1 %2");
-      strcpy (config.packid[0].display, "ZPKZIP");
-      config.packid[0].offset = 0L;
-      strcpy (config.packid[0].ident, "504B0304");
+		strcpy (config.packers[0].id, "ZIP");
+		strcpy (config.packers[0].packcmd, "PKZIP -M %1 %2");
+		strcpy (config.packers[0].unpackcmd, "PKUNZIP -o -ed %1 %2");
+		strcpy (config.packid[0].display, "ZPKZIP");
+		config.packid[0].offset = 0L;
+		strcpy (config.packid[0].ident, "504B0304");
 
-      strcpy (config.packers[1].id, "ARJ");
-      strcpy (config.packers[1].packcmd, "ARJ M -E -Y %1 %2");
-      strcpy (config.packers[1].unpackcmd, "ARJ e -y %1 %2");
-      strcpy (config.packid[1].display, "AARJ");
-      config.packid[1].offset = 0L;
-      strcpy (config.packid[1].ident, "60EA");
+		strcpy (config.packers[1].id, "ARJ");
+		strcpy (config.packers[1].packcmd, "ARJ M -E -Y %1 %2");
+		strcpy (config.packers[1].unpackcmd, "ARJ e -y %1 %2");
+		strcpy (config.packid[1].display, "AARJ");
+		config.packid[1].offset = 0L;
+		strcpy (config.packid[1].ident, "60EA");
 
-      strcpy (config.packers[2].id, "LHA");
-      strcpy (config.packers[2].packcmd, "LHA m -m %1 %2");
-      strcpy (config.packers[2].unpackcmd, "LHA x /cm %1 %2");
-      strcpy (config.packid[2].display, "LLHA (-lh5-)");
-      config.packid[2].offset = 2;
-      strcpy (config.packid[2].ident, "2D6C68");
+		strcpy (config.packers[2].id, "LHA");
+		strcpy (config.packers[2].packcmd, "LHA m -m %1 %2");
+		strcpy (config.packers[2].unpackcmd, "LHA x /cm %1 %2");
+		strcpy (config.packid[2].display, "LLHA (-lh5-)");
+		config.packid[2].offset = 2;
+		strcpy (config.packid[2].ident, "2D6C68");
 
-      strcpy (config.packers[3].id, "ZOO");
-      strcpy (config.packers[3].packcmd, "ZOO -move %1 %2");
-      strcpy (config.packers[3].unpackcmd, "ZOO -extract %1 %2");
-      strcpy (config.packid[3].display, "OZOO");
-      config.packid[3].offset = 21;
-      strcpy (config.packid[3].ident, "DCA7C4FD");
+		strcpy (config.packers[3].id, "ZOO");
+		strcpy (config.packers[3].packcmd, "ZOO -move %1 %2");
+		strcpy (config.packers[3].unpackcmd, "ZOO -extract %1 %2");
+		strcpy (config.packid[3].display, "OZOO");
+		config.packid[3].offset = 21;
+		strcpy (config.packid[3].ident, "DCA7C4FD");
 
-      strcpy (config.packers[4].id, "ARC");
-      strcpy (config.packers[4].packcmd, "PAK M %1 %2");
-      strcpy (config.packers[4].unpackcmd, "PAK E /WA %1 %2");
-      strcpy (config.packid[4].display, "PPAK");
-      config.packid[4].offset = 0;
-      strcpy (config.packid[4].ident, "1A");
+		strcpy (config.packers[4].id, "ARC");
+		strcpy (config.packers[4].packcmd, "PAK M %1 %2");
+		strcpy (config.packers[4].unpackcmd, "PAK E /WA %1 %2");
+		strcpy (config.packid[4].display, "PPAK");
+		config.packid[4].offset = 0;
+		strcpy (config.packid[4].ident, "1A");
 
-      strcpy (config.packers[5].id, "SQZ");
-      strcpy (config.packers[5].packcmd, "SQZ a /p3 %1 %2");
-      strcpy (config.packers[5].unpackcmd, "SQZ e /o1 %1 %2");
-      strcpy (config.packid[5].display, "SSQZ");
-      config.packid[5].offset = 0;
-      strcpy (config.packid[5].ident, "484C53515A");
+		strcpy (config.packers[5].id, "SQZ");
+		strcpy (config.packers[5].packcmd, "SQZ a /p3 %1 %2");
+		strcpy (config.packers[5].unpackcmd, "SQZ e /o1 %1 %2");
+		strcpy (config.packid[5].display, "SSQZ");
+		config.packid[5].offset = 0;
+		strcpy (config.packid[5].ident, "484C53515A");
 
-      getcwd (config.sys_path, 35);
-      if (config.sys_path[strlen (config.sys_path) - 1] != '\\')
-         strcat (config.sys_path, "\\");
-      strcpy (config.sched_name, "SCHED.DAT");
-      strcpy (config.log_name, "LORA.LOG");
-      strcpy (config.user_file, "USERS");
-      strcpy (config.enterbbs, "Please press your Escape key to enter the BBS.");
-      strcpy (config.banner, "Welcome to my FABULOUS Lora E-Mail System!");
-      strcpy (config.mail_only, "Sorry, processing mail only, please call later.");
-      strcpy (config.BBSid, "QWKPKT");
-      config.com_port = 1;
-      config.speed = 19200;
+		getcwd (config.sys_path, 35);
+		if (config.sys_path[strlen (config.sys_path) - 1] != '\\')
+			strcat (config.sys_path, "\\");
+		strcpy (config.sched_name, "SCHED.DAT");
+		strcpy (config.log_name, "LORA.LOG");
+		strcpy (config.user_file, "USERS");
+		strcpy (config.enterbbs, "Please press your Escape key to enter the BBS.");
+		strcpy (config.banner, "Welcome to my FABULOUS Lora E-Mail System!");
+		strcpy (config.mail_only, "Sorry, processing mail only, please call later.");
+		strcpy (config.BBSid, "QWKPKT");
+		config.com_port = 1;
+		config.speed = 19200;
       strcpy (config.init, "ATZ|");
       strcpy (config.term_init, "ATZ|");
       strcpy (config.dial, "ATD");
       strcpy (config.answer, "ATA|");
       strcpy (config.galileo, "011-3487892");
-      strcpy (config.galileo_init, "AT|");
-      strcpy (config.galileo_dial, "ATD");
+		strcpy (config.galileo_init, "AT|");
+		strcpy (config.galileo_dial, "ATD");
       strcpy (config.galileo_suffix, "|");
       config.inactivity_timeout = 5;
       config.modem_timeout = 60;
@@ -1649,9 +1760,9 @@ char *name;
       strcpy (config.location, "-Somewhere-");
       strcpy (config.system_name, "Lora E-Mail Test System");
       strcpy (config.sysop, "Lora Tester");
-      strcpy (config.phone, "-Unpublished-");
+		strcpy (config.phone, "-Unpublished-");
 #ifdef __OS2__
-      strcpy (config.tearline, "LoraBBS-OS/2 v%1");
+		strcpy (config.tearline, "LoraBBS-OS/2 v%1");
 #else
       strcpy (config.tearline, "LoraBBS-DOS v%1");
 #endif
@@ -1670,8 +1781,8 @@ char *name;
       config.class[0].max_call = 10;
       config.class[0].max_dl = 0;
       config.class[0].min_baud = 300;
-      config.class[0].min_file_baud = 300;
-      config.class[1].priv = DISGRACE;
+		config.class[0].min_file_baud = 300;
+		config.class[1].priv = DISGRACE;
       config.class[1].max_time = 45;
       config.class[1].max_call = 60;
       config.class[1].max_dl = 200;
@@ -1684,10 +1795,10 @@ char *name;
       config.class[2].min_baud = 300;
       config.class[2].min_file_baud = 300;
       config.class[3].priv = NORMAL;
-      config.class[3].max_time = 60;
+		config.class[3].max_time = 60;
       config.class[3].max_call = 90;
-      config.class[3].max_dl = 800;
-      config.class[3].min_baud = 300;
+		config.class[3].max_dl = 800;
+		config.class[3].min_baud = 300;
       config.class[3].min_file_baud = 300;
       config.class[4].priv = WORTHY;
       config.class[4].max_time = 60;
@@ -1705,8 +1816,8 @@ char *name;
       config.class[6].max_time = 60;
       config.class[6].max_call = 90;
       config.class[6].max_dl = 1000;
-      config.class[6].min_baud = 300;
-      config.class[6].min_file_baud = 300;
+		config.class[6].min_baud = 300;
+		config.class[6].min_file_baud = 300;
       config.class[7].priv = EXTRA;
       config.class[7].max_time = 60;
       config.class[7].max_call = 90;
@@ -1719,10 +1830,10 @@ char *name;
       config.class[8].max_dl = 1500;
       config.class[8].min_baud = 300;
       config.class[8].min_file_baud = 300;
-      config.class[9].priv = ASSTSYSOP;
+		config.class[9].priv = ASSTSYSOP;
       config.class[9].max_time = 120;
-      config.class[9].max_call = 180;
-      config.class[9].max_dl = 2000;
+		config.class[9].max_call = 180;
+		config.class[9].max_dl = 2000;
       config.class[9].min_baud = 300;
       config.class[9].min_file_baud = 300;
       config.class[10].priv = SYSOP;
@@ -1737,22 +1848,77 @@ char *name;
       crc = get_config_crc ();
       close (fd);
 
-      if (config.version != CONFIG_VERSION) {
+		if (config.version < 3) {
          strcpy (config.answer, (char *)&config.mustbezero);
          memset (&config.mustbezero, 0, 20);
-         config.speed = (unsigned short)config.old_speed;
-         config.old_speed = 0;
+			config.speed = (unsigned short)config.old_speed;
+			config.old_speed = 0;
+		}
+
+      if (config.version < 4){
+         memmove(config.alias,config.old_alias,sizeof(struct _alias)*20);
+         memmove(config.nl,config.old_nl,sizeof (struct _nl)*10);
       }
 
-      config.version = CONFIG_VERSION;
-   }
+      if (config.version < 5){
 
-   if (!config.carrier_mask)
-      config.carrier_mask = 128;
+         char temp_string[128];
+
+         sprintf (string, "%s.BBS", config.user_file);
+         sprintf (temp_string, "%s.OLD", config.user_file);
+         rename (string,temp_string);
+//         sprintf (string, "%s.IDX", config.user_file);
+//         sprintf (temp_string, "%s.OLI", config.user_file);
+//         rename (string,temp_string);
+         sprintf (string, "%s.OLD", config.user_file);
+      	fd_old_user = sh_open (string, SH_DENYNONE, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+         if (fd_old_user == -1)
+		      return;
+         sprintf (string, "%s.BBS", config.user_file);
+      	fd_user = sh_open (string, SH_DENYNONE, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+      	if (fd_user == -1)
+		      return;
+         while (read (fd_old_user, &usr_old, sizeof (struct _usr_old)) == sizeof (struct _usr_old)){
+            memset((char *)&usr,0,sizeof (struct _usr));
+            memmove((char *)&usr,(char *)&usr_old,sizeof(struct _usr_old));
+            memmove((char *)usr.pwd,((char *)usr.pwd)-sizeof(struct _lastread)*200,sizeof(struct _usr)-sizeof(char)*98-sizeof(struct _lastread)*(MAXLREAD+MAXDLREAD));
+            for (i = 50; i < MAXLREAD; i++)
+               usr.lastread[i].area = usr.lastread[i].msg_num = 0;
+            write(fd_user,&usr,sizeof (struct _usr));
+         }
+         close (fd_user);
+         close (fd_old_user);
+      }
+		config.version = CONFIG_VERSION;
+	}
+
+	if (!config.carrier_mask)
+		config.carrier_mask = 128;
+
+/* Lettura automatica file LORAKEY.TXT presente nella stessa dir
+	di Lsetup. Viene letto solo se non esiste la chiave in Lsetup */
+
+	if(!config.newkey_code[15]) {
+		fdk = fopen("LORAKEY.TXT","rt");
+		if(fdk) {
+			char *s1,*s2;
+			while (fgets(string,80,fdk)){
+					 if((s1 = strstr(string,">>>"))!=NULL) {
+					s2 = strtok(s1," ");
+					s2 = strtok(NULL," ");
+					break;
+				}
+			}
+			if(s2 && strlen(s2) == 28)
+					 strcpy(config.newkey_code,s2);
+			fclose(fdk);
+		}
+	}
+
 
 /*
-   if (!config.packers[0].id[0]) {
-      strcpy (config.packers[0].id, "ZIP");
+	if (!config.packers[0].id[0]) {
+		strcpy (config.packers[0].id, "ZIP");
       strcpy (config.packers[0].packcmd, "PKZIP -M %1 %2");
       strcpy (config.packers[0].unpackcmd, "PKUNZIP -o -ed %1");
    }
@@ -1765,11 +1931,11 @@ char *name;
       strcpy (config.packers[2].id, "LZH");
       strcpy (config.packers[2].packcmd, "LHA m -m -o %1 %2");
       strcpy (config.packers[2].unpackcmd, "LHA x /cm %1");
-   }
+	}
    if (!config.packers[3].id[0]) {
-      strcpy (config.packers[3].id, "LHA");
+		strcpy (config.packers[3].id, "LHA");
       strcpy (config.packers[3].packcmd, "LHA m -m %1 %2");
-      strcpy (config.packers[3].unpackcmd, "LHA x /cm %1");
+		strcpy (config.packers[3].unpackcmd, "LHA x /cm %1");
    }
    if (!config.packers[4].id[0]) {
       strcpy (config.packers[4].id, "ZOO");
@@ -1804,7 +1970,7 @@ char *name;
          do {
             i = read (fd, filename, 70);
             write (fdi, filename, i);
-         } while (i == 70);
+			} while (i == 70);
 
          close (fd);
          close (fdi);
@@ -1839,9 +2005,9 @@ char *name;
          rename (string, filename);
 
          fd = open (filename, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-         fdi = open (string, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE);
+			fdi = open (string, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE);
 
-         memset ((char *)&ni, 0, sizeof (NODEINFO));
+			memset ((char *)&ni, 0, sizeof (NODEINFO));
          ni.remap4d = ni.wazoo = ni.emsi = ni.janus = 1;
 
          for (;;) {
@@ -1874,176 +2040,176 @@ char *name;
    int fd;
 
    fd = open (name, O_WRONLY|O_BINARY|O_CREAT|O_TRUNC, S_IREAD|S_IWRITE);
-   config.version = CONFIG_VERSION;
-   write (fd, (char *)&config, sizeof (struct _configuration));
-   close (fd);
+	config.version = CONFIG_VERSION;
+	write (fd, (char *)&config, sizeof (struct _configuration));
+	close (fd);
 }
 
 char *get_flag_text (f)
 long f;
 {
-   static char result[10];
+	static char result[10];
 
-   strcpy (result, "--------");
-   if (f & 0x80)
-      result[0] = 'X';
-   if (f & 0x40)
-      result[1] = 'X';
-   if (f & 0x20)
-      result[2] = 'X';
-   if (f & 0x10)
-      result[3] = 'X';
-   if (f & 0x08)
-      result[4] = 'X';
-   if (f & 0x04)
-      result[5] = 'X';
-   if (f & 0x02)
-      result[6] = 'X';
-   if (f & 0x01)
-      result[7] = 'X';
+	strcpy (result, "--------");
+	if (f & 0x80)
+		result[0] = 'X';
+	if (f & 0x40)
+		result[1] = 'X';
+	if (f & 0x20)
+		result[2] = 'X';
+	if (f & 0x10)
+		result[3] = 'X';
+	if (f & 0x08)
+		result[4] = 'X';
+	if (f & 0x04)
+		result[5] = 'X';
+	if (f & 0x02)
+		result[6] = 'X';
+	if (f & 0x01)
+		result[7] = 'X';
 
-   return (result);
+	return (result);
 }
 
 long window_get_flags (int y, int x, int type, long f)
 {
-   int wh, i = 1;
-   long fb;
+	int wh, i = 1;
+	long fb;
 
-   wh = wopen (y, x, y + 11, x + 8, 1, LCYAN|_BLACK, CYAN|_BLACK);
-   wshadow (DGREY|_BLACK);
+	wh = wopen (y, x, y + 11, x + 8, 1, LCYAN|_BLACK, CYAN|_BLACK);
+	wshadow (DGREY|_BLACK);
 
-   if (type == 1)
-      fb = (f >> 24) & 0xFF;
-   else if (type == 2)
-      fb = (f >> 16) & 0xFF;
-   else if (type == 3)
-      fb = (f >> 8) & 0xFF;
-   else if (type == 4)
-      fb = f & 0xFF;
+	if (type == 1)
+		fb = (f >> 24) & 0xFF;
+	else if (type == 2)
+		fb = (f >> 16) & 0xFF;
+	else if (type == 3)
+		fb = (f >> 8) & 0xFF;
+	else if (type == 4)
+		fb = f & 0xFF;
 
-   do {
-      stop_update ();
-      wclear ();
+	do {
+		stop_update ();
+		wclear ();
 
-      wmenubegc ();
-      if (type == 1) {
-         wmenuitem (1, 1," 0 ", '0', 1, 0, NULL, 0, 0);
-         wmenuitem (2, 1," 1 ", '1', 2, 0, NULL, 0, 0);
-         wmenuitem (3, 1," 2 ", '2', 3, 0, NULL, 0, 0);
-         wmenuitem (4, 1," 3 ", '3', 4, 0, NULL, 0, 0);
-         wmenuitem (5, 1," 4 ", '4', 5, 0, NULL, 0, 0);
-         wmenuitem (6, 1," 5 ", '5', 6, 0, NULL, 0, 0);
-         wmenuitem (7, 1," 6 ", '6', 7, 0, NULL, 0, 0);
-         wmenuitem (8, 1," 7 ", '7', 8, 0, NULL, 0, 0);
-      }
-      else if (type == 2) {
-         wmenuitem (1, 1," 8 ", '8', 1, 0, NULL, 0, 0);
-         wmenuitem (2, 1," 9 ", '9', 2, 0, NULL, 0, 0);
-         wmenuitem (3, 1," A ", 'A', 3, 0, NULL, 0, 0);
-         wmenuitem (4, 1," B ", 'B', 4, 0, NULL, 0, 0);
-         wmenuitem (5, 1," C ", 'C', 5, 0, NULL, 0, 0);
-         wmenuitem (6, 1," D ", 'D', 6, 0, NULL, 0, 0);
-         wmenuitem (7, 1," E ", 'E', 7, 0, NULL, 0, 0);
-         wmenuitem (8, 1," F ", 'F', 8, 0, NULL, 0, 0);
-      }
-      else if (type == 3) {
-         wmenuitem (1, 1," G ", 'G', 1, 0, NULL, 0, 0);
-         wmenuitem (2, 1," H ", 'H', 2, 0, NULL, 0, 0);
-         wmenuitem (3, 1," I ", 'I', 3, 0, NULL, 0, 0);
-         wmenuitem (4, 1," J ", 'J', 4, 0, NULL, 0, 0);
-         wmenuitem (5, 1," K ", 'K', 5, 0, NULL, 0, 0);
-         wmenuitem (6, 1," L ", 'L', 6, 0, NULL, 0, 0);
-         wmenuitem (7, 1," M ", 'M', 7, 0, NULL, 0, 0);
-         wmenuitem (8, 1," N ", 'N', 8, 0, NULL, 0, 0);
-      }
-      else if (type == 4) {
-         wmenuitem (1, 1," O ", 'O', 1, 0, NULL, 0, 0);
-         wmenuitem (2, 1," P ", 'P', 2, 0, NULL, 0, 0);
-         wmenuitem (3, 1," Q ", 'Q', 3, 0, NULL, 0, 0);
-         wmenuitem (4, 1," R ", 'R', 4, 0, NULL, 0, 0);
-         wmenuitem (5, 1," S ", 'S', 5, 0, NULL, 0, 0);
-         wmenuitem (6, 1," T ", 'T', 6, 0, NULL, 0, 0);
-         wmenuitem (7, 1," U ", 'U', 7, 0, NULL, 0, 0);
-         wmenuitem (8, 1," V ", 'V', 8, 0, NULL, 0, 0);
-      }
-      wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
+		wmenubegc ();
+		if (type == 1) {
+			wmenuitem (1, 1," 0 ", '0', 1, 0, NULL, 0, 0);
+			wmenuitem (2, 1," 1 ", '1', 2, 0, NULL, 0, 0);
+			wmenuitem (3, 1," 2 ", '2', 3, 0, NULL, 0, 0);
+			wmenuitem (4, 1," 3 ", '3', 4, 0, NULL, 0, 0);
+			wmenuitem (5, 1," 4 ", '4', 5, 0, NULL, 0, 0);
+			wmenuitem (6, 1," 5 ", '5', 6, 0, NULL, 0, 0);
+			wmenuitem (7, 1," 6 ", '6', 7, 0, NULL, 0, 0);
+			wmenuitem (8, 1," 7 ", '7', 8, 0, NULL, 0, 0);
+		}
+		else if (type == 2) {
+			wmenuitem (1, 1," 8 ", '8', 1, 0, NULL, 0, 0);
+			wmenuitem (2, 1," 9 ", '9', 2, 0, NULL, 0, 0);
+			wmenuitem (3, 1," A ", 'A', 3, 0, NULL, 0, 0);
+			wmenuitem (4, 1," B ", 'B', 4, 0, NULL, 0, 0);
+			wmenuitem (5, 1," C ", 'C', 5, 0, NULL, 0, 0);
+			wmenuitem (6, 1," D ", 'D', 6, 0, NULL, 0, 0);
+			wmenuitem (7, 1," E ", 'E', 7, 0, NULL, 0, 0);
+			wmenuitem (8, 1," F ", 'F', 8, 0, NULL, 0, 0);
+		}
+		else if (type == 3) {
+			wmenuitem (1, 1," G ", 'G', 1, 0, NULL, 0, 0);
+			wmenuitem (2, 1," H ", 'H', 2, 0, NULL, 0, 0);
+			wmenuitem (3, 1," I ", 'I', 3, 0, NULL, 0, 0);
+			wmenuitem (4, 1," J ", 'J', 4, 0, NULL, 0, 0);
+			wmenuitem (5, 1," K ", 'K', 5, 0, NULL, 0, 0);
+			wmenuitem (6, 1," L ", 'L', 6, 0, NULL, 0, 0);
+			wmenuitem (7, 1," M ", 'M', 7, 0, NULL, 0, 0);
+			wmenuitem (8, 1," N ", 'N', 8, 0, NULL, 0, 0);
+		}
+		else if (type == 4) {
+			wmenuitem (1, 1," O ", 'O', 1, 0, NULL, 0, 0);
+			wmenuitem (2, 1," P ", 'P', 2, 0, NULL, 0, 0);
+			wmenuitem (3, 1," Q ", 'Q', 3, 0, NULL, 0, 0);
+			wmenuitem (4, 1," R ", 'R', 4, 0, NULL, 0, 0);
+			wmenuitem (5, 1," S ", 'S', 5, 0, NULL, 0, 0);
+			wmenuitem (6, 1," T ", 'T', 6, 0, NULL, 0, 0);
+			wmenuitem (7, 1," U ", 'U', 7, 0, NULL, 0, 0);
+			wmenuitem (8, 1," V ", 'V', 8, 0, NULL, 0, 0);
+		}
+		wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
-      wprints (1, 5, CYAN|_BLACK, (fb & 0x80) ? "X" : "-");
-      wprints (2, 5, CYAN|_BLACK, (fb & 0x40) ? "X" : "-");
-      wprints (3, 5, CYAN|_BLACK, (fb & 0x20) ? "X" : "-");
-      wprints (4, 5, CYAN|_BLACK, (fb & 0x10) ? "X" : "-");
-      wprints (5, 5, CYAN|_BLACK, (fb & 0x08) ? "X" : "-");
-      wprints (6, 5, CYAN|_BLACK, (fb & 0x04) ? "X" : "-");
-      wprints (7, 5, CYAN|_BLACK, (fb & 0x02) ? "X" : "-");
-      wprints (8, 5, CYAN|_BLACK, (fb & 0x01) ? "X" : "-");
+		wprints (1, 5, CYAN|_BLACK, (fb & 0x80) ? "X" : "-");
+		wprints (2, 5, CYAN|_BLACK, (fb & 0x40) ? "X" : "-");
+		wprints (3, 5, CYAN|_BLACK, (fb & 0x20) ? "X" : "-");
+		wprints (4, 5, CYAN|_BLACK, (fb & 0x10) ? "X" : "-");
+		wprints (5, 5, CYAN|_BLACK, (fb & 0x08) ? "X" : "-");
+		wprints (6, 5, CYAN|_BLACK, (fb & 0x04) ? "X" : "-");
+		wprints (7, 5, CYAN|_BLACK, (fb & 0x02) ? "X" : "-");
+		wprints (8, 5, CYAN|_BLACK, (fb & 0x01) ? "X" : "-");
 
-      start_update ();
-      i = wmenuget ();
+		start_update ();
+		i = wmenuget ();
 
-      switch (i) {
-         case 1:
-            fb ^= 0x80;
-            break;
+		switch (i) {
+			case 1:
+				fb ^= 0x80;
+				break;
 
-         case 2:
-            fb ^= 0x40;
-            break;
+			case 2:
+				fb ^= 0x40;
+				break;
 
-         case 3:
-            fb ^= 0x20;
-            break;
+			case 3:
+				fb ^= 0x20;
+				break;
 
-         case 4:
-            fb ^= 0x10;
-            break;
+			case 4:
+				fb ^= 0x10;
+				break;
 
-         case 5:
-            fb ^= 0x08;
-            break;
+			case 5:
+				fb ^= 0x08;
+				break;
 
-         case 6:
-            fb ^= 0x04;
-            break;
+			case 6:
+				fb ^= 0x04;
+				break;
 
-         case 7:
-            fb ^= 0x02;
-            break;
+			case 7:
+				fb ^= 0x02;
+				break;
 
-         case 8:
-            fb ^= 0x01;
-            break;
-      }
+			case 8:
+				fb ^= 0x01;
+				break;
+		}
 
-      hidecur ();
+		hidecur ();
 
-   } while (i != -1);
+	} while (i != -1);
 
-   wclose ();
+	wclose ();
 
-   if (type == 1) {
-      f &= 0x00FFFFFFL;
-      f |= fb << 24;
-   }
-   else if (type == 2) {
-      f &= 0xFF00FFFFL;
-      f |= fb << 16;
-   }
-   else if (type == 3) {
-      f &= 0xFFFF00FFL;
-      f |= fb << 8;
-   }
-   else if (type == 4) {
-      f &= 0xFFFFFF00L;
-      f |= fb;
-   }
+	if (type == 1) {
+		f &= 0x00FFFFFFL;
+		f |= fb << 24;
+	}
+	else if (type == 2) {
+		f &= 0xFF00FFFFL;
+		f |= fb << 16;
+	}
+	else if (type == 3) {
+		f &= 0xFFFF00FFL;
+		f |= fb << 8;
+	}
+	else if (type == 4) {
+		f &= 0xFFFFFF00L;
+		f |= fb;
+	}
 
-   return (f);
+	return (f);
 }
 
 char *get_flagA_text (long f)
 {
-   static char result[10];
+	static char result[10];
 
    strcpy (result, "--------");
    if (f & 0x80)
@@ -2124,7 +2290,7 @@ char *get_flagD_text (long f)
    if (f & 0x80)
       result[0] = 'O';
    if (f & 0x40)
-      result[1] = 'P';
+		result[1] = 'P';
    if (f & 0x20)
       result[2] = 'Q';
    if (f & 0x10)
@@ -2144,10 +2310,10 @@ char *get_flagD_text (long f)
 int select_level (start, x, y)
 int start, x, y;
 {
-   int wh1, m;
+	int wh1, m;
 
-   wh1 = wopen (y, x, y + 15, x + 16, 3, LCYAN|_BLACK, CYAN|_BLACK);
-   wactiv (wh1);
+	wh1 = wopen (y, x, y + 15, x + 16, 3, LCYAN|_BLACK, CYAN|_BLACK);
+	wactiv (wh1);
    wshadow (DGREY|_BLACK);
    wtitle (" Levels ", TRIGHT, YELLOW|_BLUE);
 
@@ -2159,7 +2325,7 @@ int start, x, y;
    wmenuitem (2, 1, levels[1].p_string, 0, levels[1].p_length, 0, NULL, 0, 0);
    wmenuitem (3, 1, levels[2].p_string, 0, levels[2].p_length, 0, NULL, 0, 0);
    wmenuitem (4, 1, levels[3].p_string, 0, levels[3].p_length, 0, NULL, 0, 0);
-   wmenuitem (5, 1, levels[4].p_string, 0, levels[4].p_length, 0, NULL, 0, 0);
+	wmenuitem (5, 1, levels[4].p_string, 0, levels[4].p_length, 0, NULL, 0, 0);
    wmenuitem (6, 1, levels[5].p_string, 0, levels[5].p_length, 0, NULL, 0, 0);
    wmenuitem (7, 1, levels[6].p_string, 0, levels[6].p_length, 0, NULL, 0, 0);
    wmenuitem (8, 1, levels[7].p_string, 0, levels[7].p_length, 0, NULL, 0, 0);
@@ -2229,7 +2395,7 @@ int *zone, *net, *node, *point;
    if (p && *p != '.')
       *node = atoi(p);
    else if (p == NULL || !stricmp (p, "ALL"))
-      *node = 0;
+		*node = 0;
 
    /* And finally check for a point number... */
 
@@ -2334,7 +2500,7 @@ int findword;
          {
             isw=1;
             break;
-         }
+			}
 
       if (!isw && string==oldstring)
          wordno++;
@@ -2369,7 +2535,7 @@ void create_path (char *path)
 
    strcpy (origpath, path);
    if (path[0] == '\\')
-      strcpy (respath, "\\");
+		strcpy (respath, "\\");
    else
       strcpy (respath, "");
 
@@ -2404,73 +2570,76 @@ void create_path (char *path)
       else {
          do {
             strcat (respath, p);
-            if (strlen (respath) > 2 || respath[1] != ':')
-               mkdir (respath);
-            strcat (respath, "\\");
-         } while ((p = strtok (NULL, "\\")) != NULL);
+				if (strlen (respath) > 2 || respath[1] != ':')
+					mkdir (respath);
+				strcat (respath, "\\");
+			} while ((p = strtok (NULL, "\\")) != NULL);
 
-         if ((p = strtok (NULL, "")) != NULL) {
-            strcat (respath, p);
-            mkdir (respath);
-         }
-      }
-   }
+			if ((p = strtok (NULL, "")) != NULL) {
+				strcat (respath, p);
+				mkdir (respath);
+			}
+		}
+	}
 }
 
 void clear_window ()
 {
-   gotoxy_ (24, 1);
-   clreol_ ();
+	gotoxy_ (24, 1);
+	clreol_ ();
 }
 
 void linehelp_window ()
 {
-   char *str = "";
-   struct _menu_t *mt;
+	char *str = "";
+	struct _menu_t *mt;
 
-   mt = wmenumcurr ();
-   if (mt == NULL)
-      return;
+	mt = wmenumcurr ();
+	if (mt == NULL)
+		return;
 
-   switch (mt->citem->tagid) {
-      case 101:
-         str = "Your registration key code number";
-         break;
-      case 102:
-         str = "Invoke temporary DOS shell";
-         break;
-      case 103:
-         str = "Write out a standard AREAS.BBS text file";
-         break;
-      case 105:
-         str = "Create message areas using a standard AREAS.BBS text file";
-         break;
-      case 106:
+	switch (mt->citem->tagid) {
+		case 101:
+			str = "Your registration key code number";
+			break;
+		case 102:
+			str = "Invoke temporary DOS shell";
+			break;
+		case 103:
+			str = "Write out a standard AREAS.BBS text file";
+			break;
+		case 105:
+			str = "Create message areas using a standard AREAS.BBS text file";
+			break;
+		case 106:
 #ifdef __OS2__
-         str = "Exit LSETUP-OS/2";
+			str = "Exit LSETUP-OS/2";
 #else
-         str = "Exit LSETUP-DOS";
+			str = "Exit LSETUP-DOS";
 #endif
-         break;
-      case 107:
-         str = "Creates a basic ROUTE.CFG file. This option works only for point systems";
-         break;
-      case 201:
-         str = "Video mode and screen blanker options";
-         break;
-      case 202:
-         str = "Path specifications";
-         break;
-      case 203:
-         str = "Fido-technolgy network addresses";
-         break;
-      case 204:
-         str = "Informations about the system and the operator";
-         break;
-      case 205:
-         str = "Informations about the clocksynch feature";
-         break;
-      case 301:
+			break;
+		case 107:
+			str = "Creates a basic ROUTE.CFG file. This option works only for point systems";
+			break;
+		case 111:
+			str = "Locks Lsetup with a password. Enter disables this option";
+			break;
+		case 201:
+			str = "Video mode and screen blanker options";
+			break;
+		case 202:
+			str = "Path specifications";
+			break;
+		case 203:
+			str = "Fido-technology network addresses";
+			break;
+		case 204:
+			str = "Informations about the system and the operator";
+			break;
+		case 205:
+			str = "Informations about the clocksynch feature";
+			break;
+		case 301:
          str = "Miscellaneous options";
          break;
       case 302:
@@ -2492,7 +2661,7 @@ void linehelp_window ()
          str = "Mail processing options: personal mail saving";
          break;
       case 310:
-         str = "Sets a password to override mail-only events";
+			str = "Sets a password to override mail-only events";
          break;
       case 401:
          str = "Message areas definitions";
@@ -2583,159 +2752,275 @@ int sh_open (char *file, int shmode, int omode, int fmode)
 
 void update_message (void)
 {
-   wopen (10, 25, 14, 55, 1, LCYAN|_BLACK, CYAN|_BLACK);
-   wshadow (DGREY|_BLACK);
-   wcenters (1, LGREY|BLACK, "Updating database");
+	wopen (10, 25, 14, 55, 1, LCYAN|_BLACK, CYAN|_BLACK);
+	wshadow (DGREY|_BLACK);
+	wcenters (1, LGREY|BLACK, "Updating database");
 }
 
 void create_route_file (void)
 {
-   FILE *fp;
-   int i, wh1;
+	FILE *fp;
+	int i, wh1;
 
-   for (i = 0; i < MAX_ALIAS; i++) {
-      if (!config.alias[i].net)
-         break;
-      if (config.alias[i].point)
-         break;
-   }
+	for (i = 0; i < MAX_ALIAS; i++) {
+		if (!config.alias[i].net)
+			break;
+		if (config.alias[i].point)
+			break;
+	}
 
-   if (i >= MAX_ALIAS || !config.alias[i].net) {
-       wh1 = wopen (10, 20, 14, 59, 0, BLACK|_LGREY, BLACK|_LGREY);
-       wactiv (wh1);
-       wshadow (DGREY|_BLACK);
+	if (i >= MAX_ALIAS || !config.alias[i].net) {
+		 wh1 = wopen (10, 20, 14, 59, 0, BLACK|_LGREY, BLACK|_LGREY);
+		 wactiv (wh1);
+		 wshadow (DGREY|_BLACK);
 
-       wcenters (1, BLACK|_LGREY, "Valid for point systems only !");
-       getxch ();
+		 wcenters (1, BLACK|_LGREY, "Valid for point systems only !");
+		 getxch ();
 
-       wclose ();
-       return;
-   }
+		 wclose ();
+		 return;
+	}
 
-   fp = fopen ("ROUTE.CFG", "wt");
+	{
+		char string[10];
+		wh1 = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
+		wactiv (wh1);
+		wshadow (DGREY|_BLACK);
 
-   fprintf (fp, ";\n");
+		wcenters (1, BLACK|_LGREY, "Are you sure (Y/n) ?  ");
+
+		strcpy (string, "Y");
+		winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+		winpdef (1, 24, string, "?", 0, 2, NULL, 0);
+
+		i = winpread ();
+		wclose ();
+		hidecur ();
+		if (i == W_ESCPRESS) return;
+		if (toupper (string[0]) != 'Y') return;
+	}
+
+	fp = fopen ("ROUTE.CFG", "wt");
+
+	fprintf (fp, ";\n");
 #ifdef __OS2__
-   fprintf (fp, "; Route file for Lora/2 v. %s\n", LSETUP_VERSION);
+	fprintf (fp, "; Route file for Lora/2 v. %s\n", LSETUP_VERSION);
 #else
-   fprintf (fp, "; Route file for Lora v. %s\n", LSETUP_VERSION);
+	fprintf (fp, "; Route file for Lora v. %s\n", LSETUP_VERSION);
 #endif
-   fprintf (fp, ";\n");
-   fprintf (fp, "; Node: %d:%d/%d.%d\n", config.alias[0].zone, config.alias[0].net, config.alias[0].node, config.alias[0].point);
-   fprintf (fp, "; Sysop: %s\n", config.sysop);
-   fprintf (fp, ";\n");
-   fprintf (fp, ";   Command Reference:\n");
-   fprintf (fp, ";\n");
-   fprintf (fp, ";       TAG <tag>\n");
-   fprintf (fp, ";       SEND <verb> <nodes...>\n");
-   fprintf (fp, ";       SEND-TO <verb> <nodes...>\n");
-   fprintf (fp, ";       ROUTE <verb> <hub_node> <nodes...>\n");
-   fprintf (fp, ";       ROUTE-TO <verb> <hub_node> <nodes...>\n");
-   fprintf (fp, ";       CHANGE <from_verb> <to_verb> <nodes...>\n");
-   fprintf (fp, ";       POLL <verb> <nodes...>\n");
-   fprintf (fp, ";       LEAVE <nodes...>\n");
-   fprintf (fp, ";       UNLEAVE <nodes...>\n");
-   fprintf (fp, ";\n");
-   fprintf (fp, ";   Key:\n");
-   fprintf (fp, ";\n");
-   fprintf (fp, ";       <tag> ....... Any text, up to 32 characters in length (no spaces).\n");
-   fprintf (fp, ";\n");
-   fprintf (fp, ";       <verb> ...... Any one of the following verbs:\n");
-   fprintf (fp, ";\n");
-   fprintf (fp, ";                     NORMAL ....... (.FLO or .OUT)\n");
-   fprintf (fp, ";                     CRASH ........ (.CLO or .CUT)\n");
-   fprintf (fp, ";                     HOLD ......... (.HLO or .HUT)\n");
-   fprintf (fp, ";                     DIRECT ....... (.DLO or .DUT)\n");
-   fprintf (fp, ";\n");
-   fprintf (fp, ";       <nodes> ..... Full 'zone:net/node.point' number.  If 'zone' or 'net'\n");
-   fprintf (fp, ";                     are ommited, they will default to the previous entry\n");
-   fprintf (fp, ";                     on the line.\n");
-   fprintf (fp, ";\n");
-   fprintf (fp, ";       <hub_node> .. Hub node routed mail is sent to.\n");
-   fprintf (fp, ";\n");
-   fprintf (fp, ";\n");
+	fprintf (fp, ";\n");
+	fprintf (fp, "; Node: %d:%d/%d.%d\n", config.alias[0].zone, config.alias[0].net, config.alias[0].node, config.alias[0].point);
+	fprintf (fp, "; Sysop: %s\n", config.sysop);
+	fprintf (fp, ";\n");
+	fprintf (fp, ";   Command Reference:\n");
+	fprintf (fp, ";\n");
+	fprintf (fp, ";       TAG <tag>\n");
+	fprintf (fp, ";       SEND <verb> <nodes...>\n");
+	fprintf (fp, ";       SEND-TO <verb> <nodes...>\n");
+	fprintf (fp, ";       ROUTE <verb> <hub_node> <nodes...>\n");
+	fprintf (fp, ";       ROUTE-TO <verb> <hub_node> <nodes...>\n");
+	fprintf (fp, ";       CHANGE <from_verb> <to_verb> <nodes...>\n");
+	fprintf (fp, ";       POLL <verb> <nodes...>\n");
+	fprintf (fp, ";       LEAVE <nodes...>\n");
+	fprintf (fp, ";       UNLEAVE <nodes...>\n");
+	fprintf (fp, ";\n");
+	fprintf (fp, ";   Key:\n");
+	fprintf (fp, ";\n");
+	fprintf (fp, ";       <tag> ....... Any text, up to 32 characters in length (no spaces).\n");
+	fprintf (fp, ";\n");
+	fprintf (fp, ";       <verb> ...... Any one of the following verbs:\n");
+	fprintf (fp, ";\n");
+	fprintf (fp, ";                     NORMAL ....... (.FLO or .OUT)\n");
+	fprintf (fp, ";                     CRASH ........ (.CLO or .CUT)\n");
+	fprintf (fp, ";                     HOLD ......... (.HLO or .HUT)\n");
+	fprintf (fp, ";                     DIRECT ....... (.DLO or .DUT)\n");
+	fprintf (fp, ";\n");
+	fprintf (fp, ";       <nodes> ..... Full 'zone:net/node.point' number.  If 'zone' or 'net'\n");
+	fprintf (fp, ";                     are ommited, they will default to the previous entry\n");
+	fprintf (fp, ";                     on the line.\n");
+	fprintf (fp, ";\n");
+	fprintf (fp, ";       <hub_node> .. Hub node routed mail is sent to.\n");
+	fprintf (fp, ";\n");
+	fprintf (fp, ";\n");
 
-   for (i = MAX_ALIAS - 1; i > 0; i--)
-      if (config.alias[i].net && config.alias[i].point)
-         fprintf (fp, "Send-To Direct %d:%d/%d\n", config.alias[i].zone, config.alias[i].net, config.alias[i].node);
+	for (i = MAX_ALIAS - 1; i > 0; i--)
+		if (config.alias[i].net && config.alias[i].point)
+			fprintf (fp, "Send-To Direct %d:%d/%d\n", config.alias[i].zone, config.alias[i].net, config.alias[i].node);
 
-   fprintf (fp, "Route-To Direct %d:%d/%d 1:ALL 2:ALL 3:ALL 4:ALL 5:ALL 6:ALL\n", config.alias[i].zone, config.alias[i].net, config.alias[i].node);
+	fprintf (fp, "Route-To Direct %d:%d/%d 1:ALL 2:ALL 3:ALL 4:ALL 5:ALL 6:ALL\n", config.alias[i].zone, config.alias[i].net, config.alias[i].node);
 
-   fprintf (fp, ";\n");
-   fprintf (fp, "; Note: this is only an example of how your route file could be.\n");
-   fprintf (fp, ";\n");
+	fprintf (fp, ";\n");
+	fprintf (fp, "; Note: this is only an example of how your route file could be.\n");
+	fprintf (fp, ";\n");
 #ifdef __OS2__
-   fprintf (fp, "; Created by LSETUP-OS/2 v.%s.\n", LSETUP_VERSION);
+	fprintf (fp, "; Created by LSETUP-OS/2 v.%s.\n", LSETUP_VERSION);
 #else
-   fprintf (fp, "; Created by LSETUP-DOS v.%s.\n", LSETUP_VERSION);
+	fprintf (fp, "; Created by LSETUP-DOS v.%s.\n", LSETUP_VERSION);
 #endif
 
-   fclose (fp);
+	fclose (fp);
 }
 
 void mailonly_password (void)
 {
-   int i;
-   char string[30], verify[30];
+	int i;
+	char string[30], verify[30];
 
-   wopen (9, 24, 13, 58, 1, LCYAN|_BLACK, CYAN|_BLACK);
-   wtitle (" Mail-only password ", TRIGHT, YELLOW|_BLUE);
-   wshadow (DGREY|_BLACK);
+	wopen (9, 24, 13, 58, 1, LCYAN|_BLACK, CYAN|_BLACK);
+	wtitle (" Mail-only password ", TRIGHT, YELLOW|_BLUE);
+	wshadow (DGREY|_BLACK);
 
-   wprints (1, 2, LGREY|_BLACK, "Password:");
-   winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-   winpdef (1, 12, string, "???????????????????", 'P', 0, NULL, 0);
-   i = winpread ();
-   hidecur ();
+	wprints (1, 2, LGREY|_BLACK, "Password:");
+	winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+	winpdef (1, 12, string, "???????????????????", 'P', 0, NULL, 0);
+	i = winpread ();
+	hidecur ();
 
-   if (i == W_ESCPRESS) {
-      wclose ();
-      return;
-   }
+	if (i == W_ESCPRESS) {
+		wclose ();
+		return;
+	}
 
-   wtitle (" Mail-only password (Verify) ", TRIGHT, YELLOW|_BLUE);
+	wtitle (" Mail-only password (Verify) ", TRIGHT, YELLOW|_BLUE);
 
-   wprints (1, 2, LGREY|_BLACK, "Password:");
-   winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-   winpdef (1, 12, verify, "???????????????????", 'P', 0, NULL, 0);
-   i = winpread ();
+	wprints (1, 2, LGREY|_BLACK, "Password:");
+	winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+	winpdef (1, 12, verify, "???????????????????", 'P', 0, NULL, 0);
+	i = winpread ();
 
-   hidecur ();
-   wclose ();
+	hidecur ();
+	wclose ();
 
-   if (i == W_ESCPRESS)
-      return;
+	if (i == W_ESCPRESS)
+		return;
 
-   if (strcmp (string, verify)) {
-       wopen (10, 20, 14, 59, 0, BLACK|_LGREY, BLACK|_LGREY);
-       wshadow (DGREY|_BLACK);
+	if (strcmp (string, verify)) {
+		 wopen (10, 20, 14, 59, 0, BLACK|_LGREY, BLACK|_LGREY);
+		 wshadow (DGREY|_BLACK);
 
-       wcenters (1, BLACK|_LGREY, "Passwords doesn't match !");
-       getxch ();
+		 wcenters (1, BLACK|_LGREY, "Passwords doesn't match !");
+		 getxch ();
 
-       wclose ();
-       return;
-   }
+		 wclose ();
+		 return;
+	}
 
-   memset (config.override_pwd, 0, 20);
-   strcpy (config.override_pwd, strbtrim (string));
+	memset (config.override_pwd, 0, 20);
+	strcpy (config.override_pwd, strbtrim (string));
+}
+
+void setup_password (void)
+{
+	int i;
+	char string[30], verify[30];
+	unsigned long crc1, crc2;
+
+	wopen (9, 24, 13, 58, 1, LCYAN|_BLACK, CYAN|_BLACK);
+	wtitle (" Setup password ", TRIGHT, YELLOW|_BLUE);
+	wshadow (DGREY|_BLACK);
+
+	wprints (1, 2, LGREY|_BLACK, "Password:");
+	winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+	winpdef (1, 12, string, "???????????????????", 'P', 0, NULL, 0);
+	i = winpread ();
+	hidecur ();
+
+	if (i == W_ESCPRESS) {
+		wclose ();
+		return;
+	}
+
+	if(string[0]!=' ') {
+
+		crc1 = 0x223344FFL;
+		for (i=0; i < strlen(string); i++)
+				  crc1 = UpdateCRC (((unsigned short) string[i]), crc1);
+
+		wtitle (" Setup password (Verify) ", TRIGHT, YELLOW|_BLUE);
+
+		wprints (1, 2, LGREY|_BLACK, "Password:");
+		winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+		winpdef (1, 12, verify, "???????????????????", 'P', 0, NULL, 0);
+		i = winpread ();
+
+		hidecur ();
+		wclose ();
+
+		if (i == W_ESCPRESS)
+			return;
+
+		crc2 = 0x223344FFL;
+		for (i=0; i < strlen(verify); i++)
+				  crc2 = UpdateCRC (((unsigned short) verify[i]), crc2);
+
+		if (crc2 != crc1) {
+			 wopen (10, 20, 14, 59, 0, BLACK|_LGREY, BLACK|_LGREY);
+			 wshadow (DGREY|_BLACK);
+
+			 wcenters (1, BLACK|_LGREY, "Passwords doesn't match !");
+			 getxch ();
+
+			 wclose ();
+			 return;
+		}
+		config.setup_pwd = crc1;
+	}
+	else {
+		wclose();
+		config.setup_pwd = 0L;
+	}
+
+}
+void setup_password_check (void)
+{
+	int i;
+	char string[30];
+	unsigned long crc1;
+
+	wopen (9, 24, 13, 58, 1, LCYAN|_BLACK, CYAN|_BLACK);
+	wtitle (" Enter Password ", TRIGHT, YELLOW|_BLUE);
+	wshadow (DGREY|_BLACK);
+
+	wprints (1, 2, LGREY|_BLACK, "Password:");
+	winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+	winpdef (1, 12, string, "???????????????????", 'P', 0, NULL, 0);
+	i = winpread ();
+	hidecur ();
+
+	wclose();
+
+	crc1 = 0x223344FFL;
+	for (i=0; i < strlen(string); i++)
+			  crc1 = UpdateCRC (((unsigned short) string[i]), crc1);
+
+	if (crc1 != config.setup_pwd) {
+		 wopen (10, 20, 14, 59, 0, BLACK|_LGREY, BLACK|_LGREY);
+		 wshadow (DGREY|_BLACK);
+
+		 wcenters (1, RED|_LGREY, "******* ACCESS DENIED ******** ");
+		 getxch ();
+
+		 wclose ();
+		 exit(1);
+	}
+
 }
 
 static void internet_info (void)
 {
-   int wh, m, i = 1;
-   char string[128];
+	int wh, m, i = 1;
+	char string[128];
 
-   wh = wopen (7, 15, 13, 63, 1, LCYAN|_BLACK, CYAN|_BLACK);
-   wactiv (wh);
-   wshadow (DGREY|_BLACK);
-   wtitle (" Internet gateway ", TRIGHT, YELLOW|_BLUE);
+	wh = wopen (7, 15, 13, 63, 1, LCYAN|_BLACK, CYAN|_BLACK);
+	wactiv (wh);
+	wshadow (DGREY|_BLACK);
+	wtitle (" Internet gateway ", TRIGHT, YELLOW|_BLUE);
 
-   do {
-      stop_update ();
-      wclear ();
+	do {
+		stop_update ();
+		wclear ();
 
-      wmenubegc ();
+		wmenubegc ();
       wmenuitem (1, 1," Gateway Type ", 0, 1, 0, NULL, 0, 0);
       wmenuitem (2, 1," Gateway Name ", 0, 2, 0, NULL, 0, 0);
       wmenuitem (3, 1," Address      ", 0, 3, 0, NULL, 0, 0);
@@ -2786,36 +3071,57 @@ static void internet_info (void)
 static void import_tic ()
 {
    FILE *fp;
-   int fd, wh, found, lastarea, i, zo, ne, no, po, total = 0, cc, nlink, m, cf;
-   char string[260], *location, *tag, *p, addr[30], linea[80], flags[5];
-   struct _sys sys;
-   LINK *link;
+	int fd, wh, found, lastarea, i, zo, ne, no, po, total = 0, cc, nlink, m, cf;
+	char string[260], *location, *tag, *p, addr[30], linea[80], flags[5];
+	struct _sys sys;
+	LINK *link;
 
-   wh = wopen (11, 7, 13, 73, 3, LCYAN|_BLACK, CYAN|_BLACK);
-   wactiv (wh);
-   wtitle ("IMPORT TIC.CFG", TLEFT, LCYAN|_BLACK);
+	wh = wopen (11, 7, 13, 73, 3, LCYAN|_BLACK, CYAN|_BLACK);
+	wactiv (wh);
+	wtitle ("IMPORT TIC.CFG", TLEFT, LCYAN|_BLACK);
 
-   wprints (0, 1, YELLOW|_BLACK, "Filename");
-   sprintf (string, "%sTIC.CFG", config.sys_path);
-   winpbeg (BLACK|_LGREY, BLACK|_LGREY);
-   winpdef (0, 10, string, "?????????????????????????????????????????????????????", 0, 2, NULL, 0);
-   i = winpread ();
+	wprints (0, 1, YELLOW|_BLACK, "Filename");
+	sprintf (string, "%sTIC.CFG", config.sys_path);
+	winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+	winpdef (0, 10, string, "?????????????????????????????????????????????????????", 0, 2, NULL, 0);
+	i = winpread ();
 
-   hidecur ();
-   wclose ();
+	hidecur ();
+	wclose ();
 
-   if (i == W_ESCPRESS)
-      return;
+	if (i == W_ESCPRESS)
+		return;
+	{
+		char string[10];
+		int i,wh1;
 
-   strbtrim (string);
+		wh1 = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
+		wactiv (wh1);
+		wshadow (DGREY|_BLACK);
 
-   fp = fopen (string, "rt");
-   if (fp == NULL)
-      return;
+		wcenters (1, BLACK|_LGREY, "Are you sure (Y/n) ?  ");
 
-   link = (LINK *)malloc (sizeof (LINK) * MAX_LINKS);
-   if (link == NULL) {
-      fclose (fp);
+		strcpy (string, "Y");
+		winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+		winpdef (1, 24, string, "?", 0, 2, NULL, 0);
+
+		i = winpread ();
+		wclose ();
+		hidecur ();
+		if (i == W_ESCPRESS) return;
+		if (toupper (string[0]) != 'Y') return;
+	}
+
+
+	strbtrim (string);
+
+	fp = fopen (string, "rt");
+	if (fp == NULL)
+		return;
+
+	link = (LINK *)malloc (sizeof (LINK) * MAX_LINKS);
+	if (link == NULL) {
+		fclose (fp);
       return;
    }
 
@@ -2849,7 +3155,7 @@ static void import_tic ()
       if (strlen (tag) > 31)
          tag[31] = '\0';
 
-      nlink = 0;
+		nlink = 0;
       zo = config.alias[0].zone;
       ne = config.alias[0].net;
       no = config.alias[0].node;
@@ -2884,7 +3190,7 @@ static void import_tic ()
                      if (strchr (p, '&') != NULL)
                         link[nlink].send = 1;
                   }
-               }
+					}
             }
 
             nlink++;
@@ -2954,7 +3260,7 @@ static void import_tic ()
                else
                   strcpy (addr, "");
 
-               if (strlen (linea) + strlen (addr) >= 58) {
+					if (strlen (linea) + strlen (addr) >= 68) {
                   if (cf == 1) {
                      strcpy (sys.tic_forward1, linea);
                      cf++;
@@ -3063,7 +3369,7 @@ static void import_tic ()
             else
                strcpy (addr, "");
 
-            if (strlen (linea) + strlen (addr) >= 58) {
+				if (strlen (linea) + strlen (addr) >= 68) {
                if (cf == 1) {
                   strcpy (sys.tic_forward1, linea);
                   cf++;
@@ -3285,20 +3591,41 @@ void write_ticcfg (void)
    wh = wopen (7, 4, 11, 73, 1, LCYAN|_BLACK, CYAN|_BLACK);
    wactiv (wh);
    wshadow (DGREY|_BLACK);
-   wtitle (" Write TIC.CFG ", TRIGHT, YELLOW|_BLUE);
+	wtitle (" Write TIC.CFG ", TRIGHT, YELLOW|_BLUE);
 
-   wprints (1, 1, CYAN|_BLACK, " Filename:");
-   sprintf (string, "%sTIC.CFG", config.sys_path);
-   winpbeg (BLACK|_LGREY, BLACK|_LGREY);
-   winpdef (1, 12, string, "?????????????????????????????????????????????????????", 0, 2, NULL, 0);
-   i = winpread ();
+	wprints (1, 1, CYAN|_BLACK, " Filename:");
+	sprintf (string, "%sTIC.CFG", config.sys_path);
+	winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+	winpdef (1, 12, string, "?????????????????????????????????????????????????????", 0, 2, NULL, 0);
+	i = winpread ();
 
-   hidecur ();
+	hidecur ();
 
-   if (i == W_ESCPRESS) {
-      wclose ();
-      return;
-   }
+	if (i == W_ESCPRESS) {
+		wclose ();
+		return;
+	}
+	{
+		char string[10];
+		int i,wh1;
+
+		wh1 = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
+		wactiv (wh1);
+		wshadow (DGREY|_BLACK);
+
+		wcenters (1, BLACK|_LGREY, "Are you sure (Y/n) ?  ");
+
+		strcpy (string, "Y");
+		winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+		winpdef (1, 24, string, "?", 0, 2, NULL, 0);
+
+		i = winpread ();
+		wclose ();
+		hidecur ();
+		if (i == W_ESCPRESS) return;
+		if (toupper (string[0]) != 'Y') return;
+	}
+
 
    if ((fp = fopen (string, "wt")) == NULL) {
       wclose ();
