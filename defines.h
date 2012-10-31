@@ -858,5 +858,6 @@
 #define B_DATEFORMAT1            378
 #define B_DATEFORMAT2            379
 #define B_DATEFORMAT3            380
+#define B_REPLYTEXT              381
 
-#define X_TOTAL_MSGS             380
+#define X_TOTAL_MSGS             381

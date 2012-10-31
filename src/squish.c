@@ -18,10 +18,14 @@
 #include "externs.h"
 #include "prototyp.h"
 #include "msgapi.h"
+#include "bluewave.h"
 
 extern int maxakainfo, msg_parent, msg_child;
 extern struct _akainfo *akainfo;
 extern char *internet_to;
+
+extern struct _node2name *nametable; // Gestione nomi per aree PRIVATE
+extern int nodes_num;
 
 FILE *mopen (char *filename, char *mode);
 int mclose (FILE *fp);
@@ -32,8 +36,9 @@ int mread (char *s, int n, int e, FILE *fp);
 long memlength (void);
 void replace_tearline (FILE *fpd, char *buf);
 void add_quote_string (char *str, char *from);
-void add_quote_header (FILE *fp, char *from, char *to, char *dt, char *tm);
+void add_quote_header (FILE *fp, char *from, char *to, char *subj, char *dt, char *tm);
 int open_packet (int zone, int net, int node, int point, int ai);
+void bluewave_header (int fdi, long startpos, long numbytes, int msgnum, struct _msg *msgt);
 
 void squish_scan_message_base (area, name, upd)
 int area;
@@ -87,6 +92,9 @@ char *name, upd;
       else
          lastread = 0;
    }
+
+   if (lastread < 0)
+      lastread = 0;
 }
 
 #ifndef POINT
@@ -95,8 +103,8 @@ static void date_conversion (XMSG *xmsg)
    sprintf (xmsg->ftsc_date, "%2d %3s %2d %2d:%2d:%2d", xmsg->date_written.date.da, mtext[xmsg->date_written.date.mo - 1], xmsg->date_written.date.yr + 80, xmsg->date_written.time.hh, xmsg->date_written.time.mm, xmsg->date_written.time.ss);
 }
 
-int squish_read_message(msg_num, flag)
-int msg_num, flag;
+int squish_read_message(msg_num, flag, fakenum)
+int msg_num, flag, fakenum;
 {
    int i, z, m, line, colf=0, xx, rd;
    char c, buff[80], wrp[80], *p, sqbuff[80];
@@ -111,7 +119,7 @@ int msg_num, flag;
    }
 
    if (usr.full_read && !flag)
-      return (squish_full_read_message(msg_num));
+      return (squish_full_read_message(msg_num, fakenum));
 
    line = 1;
    msg_fzone = msg_tzone = config->alias[0].zone;
@@ -132,7 +140,7 @@ int msg_num, flag;
    }
 
    if (xmsg.attr & MSGPRIVATE)
-      if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) && usr.priv != SYSOP) {
+      if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) && stricmp(xmsg.from,usr.handle) && stricmp(xmsg.to,usr.handle) && usr.priv != SYSOP) {
          MsgCloseMsg (sq_msgh);
          return (0);
       }
@@ -162,8 +170,11 @@ int msg_num, flag;
    if (flag)
       m_print(bbstxt[B_TWO_CR]);
 
+   change_attr (WHITE|_BLACK);
+   m_print (" * %s\n", sys.msg_name);
+
    change_attr (CYAN|_BLACK);
-   line = msg_attrib (&msg, msg_num, line, 0);
+   line = msg_attrib (&msg, fakenum ? fakenum : msg_num, line, 0);
    m_print(bbstxt[B_ONE_CR]);
 
    allow_reply = 1;
@@ -184,7 +195,7 @@ int msg_num, flag;
          if(c == 0x0D) {
             buff[i-1]='\0';
 
-            if (!strncmp (buff, "SEEN-BY", 7) || buff[0] == 0x01) {
+            if (!usr.kludge && (!strncmp (buff, "SEEN-BY", 7) || buff[0] == 0x01)) {
                i = 0;
                continue;
             }
@@ -206,6 +217,12 @@ int msg_num, flag;
 
             if (!strncmp (buff, msgtxt[M_TEAR_LINE], 4) || !strncmp (buff, msgtxt[M_ORIGIN_LINE], 11))
                m_print ("%s\n", buff);
+            else if (buff[0] == 0x01)
+               m_print ("%s\n", &buff[1]);
+            else if (!strncmp (buff, "SEEN-BY", 7)) {
+               m_print ("%s\n", buff);
+               change_attr (LGREY|BLACK);
+            }
             else
                m_print ("%s\n", buff);
 
@@ -227,7 +244,7 @@ int msg_num, flag;
             }
          }
          else {
-            if (i < (usr.width - 2))
+            if (i < (usr.width - 1))
                continue;
 
             buff[i] = '\0';
@@ -282,7 +299,7 @@ int msg_num, flag;
       }
    } while (rd == 80);
 
-   if (!stricmp(xmsg.to, usr.name) && !(xmsg.attr & MSGREAD)) {
+   if ((!stricmp(xmsg.to, usr.name) || !stricmp(xmsg.to, usr.handle)) && !(xmsg.attr & MSGREAD)) {
       xmsg.attr |= MSGREAD;
       MsgWriteMsg (sq_msgh, 1, &xmsg, NULL, 0, 0, 0, NULL);
    }
@@ -295,8 +312,8 @@ int msg_num, flag;
    return(1);
 }
 
-int squish_full_read_message(msg_num)
-int msg_num;
+int squish_full_read_message(msg_num, fakenum)
+int msg_num, fakenum;
 {
    int i, z, m, line, colf=0, xx, rd;
    char c, buff[80], wrp[80], *p, sqbuff[80];
@@ -323,7 +340,7 @@ int msg_num;
    }
 
    if (xmsg.attr & MSGPRIVATE)
-      if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) && usr.priv != SYSOP) {
+      if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) && stricmp(xmsg.from,usr.handle) && stricmp(xmsg.to,usr.handle) && usr.priv != SYSOP) {
          MsgCloseMsg (sq_msgh);
          return (0);
       }
@@ -352,7 +369,7 @@ int msg_num;
    del_line ();
    m_print (" * %s\n", sys.msg_name);
    change_attr (CYAN|_BLACK);
-   line = msg_attrib (&msg, msg_num, line, 0);
+   line = msg_attrib (&msg, fakenum ? fakenum : msg_num, line, 0);
    change_attr (LGREY|_BLUE);
    del_line ();
    change_attr (CYAN|_BLACK);
@@ -376,7 +393,7 @@ int msg_num;
          if(c == 0x0D) {
             buff[i-1]='\0';
 
-            if (!strncmp (buff, "SEEN-BY", 7) || buff[0] == 0x01) {
+            if (!usr.kludge && (!strncmp (buff, "SEEN-BY", 7) || buff[0] == 0x01)) {
                i = 0;
                continue;
             }
@@ -398,6 +415,12 @@ int msg_num;
 
             if (!strncmp (buff, msgtxt[M_TEAR_LINE], 4) || !strncmp (buff, msgtxt[M_ORIGIN_LINE], 11))
                m_print ("%s\n", buff);
+            else if (buff[0] == 0x01)
+               m_print ("%s\n", &buff[1]);
+            else if (!strncmp (buff, "SEEN-BY", 7)) {
+               m_print ("%s\n", buff);
+               change_attr (LGREY|BLACK);
+            }
             else
                m_print ("%s\n", buff);
 
@@ -420,7 +443,7 @@ int msg_num;
             }
          }
          else {
-            if (i < (usr.width - 2))
+            if (i < (usr.width - 1))
                continue;
 
             buff[i] = '\0';
@@ -476,7 +499,8 @@ int msg_num;
       }
    } while (rd == 80);
 
-   if (!stricmp(xmsg.to, usr.name) && !(xmsg.attr & MSGREAD)) {
+   if ((!stricmp(xmsg.to, usr.name) || !stricmp(xmsg.to,usr.name)||
+   !stricmp(xmsg.to, usr.handle) || !stricmp(xmsg.to, usr.handle)) && !(xmsg.attr & MSGREAD)) {
       xmsg.attr |= MSGREAD;
       MsgWriteMsg (sq_msgh, 1, &xmsg, NULL, 0, 0, 0, NULL);
    }
@@ -500,7 +524,7 @@ char *txt;
    MSGH *sq_msgh;
    XMSG xmsg;
 
-   while (MsgLock (sq_ptr) == -1)
+   while (MsgLock (sq_ptr) == -1 && msgapierr != MERR_NOMEM)
       ;
 
    m_print(bbstxt[B_SAVE_MESSAGE]);
@@ -523,7 +547,7 @@ char *txt;
    gettime (&ti);
    xmsg.date_written.date.da = xmsg.date_arrived.date.da = da.da_day;
    xmsg.date_written.date.mo = xmsg.date_arrived.date.mo = da.da_mon;
-   xmsg.date_written.date.yr = xmsg.date_arrived.date.yr = da.da_year;
+   xmsg.date_written.date.yr = xmsg.date_arrived.date.yr = (da.da_year % 100) - 80;
    xmsg.date_written.time.hh = xmsg.date_arrived.time.hh = ti.ti_hour;
    xmsg.date_written.time.mm = xmsg.date_arrived.time.mm = ti.ti_min;
    xmsg.date_written.time.ss = xmsg.date_arrived.time.ss = ti.ti_sec;
@@ -668,7 +692,8 @@ FILE *sm;
    }
 
    if (xmsg.attr & MSGPRIVATE)
-      if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) && usr.priv != SYSOP) {
+      if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) 
+      && stricmp(xmsg.from,usr.handle) && stricmp(xmsg.to,usr.handle) && usr.priv != SYSOP) {
          MsgCloseMsg (sq_msgh);
          return (0);
       }
@@ -719,7 +744,7 @@ FILE *sm;
    else if (flags & QWK_TEXTFILE)
       qwk_header (&msgt, &QWK, msg_num, fpq, &qpos);
    else if (flags & QUOTE_TEXT)
-      add_quote_header (fpq, msgt.from, msgt.to, msgt.date, NULL);
+      add_quote_header (fpq, msgt.from, msgt.to, msgt.subj, msgt.date, NULL);
 
    do {
       rd = (int)MsgReadMsg (sq_msgh, NULL, fpos, 80L, sqbuff, 0, NULL);
@@ -734,6 +759,10 @@ FILE *sm;
 
          if (c == 0x0D) {
             buff[i-1] = '\0';
+            if (!strnicmp (buff, msgtxt[M_TEAR_LINE], 4))
+               buff[1] = '+';
+            if (!strnicmp (buff, msgtxt[M_ORIGIN_LINE], 10))
+               buff[3] = '0';
 
             if (strchr (buff, 0x01) != NULL || stristr (buff, "SEEN-BY") != NULL) {
                if (flags & QUOTE_TEXT) {
@@ -760,7 +789,7 @@ FILE *sm;
                i = 0;
          }
          else {
-            if (i < (usr.width - 2))
+            if (i < (usr.width - 1))
                continue;
 
             buff[i] = '\0';
@@ -775,6 +804,10 @@ FILE *sm;
 
             buff[i] = '\0';
             wrp[m] = '\0';
+            if (!strnicmp (buff, msgtxt[M_TEAR_LINE], 4))
+               buff[1] = '+';
+            if (!strnicmp (buff, msgtxt[M_ORIGIN_LINE], 10))
+               buff[3] = '0';
 
             if (flags & QWK_TEXTFILE) {
                write_qwk_string (buff, qwkbuffer, &pos, &blks, fpq);
@@ -794,7 +827,7 @@ FILE *sm;
       }
    } while (rd == 80);
 
-   if (!stricmp(xmsg.to, usr.name) && !(xmsg.attr & MSGREAD)) {
+   if ((!stricmp(xmsg.to, usr.name)||!stricmp(xmsg.to, usr.handle)) && !(xmsg.attr & MSGREAD)) {
       xmsg.attr |= MSGREAD;
       MsgWriteMsg (sq_msgh, 1, &xmsg, NULL, 0, 0, 0, NULL);
    }
@@ -851,7 +884,8 @@ int m, verbose;
          continue;
 
       if (xmsg.attr & MSGPRIVATE)
-         if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) && usr.priv != SYSOP)
+         if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) &&
+         stricmp(xmsg.from,usr.handle) && stricmp(xmsg.to,usr.handle) && usr.priv != SYSOP)
             continue;
 
       memset ((char *)&msgt, 0, sizeof (struct _msg));
@@ -907,8 +941,8 @@ int m, verbose;
       press_enter();
 }
 
-int squish_mail_list_headers (m, line)
-int m, line;
+int squish_mail_list_headers (m, line, ovrmsgn)
+int m, line, ovrmsgn;
 {
    struct _msg msgt;
    MSGH *sq_msgh;
@@ -929,7 +963,8 @@ int m, line;
       return (line);
 
    if (xmsg.attr & MSGPRIVATE)
-      if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) && usr.priv != SYSOP)
+      if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) &&
+      stricmp(xmsg.from,usr.handle) && stricmp(xmsg.to,usr.handle) && usr.priv != SYSOP)
          return (line);
 
    memset ((char *)&msgt, 0, sizeof (struct _msg));
@@ -949,7 +984,7 @@ int m, line;
    msg_tpoint = xmsg.dest.point;
    msg.attr = (word)xmsg.attr;
 
-   if ((line = msg_attrib (&msgt, m, line, 0)) == 0)
+   if ((line = msg_attrib (&msgt, ovrmsgn ? ovrmsgn : m, line, 0)) == 0)
       return (0);
 
    return (line);
@@ -980,7 +1015,8 @@ char *stringa;
       }
 
       if (xmsg.attr & MSGPRIVATE)
-         if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) && usr.priv != SYSOP) {
+         if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) &&
+         stricmp(xmsg.from,usr.handle) && stricmp(xmsg.to,usr.handle) && usr.priv != SYSOP) {
             MsgCloseMsg (sq_msgh);
             continue;
          }
@@ -1057,7 +1093,8 @@ int msg_num;
 
    MsgCloseMsg (sq_msgh);
 
-   if (!stricmp (xmsg.from, usr.name) || !stricmp (xmsg.to, usr.name) || usr.priv == SYSOP) {
+   if (!stricmp (xmsg.from, usr.name) || !stricmp (xmsg.to, usr.name) ||
+   !stricmp (xmsg.from, usr.handle) || !stricmp (xmsg.to, usr.handle) || usr.priv == SYSOP) {
       MsgKillMsg (sq_ptr, msg_num);
       return (1);
    }
@@ -1073,7 +1110,7 @@ char qwk;
    float in, out;
    int i, z, m, pos, blks, xx, rd, tt, pp, msg_num;
    char c, buff[80], wrp[80], qwkbuffer[130], sqbuff[80];
-   long fpos, qpos;
+   long fpos, qpos, bw_start;
    struct _msg msgt;
    struct QWKmsghd QWK;
    MSGH *sq_msgh;
@@ -1082,18 +1119,14 @@ char qwk;
    tt = 0;
    pp = 0;
 
-   MsgLock (sq_ptr);
-
-   if (start > last_msg)
-      start = last_msg;
-
-   if (start == last_msg) {
+   if (start > last_msg) {
       *personal = pp;
       *total = tt;
-      MsgUnlock (sq_ptr);
 
       return (totals);
    }
+
+   MsgLock (sq_ptr);
 
    for (msg_num = start; msg_num <= last_msg; msg_num++) {
       if (!(msg_num % 5))
@@ -1114,13 +1147,14 @@ char qwk;
       }
 
       if (xmsg.attr & MSGPRIVATE)
-         if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) && usr.priv != SYSOP) {
+         if (stricmp(xmsg.from,usr.name) && stricmp(xmsg.to,usr.name) &&
+         stricmp(xmsg.from,usr.handle) && stricmp(xmsg.to,usr.handle) && usr.priv != SYSOP) {
             MsgCloseMsg (sq_msgh);
             continue;
          }
 
       totals++;
-      if (fdi != -1) {
+      if (qwk == 1 && fdi != -1) {
          sprintf(buff,"%u",totals);   /* Stringized version of current position */
          in = (float) atof(buff);
          out = IEEToMSBIN(in);
@@ -1129,10 +1163,14 @@ char qwk;
          c = 0;
          write(fdi,&c,sizeof(char));              /* Conference # */
       }
+      else if (qwk == 2) {
+         bw_start = ftell (fpq);
+         fputc (' ', fpq);
+      }
 
-      if (!stricmp(xmsg.to,usr.name)) {
+      if (!stricmp(xmsg.to,usr.name)||!stricmp(xmsg.to,usr.handle)) {
          pp++;
-         if (fdp != -1) {
+         if (qwk == 1 && fdi != -1 && fdp != -1) {
             write(fdp,&out,sizeof(float));
             write(fdp,&c,sizeof(char));              /* Conference # */
          }
@@ -1162,9 +1200,9 @@ char qwk;
       i = 0;
       fpos = 0L;
 
-      if (qwk)
+      if (qwk == 1)
          qwk_header (&msgt, &QWK, msg_num, fpq, &qpos);
-      else
+      else if (qwk == 0)
          text_header (&msgt,msg_num,fpq);
 
       do {
@@ -1186,17 +1224,17 @@ char qwk;
                   continue;
                }
 
-               if (qwk) {
+               if (qwk == 1) {
                   write_qwk_string (buff, qwkbuffer, &pos, &blks, fpq);
                   write_qwk_string ("\r\n", qwkbuffer, &pos, &blks, fpq);
                }
                else
-                  fprintf(fpq,"%s\n",buff);
+                  fprintf (fpq, "%s\n", buff);
 
                i = 0;
             }
             else {
-               if (i < (usr.width - 2))
+               if (i < (usr.width - 1))
                   continue;
 
                buff[i] = '\0';
@@ -1213,12 +1251,12 @@ char qwk;
 
                wrp[m] = '\0';
 
-               if (qwk) {
+               if (qwk == 1) {
                   write_qwk_string (buff, qwkbuffer, &pos, &blks, fpq);
                   write_qwk_string ("\r\n", qwkbuffer, &pos, &blks, fpq);
                }
                else
-                  fprintf(fpq,"%s\n",buff);
+                  fprintf (fpq, "%s\n", buff);
 
                strcpy (buff, wrp);
                i = strlen (buff);
@@ -1226,14 +1264,14 @@ char qwk;
          }
       } while (rd == 80);
 
-      if (!stricmp(xmsg.to, usr.name) && !(xmsg.attr & MSGREAD)) {
+      if ((!stricmp(xmsg.to, usr.name)||!stricmp(xmsg.to, usr.handle)) && !(xmsg.attr & MSGREAD)) {
          xmsg.attr |= MSGREAD;
          MsgWriteMsg (sq_msgh, 1, &xmsg, NULL, 0, 0, 0, NULL);
       }
 
       MsgCloseMsg (sq_msgh);
 
-      if (qwk) {
+      if (qwk == 1) {
          qwkbuffer[128] = 0;
          fwrite (qwkbuffer, 128, 1, fpq);
          blks++;
@@ -1247,6 +1285,8 @@ char qwk;
 
          totals += blks - 1;
       }
+      else if (qwk == 2)
+         bluewave_header (fdi, bw_start, ftell (fpq) - bw_start, msg_num, &msgt);
       else
          fprintf(fpq,bbstxt[B_TWO_CR]);
 
@@ -1262,8 +1302,7 @@ char qwk;
 }
 #endif
 
-int squish_save_message2(txt)
-FILE *txt;
+int squish_save_message2 (FILE *txt)
 {
    int i, dest, m, dd, hh, mm, ss, aa, mo;
    char buffer[2050];
@@ -1292,8 +1331,8 @@ FILE *txt;
    if (mo == 12)
       mo = 0;
    xmsg.date_written.date.da = dd;
-   xmsg.date_written.date.mo = mo;
-   xmsg.date_written.date.yr = aa;
+   xmsg.date_written.date.mo = mo + 1;
+   xmsg.date_written.date.yr = (aa % 100) - 80;
    xmsg.date_written.time.hh = hh;
    xmsg.date_written.time.mm = mm;
    xmsg.date_written.time.ss = ss;
@@ -1301,7 +1340,7 @@ FILE *txt;
    gettime (&ti);
    xmsg.date_arrived.date.da = da.da_day;
    xmsg.date_arrived.date.mo = da.da_mon;
-   xmsg.date_arrived.date.yr = da.da_year;
+   xmsg.date_arrived.date.yr = (da.da_year % 100) - 80;
    xmsg.date_arrived.time.hh = ti.ti_hour;
    xmsg.date_arrived.time.mm = ti.ti_min;
    xmsg.date_arrived.time.ss = ti.ti_sec;
@@ -1344,215 +1383,260 @@ FILE *txt;
    return (1);
 }
 
-int squish_export_mail (maxnodes, forward)
-int maxnodes;
-struct _fwrd *forward;
+int squish_export_mail (int maxnodes, struct _fwrd *forward)
 {
-   FILE *fpd;
-   int i, pp, z, ne, no, n_seen, cnet, cnode, mi, msgnum, xx, rd, m, sent, ai;
-   char buff[82], wrp[82], c, *p, buffer[2050], sqbuff[82], need_origin;
-   char need_seen;
-   long fpos;
-   MSGH *sq_msgh;
-   XMSG xmsg;
-   struct _msghdr2 mhdr;
-   struct _fwrd *seen;
+	FILE *fpd;
+	int i, pp, z, ne, no, n_seen, cnet, cnode, mi, msgnum, xx, rd, m, sent, ai;
+	char buff[82], wrp[82], c, *p, buffer[2050], sqbuff[82], need_origin;
+	char need_seen, *flag;
+	long fpos;
+	MSGH *sq_msgh;
+	XMSG xmsg;
+	struct _msghdr2 mhdr;
+	struct _fwrd *seen;
 
-   seen = (struct _fwrd *)malloc ((MAX_EXPORT_SEEN + 1) * sizeof (struct _fwrd));
-   if (seen == NULL)
-      return (maxnodes);
+	seen = (struct _fwrd *)malloc ((MAX_EXPORT_SEEN + 1) * sizeof (struct _fwrd));
+	if (seen == NULL)
+		return (maxnodes);
 
-   fpd = fopen ("MSGTMP.EXP", "rb+");
-   if (fpd == NULL) {
-      fpd = fopen ("MSGTMP.EXP", "wb");
-      fclose (fpd);
-   }
-   else
-      fclose (fpd);
-   fpd = mopen ("MSGTMP.EXP", "r+b");
+	fpd = fopen ("MSGTMP.EXP", "rb+");
+	if (fpd == NULL) {
+		fpd = fopen ("MSGTMP.EXP", "wb");
+		fclose (fpd);
+	}
+	else
+		fclose (fpd);
+	fpd = mopen ("MSGTMP.EXP", "r+b");
 
-   for (i = 0; i < maxnodes; i++)
-      forward[i].reset = forward[i].export = 0;
+	for (i = 0; i < maxnodes; i++)
+		forward[i].reset = forward[i].export = 0;
 
-   if (!sys.use_alias) {
-      z = config->alias[sys.use_alias].zone;
-      parse_netnode2 (sys.forward1, &z, &ne, &no, &pp);
-      if (z != config->alias[sys.use_alias].zone) {
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
-            if (z == config->alias[i].zone)
-               break;
-         if (i < MAX_ALIAS && config->alias[i].net)
-            sys.use_alias = i;
-      }
-   }
+	z = config->alias[sys.use_alias].zone;
+	ne = config->alias[sys.use_alias].net;
+	no = config->alias[sys.use_alias].node;
+	pp = 0;
 
-   z = config->alias[sys.use_alias].zone;
-   ne = config->alias[sys.use_alias].net;
-   no = config->alias[sys.use_alias].node;
-   pp = 0;
+	p = strtok (sys.forward1, " ");
+	if (p != NULL)
+		do {
+			flag = p;
+			while (*p == '<' || *p == '>' || *p == '!' || *p == 'p' || *p == 'P')
+				p++;
+			parse_netnode2 (p, &z, &ne, &no, &pp);
+			for (i = 0; i < MAX_ALIAS; i++) {
+				if (config->alias[i].net == 0)
+					continue;
+				if (config->alias[i].zone == z && config->alias[i].net == ne && config->alias[i].node == no && config->alias[i].point == pp)
+					break;
+				if (config->alias[i].point && config->alias[i].fakenet) {
+					if (config->alias[i].zone == z && config->alias[i].fakenet == ne && config->alias[i].point == no)
+						break;
+				}
+			}
+			if (i < MAX_ALIAS && config->alias[i].net)
+				continue;
+			if ((i = is_here (z, ne, no, pp, forward, maxnodes)) != -1)
+				forward[i].reset = forward[i].export = 1;
+			else {
+				i = maxnodes;
+				forward[maxnodes].zone = z;
+				forward[maxnodes].net = ne;
+				forward[maxnodes].node = no;
+				forward[maxnodes].point = pp;
+				forward[maxnodes].export = 1;
+				forward[maxnodes].reset = 1;
+				maxnodes++;
+			}
+			forward[i].receiveonly = forward[i].sendonly = forward[i].passive = forward[i].private = 0;
+			while (*flag=='<'||*flag=='>'||*flag=='!'||*flag=='P'||*flag=='p') {
+				if (*flag == '>')
+					forward[i].receiveonly = 1;
+				if (*flag == '<')
+					forward[i].sendonly = 1;
+				if (*flag == '!')
+					forward[i].passive = 1;
+				if (*flag == 'p' || *flag == 'P')
+					forward[i].private = 1;
+				flag++;
+			}
+		} while ((p = strtok (NULL, " ")) != NULL);
 
-   p = strtok (sys.forward1, " ");
-   if (p != NULL)
-      do {
-         parse_netnode2 (p, &z, &ne, &no, &pp);
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
-            if (config->alias[i].zone == z && config->alias[i].net == ne && config->alias[i].node == no && config->alias[i].point == pp)
-               break;
-            if (config->alias[i].point && config->alias[i].fakenet) {
-               if (config->alias[i].zone == z && config->alias[i].fakenet == ne && config->alias[i].point == no)
-                  break;
-            }
-         }
-         if (i < MAX_ALIAS && config->alias[i].net)
-            continue;
-         if ((i = is_here (z, ne, no, pp, forward, maxnodes)) != -1)
-            forward[i].reset = forward[i].export = 1;
-         else {
-            forward[maxnodes].zone = z;
-            forward[maxnodes].net = ne;
-            forward[maxnodes].node = no;
-            forward[maxnodes].point = pp;
-            forward[maxnodes].export = 1;
-            forward[maxnodes].reset = 1;
-            maxnodes++;
-         }
-      } while ((p = strtok (NULL, " ")) != NULL);
+	z = config->alias[sys.use_alias].zone;
+	ne = config->alias[sys.use_alias].net;
+	no = config->alias[sys.use_alias].node;
+	pp = 0;
 
-   if (!sys.use_alias) {
-      z = config->alias[sys.use_alias].zone;
-      parse_netnode2 (sys.forward2, &z, &ne, &no, &pp);
-      if (z != config->alias[sys.use_alias].zone) {
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
-            if (z == config->alias[i].zone)
-               break;
-         if (i < MAX_ALIAS && config->alias[i].net)
-            sys.use_alias = i;
-      }
-   }
+	p = strtok (sys.forward2, " ");
+	if (p != NULL)
+		do {
+			flag = p;
+			while (*p == '<' || *p == '>' || *p == '!' || *p == 'p' || *p == 'P')
+				p++;
+			parse_netnode2 (p, &z, &ne, &no, &pp);
+			for (i = 0; i < MAX_ALIAS; i++) {
+				if (config->alias[i].net == 0)
+					continue;
+				if (config->alias[i].zone == z && config->alias[i].net == ne && config->alias[i].node == no && config->alias[i].point == pp)
+					break;
+				if (config->alias[i].point && config->alias[i].fakenet) {
+					if (config->alias[i].zone == z && config->alias[i].fakenet == ne && config->alias[i].point == no)
+						break;
+				}
+			}
+			if (i < MAX_ALIAS && config->alias[i].net)
+				continue;
+			if ((i = is_here (z, ne, no, pp, forward, maxnodes)) != -1)
+				forward[i].reset = forward[i].export = 1;
+			else {
+				i = maxnodes;
+				forward[maxnodes].zone = z;
+				forward[maxnodes].net = ne;
+				forward[maxnodes].node = no;
+				forward[maxnodes].point = pp;
+				forward[maxnodes].export = 1;
+				forward[maxnodes].reset = 1;
+				maxnodes++;
+			}
+			forward[i].receiveonly = forward[i].sendonly = forward[i].passive = forward[i].private = 0;
+			while (*flag=='<'||*flag=='>'||*flag=='!'||*flag=='P'||*flag=='p') {
+				if (*flag == '>')
+					forward[i].receiveonly = 1;
+				if (*flag == '<')
+					forward[i].sendonly = 1;
+				if (*flag == '!')
+					forward[i].passive = 1;
+				if (*flag == 'p' || *flag == 'P')
+					forward[i].private = 1;
+				flag++;
+			}
 
-   z = config->alias[sys.use_alias].zone;
-   ne = config->alias[sys.use_alias].net;
-   no = config->alias[sys.use_alias].node;
-   pp = 0;
+		} while ((p = strtok (NULL, " ")) != NULL);
 
-   p = strtok (sys.forward2, " ");
-   if (p != NULL)
-      do {
-         parse_netnode2 (p, &z, &ne, &no, &pp);
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
-            if (config->alias[i].zone == z && config->alias[i].net == ne && config->alias[i].node == no && config->alias[i].point == pp)
-               break;
-            if (config->alias[i].point && config->alias[i].fakenet) {
-               if (config->alias[i].zone == z && config->alias[i].fakenet == ne && config->alias[i].point == no)
-                  break;
-            }
-         }
-         if (i < MAX_ALIAS && config->alias[i].net)
-            continue;
-         if ((i = is_here (z, ne, no, pp, forward, maxnodes)) != -1)
-            forward[i].reset = forward[i].export = 1;
-         else {
-            forward[maxnodes].zone = z;
-            forward[maxnodes].net = ne;
-            forward[maxnodes].node = no;
-            forward[maxnodes].point = pp;
-            forward[maxnodes].export = 1;
-            forward[maxnodes].reset = 1;
-            maxnodes++;
-         }
-      } while ((p = strtok (NULL, " ")) != NULL);
+	z = config->alias[sys.use_alias].zone;
+	ne = config->alias[sys.use_alias].net;
+	no = config->alias[sys.use_alias].node;
+	pp = 0;
 
-   if (!sys.use_alias) {
-      z = config->alias[sys.use_alias].zone;
-      parse_netnode2 (sys.forward3, &z, &ne, &no, &pp);
-      if (z != config->alias[sys.use_alias].zone) {
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
-            if (z == config->alias[i].zone)
-               break;
-         if (i < MAX_ALIAS && config->alias[i].net)
-            sys.use_alias = i;
-      }
-   }
+	p = strtok (sys.forward3, " ");
+	if (p != NULL)
+		do {
+			flag = p;
+			while (*p == '<' || *p == '>' || *p == '!' || *p == 'p' || *p == 'P')
+				p++;
+			parse_netnode2 (p, &z, &ne, &no, &pp);
+			for (i = 0; i < MAX_ALIAS; i++) {
+				if (config->alias[i].net == 0)
+					continue;
+				if (config->alias[i].zone == z && config->alias[i].net == ne && config->alias[i].node == no && config->alias[i].point == pp)
+					break;
+				if (config->alias[i].point && config->alias[i].fakenet) {
+					if (config->alias[i].zone == z && config->alias[i].fakenet == ne && config->alias[i].point == no)
+						break;
+				}
+			}
+			if (i < MAX_ALIAS && config->alias[i].net)
+				continue;
+			if ((i = is_here (z, ne, no, pp, forward, maxnodes)) != -1)
+				forward[i].reset = forward[i].export = 1;
+			else {
+				i = maxnodes;
+				forward[maxnodes].zone = z;
+				forward[maxnodes].net = ne;
+				forward[maxnodes].node = no;
+				forward[maxnodes].point = pp;
+				forward[maxnodes].export = 1;
+				forward[maxnodes].reset = 1;
+				maxnodes++;
+			}
+			forward[i].receiveonly = forward[i].sendonly = forward[i].passive = forward[i].private = 0;
+			while (*flag=='<'||*flag=='>'||*flag=='!'||*flag=='P'||*flag=='p') {
+				if (*flag == '>')
+					forward[i].receiveonly = 1;
+				if (*flag == '<')
+					forward[i].sendonly = 1;
+				if (*flag == '!')
+					forward[i].passive = 1;
+				if (*flag == 'p' || *flag == 'P')
+					forward[i].private = 1;
+				flag++;
+			}
 
-   z = config->alias[sys.use_alias].zone;
-   ne = config->alias[sys.use_alias].net;
-   no = config->alias[sys.use_alias].node;
-   pp = 0;
+		} while ((p = strtok (NULL, " ")) != NULL);
 
-   p = strtok (sys.forward3, " ");
-   if (p != NULL)
-      do {
-         parse_netnode2 (p, &z, &ne, &no, &pp);
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
-            if (config->alias[i].zone == z && config->alias[i].net == ne && config->alias[i].node == no && config->alias[i].point == pp)
-               break;
-            if (config->alias[i].point && config->alias[i].fakenet) {
-               if (config->alias[i].zone == z && config->alias[i].fakenet == ne && config->alias[i].point == no)
-                  break;
-            }
-         }
-         if (i < MAX_ALIAS && config->alias[i].net)
-            continue;
-         if ((i = is_here (z, ne, no, pp, forward, maxnodes)) != -1)
-            forward[i].reset = forward[i].export = 1;
-         else {
-            forward[maxnodes].zone = z;
-            forward[maxnodes].net = ne;
-            forward[maxnodes].node = no;
-            forward[maxnodes].point = pp;
-            forward[maxnodes].export = 1;
-            forward[maxnodes].reset = 1;
-            maxnodes++;
-         }
-      } while ((p = strtok (NULL, " ")) != NULL);
+	msgnum = (int)MsgGetHighWater(sq_ptr) + 1;
 
-   msgnum = (int)MsgGetHighWater(sq_ptr) + 1;
+	strcpy (wrp, sys.echotag);
+	wrp[14] = '\0';
+	prints (8, 65, YELLOW|_BLACK, "              ");
+	prints (8, 65, YELLOW|_BLACK, wrp);
 
-   strcpy (wrp, sys.echotag);
-   wrp[14] = '\0';
-   prints (8, 65, YELLOW|_BLACK, "              ");
-   prints (8, 65, YELLOW|_BLACK, wrp);
+	prints (7, 65, YELLOW|_BLACK, "              ");
+	prints (9, 65, YELLOW|_BLACK, "              ");
+	prints (9, 65, YELLOW|_BLACK, "Squish<tm>");
 
-   prints (7, 65, YELLOW|_BLACK, "              ");
-   prints (9, 65, YELLOW|_BLACK, "              ");
-   prints (9, 65, YELLOW|_BLACK, "Squish<tm>");
+	sprintf (wrp, "%d / %d", msgnum, last_msg);
+	prints (7, 65, YELLOW|_BLACK, wrp);
+	sent = 0;
 
-   sprintf (wrp, "%d / %d", msgnum, last_msg);
-   prints (7, 65, YELLOW|_BLACK, wrp);
-   sent = 0;
+	for (; msgnum <= last_msg; msgnum++) {
+		sprintf (wrp, "%d / %d", msgnum, last_msg);
+		prints (7, 65, YELLOW|_BLACK, wrp);
 
-   for (; msgnum <= last_msg; msgnum++) {
-      sprintf (wrp, "%d / %d", msgnum, last_msg);
-      prints (7, 65, YELLOW|_BLACK, wrp);
+		for (i = 0; i < maxnodes; i++)
+			if (forward[i].reset)
+				forward[i].export = 1;
 
-      for (i = 0; i < maxnodes; i++)
-         if (forward[i].reset)
-            forward[i].export = 1;
+		for (i = 0; i < maxnodes; i++) {
+			if (forward[i].sendonly||forward[i].passive) forward[i].export=0;
+		}
 
-      sq_msgh = MsgOpenMsg (sq_ptr, MOPEN_RW, (dword)msgnum);
-      if (sq_msgh == NULL)
-         continue;
 
-      if (MsgReadMsg (sq_msgh, &xmsg, 0L, 0L, NULL, 0, NULL) == -1) {
-         MsgCloseMsg (sq_msgh);
-         continue;
-      }
+		sq_msgh = MsgOpenMsg (sq_ptr, MOPEN_RW, (dword)msgnum);
+		if (sq_msgh == NULL)
+			continue;
 
-      if (xmsg.attr & MSGSCANNED) {
-         MsgCloseMsg (sq_msgh);
-         continue;
-      }
-      else {
-         xmsg.attr |= MSGSCANNED;
-         MsgWriteMsg (sq_msgh, 1, &xmsg, NULL, 0, 0, 0, NULL);
-      }
+		if (MsgReadMsg (sq_msgh, &xmsg, 0L, 0L, NULL, 0, NULL) == -1) {
+			MsgCloseMsg (sq_msgh);
+			continue;
+		}
 
-      sprintf (wrp, "%5d  %-22.22s Squish<tm>   ", msgnum, sys.echotag);
-      wputs (wrp);
+		if (xmsg.attr & MSGSCANNED) {
+			MsgCloseMsg (sq_msgh);
+			continue;
+		}
+		else {
+			xmsg.attr |= MSGSCANNED;
+			MsgWriteMsg (sq_msgh, 1, &xmsg, NULL, 0, 0, 0, NULL);
+		}
+		for (i=0;i<maxnodes;i++) {
+			if (forward[i].private) {
 
-      need_seen = need_origin = 1;
+				int ii;
 
-      mseek (fpd, 0L, SEEK_SET);
+				forward[i].export=0;
+				if (!nametable) continue;
+
+				for(ii=0;ii<nodes_num;ii++) {
+					if (forward[i].zone==nametable[ii].zone&&
+						 forward[i].net==nametable[ii].net&&
+						 forward[i].node==nametable[ii].node&&
+						 forward[i].point==nametable[ii].point&&
+						 !stricmp(xmsg.to,nametable[ii].name)) {
+							 forward[i].export=1;
+							 break;
+					}
+				}
+			}
+
+
+		}
+
+		sprintf (wrp, "%5d  %-22.22s Squish<tm>   ", msgnum, sys.echotag);
+		wputs (wrp);
+
+		need_seen = need_origin = 1;
+
+		mseek (fpd, 0L, SEEK_SET);
       mprintf (fpd, "AREA:%s\r\n", sys.echotag);
 
       mi = i = 0;
@@ -1617,7 +1701,7 @@ struct _fwrd *forward;
                            break;
                         }
                      }
-
+                     
                      if (n_seen + maxnodes >= MAX_EXPORT_SEEN)
                         continue;
 
@@ -1920,7 +2004,9 @@ void squish_rescan_echomail (char *tag, int zone, int net, int node, int point)
       close (fd);
    }
 
-   strcpy (sys.echotag, tag);
+   strcpy (buff, tag);
+   memset ((char *)&sys, 0, sizeof (struct _sys));
+   strcpy (sys.echotag, buff);
 
    seen = (struct _fwrd *)malloc ((MAX_EXPORT_SEEN + 1) * sizeof (struct _fwrd));
    if (seen == NULL)
@@ -1934,13 +2020,6 @@ void squish_rescan_echomail (char *tag, int zone, int net, int node, int point)
    else
       fclose (fpd);
    fpd = mopen ("MSGTMP.EXP", "r+b");
-
-   sys.use_alias = 0;
-   for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
-      if (zone == config->alias[i].zone)
-         break;
-   if (i < MAX_ALIAS && config->alias[i].net)
-      sys.use_alias = i;
 
    msgnum = 1;
 

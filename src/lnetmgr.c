@@ -81,9 +81,9 @@ void main (void)
    wactiv (i);
 
 #ifdef __OS2__
-   sprintf (linea, "LoraBBS-OS/2 Network Manager %s - Copyright (c) 1992-94 by Marco Maccaferri", LNETMGR_VERSION);
+   sprintf (linea, "LoraBBS-OS/2 Network Manager %s - Copyright (c) 1992-95 by Marco Maccaferri", LNETMGR_VERSION);
 #else
-   sprintf (linea, "LoraBBS-DOS Network Manager %s - Copyright (c) 1992-94 by Marco Maccaferri", LNETMGR_VERSION);
+   sprintf (linea, "LoraBBS-DOS Network Manager %s - Copyright (c) 1992-95 by Marco Maccaferri", LNETMGR_VERSION);
 #endif
    wcenters (0, BLACK|_LGREY, linea);
 
@@ -107,30 +107,6 @@ void main (void)
             if (read(fd, (char *)&useron, sizeof(struct _useron)) != sizeof(struct _useron))
                memset ((char *)&useron, 0, sizeof (struct _useron));
 
-            switch (useron.status) {
-            case 0:
-               p = "Login   ";
-               break;
-            case BROWSING:
-               p = "Browsing";
-               break;
-            case UPLDNLD:
-               p = "Up/Downl";
-               break;
-            case READWRITE:
-               p = "R/Write ";
-               break;
-            case DOOR:
-               p = "Ext.Door";
-               break;
-            case CHATTING:
-               p = "CB Chat ";
-               break;
-            case QUESTIONAIRE:
-               p = "New user";
-               break;
-            }
-
             useron.city[21] = '\0';
 
             sprintf (names[line - 2], "%-30.30s", useron.name);
@@ -141,16 +117,36 @@ void main (void)
                wprints (line, 0, YELLOW|_BLACK, linea);
                sprintf (linea, "%3d", useron.line);
                wprints (line, 33, YELLOW|_BLACK, linea);
-               sprintf (linea, "%5d", useron.baud);
+               sprintf (linea, "%5lu", useron.baud);
                wprints (line, 37, YELLOW|_BLACK, linea);
                sprintf (linea, "%-20.20s", useron.city);
                wprints (line, 43, YELLOW|_BLACK, linea);
                sprintf (linea, "%c%c", useron.donotdisturb ? 'D' : ' ', useron.priv_chat ? 'C' : ' ');
                wprints (line, 64, YELLOW|_BLACK, linea);
-               sprintf (linea, "%-8.8s", p);
+               sprintf (linea, "%-8.8s", useron.status);
                wprints (line, 67, YELLOW|_BLACK, linea);
                sprintf (linea, "%3d", useron.cb_channel);
                wprints (line, 76, YELLOW|_BLACK, linea);
+            }
+            else if (useron.line_status) {
+               if (useron.line_status != WFC)
+                  wprints (line, 0, YELLOW|_BLACK, "                               ");
+               else {
+                  sprintf (linea, "%-31.31s", "Waiting for call");
+                  wprints (line, 0, YELLOW|_BLACK, linea);
+               }
+               sprintf (linea, "%3d", useron.line);
+               wprints (line, 33, YELLOW|_BLACK, linea);
+               wprints (line, 37, YELLOW|_BLACK, "     ");
+               wprints (line, 43, YELLOW|_BLACK, "                    ");
+               wprints (line, 64, YELLOW|_BLACK, "  ");
+               if (useron.line_status != WFC) {
+                  sprintf (linea, "%-8.8s", useron.status);
+                  wprints (line, 67, YELLOW|_BLACK, linea);
+               }
+               else
+                  wprints (line, 67, YELLOW|_BLACK, "        ");
+               wprints (line, 76, YELLOW|_BLACK, "   ");
             }
             else {
                wprints (line, 0, YELLOW|_BLACK, "                               ");

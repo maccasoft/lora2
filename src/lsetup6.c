@@ -102,7 +102,7 @@ static char *menu_types[] = {
    " 60 - Inquire message",
    " 61 - Gosub menu",
    " 62 - Hurl file",
-   " 63 - N/A",
+   " 63 - Forward message",
    " 64 - Read individual message",
    " 65 - Tag files for download",
    " 66 - Return to previous",
@@ -169,6 +169,8 @@ static char *menu_types[] = {
    " 127 - Kill from filebox",
    " 128 - List file in filebox",
    " 129 - List/Remove tagged files",
+   " 130 - Set view kludge lines",
+   " 131 - BlueWave download",
    NULL
 };
 
@@ -409,7 +411,7 @@ static int select_menu_type (int start)
 
    wmenubegc ();
    wmenuitem (0, 0, " Moving between menus ", 'M', 1000, 0, NULL, 0, 0);
-      wmenubeg (9, 40, 17, 73, 3, LCYAN|_BLACK, LCYAN|_BLACK, NULL);
+      wmenubeg (9, 40, 19, 73, 3, LCYAN|_BLACK, LCYAN|_BLACK, NULL);
       wmenuitem (0, 0, menu_types[14], 0, 14, M_CLALL, set_selection, 0, 0);
       wmenuitem (1, 0, menu_types[15], 0, 15, M_CLALL, set_selection, 0, 0);
       wmenuitem (2, 0, menu_types[16], 0, 16, M_CLALL, set_selection, 0, 0);
@@ -417,9 +419,11 @@ static int select_menu_type (int start)
       wmenuitem (4, 0, menu_types[61], 0, 61, M_CLALL, set_selection, 0, 0);
       wmenuitem (5, 0, menu_types[66], 0, 66, M_CLALL, set_selection, 0, 0);
       wmenuitem (6, 0, menu_types[67], 0, 67, M_CLALL, set_selection, 0, 0);
+      wmenuitem (7, 0, menu_types[1], 0, 1, M_CLALL, set_selection, 0, 0);
+      wmenuitem (8, 0, menu_types[2], 0, 2, M_CLALL, set_selection, 0, 0);
       wmenuend (14, M_OMNI|M_PD|M_SAVE, 33, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
    wmenuitem (1, 0, " Message areas ", 'F', 2000, 0, NULL, 0, 0);
-      wmenubeg (5, 38, 21, 73, 3, LCYAN|_BLACK, LCYAN|_BLACK, NULL);
+      wmenubeg (4, 38, 21, 73, 3, LCYAN|_BLACK, LCYAN|_BLACK, NULL);
       wmenuitem (0, 0, menu_types[19], 0, 19, M_CLALL, set_selection, 0, 0);
       wmenuitem (1, 0, menu_types[40], 0, 40, M_CLALL, set_selection, 0, 0);
       wmenuitem (2, 0, menu_types[41], 0, 41, M_CLALL, set_selection, 0, 0);
@@ -431,10 +435,11 @@ static int select_menu_type (int start)
       wmenuitem (8, 0, menu_types[58], 0, 58, M_CLALL, set_selection, 0, 0);
       wmenuitem (9, 0, menu_types[59], 0, 59, M_CLALL, set_selection, 0, 0);
       wmenuitem (10, 0, menu_types[60], 0, 60, M_CLALL, set_selection, 0, 0);
-      wmenuitem (11, 0, menu_types[64], 0, 64, M_CLALL, set_selection, 0, 0);
-      wmenuitem (12, 0, menu_types[89], 0, 89, M_CLALL, set_selection, 0, 0);
-      wmenuitem (13, 0, menu_types[118], 0, 118, M_CLALL, set_selection, 0, 0);
-      wmenuitem (14, 0, menu_types[119], 0, 119, M_CLALL, set_selection, 0, 0);
+      wmenuitem (11, 0, menu_types[63], 0, 63, M_CLALL, set_selection, 0, 0);
+      wmenuitem (12, 0, menu_types[64], 0, 64, M_CLALL, set_selection, 0, 0);
+      wmenuitem (13, 0, menu_types[89], 0, 89, M_CLALL, set_selection, 0, 0);
+      wmenuitem (14, 0, menu_types[118], 0, 118, M_CLALL, set_selection, 0, 0);
+      wmenuitem (15, 0, menu_types[119], 0, 119, M_CLALL, set_selection, 0, 0);
       wmenuend (19, M_OMNI|M_PD|M_SAVE, 35, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
    wmenuitem (2, 0, " File areas ", 'F', 3000, 0, NULL, 0, 0);
       wmenubeg (4, 40, 21, 73, 3, LCYAN|_BLACK, LCYAN|_BLACK, NULL);
@@ -472,7 +477,7 @@ static int select_menu_type (int start)
       wmenuitem (12, 0, menu_types[70], 0, 70, M_CLALL, set_selection, 0, 0);
       wmenuend (27, M_OMNI|M_PD|M_SAVE, 33, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
    wmenuitem (4, 0, " User configuration 2", 'F', 4500, 0, NULL, 0, 0);
-      wmenubeg (7, 40, 18, 73, 3, LCYAN|_BLACK, LCYAN|_BLACK, NULL);
+      wmenubeg (7, 40, 19, 73, 3, LCYAN|_BLACK, LCYAN|_BLACK, NULL);
       wmenuitem (0, 0, menu_types[77], 0, 77, M_CLALL, set_selection, 0, 0);
       wmenuitem (1, 0, menu_types[99], 0, 99, M_CLALL, set_selection, 0, 0);
       wmenuitem (2, 0, menu_types[100], 0, 100, M_CLALL, set_selection, 0, 0);
@@ -483,6 +488,7 @@ static int select_menu_type (int start)
       wmenuitem (7, 0, menu_types[124], 0, 124, M_CLALL, set_selection, 0, 0);
       wmenuitem (8, 0, menu_types[125], 0, 125, M_CLALL, set_selection, 0, 0);
       wmenuitem (9, 0, menu_types[126], 0, 126, M_CLALL, set_selection, 0, 0);
+      wmenuitem (10, 0, menu_types[130], 0, 130, M_CLALL, set_selection, 0, 0);
       wmenuend (77, M_OMNI|M_PD|M_SAVE, 33, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
    wmenuitem (5, 0, " Line editor ", 'F', 5000, 0, NULL, 0, 0);
       wmenubeg (9, 40, 19, 73, 3, LCYAN|_BLACK, LCYAN|_BLACK, NULL);
@@ -512,12 +518,13 @@ static int select_menu_type (int start)
       wmenuitem (3, 0, menu_types[96], 0, 96, M_CLALL, set_selection, 0, 0);
       wmenuend (78, M_OMNI|M_PD|M_SAVE, 33, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
    wmenuitem (8, 0, " Offline reader ", 'F', 8000, 0, NULL, 0, 0);
-      wmenubeg (9, 40, 15, 73, 3, LCYAN|_BLACK, LCYAN|_BLACK, NULL);
+      wmenubeg (9, 40, 16, 73, 3, LCYAN|_BLACK, LCYAN|_BLACK, NULL);
       wmenuitem (0, 0, menu_types[86], 0, 86, M_CLALL, set_selection, 0, 0);
       wmenuitem (1, 0, menu_types[87], 0, 87, M_CLALL, set_selection, 0, 0);
       wmenuitem (2, 0, menu_types[88], 0, 88, M_CLALL, set_selection, 0, 0);
       wmenuitem (3, 0, menu_types[112], 0, 112, M_CLALL, set_selection, 0, 0);
       wmenuitem (4, 0, menu_types[113], 0, 113, M_CLALL, set_selection, 0, 0);
+      wmenuitem (5, 0, menu_types[131], 0, 131, M_CLALL, set_selection, 0, 0);
       wmenuend (86, M_OMNI|M_PD|M_SAVE, 33, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
    wmenuitem (9, 0, " Built-in doors ", 'F', 8500, 0, NULL, 0, 0);
       wmenubeg (6, 40, 18, 73, 3, LCYAN|_BLACK, LCYAN|_BLACK, NULL);
@@ -548,14 +555,15 @@ static int select_menu_type (int start)
       wmenuitem (10, 0, menu_types[17], 0, 17, M_CLALL, set_selection, 0, 0);
       wmenuend (999, M_OMNI|M_PD|M_SAVE, 33, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
    wmenuitem (11, 0, " Miscellaneous 2", 'F', 9500, 0, NULL, 0, 0);
-      wmenubeg (6, 40, 14, 73, 3, LCYAN|_BLACK, LCYAN|_BLACK, NULL);
+      wmenubeg (6, 40, 15, 73, 3, LCYAN|_BLACK, LCYAN|_BLACK, NULL);
       wmenuitem (0, 0, menu_types[51], 0, 51, M_CLALL, set_selection, 0, 0);
-      wmenuitem (1, 0, menu_types[83], 0, 83, M_CLALL, set_selection, 0, 0);
-      wmenuitem (2, 0, menu_types[90], 0, 90, M_CLALL, set_selection, 0, 0);
-      wmenuitem (3, 0, menu_types[97], 0, 97, M_CLALL, set_selection, 0, 0);
-      wmenuitem (4, 0, menu_types[98], 0, 98, M_CLALL, set_selection, 0, 0);
-      wmenuitem (5, 0, menu_types[104], 0, 104, M_CLALL, set_selection, 0, 0);
-      wmenuitem (6, 0, menu_types[105], 0, 105, M_CLALL, set_selection, 0, 0);
+      wmenuitem (1, 0, menu_types[71], 0, 71, M_CLALL, set_selection, 0, 0);
+      wmenuitem (2, 0, menu_types[83], 0, 83, M_CLALL, set_selection, 0, 0);
+      wmenuitem (3, 0, menu_types[90], 0, 90, M_CLALL, set_selection, 0, 0);
+      wmenuitem (4, 0, menu_types[97], 0, 97, M_CLALL, set_selection, 0, 0);
+      wmenuitem (5, 0, menu_types[98], 0, 98, M_CLALL, set_selection, 0, 0);
+      wmenuitem (6, 0, menu_types[104], 0, 104, M_CLALL, set_selection, 0, 0);
+      wmenuitem (7, 0, menu_types[105], 0, 105, M_CLALL, set_selection, 0, 0);
       wmenuend (51, M_OMNI|M_PD|M_SAVE, 33, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
 
    wmenuend (1000, M_OMNI, 22, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
@@ -976,22 +984,14 @@ static void edit_menu_items (char *file, char *name)
          // E Edit
          case 'E':
          case 'e':
-            memcpy (&mi, &cmd[beg], sizeof (struct _cmd));
-            edit_single_item (&mi);
-            memcpy (&cmd[beg], &mi, sizeof (struct _cmd));
-            break;
-
-         // Show
-         case 'S':
-         case 's':
-            display_menu (elements);
-            break;
-
-         // L List
-         case 'L':
-         case 'l':
-            beg = list_menu_items (beg, elements);
-            break;
+            if (mh.n_elem) {
+               memcpy (&mi, &cmd[beg], sizeof (struct _cmd));
+               edit_single_item (&mi);
+               memcpy (&cmd[beg], &mi, sizeof (struct _cmd));
+               break;
+            }
+            // Se si tratta del primo elemento, passa direttamente alla
+            // funzione di add.
 
          // A Add
          case 'A':
@@ -1029,6 +1029,18 @@ static void edit_menu_items (char *file, char *name)
             }
 
             i = 'A';
+            break;
+
+         // Show
+         case 'S':
+         case 's':
+            display_menu (elements);
+            break;
+
+         // L List
+         case 'L':
+         case 'l':
+            beg = list_menu_items (beg, elements);
             break;
 
          // C Copy

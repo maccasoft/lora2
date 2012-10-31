@@ -21,6 +21,9 @@
 extern int maxakainfo;
 extern struct _akainfo *akainfo;
 
+extern struct _node2name *nametable; // Gestione nomi per aree PRIVATE
+extern int nodes_num;
+
 FILE *mopen (char *filename, char *mode);
 int mclose (FILE *fp);
 int mputs (char *s, FILE *fp);
@@ -29,7 +32,7 @@ long mseek (FILE *fp, long position, int offset);
 int mread (char *s, int n, int e, FILE *fp);
 void replace_tearline (FILE *fpd, char *buf);
 void add_quote_string (char *str, char *from);
-void add_quote_header (FILE *fp, char *from, char *to, char *dt, char *tm);
+void add_quote_header (FILE *fp, char *from, char *to, char *subj, char *dt, char *tm);
 int open_packet (int zone, int net, int node, int point, int ai);
 
 char *pip[128]={
@@ -58,8 +61,8 @@ int read0(unsigned char *, FILE *);
 void pipstring(unsigned char *, FILE *);
 void write0(unsigned char *, FILE *);
 
-int pip_mail_list_header (i, pip_board, line)
-int i, pip_board, line;
+int pip_mail_list_header (i, pip_board, line, ovrmsgn)
+int i, pip_board, line, ovrmsgn;
 {
    FILE *f1, *f2;
    char fn[80];
@@ -102,27 +105,24 @@ int i, pip_board, line;
    if ( (mpkt.attribute & SET_PKT_FROMUS) )
       msg_tpoint = mpkt.point;
 
-   if ((line = msg_attrib(&msgt,i,line,0)) == 0)
+   if ((line = msg_attrib (&msgt, ovrmsgn ? ovrmsgn : i, line, 0)) == 0)
       return (0);
 
-   fclose(f1);
-   fclose(f2);
+   fclose (f1);
+   fclose (f2);
 
    return (line);
 }
 
-int pip_write_message_text(msg_num, flags, quote_name, sm)
-int msg_num, flags;
-char *quote_name;
-FILE *sm;
+int pip_write_message_text (int msg_num, int flags, char *quote_name, FILE *sm)
 {
    FILE *f1,*f2, *fpq;
-   MSGPTR hdr;
-   MSGPKTHDR mpkt;
    char buff[86], wrp[80], c, fn[80], shead, qwkbuffer[130], *p;
    byte a;
    int i, m, z, pos, blks;
    long qpos;
+   MSGPTR hdr;
+   MSGPKTHDR mpkt;
    struct _msg msgt;
    struct QWKmsghd QWK;
 
@@ -131,63 +131,56 @@ FILE *sm;
    blks = 1;
    pos = 0;
 
-   sprintf(fn,"%sMPTR%04x.PIP",pip_msgpath,sys.pip_board);
-   f1 = fopen(fn,"rb+");
+   sprintf (fn, "%sMPTR%04x.PIP", pip_msgpath, sys.pip_board);
+   f1 = fopen (fn, "rb+");
 
    if (f1 == NULL)
       return (0);
 
-   if (fseek(f1,sizeof(hdr)*msg_num,SEEK_SET))
-   {
-      fclose(f1);
+   if (fseek (f1, (long)sizeof (hdr) * msg_num, SEEK_SET)) {
+      fclose (f1);
       return (0);
    }
-   if (fread(&hdr,sizeof(hdr),1,f1)==0)
-   {
-      fclose(f1);
+   if (fread (&hdr, sizeof (hdr), 1, f1) == 0) {
+      fclose (f1);
       return (0);
    }
-   if (hdr.status & SET_MPTR_DEL)
-   {
+   if (hdr.status & SET_MPTR_DEL) {
+      fclose (f1);
+      return (0);
+   }
+
+   sprintf (fn, "%sMPKT%04x.PIP", pip_msgpath, sys.pip_board);
+   f2 = fopen (fn, "rb+");
+   if (f2 == NULL) {
       fclose(f1);
       return (0);
    }
 
-   sprintf(fn,"%sMPKT%04x.PIP",pip_msgpath,sys.pip_board);
-   f2 = fopen(fn,"rb+");
-   if (f2 == NULL)
-   {
-      fclose(f1);
-      return (0);
-   }
-
-   if (sm == NULL)
-   {
-      fpq = fopen(quote_name, (flags & APPEND_TEXT) ? "at" : "wt");
-      if (fpq == NULL)
-      {
+   if (sm == NULL) {
+      fpq = fopen (quote_name, (flags & APPEND_TEXT) ? "at" : "wt");
+      if (fpq == NULL) {
          fclose (f1);
          fclose (f2);
-         return(0);
+         return (0);
       }
    }
    else
       fpq = sm;
 
 
-   if (!((hdr.status&SET_MPTR_RCVD) || (hdr.status&SET_MPTR_DEL)))
-   {
-      fseek(f2,hdr.pos,SEEK_SET);
-      fread(&mpkt,sizeof(mpkt),1,f2);
+   if (!((hdr.status & SET_MPTR_RCVD) || (hdr.status & SET_MPTR_DEL))) {
+      fseek (f2, hdr.pos,SEEK_SET);
+      fread (&mpkt, sizeof (mpkt), 1, f2);
 
       memset ((char *)&msgt, 0, sizeof (struct _msg));
       msg_fzone = msg_tzone = config->alias[sys.use_alias].zone;
       msg_fpoint = msg_tpoint = 0;
 
-      read0(msgt.date,f2);
-      read0(msgt.to,f2);
-      read0(msgt.from,f2);
-      read0(msgt.subj,f2);
+      read0 (msgt.date, f2);
+      read0 (msgt.to, f2);
+      read0 (msgt.from, f2);
+      read0 (msgt.subj, f2);
 
       msgt.orig_net = mpkt.fromnet;
       msgt.orig = mpkt.fromnode;
@@ -197,15 +190,13 @@ FILE *sm;
       if (mpkt.attribute & SET_PKT_PRIV)
          msgt.attr |= MSGPRIVATE;
 
-      if(msgt.attr & MSGPRIVATE)
-      {
-         if(stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name))
-         {
-            fclose(f1);
-            fclose(f2);
+      if (msgt.attr & MSGPRIVATE) {
+         if (stricmp (msgt.from, usr.name) && stricmp (msgt.to, usr.name) && stricmp (msgt.from, usr.handle) && stricmp (msgt.to, usr.handle)) {
+            fclose (f1);
+            fclose (f2);
             if (sm != NULL)
                fclose (fpq);
-            return(0);
+            return (0);
          }
       }
 
@@ -220,44 +211,38 @@ FILE *sm;
          i = strlen (buff);
       }
 
-      while ((a=(byte)fgetc(f2)) != 0 && !feof(f2))
-      {
+      while ((a = (byte)fgetc (f2)) != 0 && !feof (f2)) {
          c = a;
 
-         switch(mpkt.pktype)
-         {
+         switch (mpkt.pktype) {
             case 2:
                c = a;
                break;
             case 10:
-               if (a!=10)
-               {
+               if (a != 10) {
                   if (a == 141)
                      a='\r';
 
-                  if (a<128)
-                     c=a;
-                  else
-                  {
-                     if (a==128)
-                     {
-                        a=(byte)fgetc(f2);
-                        c=(a)+127;
+                  if (a < 128)
+                     c = a;
+                  else {
+                     if (a == 128) {
+                        a = (byte)fgetc (f2);
+                        c = (a) + 127;
                      }
-                     else
-                     {
+                     else {
                         buff[i] = '\0';
-                        strcat(buff,pip[a-128]);
-                        i += strlen(pip[a-128]);
+                        strcat (buff, pip[a - 128]);
+                        i += strlen (pip[a - 128]);
                         c = buff[--i];
                      }
                   }
                }
                else
-                  c='\0';
+                  c = '\0';
                break;
             default:
-               return(1);
+               return (1);
          }
 
          if (c == '\0')
@@ -265,7 +250,11 @@ FILE *sm;
          buff[i++] = c;
 
          if (c == 0x0D) {
-            buff[i-1]='\0';
+            buff[i - 1] = '\0';
+            if (!strnicmp (buff, msgtxt[M_TEAR_LINE], 4))
+               buff[1] = '+';
+            if (!strnicmp (buff, msgtxt[M_ORIGIN_LINE], 10))
+               buff[3] = '0';
 
             if ((p = strchr (buff, 0x01)) != NULL) {
                if (!strncmp(&p[1],"INTL",4) && !shead)
@@ -281,11 +270,11 @@ FILE *sm;
                else if (flags & QWK_TEXTFILE)
                   qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
                else if (flags & QUOTE_TEXT)
-                  add_quote_header (fpq, msgt.from, msgt.to, msgt.date, NULL);
+                  add_quote_header (fpq, msgt.from, msgt.to, msgt.subj, msgt.date, NULL);
                shead = 1;
             }
 
-            if (strchr (buff, 0x01) != NULL || !stristr (buff, "SEEN-BY") != NULL) {
+            if (strchr (buff, 0x01) != NULL || stristr (buff, "SEEN-BY") != NULL) {
                if (flags & QUOTE_TEXT) {
                   add_quote_string (buff, msgt.from);
                   i = strlen (buff);
@@ -300,7 +289,7 @@ FILE *sm;
                write_qwk_string ("\r\n", qwkbuffer, &pos, &blks, fpq);
             }
             else
-               fprintf(fpq,"%s\n",buff);
+               fprintf (fpq, "%s\n", buff);
 
             if (flags & QUOTE_TEXT) {
                add_quote_string (buff, msgt.from);
@@ -310,11 +299,11 @@ FILE *sm;
                i = 0;
          }
          else {
-            if(i<(usr.width-2))
+            if (i < (usr.width - 1))
                continue;
 
-            buff[i]='\0';
-            while(i>0 && buff[i] != ' ')
+            buff[i] = '\0';
+            while (i > 0 && buff[i] != ' ')
                i--;
 
             m=0;
@@ -325,6 +314,10 @@ FILE *sm;
 
             buff[i]='\0';
             wrp[m]='\0';
+            if (!strnicmp (buff, msgtxt[M_TEAR_LINE], 4))
+               buff[1] = '+';
+            if (!strnicmp (buff, msgtxt[M_ORIGIN_LINE], 10))
+               buff[3] = '0';
 
             if (!shead) {
                if (flags & INCLUDE_HEADER) {
@@ -333,7 +326,7 @@ FILE *sm;
                else if (flags & QWK_TEXTFILE)
                   qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
                else if (flags & QUOTE_TEXT)
-                  add_quote_header (fpq, msgt.from, msgt.to, msgt.date, NULL);
+                  add_quote_header (fpq, msgt.from, msgt.to, msgt.subj, msgt.date, NULL);
                shead = 1;
             }
 
@@ -355,24 +348,23 @@ FILE *sm;
       }
    }
 
-   fprintf(fpq,bbstxt[B_ONE_CR],buff);
+   fprintf (fpq, bbstxt[B_ONE_CR], buff);
 
-   fclose(f1);
-   fclose(f2);
+   fclose (f1);
+   fclose (f2);
 
-   if (flags & QWK_TEXTFILE)
-   {
+   if (flags & QWK_TEXTFILE) {
       fwrite(qwkbuffer, 128, 1, fpq);
       blks++;
 
-      fseek(fpq,qpos,SEEK_SET);          /* Restore back to header start */
-      sprintf(buff,"%d",blks);
-      ljstring(QWK.Msgrecs,buff,6);
-      fwrite((char *)&QWK,128,1,fpq);           /* Write out the header */
-      fseek(fpq,0L,SEEK_END);               /* Bump back to end of file */
+      fseek (fpq, qpos, SEEK_SET);          /* Restore back to header start */
+      sprintf (buff, "%d", blks);
+      ljstring (QWK.Msgrecs, buff, 6);
+      fwrite ((char *)&QWK, 128, 1, fpq);           /* Write out the header */
+      fseek (fpq, 0L, SEEK_END);               /* Bump back to end of file */
 
       if (sm == NULL)
-         fclose(fpq);
+         fclose (fpq);
       return (blks);
    }
 
@@ -430,7 +422,7 @@ int msg;
       read0(msgt.from,f2);
       read0(msgt.subj,f2);
 
-      if (!stricmp (msgt.from, usr.name) || !stricmp (msgt.to, usr.name) || usr.priv == SYSOP) {
+      if (!stricmp (msgt.from, usr.name) || !stricmp (msgt.to, usr.name) || !stricmp (msgt.from, usr.handle) || !stricmp (msgt.to, usr.handle) || usr.priv == SYSOP) {
          hdr.status |= SET_MPTR_DEL;
          fseek (f1, sizeof(hdr) * msg, SEEK_SET);
          fwrite (&hdr, sizeof(hdr), 1, f1);
@@ -458,29 +450,23 @@ char qwk;
    char buff[86], wrp[80], c, fn[80], shead, qwkbuffer[130];
    byte a;
    int i, m, z, pos, blks, tt, pp, msg_num;
-   long qpos;
+   long qpos, bw_start;
    struct _msg msgt;
    struct QWKmsghd QWK;
 
    tt = pp = 0;
 
-   sprintf(fn,"%sMPTR%04x.PIP",pip_msgpath,pip_board);
-   f1=fopen(fn,"rb+");
-   sprintf(fn,"%sMPKT%04x.PIP",pip_msgpath,pip_board);
-   f2=fopen(fn,"rb+");
-
-   if (start > last_msg)
-      start = last_msg;
-
-   if (start == last_msg) {
-      fclose (f2);
-      fclose (f1);
-
+   if (start > last_msg) {
       *personal = pp;
       *total = tt;
 
       return (totals);
    }
+
+   sprintf(fn,"%sMPTR%04x.PIP",pip_msgpath,pip_board);
+   f1=fopen(fn,"rb+");
+   sprintf(fn,"%sMPKT%04x.PIP",pip_msgpath,pip_board);
+   f2=fopen(fn,"rb+");
 
    for(msg_num = start; msg_num <= last_msg; msg_num++) {
       if (!(msg_num % 5))
@@ -498,13 +484,13 @@ char qwk;
       msg_fzone = msg_tzone = config->alias[sys.use_alias].zone;
       msg_fpoint = msg_tpoint = 0;
 
-      fseek(f2,hdr.pos,SEEK_SET);
-      fread(&mpkt,sizeof(mpkt),1,f2);
+      fseek (f2, hdr.pos, SEEK_SET);
+      fread (&mpkt, sizeof (mpkt), 1, f2);
 
-      read0(msgt.date,f2);
-      read0(msgt.to,f2);
-      read0(msgt.from,f2);
-      read0(msgt.subj,f2);
+      read0 (msgt.date, f2);
+      read0 (msgt.to, f2);
+      read0 (msgt.from, f2);
+      read0 (msgt.subj, f2);
 
       msgt.orig_net = mpkt.fromnet;
       msgt.orig = mpkt.fromnode;
@@ -514,11 +500,11 @@ char qwk;
       if (mpkt.attribute & SET_PKT_PRIV)
          msgt.attr |= MSGPRIVATE;
 
-      if((msgt.attr & MSGPRIVATE) && stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && usr.priv < SYSOP)
+      if((msgt.attr & MSGPRIVATE) && stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && stricmp(msgt.from,usr.handle) && stricmp(msgt.to,usr.handle) && usr.priv < SYSOP)
          continue;
 
       totals++;
-      if (fdi != -1) {
+      if (qwk == 1 && fdi != -1) {
          sprintf(buff,"%u",totals);   /* Stringized version of current position */
          in = (float) atof(buff);
          out = IEEToMSBIN(in);
@@ -528,12 +514,17 @@ char qwk;
          write(fdi,&c,sizeof(char));              /* Conference # */
       }
 
-      if (!stricmp(msgt.to, usr.name)) {
+      if (!stricmp(msgt.to, usr.name)||!stricmp(msgt.to, usr.name)) {
          pp++;
-         if (fdp != -1) {
+         if (fdp != -1 && qwk == 1 && fdi != -1) {
             write(fdp,&out,sizeof(float));
             write(fdp,&c,sizeof(char));              /* Conference # */
          }
+      }
+
+      if (qwk == 2) {
+         bw_start = ftell (fpq);
+         fputc (' ', fpq);
       }
 
       memset (qwkbuffer, ' ', 128);
@@ -542,35 +533,29 @@ char qwk;
       pos = 0;
       i = 0;
 
-      while ((a=(byte)fgetc(f2)) != 0 && !feof(f2))
-      {
+      while ((a=(byte)fgetc(f2)) != 0 && !feof(f2)) {
          c = a;
 
-         switch(mpkt.pktype)
-         {
+         switch(mpkt.pktype) {
             case 2:
                c = a;
                break;
             case 10:
-               if (a!=10)
-               {
+               if (a!=10) {
                   if (a == 141)
                      a='\r';
 
                   if (a<128)
                      c=a;
-                  else
-                  {
-                     if (a==128)
-                     {
-                        a=(byte)fgetc(f2);
-                        c=(a)+127;
+                  else {
+                     if (a == 128) {
+                        a = (byte)fgetc (f2);
+                        c = (a) + 127;
                      }
-                     else
-                     {
+                     else {
                         buff[i] = '\0';
-                        strcat(buff,pip[a-128]);
-                        i += strlen(pip[a-128]);
+                        strcat (buff, pip[a - 128]);
+                        i += strlen (pip[a - 128]);
                         c = buff[--i];
                      }
                   }
@@ -586,12 +571,10 @@ char qwk;
             continue;
          buff[i++] = c;
 
-         if (c == 0x0D)
-         {
+         if (c == 0x0D) {
             buff[i-1]='\0';
 
-            if (buff[0] == 0x01)
-            {
+            if (buff[0] == 0x01) {
                if (!strncmp(&buff[1],"INTL",4) && !shead)
                   sscanf(&buff[6],"%d:%d/%d %d:%d/%d",&msg_tzone,&i,&i,&msg_fzone,&i,&i);
                if (!strncmp(&buff[1],"TOPT",4) && !shead)
@@ -601,22 +584,20 @@ char qwk;
                i=0;
                continue;
             }
-            else if (!shead)
-            {
-               if (qwk)
+            else if (!shead) {
+               if (qwk == 1)
                   qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
-               else
+               else if (qwk == 0)
                   text_header (&msgt,msg_num,fpq);
                shead = 1;
             }
 
-            if(buff[0] == 0x01 || !strncmp(buff,"SEEN-BY",7))
-            {
+            if(buff[0] == 0x01 || !strncmp(buff,"SEEN-BY",7)) {
                i=0;
                continue;
             }
 
-            if (qwk) {
+            if (qwk == 1) {
                write_qwk_string (buff, qwkbuffer, &pos, &blks, fpq);
                write_qwk_string ("\r\n", qwkbuffer, &pos, &blks, fpq);
             }
@@ -626,7 +607,7 @@ char qwk;
             i = 0;
          }
          else {
-            if(i<(usr.width-2))
+            if(i<(usr.width-1))
                continue;
 
             buff[i]='\0';
@@ -643,14 +624,14 @@ char qwk;
             wrp[m]='\0';
 
             if (!shead) {
-               if (qwk)
+               if (qwk == 1)
                   qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
-               else
+               else if (qwk == 0)
                   text_header (&msgt,msg_num,fpq);
                shead = 1;
             }
 
-            if (qwk) {
+            if (qwk == 1) {
                write_qwk_string (buff, qwkbuffer, &pos, &blks, fpq);
                write_qwk_string ("\r\n", qwkbuffer, &pos, &blks, fpq);
             }
@@ -662,7 +643,7 @@ char qwk;
          }
       }
 
-      if (qwk) {
+      if (qwk == 1) {
          qwkbuffer[128] = 0;
          fwrite(qwkbuffer, 128, 1, fpq);
          blks++;
@@ -676,13 +657,16 @@ char qwk;
 
          totals += blks - 1;
       }
+      else if (qwk == 2)
+         bluewave_header (fdi, bw_start, ftell (fpq) - bw_start, msg_num, &msgt);
       else
          fprintf(fpq,bbstxt[B_TWO_CR]);
 
       tt++;
    }
 
-   fclose(f1); fclose(f2);
+   fclose (f1);
+   fclose (f2);
 
    *personal = pp;
    *total = tt;
@@ -773,13 +757,11 @@ FILE *txt, *f1, *f2, *f3;
    return (1);
 }
 
-int pip_export_mail (maxnodes, forward)
-int maxnodes;
-struct _fwrd *forward;
+int pip_export_mail (int maxnodes, struct _fwrd *forward)
 {
    FILE *fpd, *f2;
    int f1, i, pp, z, ne, no, n_seen, cnet, cnode, mi, msgnum, m, num_msg, sent, ai;
-   char buff[80], wrp[80], c, *p, buffer[2050], need_origin, need_seen;
+   char buff[80], wrp[80], c, *p, buffer[2050], need_origin, need_seen, *flag;
    byte a;
    long hdrpos;
    MSGPTR hdr;
@@ -817,22 +799,8 @@ struct _fwrd *forward;
       fclose (fpd);
    fpd = mopen ("MSGTMP.EXP", "r+b");
 
-//   setvbuf (fpd, NULL, _IOFBF, 8192);
-
    for (i = 0; i < maxnodes; i++)
       forward[i].reset = forward[i].export = 0;
-
-   if (!sys.use_alias) {
-      z = config->alias[sys.use_alias].zone;
-      parse_netnode2 (sys.forward1, &z, &ne, &no, &pp);
-      if (z != config->alias[sys.use_alias].zone) {
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
-            if (z == config->alias[i].zone)
-               break;
-         if (i < MAX_ALIAS && config->alias[i].net)
-            sys.use_alias = i;
-      }
-   }
 
    z = config->alias[sys.use_alias].zone;
    ne = config->alias[sys.use_alias].net;
@@ -842,8 +810,13 @@ struct _fwrd *forward;
    p = strtok (sys.forward1, " ");
    if (p != NULL)
       do {
+         flag = p;
+         while (*p == '<' || *p == '>' || *p == '!' || *p== 'p' || *p== 'P')
+            p++;
          parse_netnode2 (p, &z, &ne, &no, &pp);
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
+         for (i = 0; i < MAX_ALIAS; i++) {
+            if (config->alias[i].net == 0)
+               continue;
             if (config->alias[i].zone == z && config->alias[i].net == ne && config->alias[i].node == no && config->alias[i].point == pp)
                break;
             if (config->alias[i].point && config->alias[i].fakenet) {
@@ -856,6 +829,7 @@ struct _fwrd *forward;
          if ((i = is_here (z, ne, no, pp, forward, maxnodes)) != -1)
             forward[i].reset = forward[i].export = 1;
          else {
+            i = maxnodes;
             forward[maxnodes].zone = z;
             forward[maxnodes].net = ne;
             forward[maxnodes].node = no;
@@ -864,19 +838,19 @@ struct _fwrd *forward;
             forward[maxnodes].reset = 1;
             maxnodes++;
          }
+         forward[i].receiveonly = forward[i].sendonly = forward[i].passive = forward[i].private = 0;
+         while (*flag == '<' || *flag == '>' || *flag =='!'||*flag=='p'||*flag=='P') {
+            if (*flag == '>')
+               forward[i].receiveonly = 1;
+            if (*flag == '<')
+               forward[i].sendonly = 1;
+            if (*flag == '!')
+               forward[i].passive = 1;
+            if (*flag == 'p' || *flag == 'P')
+               forward[i].private =1 ;
+            flag++;
+         }
       } while ((p = strtok (NULL, " ")) != NULL);
-
-   if (!sys.use_alias) {
-      z = config->alias[sys.use_alias].zone;
-      parse_netnode2 (sys.forward2, &z, &ne, &no, &pp);
-      if (z != config->alias[sys.use_alias].zone) {
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
-            if (z == config->alias[i].zone)
-               break;
-         if (i < MAX_ALIAS && config->alias[i].net)
-            sys.use_alias = i;
-      }
-   }
 
    z = config->alias[sys.use_alias].zone;
    ne = config->alias[sys.use_alias].net;
@@ -886,8 +860,13 @@ struct _fwrd *forward;
    p = strtok (sys.forward2, " ");
    if (p != NULL)
       do {
+         flag = p;
+         while (*p == '<' || *p == '>' || *p == '!' || *p== 'p' || *p== 'P')
+            p++;
          parse_netnode2 (p, &z, &ne, &no, &pp);
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
+         for (i = 0; i < MAX_ALIAS; i++) {
+            if (config->alias[i].net == 0)
+               continue;
             if (config->alias[i].zone == z && config->alias[i].net == ne && config->alias[i].node == no && config->alias[i].point == pp)
                break;
             if (config->alias[i].point && config->alias[i].fakenet) {
@@ -900,6 +879,7 @@ struct _fwrd *forward;
          if ((i = is_here (z, ne, no, pp, forward, maxnodes)) != -1)
             forward[i].reset = forward[i].export = 1;
          else {
+            i = maxnodes;
             forward[maxnodes].zone = z;
             forward[maxnodes].net = ne;
             forward[maxnodes].node = no;
@@ -908,19 +888,19 @@ struct _fwrd *forward;
             forward[maxnodes].reset = 1;
             maxnodes++;
          }
+         forward[i].receiveonly = forward[i].sendonly = forward[i].passive = forward[i].private = 0;
+         while (*flag == '<' || *flag == '>' || *flag =='!'||*flag=='p'||*flag=='P') {
+            if (*flag == '>')
+               forward[i].receiveonly = 1;
+            if (*flag == '<')
+               forward[i].sendonly = 1;
+            if (*flag == '!')
+               forward[i].passive = 1;
+            if (*flag == 'p' || *flag == 'P')
+               forward[i].private =1 ;
+            flag++;
+         }
       } while ((p = strtok (NULL, " ")) != NULL);
-
-   if (!sys.use_alias) {
-      z = config->alias[sys.use_alias].zone;
-      parse_netnode2 (sys.forward3, &z, &ne, &no, &pp);
-      if (z != config->alias[sys.use_alias].zone) {
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
-            if (z == config->alias[i].zone)
-               break;
-         if (i < MAX_ALIAS && config->alias[i].net)
-            sys.use_alias = i;
-      }
-   }
 
    z = config->alias[sys.use_alias].zone;
    ne = config->alias[sys.use_alias].net;
@@ -930,8 +910,13 @@ struct _fwrd *forward;
    p = strtok (sys.forward3, " ");
    if (p != NULL)
       do {
+         flag = p;
+         while (*p == '<' || *p == '>' || *p == '!' || *p== 'p' || *p== 'P')
+            p++;
          parse_netnode2 (p, &z, &ne, &no, &pp);
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
+         for (i = 0; i < MAX_ALIAS; i++) {
+            if (config->alias[i].net == 0)
+               continue;
             if (config->alias[i].zone == z && config->alias[i].net == ne && config->alias[i].node == no && config->alias[i].point == pp)
                break;
             if (config->alias[i].point && config->alias[i].fakenet) {
@@ -944,6 +929,7 @@ struct _fwrd *forward;
          if ((i = is_here (z, ne, no, pp, forward, maxnodes)) != -1)
             forward[i].reset = forward[i].export = 1;
          else {
+            i = maxnodes;
             forward[maxnodes].zone = z;
             forward[maxnodes].net = ne;
             forward[maxnodes].node = no;
@@ -951,6 +937,18 @@ struct _fwrd *forward;
             forward[maxnodes].export = 1;
             forward[maxnodes].reset = 1;
             maxnodes++;
+         }
+         forward[i].receiveonly = forward[i].sendonly = forward[i].passive = forward[i].private = 0;
+         while (*flag == '<' || *flag == '>' || *flag =='!'||*flag=='p'||*flag=='P') {
+            if (*flag == '>')
+               forward[i].receiveonly = 1;
+            if (*flag == '<')
+               forward[i].sendonly = 1;
+            if (*flag == '!')
+               forward[i].passive = 1;
+            if (*flag == 'p' || *flag == 'P')
+               forward[i].private =1 ;
+            flag++;
          }
       } while ((p = strtok (NULL, " ")) != NULL);
 
@@ -977,45 +975,72 @@ struct _fwrd *forward;
 
       if((hdr.status & SET_MPTR_SENT) || (hdr.status & SET_MPTR_DEL)) {
          hdrpos = tell (f1);
-         continue;
-      }
+			continue;
+		}
 
-      for (i = 0; i < maxnodes; i++)
-         if (forward[i].reset)
-            forward[i].export = 1;
+		for (i = 0; i < maxnodes; i++)
+			if (forward[i].reset)
+				forward[i].export = 1;
 
-      sprintf (wrp, "%5d  %-22.22s Pip-Base     ", msgnum, sys.echotag);
-      wputs (wrp);
+		for (i=0;i<maxnodes;i++){
+			if(forward[i].sendonly||forward[i].passive) forward[i].export=0;
+		}
 
-      need_seen = need_origin = 1;
+		sprintf (wrp, "%5d  %-22.22s Pip-Base     ", msgnum, sys.echotag);
+		wputs (wrp);
 
-      mseek (fpd, 0L, SEEK_SET);
+		need_seen = need_origin = 1;
+
+		mseek (fpd, 0L, SEEK_SET);
 //      chsize (fileno (fpd), 0L);
-      mprintf (fpd, "AREA:%s\r\n", sys.echotag);
+		mprintf (fpd, "AREA:%s\r\n", sys.echotag);
 
-      fseek(f2,hdr.pos,SEEK_SET);
-      fread(&mpkt,sizeof(MSGPKTHDR),1,f2);
+		fseek(f2,hdr.pos,SEEK_SET);
+		fread(&mpkt,sizeof(MSGPKTHDR),1,f2);
 
-      memset ((char *)&msg, 0, sizeof (struct _msg));
-      read0(msg.date,f2);
-      read0(msg.to,f2);
-      read0(msg.from,f2);
-      read0(msg.subj,f2);
+		memset ((char *)&msg, 0, sizeof (struct _msg));
+		read0(msg.date,f2);
+		read0(msg.to,f2);
+		read0(msg.from,f2);
+		read0(msg.subj,f2);
 
-      if (mpkt.attribute & SET_PKT_PRIV)
-         msg.attr |= MSGPRIVATE;
+		if (mpkt.attribute & SET_PKT_PRIV)
+			msg.attr |= MSGPRIVATE;
 
-      mi = i = 0;
-      pp = 0;
-      n_seen = 0;
+		for (i=0;i<maxnodes;i++) {
+			if (forward[i].private) {
 
-      while ((a=(byte)fgetc(f2)) != 0 && !feof(f2)) {
-         c = a;
+				int ii;
 
-         switch(mpkt.pktype) {
-            case 2:
-               c = a;
-               break;
+				forward[i].export=0;
+				if (!nametable) continue;
+
+				for(ii=0;ii<nodes_num;ii++) {
+					if (forward[i].zone==nametable[ii].zone&&
+						 forward[i].net==nametable[ii].net&&
+						 forward[i].node==nametable[ii].node&&
+						 forward[i].point==nametable[ii].point&&
+						 !stricmp(msg.to,nametable[ii].name)) {
+							 forward[i].export=1;
+							 break;
+					}
+				}
+			}
+
+
+		}
+
+		mi = i = 0;
+		pp = 0;
+		n_seen = 0;
+
+		while ((a=(byte)fgetc(f2)) != 0 && !feof(f2)) {
+			c = a;
+
+			switch(mpkt.pktype) {
+				case 2:
+					c = a;
+					break;
             case 10:
                if (a!=10) {
                   if (a == 141)
@@ -1393,9 +1418,10 @@ void pip_rescan_echomail (int board, char *tag, int zone, int net, int node, int
       close (fd);
    }
 
+   strcpy (buff, tag);
    memset ((char *)&sys, 0, sizeof (struct _sys));
+   strcpy (sys.echotag, buff);
    sys.pip_board = board;
-   strcpy (sys.echotag, tag);
 
    sprintf(buff,"%sMPTR%04x.PIP",pip_msgpath,sys.pip_board);
    f1 = open(buff, O_RDWR|O_BINARY);
@@ -1426,12 +1452,6 @@ void pip_rescan_echomail (int board, char *tag, int zone, int net, int node, int
    else
       fclose (fpd);
    fpd = mopen ("MSGTMP.EXP", "r+b");
-
-   for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
-      if (zone == config->alias[i].zone)
-         break;
-   if (i < MAX_ALIAS && config->alias[i].net)
-      sys.use_alias = i;
 
    msgnum = 0;
 

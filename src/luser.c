@@ -24,7 +24,7 @@ char *argv[];
 #else
    printf("\nLUSER; LoraBBS-DOS User maintenance utility, Version %s\n", LUSER_VERSION);
 #endif
-   printf("       Copyright (c) 1991-94 by Marco Maccaferri, All Rights Reserved\n\n");
+   printf("       Copyright (c) 1991-95 by Marco Maccaferri, All Rights Reserved\n\n");
 
    bypriv = pack = sort = days = level = 0;
 
@@ -167,6 +167,7 @@ void Purge_Users ()
          continue;
       write (fdn, (char *)&usr, sizeof (struct _usr));
       usridx.id = usr.id;
+      usridx.alias_id = usr.alias_id;
       write (fdi, (char *)&usridx, sizeof (struct _usridx));
    }
 
@@ -258,6 +259,7 @@ void Sort_Users (int bypriv)
       read (fdo, (char *)&usr, sizeof (struct _usr));
       write (fdn, (char *)&usr, sizeof (struct _usr));
       usridx.id = usr.id;
+      usridx.alias_id = usr.alias_id;
       write (fdi, (char *)&usridx, sizeof (struct _usridx));
    }
 

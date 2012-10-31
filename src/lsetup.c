@@ -91,6 +91,7 @@ void mail_processing (void);
 long get_config_crc (void);
 void export_config (char *file);
 void import_config (char *file, char *cfg);
+void write_ticcfg (void);
 
 static void internet_info (void);
 static void read_config (char *);
@@ -108,6 +109,8 @@ static void global_general (void);
 static void edit_limits (void);
 static void input_limits (int);
 static void registration_info (void);
+static void export_costfile (void);
+static void import_costfile (void);
 
 static long crc;
 
@@ -137,7 +140,7 @@ char *argv[];
       }
       if (!stricmp (argv[i], "IMPORT")) {
          if (argc > 1 && stricmp (argv[1], "EXPORT") && stricmp (argv[1], "IMPORT"))
-            import_config (argv[i + 1], argv[1]);
+	    import_config (argv[i + 1], argv[1]);
          else
             import_config (argv[i + 1], "CONFIG.DAT");
          end = 1;
@@ -177,26 +180,35 @@ char *argv[];
    sprintf (string, " Lora E-Mail System Setup DOS %s ", LSETUP_VERSION);
 #endif
    wcenters (11, BLACK|_LGREY, string);
-   wcenters (13, BLACK|_LGREY, " Copyright (C) 1989-93 Marco Maccaferri. All Rights Reserved ");
+   wcenters (13, BLACK|_LGREY, " Copyright (C) 1989-95 Marco Maccaferri. All Rights Reserved ");
+#ifdef __OCC__
+   wcenters (14, BLACK|_LGREY, " Copyright (C) 1995 Old Colorado City Communications. All Rights Reserved ");
+#endif
 
 continue_editing:
 
    wmenubegc ();
    wmenuitem (0, 3, " File ", 'F', 100, M_HASPD, NULL, 0, 0);
-      wmenubeg (1, 3, 9, 25, 3, LCYAN|_BLACK, LCYAN|_BLACK, add_shadow);
+      wmenubeg (1, 3, 12, 25, 3, LCYAN|_BLACK, LCYAN|_BLACK, add_shadow);
       wmenuitem (0, 0, " Registration        ", 0, 101, 0, registration_info, 0, 0);
       wmenuiba (linehelp_window, clear_window);
       wmenuitem (1, 0, " Write AREAS.BBS     ", 0, 103, 0, write_areasbbs, 0, 0);
       wmenuiba (linehelp_window, clear_window);
-      wmenuitem (2, 0, " Write ROUTE.CFG     ", 0, 107, 0, create_route_file, 0, 0);
+      wmenuitem (2, 0, " Write TIC.CFG       ", 0, 110, 0, write_ticcfg, 0, 0);
       wmenuiba (linehelp_window, clear_window);
-      wmenuitem (3, 0, " Import AREAS.BBS    ", 0, 105, 0, import_areasbbs, 0, 0);
+      wmenuitem (3, 0, " Write ROUTE.CFG     ", 0, 107, 0, create_route_file, 0, 0);
       wmenuiba (linehelp_window, clear_window);
-      wmenuitem (4, 0, " Import TIC.CFG      ", 0, 108, 0, import_tic, 0, 0);
+      wmenuitem (4, 0, " Write COST.CFG      ", 0, 109, 0, export_costfile, 0, 0);
       wmenuiba (linehelp_window, clear_window);
-      wmenuitem (5, 0, " DOS shell           ", 0, 102, 0, shell_to_dos, 0, 0);
+      wmenuitem (5, 0, " Import AREAS.BBS    ", 0, 105, 0, import_areasbbs, 0, 0);
       wmenuiba (linehelp_window, clear_window);
-      wmenuitem (6, 0, " Quit                ", 0, 106, M_CLALL, NULL, 0, 0);
+      wmenuitem (6, 0, " Import TIC.CFG      ", 0, 108, 0, import_tic, 0, 0);
+      wmenuiba (linehelp_window, clear_window);
+      wmenuitem (7, 0, " Import COST.CFG     ", 0, 110, 0, import_costfile, 0, 0);
+      wmenuiba (linehelp_window, clear_window);
+      wmenuitem (8, 0, " DOS shell           ", 0, 102, 0, shell_to_dos, 0, 0);
+      wmenuiba (linehelp_window, clear_window);
+      wmenuitem (9, 0, " Quit                ", 0, 106, M_CLALL, NULL, 0, 0);
       wmenuiba (linehelp_window, clear_window);
       wmenuend (101, M_PD|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, DGREY|_BLACK, BLUE|_LGREY);
    wmenuitem (0, 11, " Global ", 'G', 200, M_HASPD, NULL, 0, 0);
@@ -339,7 +351,7 @@ static void global_general ()
    int wh, i = 1;
    char string[128];
 
-   wh = wopen (5, 16, 15, 48, 3, LCYAN|_BLACK, CYAN|_BLACK);
+   wh = wopen (5, 16, 16, 50, 3, LCYAN|_BLACK, CYAN|_BLACK);
    wactiv (wh);
    wshadow (DGREY|_BLACK);
    wtitle (" General ", TRIGHT, YELLOW|_BLUE);
@@ -352,10 +364,11 @@ static void global_general ()
       wmenuitem ( 1,  1, " CGA \"snow\" checking  ", 0,  1, 0, NULL, 0, 0);
       wmenuitem ( 2,  1, " Monochrome           ", 0,  2, 0, NULL, 0, 0);
       wmenuitem ( 3,  1, " Direct screen writes ", 0,  3, 0, NULL, 0, 0);
-      wmenuitem ( 4,  1, " Blankout timer       ", 0,  4, 0, NULL, 0, 0);
-      wmenuitem ( 5,  1, " Line number          ", 0,  5, 0, NULL, 0, 0);
-      wmenuitem ( 6,  1, " Multiline system     ", 0,  6, 0, NULL, 0, 0);
-      wmenuitem ( 7,  1, " ALT-X errorlevel     ", 0,  7, 0, NULL, 0, 0);
+      wmenuitem ( 4,  1, " Screenblanker time   ", 0,  4, 0, NULL, 0, 0);
+      wmenuitem ( 5,  1, " À Blanker type       ", 0,  8, 0, NULL, 0, 0);
+      wmenuitem ( 6,  1, " Line number          ", 0,  5, 0, NULL, 0, 0);
+      wmenuitem ( 7,  1, " Multiline system     ", 0,  6, 0, NULL, 0, 0);
+      wmenuitem ( 8,  1, " ALT-X errorlevel     ", 0,  7, 0, NULL, 0, 0);
       wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
       wprints (1, 24, CYAN|_BLACK, config.snow_check ? "Yes" : "No");
@@ -363,11 +376,17 @@ static void global_general ()
       wprints (3, 24, CYAN|_BLACK, config.no_direct ? "No" : "Yes");
       sprintf (string, "%d", config.blank_timer);
       wprints (4, 24, CYAN|_BLACK, string);
+      if (config.blanker_type == 0)
+         wprints (5, 24, CYAN|_BLACK, "Blank");
+      else if (config.blanker_type == 1)
+         wprints (5, 24, CYAN|_BLACK, "Stars");
+      else if (config.blanker_type == 2)
+         wprints (5, 24, CYAN|_BLACK, "Snakes");
       sprintf (string, "%d", config.line_offset);
-      wprints (5, 24, CYAN|_BLACK, string);
-      wprints (6, 24, CYAN|_BLACK, config.multitask ? "Yes" : "No");
+      wprints (6, 24, CYAN|_BLACK, string);
+      wprints (7, 24, CYAN|_BLACK, config.multitask ? "Yes" : "No");
       sprintf (string, "%d", config.altx_errorlevel);
-      wprints (7, 24, CYAN|_BLACK, string);
+      wprints (8, 24, CYAN|_BLACK, string);
 
       start_update ();
       i = wmenuget ();
@@ -401,12 +420,12 @@ static void global_general ()
             winpdef (4, 24, string, "?????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                config.blank_timer = atoi (string);
-            break;
+	    break;
 
          case 5:
             sprintf (string, "%d", config.line_offset);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (5, 24, string, "?????", 0, 2, NULL, 0);
+            winpdef (6, 24, string, "?????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                config.line_offset = atoi (string);
             break;
@@ -418,9 +437,14 @@ static void global_general ()
          case 7:
             sprintf (string, "%d", config.altx_errorlevel);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (7, 24, string, "????", 0, 2, NULL, 0);
+            winpdef (8, 24, string, "????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                config.altx_errorlevel = atoi (string) % 256;
+            break;
+
+         case 8:
+            if (++config.blanker_type >= 3)
+               config.blanker_type = 0;
             break;
       }
 
@@ -468,7 +492,8 @@ typedef struct {
    int point;
    bit passive :1;
    bit receive :1;
-   bit send    :1;
+   bit send    :1;               
+   bit private :1;
 } LINK;
 
 #define MAX_LINKS 128
@@ -548,10 +573,10 @@ static void import_areasbbs ()
          continue;
       tag = strbtrim (tag);
       if (strlen (tag) > 31)
-         tag[31] = '\0';
+	 tag[31] = '\0';
 
       if ((forward = strtok (NULL, "")) == NULL)
-         continue;
+	 continue;
       forward = strbtrim (forward);
 
       nlink = 0;
@@ -562,7 +587,17 @@ static void import_areasbbs ()
 
       p = strtok (forward, " ");
       if (p != NULL)
-         do {
+	 do {
+
+	    if (strstr(p,">")) link[nlink].receive=1;
+	    else link[nlink].receive=0;
+	    if (strstr(p,"<")) link[nlink].send=1;
+	    else link[nlink].send=0;
+	    if (strstr(p,"P")||strstr(p,"p")) link[nlink].private=1;
+	    else link[nlink].private=0;
+	    if (strstr(p,"!")) link[nlink].passive=1;
+	    else link[nlink].passive=0;
+            
             parse_netnode2 (p, &zo, &ne, &no, &po);
             link[nlink].zone = zo;
             link[nlink].net = ne;
@@ -571,7 +606,7 @@ static void import_areasbbs ()
             nlink++;
             if (nlink >= MAX_LINKS)
                break;
-         } while ((p = strtok (NULL, " ")) != NULL);
+	 } while ((p = strtok (NULL, " ")) != NULL);
 
       qsort (link, nlink, sizeof (LINK), sort_func);
 
@@ -596,7 +631,7 @@ static void import_areasbbs ()
                   else
                      sprintf (addr, "%d:%d/%d ", link[m].zone, link[m].net, link[m].node);
                   zo = link[m].zone;
-                  ne = link[m].net;
+		  ne = link[m].net;
                   no = link[m].node;
                   po = link[m].point;
                }
@@ -606,7 +641,7 @@ static void import_areasbbs ()
                   else
                      sprintf (addr, "%d/%d ", link[m].net, link[m].node);
                   ne = link[m].net;
-                  no = link[m].node;
+		  no = link[m].node;
                   po = link[m].point;
                }
                else if (no != link[m].node) {
@@ -631,7 +666,7 @@ static void import_areasbbs ()
                   }
                   else if (cf == 2) {
                      strcpy (sys.forward2, linea);
-                     cf++;
+		     cf++;
                   }
                   else if (cf == 3) {
                      strcpy (sys.forward3, linea);
@@ -641,167 +676,178 @@ static void import_areasbbs ()
                   linea[0] = '\0';
 
                   if (link[m].point)
-                     sprintf (addr, "%d:%d/%d.%d ", link[m].zone, link[m].net, link[m].node, link[m].point);
-                  else
-                     sprintf (addr, "%d:%d/%d ", link[m].zone, link[m].net, link[m].node);
-                  zo = link[m].zone;
-                  ne = link[m].net;
-                  no = link[m].node;
-                  po = link[m].point;
-               }
+		     sprintf (addr, "%d:%d/%d.%d ", link[m].zone, link[m].net, link[m].node, link[m].point);
+		  else
+		     sprintf (addr, "%d:%d/%d ", link[m].zone, link[m].net, link[m].node);
+		  zo = link[m].zone;
+		  ne = link[m].net;
+		  no = link[m].node;
+		  po = link[m].point;
+	       }
 
-               strcat (linea, addr);
-            }
+	       if(link[m].receive) strcat(linea,">");
+	       if(link[m].send) strcat(linea,"<");
+	       if(link[m].private) strcat(linea,"P");
+	       if(link[m].passive) strcat(linea,"!");
+	       strcat (linea, addr);
+	    }
 
-            if (strlen (linea) > 2) {
-               if (cf == 1) {
-                  strcpy (sys.forward1, linea);
-                  cf++;
-               }
-               else if (cf == 2) {
-                  strcpy (sys.forward2, linea);
-                  cf++;
-               }
-               else if (cf == 3) {
-                  strcpy (sys.forward3, linea);
-                  cf++;
-               }
-            }
+	    if (strlen (linea) > 2) {
+	       if (cf == 1) {
+		  strcpy (sys.forward1, linea);
+		  cf++;
+	       }
+	       else if (cf == 2) {
+		  strcpy (sys.forward2, linea);
+		  cf++;
+	       }
+	       else if (cf == 3) {
+		  strcpy (sys.forward3, linea);
+		  cf++;
+	       }
+	    }
 
-            for (i = 0; i < MAX_ALIAS && config.alias[i].net; i++)
-               if (link[0].zone == config.alias[i].zone)
-                  break;
-            if (i < MAX_ALIAS && config.alias[i].net)
-               sys.use_alias = i;
+	    for (i = 0; i < MAX_ALIAS && config.alias[i].net; i++)
+	       if (link[0].zone == config.alias[i].zone)
+		  break;
+	    if (i < MAX_ALIAS && config.alias[i].net)
+	       sys.use_alias = i;
 
-            if (!strcmp (location, "##"))
-               sys.passthrough = 1;
-            else if (atoi (location))
-               sys.quick_board = atoi (location);
-            else if (*location == '$') {
-               strcpy (sys.msg_path, ++location);
-               sys.squish = 1;
-            }
-            else if (*location == '!')
-               sys.pip_board = atoi(++location);
-            else
-               strcpy (sys.msg_path, location);
+	    sys.passthrough = 0;
+	    sys.quick_board = 0;
+	    sys.gold_board = 0;
+	    sys.msg_path[0] = '\0';
 
-            sys.netmail = 0;
-            sys.echomail = 1;
+	    if (!strcmp (location, "##"))
+	       sys.passthrough = 1;
+	    else if (atoi (location))
+	       sys.quick_board = atoi (location);
+	    else if (toupper (location[0]) == 'G' && atoi (&location[1]))
+	       sys.gold_board = atoi (++location);
+	    else if (*location == '$') {
+	       strcpy (sys.msg_path, ++location);
+	       sys.squish = 1;
+	    }
+	    else if (*location == '!')
+	       sys.pip_board = atoi(++location);
+	    else
+	       strcpy (sys.msg_path, location);
 
-            lseek (fd, -1L * SIZEOF_MSGAREA, SEEK_CUR);
-            write (fd, (char *)&sys, SIZEOF_MSGAREA);
+	    sys.netmail = 0;
+	    sys.echomail = 1;
 
-            found = 1;
-            break;
-         }
+	    lseek (fd, -1L * SIZEOF_MSGAREA, SEEK_CUR);
+	    write (fd, (char *)&sys, SIZEOF_MSGAREA);
+
+	    found = 1;
+	    break;
+	 }
       }
 
       if (!found) {
-         memset ((char *)&sys, 0, SIZEOF_MSGAREA);
-         sys.msg_num = lastarea + 1;
-         strcpy (sys.echotag, tag);
-         strcpy (sys.msg_name, tag);
+	 memset ((char *)&sys, 0, SIZEOF_MSGAREA);
+	 sys.msg_num = lastarea + 1;
+	 strcpy (sys.echotag, tag);
+	 strcpy (sys.msg_name, tag);
 
-         cf = 1;
-         linea[0] = '\0';
-         zo = po = ne = no = 0;
+	 cf = 1;
+	 linea[0] = '\0';
+	 zo = po = ne = no = 0;
 
-         for (m = 0; m < nlink; m++) {
-            if (zo != link[m].zone) {
-               if (link[m].point)
-                  sprintf (addr, "%d:%d/%d.%d ", link[m].zone, link[m].net, link[m].node, link[m].point);
-               else
-                  sprintf (addr, "%d:%d/%d ", link[m].zone, link[m].net, link[m].node);
-               zo = link[m].zone;
-               ne = link[m].net;
-               no = link[m].node;
-               po = link[m].point;
-            }
-            else if (ne != link[m].net) {
-               if (link[m].point)
-                  sprintf (addr, "%d/%d.%d ", link[m].net, link[m].node, link[m].point);
-               else
-                  sprintf (addr, "%d/%d ", link[m].net, link[m].node);
-               ne = link[m].net;
-               no = link[m].node;
-               po = link[m].point;
-            }
-            else if (no != link[m].node) {
-               if (link[m].point)
-                  sprintf (addr, "%d.%d ", link[m].node, link[m].point);
-               else
-                  sprintf (addr, "%d ", link[m].node);
-               no = link[m].node;
-               po = link[m].point;
-            }
-            else if (link[m].point && po != link[m].point) {
-               sprintf (addr, ".%d ", link[m].point);
-               po = link[m].point;
-            }
-            else
-               strcpy (addr, "");
+	 for (m = 0; m < nlink; m++) {
+	    if (zo != link[m].zone) {
+	       if (link[m].point)
+		  sprintf (addr, "%d:%d/%d.%d ", link[m].zone, link[m].net, link[m].node, link[m].point);
+	       else
+		  sprintf (addr, "%d:%d/%d ", link[m].zone, link[m].net, link[m].node);
+	       zo = link[m].zone;
+	       ne = link[m].net;
+	       no = link[m].node;
+	       po = link[m].point;
+	    }
+	    else if (ne != link[m].net) {
+	       if (link[m].point)
+		  sprintf (addr, "%d/%d.%d ", link[m].net, link[m].node, link[m].point);
+	       else
+		  sprintf (addr, "%d/%d ", link[m].net, link[m].node);
+	       ne = link[m].net;
+	       no = link[m].node;
+	       po = link[m].point;
+	    }
+	    else if (no != link[m].node) {
+	       if (link[m].point)
+		  sprintf (addr, "%d.%d ", link[m].node, link[m].point);
+	       else
+		  sprintf (addr, "%d ", link[m].node);
+	       no = link[m].node;
+	       po = link[m].point;
+	    }
+	    else if (link[m].point && po != link[m].point) {
+	       sprintf (addr, ".%d ", link[m].point);
+	       po = link[m].point;
+	    }
+	    else
+	       strcpy (addr, "");
 
-            if (strlen (linea) + strlen (addr) >= 58) {
-               if (cf == 1) {
-                  strcpy (sys.forward1, linea);
-                  cf++;
-               }
-               else if (cf == 2) {
-                  strcpy (sys.forward2, linea);
-                  cf++;
-               }
-               else if (cf == 3) {
-                  strcpy (sys.forward3, linea);
-                  cf++;
-               }
+	    if (strlen (linea) + strlen (addr) >= 58) {
+	       if (cf == 1) {
+		  strcpy (sys.forward1, linea);
+		  cf++;
+	       }
+	       else if (cf == 2) {
+		  strcpy (sys.forward2, linea);
+		  cf++;
+	       }
+	       else if (cf == 3) {
+		  strcpy (sys.forward3, linea);
+		  cf++;
+	       }
 
-               linea[0] = '\0';
+	       linea[0] = '\0';
 
-               if (link[m].point)
-                  sprintf (addr, "%d:%d/%d.%d ", link[m].zone, link[m].net, link[m].node, link[m].point);
-               else
-                  sprintf (addr, "%d:%d/%d ", link[m].zone, link[m].net, link[m].node);
-               zo = link[m].zone;
-               ne = link[m].net;
-               no = link[m].node;
-               po = link[m].point;
-            }
+	       if (link[m].point)
+		  sprintf (addr, "%d:%d/%d.%d ", link[m].zone, link[m].net, link[m].node, link[m].point);
+	       else
+		  sprintf (addr, "%d:%d/%d ", link[m].zone, link[m].net, link[m].node);
+	       zo = link[m].zone;
+	       ne = link[m].net;
+	       no = link[m].node;
+	       po = link[m].point;
+	    }
 
-            strcat (linea, addr);
-         }
+	    strcat (linea, addr);
+	 }
 
-         if (strlen (linea) > 2) {
-            if (cf == 1) {
-               strcpy (sys.forward1, linea);
-               cf++;
-            }
-            else if (cf == 2) {
-               strcpy (sys.forward2, linea);
-               cf++;
-            }
-            else if (cf == 3) {
-               strcpy (sys.forward3, linea);
-               cf++;
-            }
-         }
+	 if (strlen (linea) > 2) {
+	    if (cf == 1) {
+	       strcpy (sys.forward1, linea);
+	       cf++;
+	    }
+	    else if (cf == 2) {
+	       strcpy (sys.forward2, linea);
+	       cf++;
+	    }
+	    else if (cf == 3) {
+	       strcpy (sys.forward3, linea);
+	       cf++;
+	    }
+	 }
 
-         sys.msg_priv = sys.write_priv = SYSOP;
-         sys.max_msgs = 200;
-         sys.max_age = 14;
+	 sys.msg_priv = sys.write_priv = SYSOP;
+	 sys.max_msgs = 200;
+	 sys.max_age = 14;
 
-         for (i = 0; i < MAX_ALIAS && config.alias[i].net; i++)
-            if (link[0].zone == config.alias[i].zone)
-               break;
-         if (i < MAX_ALIAS && config.alias[i].net)
-            sys.use_alias = i;
+	 for (i = 0; i < MAX_ALIAS && config.alias[i].net; i++)
+	    if (link[0].zone == config.alias[i].zone)
+	       break;
+	 if (i < MAX_ALIAS && config.alias[i].net)
+	    sys.use_alias = i;
 
-         sys.echomail = 1;
+	 sys.echomail = 1;
 
-         if (location[0] == '#') {
-            sys.passthrough = 1;
-            sys.echomail = 0;
+	 if (location[0] == '#') {
+	    sys.passthrough = 1;
+	    sys.echomail = 0;
          }
          else if (atoi (location))
             sys.quick_board = atoi (location);
@@ -1690,6 +1736,15 @@ char *name;
       read (fd, (char *)&config, sizeof (struct _configuration));
       crc = get_config_crc ();
       close (fd);
+
+      if (config.version != CONFIG_VERSION) {
+         strcpy (config.answer, (char *)&config.mustbezero);
+         memset (&config.mustbezero, 0, 20);
+         config.speed = (unsigned short)config.old_speed;
+         config.old_speed = 0;
+      }
+
+      config.version = CONFIG_VERSION;
    }
 
    if (!config.carrier_mask)
@@ -2671,7 +2726,7 @@ static void internet_info (void)
    int wh, m, i = 1;
    char string[128];
 
-   wh = wopen (7, 15, 12, 63, 1, LCYAN|_BLACK, CYAN|_BLACK);
+   wh = wopen (7, 15, 13, 63, 1, LCYAN|_BLACK, CYAN|_BLACK);
    wactiv (wh);
    wshadow (DGREY|_BLACK);
    wtitle (" Internet gateway ", TRIGHT, YELLOW|_BLUE);
@@ -2681,30 +2736,42 @@ static void internet_info (void)
       wclear ();
 
       wmenubegc ();
-      wmenuitem (1, 1," Gateway Name ", 0, 1, 0, NULL, 0, 0);
-      wmenuitem (2, 1," Address      ", 0, 2, 0, NULL, 0, 0);
+      wmenuitem (1, 1," Gateway Type ", 0, 1, 0, NULL, 0, 0);
+      wmenuitem (2, 1," Gateway Name ", 0, 2, 0, NULL, 0, 0);
+      wmenuitem (3, 1," Address      ", 0, 3, 0, NULL, 0, 0);
       wmenuend (i, M_VERT|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
-      wprints (1, 16, CYAN|_BLACK, config.uucp_gatename);
+      if (config.internet_gate == 0)
+         wprints (1, 16, CYAN|_BLACK, "Uucp");
+      else if (config.internet_gate == 1)
+         wprints (1, 16, CYAN|_BLACK, "GIGO");
+      wprints (2, 16, CYAN|_BLACK, config.uucp_gatename);
       sprintf (string, "%u:%u/%u.%u", config.uucp_zone, config.uucp_net, config.uucp_node, config.uucp_point);
-      wprints (2, 16, CYAN|_BLACK, string);
+      wprints (3, 16, CYAN|_BLACK, string);
 
       start_update ();
       i = wmenuget ();
 
       switch (i) {
          case 1:
+            if (config.internet_gate == 0)
+               config.internet_gate = 1;
+            else if (config.internet_gate == 1)
+               config.internet_gate = 0;
+            break;
+
+         case 2:
             strcpy (string, config.uucp_gatename);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (1, 16, string, "???????????????????", 0, 2, NULL, 0);
+            winpdef (2, 16, string, "???????????????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                strcpy (config.uucp_gatename, strbtrim (string));
             break;
 
-         case 2:
+         case 3:
             sprintf (string, "%u:%u/%u.%u", config.uucp_zone, config.uucp_net, config.uucp_node, config.uucp_point);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (2, 16, string, "???????????????????", 0, 2, NULL, 0);
+            winpdef (3, 16, string, "???????????????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                parse_netnode (string, (int *)&config.uucp_zone, (int *)&config.uucp_net, (int *)&config.uucp_node, (int *)&config.uucp_point);
             break;
@@ -3051,6 +3118,266 @@ static void import_tic ()
 
    close (fd);
    fclose (fp);
+}
+
+static void export_costfile (void)
+{
+   FILE *fp;
+   int fd, i;
+   char string[80];
+   ACCOUNT ai;
+
+   sprintf (string, "%sCOST.DAT", config.net_info);
+   if ((fd = sh_open (string, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+      return;
+
+   sprintf (string, "%sCOST.CFG", config.net_info);
+   if ((fp = fopen (string, "wt")) == NULL) {
+      close (fd);
+      return;
+   }
+
+   while (read (fd, (char *)&ai, sizeof (ACCOUNT)) == sizeof (ACCOUNT)) {
+      if (ai.search[0] == '\0')
+         strcpy (ai.search, "/");
+      if (ai.traslate[0] == '\0')
+         strcpy (ai.traslate, "/");
+      fprintf (fp, "\nPrefix %s %s \"%s\"\n", ai.search, ai.traslate, ai.location);
+
+      for (i = 0; i < MAXCOST; i++) {
+         if (ai.cost[i].days == 0)
+            continue;
+         strcpy (string, "-------");
+         if (ai.cost[i].days & DAY_SUNDAY)
+            string[0] = 'S';
+         if (ai.cost[i].days & DAY_MONDAY)
+            string[1] = 'M';
+         if (ai.cost[i].days & DAY_TUESDAY)
+            string[2] = 'T';
+         if (ai.cost[i].days & DAY_WEDNESDAY)
+            string[3] = 'W';
+         if (ai.cost[i].days & DAY_THURSDAY)
+            string[4] = 'T';
+         if (ai.cost[i].days & DAY_FRIDAY)
+            string[5] = 'F';
+         if (ai.cost[i].days & DAY_SATURDAY)
+            string[6] = 'S';
+         fprintf (fp, "    %s %2d:%02d-%2d:%02d %4d %3d.%d %4d %3d.%d\n",
+                  string,
+                  ai.cost[i].start / 60, ai.cost[i].start % 60,
+                  ai.cost[i].stop / 60, ai.cost[i].stop % 60,
+                  ai.cost[i].cost_first, ai.cost[i].time_first / 10, ai.cost[i].time_first % 10,
+                  ai.cost[i].cost, ai.cost[i].time / 10, ai.cost[i].time % 10);
+      }
+   }
+
+   fclose (fp);
+   close (fd);
+}
+
+static void import_costfile (void)
+{
+   FILE *fp;
+   int fd, i, t1, t2;
+   char string[80], *p;
+   ACCOUNT ai;
+
+   sprintf (string, "%sCOST.DAT", config.net_info);
+   if ((fd = sh_open (string, SH_DENYNONE, O_WRONLY|O_BINARY|O_CREAT|O_TRUNC, S_IREAD|S_IWRITE)) == -1)
+      return;
+
+   sprintf (string, "%sCOST.CFG", config.net_info);
+   if ((fp = fopen (string, "rt")) == NULL) {
+      close (fd);
+      return;
+   }
+
+   while (fgets (string, 70, fp) != NULL) {
+      while (strlen (string) > 0 && (string[strlen (string) - 1] == 0x0D || string[strlen (string) - 1] == 0x0A))
+         string[strlen (string) - 1] = '\0';
+      if ((p = strtok (string, " ")) == NULL)
+         continue;
+      if (stricmp (p, "Prefix"))
+         continue;
+
+      memset (&ai, 0, sizeof (ACCOUNT));
+
+      if ((p = strtok (NULL, " ")) == NULL)
+         continue;
+      strcpy (ai.search, p);
+      if ((p = strtok (NULL, " ")) == NULL)
+         continue;
+      if (strcmp (p, "/"))
+         strcpy (ai.traslate, p);
+      if ((p = strtok (NULL, "\"")) == NULL)
+         continue;
+      strcpy (ai.location, p);
+
+      for (i = 0; i < MAXCOST; i++) {
+         if (fgets (string, 70, fp) == NULL)
+            break;
+         while (strlen (string) > 0 && (string[strlen (string) - 1] == 0x0D || string[strlen (string) - 1] == 0x0A))
+            string[strlen (string) - 1] = '\0';
+         if ((p = strtok (string, " ")) == NULL)
+            break;
+         if (toupper (p[0]) == 'S')
+            ai.cost[i].days |= DAY_SUNDAY;
+         if (toupper (p[1]) == 'M')
+            ai.cost[i].days |= DAY_MONDAY;
+         if (toupper (p[2]) == 'T')
+            ai.cost[i].days |= DAY_TUESDAY;
+         if (toupper (p[3]) == 'W')
+            ai.cost[i].days |= DAY_WEDNESDAY;
+         if (toupper (p[4]) == 'T')
+            ai.cost[i].days |= DAY_THURSDAY;
+         if (toupper (p[5]) == 'F')
+            ai.cost[i].days |= DAY_FRIDAY;
+         if (toupper (p[6]) == 'S')
+            ai.cost[i].days |= DAY_SATURDAY;
+
+         if ((p = strtok (NULL, " -")) == NULL)
+            break;
+         sscanf (p, "%d:%d", &t1, &t2);
+         ai.cost[i].start = t1 * 60 + t2;
+
+         if ((p = strtok (NULL, " ")) == NULL)
+            break;
+         sscanf (p, "%d:%d", &t1, &t2);
+         ai.cost[i].stop = t1 * 60 + t2;
+
+         if ((p = strtok (NULL, " ")) == NULL)
+            break;
+         ai.cost[i].cost_first = atoi (p);
+         if ((p = strtok (NULL, " ")) == NULL)
+            break;
+         if (sscanf (p, "%d.%d", &t1, &t2) == 1)
+            ai.cost[i].time_first = t1 * 10;
+         else
+            ai.cost[i].time_first = t1 * 10 + t2;
+
+         if ((p = strtok (NULL, " ")) == NULL)
+            break;
+         ai.cost[i].cost = atoi (p);
+         if ((p = strtok (NULL, " ")) == NULL)
+            break;
+         if (sscanf (p, "%d.%d", &t1, &t2) == 1)
+            ai.cost[i].time = t1 * 10;
+         else
+            ai.cost[i].time = t1 * 10 + t2;
+      }
+
+      if (i > 0)
+         write (fd, &ai, sizeof (ACCOUNT));
+   }
+
+   fclose (fp);
+   close (fd);
+}
+
+void write_ticcfg (void)
+{
+   FILE *fp;
+   int wh, i = 1, fd, zone, net, node, point, fdn;
+   char string[128], *p;
+   struct _sys sys;
+   NODEINFO ni;
+
+   wh = wopen (7, 4, 11, 73, 1, LCYAN|_BLACK, CYAN|_BLACK);
+   wactiv (wh);
+   wshadow (DGREY|_BLACK);
+   wtitle (" Write TIC.CFG ", TRIGHT, YELLOW|_BLUE);
+
+   wprints (1, 1, CYAN|_BLACK, " Filename:");
+   sprintf (string, "%sTIC.CFG", config.sys_path);
+   winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+   winpdef (1, 12, string, "?????????????????????????????????????????????????????", 0, 2, NULL, 0);
+   i = winpread ();
+
+   hidecur ();
+
+   if (i == W_ESCPRESS) {
+      wclose ();
+      return;
+   }
+
+   if ((fp = fopen (string, "wt")) == NULL) {
+      wclose ();
+      return;
+   }
+
+   fprintf (fp, "Hold %s\n;\n", config.outbound);
+
+   sprintf (string, "%sSYSFILE.DAT", config.sys_path);
+   while ((fd = sopen (string, SH_DENYWR, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+      ;
+
+   sprintf (string, "%sNODES.DAT", config.net_info);
+   if ((fdn = sh_open (string, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1) {
+      close (fd);
+      fclose (fp);
+      return;
+   }
+
+   while (read (fd, (char *)&sys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
+      if (!sys.tic_tag[0])
+         continue;
+
+      fprintf (fp, "AREA %s %s\n", sys.filepath, sys.tic_tag);
+
+      zone = config.alias[0].zone;
+      net = config.alias[0].net;
+      node = config.alias[0].node;
+      point = config.alias[0].point;
+
+      if ((p = strtok (sys.tic_forward1, " ")) != NULL)
+         do {
+            parse_netnode2 (p, &zone, &net, &node, &point);
+
+            lseek (fdn, 0L, SEEK_SET);
+            while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
+               if (zone == ni.zone && net == ni.net && node == ni.node && point == ni.point)
+                  break;
+            }
+            if (zone == ni.zone && net == ni.net && node == ni.node && point == ni.point)
+               fprintf (fp, "   %d:%d/%d.%d %s\n", zone, net, node, point, ni.pw_tic);
+         } while ((p = strtok (NULL, " ")) != NULL);
+
+      if ((p = strtok (sys.tic_forward2, " ")) != NULL)
+         do {
+            parse_netnode2 (p, &zone, &net, &node, &point);
+
+            lseek (fdn, 0L, SEEK_SET);
+            while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
+               if (zone == ni.zone && net == ni.net && node == ni.node && point == ni.point)
+                  break;
+            }
+            if (zone == ni.zone && net == ni.net && node == ni.node && point == ni.point)
+               fprintf (fp, "   %d:%d/%d.%d %s\n", zone, net, node, point, ni.pw_tic);
+         } while ((p = strtok (NULL, " ")) != NULL);
+
+      if ((p = strtok (sys.tic_forward3, " ")) != NULL)
+         do {
+            parse_netnode2 (p, &zone, &net, &node, &point);
+
+            lseek (fdn, 0L, SEEK_SET);
+            while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
+               if (zone == ni.zone && net == ni.net && node == ni.node && point == ni.point)
+                  break;
+            }
+            if (zone == ni.zone && net == ni.net && node == ni.node && point == ni.point)
+               fprintf (fp, "   %d:%d/%d.%d %s\n", zone, net, node, point, ni.pw_tic);
+         } while ((p = strtok (NULL, " ")) != NULL);
+
+      fprintf (fp, ";\n");
+   }
+
+   fprintf (fp, "; Created by LSETUP v.%s\n;\n", LSETUP_VERSION);
+
+   fclose (fp);
+   close (fd);
+   close (fdn);
+
+   wclose ();
 }
 
 #ifndef __OS2__

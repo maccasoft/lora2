@@ -5,6 +5,7 @@
 #include <dir.h>
 #include <dos.h>
 #include <string.h>
+#include <ctype.h>
 #include <process.h>
 #include <time.h>
 #include <conio.h>
@@ -21,7 +22,7 @@
 #include "prototyp.h"
 #include "exec.h"
 
-extern char *suffixes[];
+extern char *suffixes[], nomailproc;
 
 #define PACK_ECHOMAIL  0x0001
 #define PACK_NETMAIL   0x0002
@@ -29,6 +30,7 @@ extern char *suffixes[];
 int spawn_program (int swapout, char *outstring);
 void pack_outbound (int flags);
 void change_type (int, int, int, int, char, char);
+void copy_mail_packet (char *from, char *to);
 
 static void call_packer (char *, char *, char *, int, int, int, int);
 static char get_flag (void);
@@ -47,82 +49,109 @@ static char *flag_result (char c)
    return ("???");
 }
 
+// Ricava dal nome del file il numero di zona, net, nodo e point del file
+// e testa la presenza del flag busy. Ritorna 0 se il flag e' gia' presente
+// (un'altra linea sta processando quel nodo), oppure -1 se e' stato settato
+// correttamente il flag busy.
 int flagged_file (char *outname)
 {
-   int fd;
-   char string[128];
+   int zone, net, node, point;
+   char string[128], *p;
 
    strcpy (string, strupr (outname));
-   strisrep (string, ".XUT", ".BSY");
+   zone = config->alias[0].zone;
+   point = 0;
 
-   if (!dexists (string)) {
-      fd = open (string, O_WRONLY|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-      write (fd, &config->line_offset, sizeof (short));
-      close (fd);
-      return (0);
+   // Cerca il numero di zona, si assume che la prima estensione incontrata
+   // sia quella dell'outbound di zona.
+   if ((p = strchr (string, '.')) != NULL) {
+      p++;
+      if (isdigit (p[0]) && isdigit (p[1]) && isdigit (p[2]))
+         zone = atoi (p);
    }
+
+   // Se e' presente la stringa .PNT si tratta di un point, altrimenti e'
+   // un normale nodo.
+   if ((p = strstr (string, ".PNT")) != NULL) {
+      p -= 8;
+      sscanf (p, "%04x%04x", &net, &node);
+      p += 13;
+      point = atoi (p);
+   }
+   else {
+      p = strchr (string, '\0');
+      p -= 12;
+      sscanf (p, "%04x%04x", &net, &node);
+   }
+
+   if (flag_file (TEST_AND_SET, zone, net, node, point, 1))
+      return (0);
 
    return (-1);
 }
 
-void clear_flagged_file (char *outname)
+void clear_flagged_file (void)
 {
-   int zone;
-   char string[128], *p;
-   struct ffblk blk, blko, blkp;
-
-   if (outname != NULL) {
-      sprintf (string, "%s*.BSY", outname);
-
-      if (!findfirst (string, &blk, 0))
-         do {
-            if (blk.ff_fsize > 0L) {
-               sprintf (string, "%s%s", outname, blk.ff_name);
-               unlink (string);
-            }
-         } while (!findnext (&blk));
-   }
-   else {
-      strcpy (string, HoldAreaNameMunge (config->alias[0].zone));
-      string[strlen (string) - 1] = '\0';
-      strcat (string, ".*");
-
-      if (!findfirst (string, &blko, FA_DIREC))
-         do {
-            if ((p = strchr (blko.ff_name, '.')) != NULL)
-               sscanf (&p[1], "%3x", &zone);
-            else
-               zone = config->alias[0].zone;
-
-            sprintf (string, "%s*.BSY", HoldAreaNameMunge (zone));
-
-            if (!findfirst (string, &blk, 0))
-               do {
-                  if (blk.ff_fsize > 0L) {
-                     sprintf (string, "%s%s", HoldAreaNameMunge (zone), blk.ff_name);
-                     unlink (string);
-                  }
-               } while (!findnext (&blk));
-
-            sprintf (string, "%s*.PNT", HoldAreaNameMunge (zone));
-
-            if (!findfirst (string, &blkp, FA_DIREC))
-               do {
-                  sprintf (string, "%s%s\\*.BSY", HoldAreaNameMunge (zone), blkp.ff_name);
-
-                  if (!findfirst (string, &blk, 0))
-                     do {
-                        if (blk.ff_fsize > 0L) {
-                           sprintf (string, "%s%s\\%s", HoldAreaNameMunge (zone), blkp.ff_name, blk.ff_name);
-                           unlink (string);
-                        }
-                     } while (!findnext (&blk));
-               } while (!findnext (&blkp));
-         } while (!findnext (&blko));
-   }
+   flag_file (CLEAR_SESSION_FLAG, 0, 0, 0, 0, 1);
 }
 
 void clear_temp_file (void)
+{
+   int zone;
+   char string[128], newname[128], *p, sig = 0;
+   struct ffblk blk, blko, blkp;
+
+   strcpy (string, HoldAreaNameMunge (config->alias[0].zone));
+   string[strlen (string) - 1] = '\0';
+   strcat (string, ".*");
+
+   if (!findfirst (string, &blko, FA_DIREC))
+      do {
+         if ((p = strchr (blko.ff_name, '.')) != NULL)
+            sscanf (&p[1], "%3x", &zone);
+         else
+            zone = config->alias[0].zone;
+
+         sprintf (string, "%s*.X$R", HoldAreaNameMunge (zone));
+
+         if (!findfirst (string, &blk, 0))
+            do {
+               sprintf (string, "%s%s", HoldAreaNameMunge (zone), blk.ff_name);
+               strcpy (newname, string);
+               strisrep (newname, ".X$R", ".OUT");
+               if (!sig) {
+                  sig = 1;
+                  status_line ("+Found busy nodes");
+               }
+               if (rename (string, newname) == -1)
+                  copy_mail_packet (string, newname);
+               status_line (":  Packet %s renamed to %s", string, newname);
+            } while (!findnext (&blk));
+
+         sprintf (string, "%s*.PNT", HoldAreaNameMunge (zone));
+
+         if (!findfirst (string, &blkp, FA_DIREC))
+            do {
+               sprintf (string, "%s%s\\*.X$R", HoldAreaNameMunge (zone), blkp.ff_name);
+
+               if (!findfirst (string, &blk, 0))
+                  do {
+                     sprintf (string, "%s%s\\%s", HoldAreaNameMunge (zone), blkp.ff_name, blk.ff_name);
+                     strcpy (newname, string);
+                     strisrep (newname, ".X$R", ".OUT");
+                     if (!sig) {
+                        sig = 1;
+                        status_line ("+Found busy nodes");
+                     }
+                     if (rename (string, newname) == -1)
+                        copy_mail_packet (string, newname);
+                     status_line (":  Packet %s renamed to %s", string, newname);
+                  } while (!findnext (&blk));
+            } while (!findnext (&blkp));
+      } while (!findnext (&blko));
+}
+
+void rename_out_packets (void)
 {
    int zone;
    char string[128], newname[128], *p;
@@ -139,28 +168,30 @@ void clear_temp_file (void)
          else
             zone = config->alias[0].zone;
 
-         sprintf (string, "%s*.$UT", HoldAreaNameMunge (zone));
+         sprintf (string, "%s*.OUT", HoldAreaNameMunge (zone));
 
          if (!findfirst (string, &blk, 0))
             do {
                sprintf (string, "%s%s", HoldAreaNameMunge (zone), blk.ff_name);
                strcpy (newname, string);
-               strisrep (newname, ".$UT", ".XUT");
-               rename (string, newname);
+               strisrep (newname, ".OUT", ".XPR");
+               if (rename (string, newname) == -1)
+                  copy_mail_packet (string, newname);
             } while (!findnext (&blk));
 
          sprintf (string, "%s*.PNT", HoldAreaNameMunge (zone));
 
          if (!findfirst (string, &blkp, FA_DIREC))
             do {
-               sprintf (string, "%s%s\\*.$UT", HoldAreaNameMunge (zone), blkp.ff_name);
+               sprintf (string, "%s%s\\*.OUT", HoldAreaNameMunge (zone), blkp.ff_name);
 
                if (!findfirst (string, &blk, 0))
                   do {
                      sprintf (string, "%s%s\\%s", HoldAreaNameMunge (zone), blkp.ff_name, blk.ff_name);
                      strcpy (newname, string);
-                     strisrep (newname, ".$UT", ".XUT");
-                     rename (string, newname);
+                     strisrep (newname, ".OUT", ".XPR");
+                     if (rename (string, newname) == -1)
+                        copy_mail_packet (string, newname);
                   } while (!findnext (&blk));
             } while (!findnext (&blkp));
       } while (!findnext (&blko));
@@ -170,11 +201,14 @@ void pack_outbound (int flags)
 {
    FILE *fp;
    char filename[80], dest[80], outbase[80], *p, dstf, linea[256];
-   char *px, do_pack, *v, srcf, nopack;
+   char *px, *v, srcf, nopack;
    int dzo, dne, dno, pzo, pne, pno, dpo, i, skip_tag;
    long t;
    struct ffblk blk, blko;
    struct tm *dt;
+
+   if (nomailproc)
+      return;
 
    t = time (NULL);
    dt = localtime (&t);
@@ -246,6 +280,9 @@ void pack_outbound (int flags)
 
       dstf = 'F';
 
+      if (!stricmp (p, "SendFile-To") || !stricmp (p, "RouteFile-To"))
+         continue;
+
       if (!stricmp (p, "Poll")) {
          dstf = get_flag ();
 
@@ -284,53 +321,46 @@ void pack_outbound (int flags)
          while (v != NULL && (p = strtok (v, " ")) != NULL) {
             v = strtok (NULL, "");
             parse_netnode2 (p, &dzo, &dne, &dno, &dpo);
-            nopack = do_pack = 0;
+            nopack = 1;
 
             if ((short)dne != -1 && (short)dno != -1) {
                if (!dpo) {
-                  sprintf (filename, "%s%04x%04x.XUT", HoldAreaNameMunge (dzo), dne, dno);
+                  sprintf (filename, "%s%04x%04x.XPR", HoldAreaNameMunge (dzo), dne, dno);
                   if (!findfirst (filename, &blk, 0)) {
-                     if (flagged_file (filename)) {
-                        strcpy (outbase, strupr (blk.ff_name));
-                        strisrep (outbase, ".XUT", ".$UT");
-                        nopack = 1;
-                     }
-                     else
-                        invent_pkt_name (outbase);
-                     sprintf (dest, "%s%s", HoldAreaNameMunge (dzo), outbase);
-                     if (rename (filename, dest) == -1)
-                        do {
-                           time_release ();
+                     do {
+                        time_release ();
+                        if (!flagged_file (filename)) {
+                           strcpy (outbase, blko.ff_name);
+                           strisrep (outbase, ".XPR", ".X$R");
+                        }
+                        else {
                            invent_pkt_name (outbase);
-                           sprintf (dest, "%s%s", HoldAreaNameMunge (dzo), outbase);
-                        } while (rename (filename, dest) == -1);
-                     do_pack = 1;
+                           nopack = 0;
+                        }
+                        sprintf (dest, "%s%s", HoldAreaNameMunge (dzo), outbase);
+                     } while (rename (filename, dest) == -1);
                   }
                }
                else {
                   if ((short)dpo == -1)
-                     sprintf (filename, "%s%04x%04x.PNT\\*.XUT", HoldAreaNameMunge (dzo), dne, dno);
+                     sprintf (filename, "%s%04x%04x.PNT\\*.XPR", HoldAreaNameMunge (dzo), dne, dno);
                   else
-                     sprintf (filename, "%s%04x%04x.PNT\\%08X.XUT", HoldAreaNameMunge (dzo), dne, dno, dpo);
+                     sprintf (filename, "%s%04x%04x.PNT\\%08X.XPR", HoldAreaNameMunge (dzo), dne, dno, dpo);
                   if (!findfirst (filename, &blko, 0))
                      do {
                         sprintf (filename, "%s%04x%04x.PNT\\%s", HoldAreaNameMunge (dzo), dne, dno, blko.ff_name);
-                        if (flagged_file (filename)) {
-                           strcpy (outbase, strupr (blko.ff_name));
-                           strisrep (outbase, ".XUT", ".$UT");
-                           nopack = 1;
-                        }
-                        else
-                           invent_pkt_name (outbase);
-
-                        sprintf (filename, "%s%04x%04x.PNT\\%s", HoldAreaNameMunge (dzo), dne, dno, blko.ff_name);
-                        sprintf (dest, "%s%04x%04x.PNT\\%s", HoldAreaNameMunge (dzo), dne, dno, outbase);
-                        if (rename (filename, dest) == -1)
-                           do {
-                              time_release ();
+                        do {
+                           time_release ();
+                           if (!flagged_file (filename)) {
+                              strcpy (outbase, blko.ff_name);
+                              strisrep (outbase, ".XPR", ".X$R");
+                           }
+                           else {
                               invent_pkt_name (outbase);
-                              sprintf (dest, "%s%04x%04x.PNT\\%s", HoldAreaNameMunge (dzo), dne, dno, outbase);
-                           } while (rename (filename, dest) == -1);
+                              nopack = 0;
+                           }
+                           sprintf (dest, "%s%04x%04x.PNT\\%s", HoldAreaNameMunge (dzo), dne, dno, outbase);
+                        } while (rename (filename, dest) == -1);
 
                         if (!nopack) {
                            sscanf (blko.ff_name, "%08x", &dpo);
@@ -368,40 +398,34 @@ void pack_outbound (int flags)
                            sprintf (dest, "%s%04x%04x.PNT\\*.PKT", HoldAreaNameMunge (dzo), dne, dno);
 
                            call_packer (outbase, filename, dest, dzo, dne, dno, dpo);
-                           clear_flagged_file (HoldAreaNameMunge (dzo));
                         }
 
-                        nopack = 0;
-                        do_pack = 0;
+                        nopack = 1;
+                        clear_flagged_file ();
                      } while (!findnext (&blko));
                }
             }
             else {
                if ((short)dne != -1 && (short)dno == -1)
-                  sprintf (filename, "%s%04x*.XUT", HoldAreaNameMunge (dzo), dne);
+                  sprintf (filename, "%s%04x*.XPR", HoldAreaNameMunge (dzo), dne);
                else
-                  sprintf (filename, "%s*.XUT", HoldAreaNameMunge (dzo));
+                  sprintf (filename, "%s*.XPR", HoldAreaNameMunge (dzo));
 
                if (!findfirst (filename, &blko, 0))
                   do {
                      sprintf (filename, "%s%s", HoldAreaNameMunge (dzo), blko.ff_name);
-                     if (flagged_file (filename)) {
-                        strcpy (outbase, strupr (blk.ff_name));
-                        strisrep (outbase, ".XUT", ".$UT");
-                        nopack = 1;
-                     }
-                     else
-                        invent_pkt_name (outbase);
-
-                     sprintf (filename, "%s%s", HoldAreaNameMunge (dzo), blko.ff_name);
-                     sprintf (dest, "%s%s", HoldAreaNameMunge (dzo), outbase);
-                     if (rename (filename, dest) == -1)
-                        do {
-                           time_release ();
+                     do {
+                        time_release ();
+                        if (!flagged_file (filename)) {
+                           strcpy (outbase, blko.ff_name);
+                           strisrep (outbase, ".XPR", ".X$R");
+                        }
+                        else {
                            invent_pkt_name (outbase);
-                           sprintf (filename, "%s%s", HoldAreaNameMunge (dzo), blko.ff_name);
-                           sprintf (dest, "%s%s", HoldAreaNameMunge (dzo), outbase);
-                        } while (rename (filename, dest) == -1);
+                           nopack = 0;
+                        }
+                        sprintf (dest, "%s%s", HoldAreaNameMunge (dzo), outbase);
+                     } while (rename (filename, dest) == -1);
 
                      if (!nopack) {
                         sscanf (blko.ff_name, "%04x%04x", &dne, &dno);
@@ -442,11 +466,10 @@ void pack_outbound (int flags)
                         sprintf (outbase, "%s%04x%04x.%cLO", HoldAreaNameMunge (dzo), dne, dno, dstf);
                         sprintf (dest, "%s*.PKT", HoldAreaNameMunge (dzo));
                         call_packer (outbase, filename, dest, dzo, dne, dno, 0);
-                        clear_flagged_file (HoldAreaNameMunge (dzo));
                      }
 
-                     nopack = 0;
-                     do_pack = 0;
+                     nopack = 1;
+                     clear_flagged_file ();
                   } while (!findnext (&blko));
 
                if ((short)dne != -1 && (short)dno == -1)
@@ -455,9 +478,11 @@ void pack_outbound (int flags)
                   dne = config->alias[0].net;
                   dno = config->alias[0].node;
                }
+
+               nopack = 1;
             }
 
-            if (do_pack && !nopack) {
+            if (!nopack) {
                sprintf (filename, "%d:%d/%d.%d", dzo, dne, dno, dpo);
                filename[14] = '\0';
                prints (7, 65, YELLOW|_BLACK, "              ");
@@ -513,9 +538,11 @@ void pack_outbound (int flags)
                   sprintf (outbase, "%s%04x%04x.%cLO", HoldAreaNameMunge (dzo), dne, dno, dstf);
                   sprintf (dest, "%s*.PKT", HoldAreaNameMunge (dzo));
                }
+
                call_packer (outbase, filename, dest, dzo, dne, dno, dpo);
-               clear_flagged_file (HoldAreaNameMunge (dzo));
             }
+
+            clear_flagged_file ();
          }
       }
       else if (!stricmp (p, "Change")) {
@@ -674,7 +701,7 @@ void pack_outbound (int flags)
          dne = config->alias[0].net;
          dno = config->alias[0].node;
          dpo = 0;
-         nopack = do_pack = 0;
+         nopack = 1;
 
          p = strtok (NULL, " ");
          parse_netnode2 (p, &dzo, &dne, &dno, &i);
@@ -682,56 +709,44 @@ void pack_outbound (int flags)
          pne = dne;
          pno = dno;
 
-         sprintf (filename, "%s%04x%04x.XUT", HoldAreaNameMunge (dzo), dne, dno);
-         if (flagged_file (filename)) {
-            status_line ("+Node %d:%d/%d found busy", dzo, dne, dno);
-            nopack = 1;
-         }
+         sprintf (filename, "%s%04x%04x.XPR", HoldAreaNameMunge (dzo), dne, dno);
+         if (flagged_file (filename))
+            nopack = 0;
 
          for (;;) {
             if ((short)pne != -1 && (short)pno != -1) {
-               sprintf (filename, "%s%04x%04x.XUT", HoldAreaNameMunge (pzo), pne, pno);
+               sprintf (filename, "%s%04x%04x.XPR", HoldAreaNameMunge (pzo), pne, pno);
                if (!findfirst (filename, &blk, 0)) {
-                  if (nopack) {
-                     strcpy (outbase, strupr (blk.ff_name));
-                     strisrep (outbase, ".XUT", ".$UT");
-                  }
-                  else
-                     invent_pkt_name (outbase);
-                  sprintf (dest, "%s%s", HoldAreaNameMunge (nopack ? pzo : dzo), outbase);
-                  if (rename (filename, dest) == -1)
-                     do {
-                        time_release ();
+                  do {
+                     time_release ();
+                     if (nopack) {
+                        strcpy (outbase, strupr (blk.ff_name));
+                        strisrep (outbase, ".XPR", ".X$R");
+                     }
+                     else
                         invent_pkt_name (outbase);
-                        sprintf (dest, "%s%s", HoldAreaNameMunge (dzo), outbase);
-                     } while (rename (filename, dest) == -1);
-                  do_pack = 1;
+                     sprintf (dest, "%s%s", HoldAreaNameMunge (dzo), outbase);
+                  } while (rename (filename, dest) == -1);
                }
             }
             else {
                if ((short)pne != -1 && (short)pno == -1)
-                  sprintf (filename, "%s%04x*.XUT", HoldAreaNameMunge (pzo), pne);
+                  sprintf (filename, "%s%04x*.XPR", HoldAreaNameMunge (pzo), pne);
                else
-                  sprintf (filename, "%s*.XUT", HoldAreaNameMunge (pzo));
+                  sprintf (filename, "%s*.XPR", HoldAreaNameMunge (pzo));
                if (!findfirst (filename, &blk, 0))
                   do {
-                     if (nopack) {
-                        strcpy (outbase, strupr (blk.ff_name));
-                        strisrep (outbase, ".XUT", ".$UT");
-                     }
-                     else
-                        invent_pkt_name (outbase);
-
                      sprintf (filename, "%s%s", HoldAreaNameMunge (pzo), blk.ff_name);
-                     sprintf (dest, "%s%s", HoldAreaNameMunge (nopack ? pzo : dzo), outbase);
-                     if (rename (filename, dest) == -1)
-                        do {
-                           time_release ();
+                     do {
+                        time_release ();
+                        if (nopack) {
+                           strcpy (outbase, strupr (blk.ff_name));
+                           strisrep (outbase, ".XPR", ".X$R");
+                        }
+                        else
                            invent_pkt_name (outbase);
-                           sprintf (filename, "%s%s", HoldAreaNameMunge (pzo), blk.ff_name);
-                           sprintf (dest, "%s%s", HoldAreaNameMunge (dzo), outbase);
-                        } while (rename (filename, dest) == -1);
-                     do_pack = 1;
+                        sprintf (dest, "%s%s", HoldAreaNameMunge (dzo), outbase);
+                     } while (rename (filename, dest) == -1);
                   } while (!findnext (&blk));
             }
 
@@ -740,7 +755,7 @@ void pack_outbound (int flags)
             parse_netnode2 (p, &pzo, &pne, &pno, &i);
          }
 
-         if (do_pack && !nopack) {
+         if (!nopack) {
             sprintf (filename, "%d:%d/%d.%d", dzo, dne, dno, dpo);
             filename[14] = '\0';
             prints (7, 65, YELLOW|_BLACK, "              ");
@@ -775,7 +790,7 @@ void pack_outbound (int flags)
             call_packer (outbase, filename, dest, dzo, dne, dno, 0);
          }
 
-         clear_flagged_file (NULL);
+         clear_flagged_file ();
       }
       else
          status_line ("!Unknown keyword '%s'", p);
@@ -783,8 +798,10 @@ void pack_outbound (int flags)
 
    fclose (fp);
 
-   clear_temp_file ();
    hidecur ();
+
+   clear_flagged_file ();
+   clear_temp_file ();
    wclose ();
 
    printc (12, 0, LGREY|_BLACK, 'Ã');
@@ -820,25 +837,27 @@ int zone, net, node, point;
    outbase[strlen (outbase) - 5] = '\0';
    pktsize = 0L;
 
-   if (!findfirst (packet, &blk, 0))
-      do {
-         pktsize += blk.ff_fsize;
-         sprintf (outstring, "%s%s", outbase, blk.ff_name);
-         fd = open (outstring, O_RDWR|O_BINARY);
-         if (fd != -1) {
-            read (fd, (char *)&pkthdr, sizeof (struct _pkthdr2));
-            memset (pkthdr.password, 0, 8);
-            if (arctype != -1)
-               strcpy (pkthdr.password, ni.pw_packet);
-            pkthdr.dest_zone2 = pkthdr.dest_zone = zone;
-            pkthdr.dest_net = net;
-            pkthdr.dest_node = node;
-            pkthdr.dest_point = point;
-            lseek (fd, 0L, SEEK_SET);
-            write (fd, (char *)&pkthdr, sizeof (struct _pkthdr2));
-            close (fd);
-         }
-      } while (!findnext (&blk));
+   if (findfirst (packet, &blk, 0))
+      return;
+
+   do {
+      pktsize += blk.ff_fsize;
+      sprintf (outstring, "%s%s", outbase, blk.ff_name);
+      fd = open (outstring, O_RDWR|O_BINARY);
+      if (fd != -1) {
+         read (fd, (char *)&pkthdr, sizeof (struct _pkthdr2));
+         memset (pkthdr.password, 0, 8);
+         if (arctype != -1)
+            strcpy (pkthdr.password, ni.pw_packet);
+         pkthdr.dest_zone2 = pkthdr.dest_zone = zone;
+         pkthdr.dest_net = net;
+         pkthdr.dest_node = node;
+         pkthdr.dest_point = point;
+         lseek (fd, 0L, SEEK_SET);
+         write (fd, (char *)&pkthdr, sizeof (struct _pkthdr2));
+         close (fd);
+      }
+   } while (!findnext (&blk));
 
    x = 0;
    if ((fp = fopen (attach, "rt")) != NULL) {
@@ -895,8 +914,11 @@ int zone, net, node, point;
    if (varr != NULL)
       srestore (varr);
 
-   if (x != 0) {
-      status_line (":Return code: %d", x);
+   if (x != 0 || !findfirst (packet, &blk, 0)) {
+      if (x != 0)
+         status_line ("!ERROR: Return code: %d", x);
+      else
+         status_line ("!ERROR: Packer configuration");
       rename_noarc_packet (packet);
    }
 
@@ -948,8 +970,9 @@ char *name;
    if (!findfirst (name, &blk, 0))
       do {
          sprintf (filename, "%s%s", dir, blk.ff_name);
-         sprintf (newname, "%sNOARC.%03d", dir, i);
+         sprintf (newname, "%sNOARC.%03d", dir, i++);
          rename (filename, newname);
+         status_line (":  File %s renamed to %s", filename, newname);
       } while (!findnext (&blk));
 }
 
@@ -1018,7 +1041,7 @@ char from, to;
       sprintf (filename, "%s%04x%04x.PNT\\%08x.%cUT", HoldAreaNameMunge (zo), ne, no, po, from);
    else
       sprintf (filename, "%s%04x%04x.%cUT", HoldAreaNameMunge (zo), ne, no, from);
-   fps = fopen (filename, "rt");
+   fps = fopen (filename, "rb");
    if (fps == NULL)
       return;
 
@@ -1026,7 +1049,7 @@ char from, to;
       sprintf (filename, "%s%04x%04x.PNT\\%08x.%cUT", HoldAreaNameMunge (zo), ne, no, po, to);
    else
       sprintf (filename, "%s%04x%04x.%cUT", HoldAreaNameMunge (zo), ne, no, to);
-   fpd = fopen (filename, "at");
+   fpd = fopen (filename, "ab");
    if (fpd == NULL)
       return;
 

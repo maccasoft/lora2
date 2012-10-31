@@ -80,6 +80,7 @@ void setup_screen ()
    whline (12, 0, 80, 0, LGREY|_BLACK);
    whline (22, 0, 80, 0, LGREY|_BLACK);
    wvline (1, 52, 24, 0, LGREY|_BLACK);
+//   wvline (22, 21, 3, 0, LGREY|_BLACK);
    sprintf (stringa, "%d:%d/%d.%d", config->alias[0].zone, config->alias[0].net, config->alias[0].node, config->alias[0].point);
    prints (0, 1, LGREEN|_BLACK, stringa);
    prints (0, 78 - strlen (VERSION), LGREEN|_BLACK, VERSION);
@@ -115,11 +116,11 @@ void idle_system ()
 
    prints (7, 54, LCYAN|_BLACK, "     Next:");
    prints (8, 54, LCYAN|_BLACK, "Remaining:");
-   prints (9, 54, LCYAN|_BLACK, "   M'Task:");
+   prints (9, 54, LCYAN|_BLACK, "  Current:");
    prints (10, 54, LCYAN|_BLACK, "     Port:");
 
    mtask_find ();
-   sprintf (string, "%-5u Com%d", rate, com_port + 1);
+   sprintf (string, "%-6lu Com%d", rate, com_port + 1);
    prints (10, 65, YELLOW|_BLACK, string);
 }
 
@@ -224,21 +225,24 @@ void setup_bbs_screen ()
 {
    int i;
 
-   clown_clear ();
+   if (local_mode != 2)
+      clown_clear ();
+
    i = whandle();
 #ifndef __OS2__
    wunlink(i);
 #endif
 
-   mainview = wopen(0,0,22,79,5,LGREY|_BLACK,LGREY|_BLACK);
-   wactiv(mainview);
+   if (local_mode != 2) {
+      status = wopen (23, 0, 24, 79, 5, BLACK|_LGREY, BLACK|_LGREY);
+      wactiv (status);
+      wprints (0, 65, BLACK|_LGREY, " [Time:      ]");
+      wprints (1, 79 - strlen (reg_prompt), BLACK|_LGREY, reg_prompt);
+   }
 
-   status = wopen(23,0,24,79,5,BLACK|_LGREY,BLACK|_LGREY);
-   wactiv(status);
-   wprints(0,65,BLACK|_LGREY," [Time:      ]");
-   wprints(1,79 - strlen(reg_prompt),BLACK|_LGREY,reg_prompt);
+   mainview = wopen (0, 0, (local_mode == 2) ? 24 : 22, 79, 5, LGREY|_BLACK, LGREY|_BLACK);
+   wactiv (mainview);
 
-   wactiv(mainview);
    f4_status ();
 }
 
@@ -362,16 +366,20 @@ void activation_key()
    cs2.sp.byte1 = ak.ending1;
    cs2.sp.byte2 = ak.ending2;
 
-   if (ak.flag1 & REG2)
-      maxlines = 2;
-   else if (ak.flag1 & REG5)
-      maxlines = 5;
-   else if (ak.flag1 & REG10)
-      maxlines = 10;
-   else if (ak.flag1 & REGUNL)
-      maxlines = 99;
-   else if (ak.flag1 & POINT)
-      maxlines = 1;
+   if (local_mode)
+      maxlines = line_offset;
+   else {
+      if (ak.flag1 & REG2)
+         maxlines = 2;
+      else if (ak.flag1 & REG5)
+         maxlines = 5;
+      else if (ak.flag1 & REG10)
+         maxlines = 10;
+      else if (ak.flag1 & REGUNL)
+         maxlines = 99;
+      else if (ak.flag1 & POINT)
+         maxlines = 1;
+   }
 
    if (cs4.value == get_crc (&ak, sizeof (AK))) {
 #ifdef __OS2__
@@ -571,28 +579,28 @@ void mtask_find ()
    have_os2 = 0;
 
    if ((have_dv = dv_get_version()) != 0) {
-      wprints (9, 65, YELLOW|_BLACK, "DESQview");
+      ;// wprints (9, 65, YELLOW|_BLACK, "DESQview");
       _vinfo.dvexist = 1;
    }
    else if ((have_ddos = ddos_active ()) != 0)
-      wprints (9, 65, YELLOW|_BLACK, "DoubleDOS");
+      ;// wprints (9, 65, YELLOW|_BLACK, "DoubleDOS");
    else if ((have_ml = ml_active ()) != 0)
-      wprints (9, 65, YELLOW|_BLACK, "Multilink");
+      ;// wprints (9, 65, YELLOW|_BLACK, "Multilink");
    else if ((have_tv = tv_get_version ()) != 0)
-      wprints (9, 65, YELLOW|_BLACK, "TopView");
+      ;// wprints (9, 65, YELLOW|_BLACK, "TopView");
    else if (windows_active())
-      wprints (9, 65, YELLOW|_BLACK, "MS-Windows");
+      ;// wprints (9, 65, YELLOW|_BLACK, "MS-Windows");
    else if ((have_os2 = os2_active ()) != 0)
-      wprints (9, 65, YELLOW|_BLACK, "OS/2");
+      ;// wprints (9, 65, YELLOW|_BLACK, "OS/2");
    else
-      wprints (9, 65, YELLOW|_BLACK, "None");
+      ;// wprints (9, 65, YELLOW|_BLACK, "None");
 
    if (have_dv || have_ddos || have_ml || have_tv || have_os2)
       use_tasker = 1;
    else
       use_tasker = 0;
 #else
-   wprints (9, 65, YELLOW|_BLACK, "OS/2");
+   // wprints (9, 65, YELLOW|_BLACK, "OS/2");
 #endif
 }
 
@@ -626,7 +634,7 @@ void write_sysinfo()
    strcode (sysinfo.pwd, "YG&%FYTF%$RTD");
 }
 
-void read_sysinfo()
+void read_sysinfo (void)
 {
    int fd, iyear, imday, iwday, imon, modif;
    char filename[80];
@@ -675,35 +683,69 @@ void read_sysinfo()
       locked = 1;
    }
 
-   tim = localtime (&sysinfo.today.timestamp);
-   if (tim->tm_mday != imday) {
-      memcpy ((char *)&sysinfo.yesterday, (char *)&sysinfo.today, sizeof (struct _daystat));
-      memset ((char *)&sysinfo.today, 0, sizeof (struct _daystat));
-      sysinfo.today.timestamp = tempo;
-      if (!iwday) {
-         memset ((char *)&sysinfo.week, 0, sizeof (struct _daystat));
-         sysinfo.week.timestamp = tempo;
+   if (!local_mode) {
+      tim = localtime (&sysinfo.today.timestamp);
+      if (tim == NULL || tim->tm_mday != imday) {
+         memcpy ((char *)&sysinfo.yesterday, (char *)&sysinfo.today, sizeof (struct _daystat));
+         memset ((char *)&sysinfo.today, 0, sizeof (struct _daystat));
+         sysinfo.today.timestamp = tempo;
+         if (!iwday) {
+            memset ((char *)&sysinfo.week, 0, sizeof (struct _daystat));
+            sysinfo.week.timestamp = tempo;
+         }
+         system_autoupdate ();
+         modif = 1;
       }
-      system_autoupdate ();
-      modif = 1;
+
+      tim = localtime (&sysinfo.month.timestamp);
+      if (tim == NULL || tim->tm_mon != imon) {
+         memset ((char *)&sysinfo.month, 0, sizeof (struct _daystat));
+         sysinfo.month.timestamp = tempo;
+         modif = 1;
+      }
+
+      tim = localtime (&sysinfo.year.timestamp);
+      if (tim == NULL || tim->tm_year != iyear) {
+         memset ((char *)&sysinfo.year, 0, sizeof (struct _daystat));
+         sysinfo.year.timestamp = tempo;
+         modif = 1;
+      }
+
+      if (modif)
+         write_sysinfo ();
+   }
+}
+
+void update_sysinfo_calls (void)
+{
+   int fd;
+   char filename[80];
+
+   sprintf (filename, "%sSYSINFO.DAT", config->sys_path);
+   fd = sh_open (filename, SH_DENYRW, O_BINARY|O_RDWR, S_IREAD|S_IWRITE);
+
+   read (fd, (char *)&sysinfo, sizeof (struct _sysinfo));
+
+   sysinfo.total_calls++;
+   sysinfo.today.humancalls++;
+   sysinfo.week.humancalls++;
+   sysinfo.month.humancalls++;
+   sysinfo.year.humancalls++;
+
+   lseek (fd, 0L, SEEK_SET);
+   write (fd, (char *)&sysinfo, sizeof (struct _sysinfo));
+
+   memset ((char *)&linestat, 0, sizeof (struct _linestat));
+
+   while (read (fd, (char *)&linestat, sizeof (struct _linestat)) == sizeof (struct _linestat)) {
+      if (linestat.line == line_offset)
+         break;
    }
 
-   tim = localtime (&sysinfo.month.timestamp);
-   if (tim->tm_mon != imon) {
-      memset ((char *)&sysinfo.month, 0, sizeof (struct _daystat));
-      sysinfo.month.timestamp = tempo;
-      modif = 1;
-   }
+   close (fd);
 
-   tim = localtime (&sysinfo.year.timestamp);
-   if (tim->tm_year != iyear) {
-      memset ((char *)&sysinfo.year, 0, sizeof (struct _daystat));
-      sysinfo.year.timestamp = tempo;
-      modif = 1;
-   }
-
-   if (modif)
-      write_sysinfo ();
+   if (sysinfo.pwd[0])
+      strcode (sysinfo.pwd, "YG&%FYTF%$RTD");
 }
 
 static int fossil_inf(finfo)
@@ -736,7 +778,7 @@ void fossil_version()
    m_print(msgtxt[M_FOSSIL_TYPE], finfo.id);
 }
 
-void fossil_version2()
+void fossil_version2 (void)
 {
    struct _fossil_info finfo;
 
@@ -748,19 +790,23 @@ void fossil_version2()
    }
 }
 
-void terminating_call()
+void terminating_call (void)
 {
    int wh;
 
    if (caller) {
-      if (config->snooping || local_mode) {
-         hidecur ();
-         wh = wopen (11, 24, 15, 54, 1, LCYAN|_BLUE, LCYAN|_BLUE);
+      if (local_mode != 2) {
+         if (config->snooping) {
+            hidecur ();
+            wh = wopen(11,24,15,54,1,LCYAN|_BLUE,LCYAN|_BLUE);
+            wactiv(wh);
 
-         wcenters (1, LCYAN|_BLUE, "Terminating call");
+            wcenters(1,LCYAN|_BLUE,"Terminating call");
+         }
+         else
+            prints (5, 65, YELLOW|_BLACK, "Terminating ");
       }
-      else
-         prints (5, 65, YELLOW|_BLACK, "Terminating ");
+
       textattr (LGREY|_BLACK);
       update_user ();
    }

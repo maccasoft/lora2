@@ -20,7 +20,7 @@ struct _msginfo {
 };
 
 struct _msgidx {
-   int  msgnum;
+   short msgnum;
    byte board;
 };
 
@@ -29,7 +29,7 @@ struct _msgtoidx {
 };
 
 struct _msghdr {
-   int  msgnum;
+   short msgnum;
    word prevreply;
    word nextreply;
    word timesread;
@@ -87,5 +87,4 @@ struct _gold_msghdr {
    char whofrom[36];
    char subject[73];
 };
-
 

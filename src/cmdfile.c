@@ -14,7 +14,6 @@
 
 #ifdef __OS2__
 #define INCL_DOSPROCESS
-#define INCL_NOPMAPI
 #include <os2.h>
 #endif
 
@@ -39,6 +38,7 @@ int get_user_age (void);
 void rpnInit (void);
 char *rpnProcessString (char *p);
 FILE *get_system_file (char *);
+int check_subscription (void);
 
 static void raise_priv (void);
 static void lower_priv (void);
@@ -101,13 +101,23 @@ void read_hourly_files ()
 int naplps_read_file (char *name)
 {
    FILE *fp;
-   char linea[130], *p;
+   int c;
+   char *p, prolog = 0, epilog = 0;
 
    XON_ENABLE();
    _BRK_ENABLE();
 
    if (!name || !(*name))
       return (-1);
+
+   if ((p = strstr (name, "/NAP")) != NULL) {
+      if (p[4] != '=')
+         prolog = epilog = 1;
+      else if (!strnicmp (&p[5], "ON", 2))
+         prolog = 1;
+      else if (!strnicmp (&p[5], "OFF", 3))
+         epilog = 1;
+   }
 
    if ((p = strchr (name,'/')) != NULL)
       *(p - 1) = '\0';
@@ -120,11 +130,19 @@ int naplps_read_file (char *name)
    if (fp == NULL)
       return (-1);
 
-   while (fgets (linea, 128, fp) != NULL) {
-      while (strstr (linea, "\r\n") != NULL)
-         strsrep (linea, "\r\n", "\n");
+   if (prolog) {
+      BUFFER_BYTE (0x1B);
+      BUFFER_BYTE (0x25);
+      BUFFER_BYTE (0x41);
+   }
 
-      m_print ("%s", linea);
+   while ((c = getc (fp)) != EOF)
+      BUFFER_BYTE (c);
+
+   if (epilog) {
+      BUFFER_BYTE (0x1B);
+      BUFFER_BYTE (0x25);
+      BUFFER_BYTE (0x40);
    }
 
    fclose (fp);
@@ -135,6 +153,33 @@ int naplps_read_file (char *name)
    return (1);
 }
 
+char *line_fgets (char *dest, int max, FILE *fp)
+{
+   int i, c;
+
+   i = 0;
+
+   while (i < max) {
+      if ((c = fgetc (fp)) == EOF) {
+         if (i == 0)
+            return (NULL);
+         else
+            break;
+      }
+      dest[i++] = (char )c;
+      if ((char )c == 0x0D) {
+         if ((c = fgetc (fp)) == 0x0A)
+            dest[i++] = (char )c;
+         else
+            ungetc (c, fp);
+         break;
+      }
+   }
+
+   dest[i] = '\0';
+   return (dest);
+}
+
 int read_system_file (char *name)
 {
    int i;
@@ -143,7 +188,7 @@ int read_system_file (char *name)
    strcpy (filename, text_path);
    strcat (filename, name);
 
-   if (stristr (name, "/P") == NULL)
+   if (stristr (name, "/R") == NULL)
       i = read_file (filename);
    else
       i = naplps_read_file (filename);
@@ -152,7 +197,7 @@ int read_system_file (char *name)
       strcpy (filename, config->glob_text_path);
       strcat (filename, name);
 
-      if (stristr (name, "/P") == NULL)
+      if (stristr (name, "/R") == NULL)
          i = read_file (filename);
       else
          i = naplps_read_file (filename);
@@ -168,39 +213,44 @@ FILE *get_system_file (char *name)
 
    isrip = 0;
 
-   fp = fopen (name, "rb");
-   if (fp == NULL && usr_rip) {
-      sprintf (linea, "%s.RIP", name);
-      fp = fopen (linea, "rb");
-      if (fp != NULL) {
-         isrip = 1;
-         return (fp);
+   fp = sh_fopen (name, "rb", SH_DENYWR);
+
+   if (strchr (name, '.') == NULL) {
+      if (fp == NULL && usr_rip) {
+         sprintf (linea, "%s.RIP", name);
+         fp = sh_fopen (linea, "rb", SH_DENYWR);
+         if (fp != NULL) {
+            isrip = 1;
+            return (fp);
+         }
       }
-   }
-   if (fp == NULL && !usr.ansi && !usr.avatar) {
-      sprintf(linea,"%s.ASC",name);
-      fp = fopen(linea,"rb");
-   }
-   if (fp == NULL && usr.ansi) {
-      sprintf(linea,"%s.ANS",name);
-      fp = fopen(linea,"rb");
-   }
-   if (fp == NULL && usr.avatar) {
-      sprintf(linea,"%s.AVT",name);
-      fp = fopen(linea,"rb");
-   }
-   if (fp == NULL) {
-      sprintf(linea,"%s.BBS",name);
-      fp = fopen(linea,"rb");
+      if (fp == NULL && !usr.ansi && !usr.avatar) {
+         sprintf (linea, "%s.ASC", name);
+         fp = sh_fopen (linea, "rb", SH_DENYWR);
+      }
+      if (fp == NULL && usr.ansi) {
+         sprintf (linea, "%s.ANS", name);
+         fp = sh_fopen (linea, "rb", SH_DENYWR);
+      }
+      if (fp == NULL && usr.avatar) {
+         sprintf (linea, "%s.AVT", name);
+         fp = sh_fopen (linea, "rb", SH_DENYWR);
+      }
+      if (fp == NULL) {
+         sprintf (linea, "%s.BBS", name);
+         fp = sh_fopen (linea, "rb", SH_DENYWR);
+      }
    }
 
    return (fp);
 }
 
+#define MAX_LINE_LENGTH  2050
+
 int read_file (char *name)
 {
    FILE *fp, *answer, *fpc;
-   char linea[260], stringa[80], parola[80], *p, lastresp[80];
+   char *linea, stringa[80], parola[80], *p, lastresp[80];
    char onexit[40], resp, c;
    int line, required, more, m, a, day, mont, year, bignum, fd;
    word search;
@@ -227,26 +277,26 @@ int read_file (char *name)
    if (fp == NULL)
       return (0);
 
+   if ((linea = (char *)malloc (MAX_LINE_LENGTH)) == NULL) {
+      fclose (fp);
+      return (0);
+   }
+
    more = line = 1;
    nopause = bignum = required = 0;
    fpc = answer = NULL;
    resp = ' ';
    onexit[0] = '\0';
 
-   if (!isrip)
-      rpnInit ();
+   rpnInit ();
 
 loop:
-   change_attr(LGREY|_BLACK);
+   change_attr (LGREY|_BLACK);
 
-   while (fgets(linea, 258, fp) != NULL) {
-      linea [258] = '\0';
+   while (line_fgets (linea, MAX_LINE_LENGTH - 2, fp) != NULL) {
+      linea[MAX_LINE_LENGTH - 2] = '\0';
 
-      while (strstr (linea, "\r\n") == NULL && strlen (linea) < 258)
-         if (fgets (&linea[strlen(linea)], 255-strlen(linea), fp) == NULL)
-            break;
-
-      for (p=linea;(*p) && (*p != 0x1A);p++) {
+      for (p = linea; (*p) && (*p != 0x1A); p++) {
          if (!local_mode) {
             if (!CARRIER || RECVD_BREAK()) {
                CLEAR_OUTBOUND();
@@ -257,6 +307,7 @@ loop:
 #ifdef __OS2__
                VioUpdate ();
 #endif
+               free (linea);
                return (line);
             }
 
@@ -271,16 +322,12 @@ loop:
 #ifdef __OS2__
                   VioUpdate ();
 #endif
+                  free (linea);
                   return (line);
                }
                else
                   TIMED_READ (1);
             }
-         }
-
-         if (isrip && !local_mode) {
-            BUFFER_BYTE (*p);
-            continue;
          }
 
          switch (*p) {
@@ -307,17 +354,19 @@ loop:
                p++;
                switch(toupper(*p)) {
                case '"':
-                  if (usr.archiver == bbstxt[B_ZIP][0])
-                     big_string (bignum, "%s", &bbstxt[B_ZIP][1]);
-                  else if (usr.archiver == bbstxt[B_ARJ][0])
-                     big_string (bignum, "%s", &bbstxt[B_ARJ][1]);
-                  else if (usr.archiver == bbstxt[B_LHA][0])
-                     big_string (bignum, "%s", &bbstxt[B_LHA][1]);
+                  for (m = 0; m < 10; m++) {
+                     if (config->packid[m].display[0] == usr.archiver)
+                        break;
+                  }
+                  if (m < 10)
+                     big_string (bignum, "%s", &config->packid[m].display[1]);
                   else
                      big_string (bignum, "%s", &bbstxt[B_NONE][1]);
                   break;
                case '%':
-                  if (usr.protocol == protocols[0][0])
+                  if (usr.protocol == '\0')
+                     big_string (bignum, "%s", &bbstxt[B_NONE][1]);
+                  else if (usr.protocol == protocols[0][0])
                      big_string (bignum, "%s", &protocols[0][1]);
                   else if (usr.protocol == protocols[1][0])
                      big_string (bignum, "%s", &protocols[1][1]);
@@ -343,7 +392,7 @@ loop:
                         }
                         close (fd);
                      }
-                     if (fd != -1 || !prot.active || prot.hotkey != usr.protocol)
+                     if (fd == -1 || !prot.active || prot.hotkey != usr.protocol)
                         big_string (bignum, "%s", &bbstxt[B_NONE][1]);
                   }
                   break;
@@ -369,6 +418,9 @@ loop:
                   break;
                case 'I':
                   big_string (bignum, "%s",usr.ibmset ? bbstxt[B_YES] : bbstxt[B_NO]);
+                  break;
+               case 'K':
+                  big_string (bignum, "%s",usr.kludge ? bbstxt[B_YES] : bbstxt[B_NO]);
                   break;
                case 'L':
                   big_string (bignum, "%d", usr.credit);
@@ -482,6 +534,7 @@ loop:
                   VioUpdate ();
 #endif
                   modem_hangup();
+                  free (linea);
                   return (line);
                case CTRLO:
                   big_string (bignum, "%d",time_remain());
@@ -628,7 +681,7 @@ loop:
                   big_string (bignum, "%d",config->class[usr_class].max_call);
                   break;
                case 'R':
-                  big_string (bignum, "%u", local_mode ? 0 : rate);
+                  big_string (bignum, "%ld", local_mode ? 0 : rate);
                   break;
                case 'T':
                   big_string (bignum, "%d",config->class[usr_class].max_dl);
@@ -644,6 +697,7 @@ loop:
                   VioUpdate ();
 #endif
                   terminating_call ();
+                  free (linea);
                   return (line);
                case 'Y':
                   big_string (bignum, "%s",sys.msg_name);
@@ -774,6 +828,7 @@ loop:
 #ifdef __OS2__
                         VioUpdate ();
 #endif
+                        free (linea);
                         return (line);
                      }
                   }
@@ -813,6 +868,7 @@ loop:
 #ifdef __OS2__
                         VioUpdate ();
 #endif
+                        free (linea);
                         return (line);
                      }
                   }
@@ -837,36 +893,31 @@ loop:
                break;
             case CTRLP:
                p++;
-               if ( *p == 'B' )
-               {
+               if ( *p == 'B' ) {
                   p++;
                   a = set_priv ( *p );
                   if (usr.priv > a)
                      p = strchr(linea,'\0') - 1;
                }
-               else if ( *p == 'L' )
-               {
+               else if ( *p == 'L' ) {
                   p++;
                   a = set_priv ( *p );
                   if (usr.priv < a)
                      p = strchr(linea,'\0') - 1;
                }
-               else if ( *p == 'Q' )
-               {
+               else if ( *p == 'Q' ) {
                   p++;
                   a = set_priv ( *p );
                   if (a != usr.priv)
                      p = strchr(linea,'\0') - 1;
                }
-               else if ( *p == 'X' )
-               {
+               else if ( *p == 'X' ) {
                   p++;
                   a = set_priv ( *p );
                   if (usr.priv == a)
                      p = strchr(linea,'\0') - 1;
                }
-               else
-               {
+               else {
                   a = set_priv ( *p );
                   if (usr.priv < a)
                      fseek (fp, 0L, SEEK_END);
@@ -1110,7 +1161,19 @@ loop:
                      fp = fpc;
                      fpc = NULL;
                   }
-                  p = strchr(p,'\0') - 1;
+                  p = strchr (p, '\0') - 1;
+                  break;
+               case 'l':
+                  m = 0;
+                  p++;
+                  while (*p && isdigit (*p)) {
+                     m *= 10;
+                     m += *p++ - '0';
+                  }
+                  if (*p == ' ')
+                     p++;
+                  if (line_offset != m)
+                     p = strchr (p, '\0') - 1;
                   break;
                case 'M':
                   p++;
@@ -1119,7 +1182,7 @@ loop:
                      *p &= 0x7F;
                   }
                   process_menu_option (*p, p + 1);
-                  p = strchr(p,'\0') - 1;
+                  p = strchr (p, '\0') - 1;
                   break;
                case 'p':
                   p++;
@@ -1208,9 +1271,9 @@ loop:
                   c = bbstxt[B_ASCII_CONV][(unsigned char)c - 128];
                if (!bignum || (!usr.ansi && !usr.avatar)) {
                   if (!local_mode)
-                     BUFFER_BYTE(c);
-                  if (snooping)
-                     wputc(c);
+                     BUFFER_BYTE (c);
+                  if (snooping && !isrip)
+                     wputc (c);
                   vx++;
                   if (vx > 80) {
                      vx -= 80;
@@ -1275,6 +1338,8 @@ loop:
       UNBUFFER_BYTES ();
       FLUSH_OUTPUT();
    }
+
+   free (linea);
 
    return (line ? line : -1);
 }

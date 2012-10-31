@@ -26,13 +26,15 @@ void cls (void)
       last_color = pc;
    }
 
-   if (usr.formfeed) {
-      if (usr.ansi && !local_mode)
-         ansi_print("\x1B[2J\x1B[1;1f");
-      if (usr.avatar && !local_mode)
-         BUFFER_BYTE(CTRLL);
+   if (usr.ansi || usr.avatar) {
+      if (!local_mode) {
+         if (usr.ansi && !usr.formfeed)
+            ansi_print ("\x1B[2J\x1B[1;1f");
+         else
+            BUFFER_BYTE (CTRLL);
+      }
       if (snooping)
-         wclear();
+         wclear ();
    }
    else {
       if (!local_mode) {
@@ -66,7 +68,7 @@ int i;
       return;
 
    last_color = i;
-   if (snooping || local_mode)
+   if ((snooping || local_mode))
       wtextattr (i);
 
    if (usr.avatar && !local_mode) {
@@ -296,33 +298,33 @@ static void ansi_print(char *format, ...)
    va_list var_args;
    char *string, *q, visual;
 
-   string=(char *)malloc(256);
+   string = (char *)malloc (256);
 
-   if (string==NULL || strlen(format) > 256) {
+   if (string == NULL || strlen (format) > 256) {
       if (string)
-         free(string);
+         free (string);
       return;
    }
 
-   va_start(var_args,format);
-   vsprintf(string,format,var_args);
-   va_end(var_args);
+   va_start (var_args, format);
+   vsprintf (string, format, var_args);
+   va_end (var_args);
 
    visual = 1;
 
-   for(q=string;*q;q++) {
+   for (q=string; *q; q++) {
       if (*q == 0x1B)
          visual = 0;
 
       if (!local_mode)
-         BUFFER_BYTE((*q));
+         BUFFER_BYTE ((*q));
       if (snooping && visual)
-         wputc(*q);
+         wputc (*q);
    }
 
    if (!local_mode)
       UNBUFFER_BYTES ();
 
-   free(string);
+   free (string);
 }
 

@@ -20,6 +20,7 @@
 #include "prototyp.h"
 
 extern int outinfo, blanked;
+extern char nomailproc;
 
 void stop_blanking (void);
 void rebuild_call_queue (void);
@@ -84,14 +85,15 @@ void find_event ()
                   write_sysinfo ();
                   read_sysinfo ();
 
-                  if (e_ptrs[i]->echomail & (ECHO_STARTEXPORT|ECHO_STARTIMPORT)) {
-                     if (e_ptrs[cur_event]->echomail & (ECHO_RESERVED4))
-                        import_tic_files ();
-                     if (e_ptrs[i]->echomail & ECHO_STARTIMPORT)
-                        process_startup_mail (1);
-                     else
-                        process_startup_mail (0);
-                  }
+                  if (!nomailproc)
+                     if (e_ptrs[i]->echomail & (ECHO_STARTEXPORT|ECHO_STARTIMPORT)) {
+                        if (e_ptrs[cur_event]->echomail & (ECHO_RESERVED4))
+                           import_tic_files ();
+                        if (e_ptrs[i]->echomail & ECHO_STARTIMPORT)
+                           process_startup_mail (1);
+                        else
+                           process_startup_mail (0);
+                     }
 
                   if (e_ptrs[i]->res_net && !(e_ptrs[cur_event]->behavior & MAT_NOOUT)) {
                      if (e_ptrs[cur_event]->echomail & ECHO_FORCECALL) {

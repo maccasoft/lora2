@@ -1373,7 +1373,7 @@ continue_editing:
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
             winpdef (14, 20, string, "?????????????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS) {
-               p = strtok (string, " ");
+               p = strtok (strbtrim (string), " ");
                if (p == NULL || !strlen (p))
                   nevt.behavior &= ~MAT_RESERV;
                else {
@@ -1446,6 +1446,21 @@ static void mailproc_linehelp (void)
       case 4:
          str = "Enable / disable the replace or link of the tear line on local message";
          break;
+      case 5:
+         str = "Enable / disable the flashing MAIL flag on the bottom right corner";
+         break;
+      case 6:
+         str = "Always import netmail messages without text";
+         break;
+      case 7:
+         str = "Text to put as tearline when replaced";
+         break;
+      case 8:
+         str = "Forces the insertion of the ^aINTL kludge in netmail messages";
+         break;
+      case 9:
+         str = "Exports Internet-type message areas";
+         break;
    }
 
    clear_window ();
@@ -1457,7 +1472,7 @@ void mail_processing ()
    int wh, i = 1;
    char string[128];
 
-   wh = wopen (7, 10, 18, 74, 3, LCYAN|_BLACK, CYAN|_BLACK);
+   wh = wopen (7, 10, 19, 74, 3, LCYAN|_BLACK, CYAN|_BLACK);
    wactiv (wh);
    wshadow (DGREY|_BLACK);
    wtitle (" Mail Processing ", TRIGHT, YELLOW|_BLUE);
@@ -1483,6 +1498,8 @@ void mail_processing ()
       wmenuiba (mailproc_linehelp, clear_window);
       wmenuitem ( 8,  1, " Force INTL line    ", 0,  8, 0, NULL, 0, 0);
       wmenuiba (mailproc_linehelp, clear_window);
+      wmenuitem ( 9,  1, " Export Internet    ", 0,  9, 0, NULL, 0, 0);
+      wmenuiba (mailproc_linehelp, clear_window);
       wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
       wprints (1, 22, CYAN|_BLACK, config.mail_method ? "Separate netmail" : "Netmail and echomail together");
@@ -1500,6 +1517,7 @@ void mail_processing ()
       wprints (6, 22, CYAN|_BLACK, config.tearline);
       wprints (7, 22, CYAN|_BLACK, config.keep_empty ? "Yes" : "No");
       wprints (8, 22, CYAN|_BLACK, config.force_intl ? "Yes" : "No");
+      wprints (9, 22, CYAN|_BLACK, config.export_internet ? "Yes" : "No");
 
       start_update ();
       i = wmenuget ();
@@ -1554,6 +1572,10 @@ void mail_processing ()
 
          case 8:
             config.force_intl ^= 1;
+            break;
+
+         case 9:
+            config.export_internet ^= 1;
             break;
       }
 

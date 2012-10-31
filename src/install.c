@@ -134,7 +134,7 @@ void main (int argc, char *argv[])
 #else
    cprintf ("          LoraBBS-DOS v%s - The Computer-Based Information System\r\n", INSTALL_VERSION);
 #endif
-   cprintf ("        CopyRight (c) 1989-94 by Marco Maccaferri. All Rights Reserved\r\n");
+   cprintf ("        CopyRight (c) 1989-95 by Marco Maccaferri. All Rights Reserved\r\n");
    cprintf ("컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴");
    gotoxy (1, 24);
    cprintf ("컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴");

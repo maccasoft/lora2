@@ -20,6 +20,10 @@ struct _qlastread {
    word msgnum[200];
 };
 
+struct _glastread {
+   word msgnum[500];
+};
+
 typedef struct {
    long crc;
    unsigned int num;
@@ -29,7 +33,7 @@ typedef struct {
 char *cfgname = "CONFIG.DAT";
 struct _configuration cfg;
 
-extern unsigned int _stklen = 10240;
+extern unsigned int _stklen = 13000;
 
 unsigned long far cr3tab[] = {                /* CRC polynomial 0xedb88320 */
         0x00000000L, 0x77073096L, 0xee0e612cL, 0x990951baL, 0x076dc419L, 0x706af48fL, 0xe963a535L, 0x9e6495a3L,
@@ -318,8 +322,18 @@ void Purge_Squish_Areas (void)
       msgnum = (int)MsgGetNumMsg (sq_ptr);
       last = msgnum;
 
+      if (msgnum == 0) {
+         MsgUnlock (sq_ptr);
+         MsgCloseArea (sq_ptr);
+         continue;
+      }
+
       msgnum++;
-      lastr = (int *)malloc (msgnum * sizeof (int));
+      if ((lastr = (int *)malloc (msgnum * sizeof (int))) == NULL) {
+         MsgUnlock (sq_ptr);
+         MsgCloseArea (sq_ptr);
+         continue;
+      }
       memset (lastr, 0, msgnum * sizeof (int));
       msgnum--;
 
@@ -407,49 +421,59 @@ void Purge_Squish_Areas (void)
       MsgUnlock (sq_ptr);
       MsgCloseArea (sq_ptr);
 
-      sprintf (filename, "%s.BBS", cfg.user_file);
-      fdu = open (filename, O_RDWR | O_BINARY);
-      pos = tell (fdu);
+      if (last < maxmsgs) {
+         sprintf (filename, "%s.BBS", cfg.user_file);
+         fdu = open (filename, O_RDWR | O_BINARY);
+         pos = tell (fdu);
 
-      while (read(fdu, (char *) &usr, sizeof(struct _usr)) == sizeof(struct _usr)) {
-         for (i = 0; i < MAXLREAD; i++)
-            if (usr.lastread[i].area == tsys.msg_num)
-               break;
-
-         if (i < MAXLREAD) {
-            m = usr.lastread[i].msg_num;
-            while (m > 0 && lastr[m] == 0)
-               m--;
-            usr.lastread[i].msg_num = lastr[m];
-
-            lseek (fdu, pos, 0);
-            write (fdu, (char *) &usr, sizeof(struct _usr));
-         }
-         else {
-            for (i = 0; i < MAXDLREAD; i++)
-               if (usr.dynlastread[i].area == tsys.msg_num)
+         while (read(fdu, (char *) &usr, sizeof(struct _usr)) == sizeof(struct _usr)) {
+            for (i = 0; i < MAXLREAD; i++)
+               if (usr.lastread[i].area == tsys.msg_num)
                   break;
 
-            if (i < MAXDLREAD) {
-               m = usr.dynlastread[i].msg_num;
+            if (i < MAXLREAD) {
+               m = usr.lastread[i].msg_num;
+               if (m > msgnum)
+                  m = msgnum;
+               if (m < 0)
+                  m = 0;
                while (m > 0 && lastr[m] == 0)
                   m--;
-               usr.dynlastread[i].msg_num = lastr[m];
+               usr.lastread[i].msg_num = lastr[m];
 
                lseek (fdu, pos, 0);
-               write (fdu, (char *) &usr, sizeof (struct _usr));
+               write (fdu, (char *) &usr, sizeof(struct _usr));
             }
+            else {
+               for (i = 0; i < MAXDLREAD; i++)
+                  if (usr.dynlastread[i].area == tsys.msg_num)
+                     break;
+
+               if (i < MAXDLREAD) {
+                  m = usr.dynlastread[i].msg_num;
+                  if (m > msgnum)
+                     m = msgnum;
+                  if (m < 0)
+                     m = 0;
+                  while (m > 0 && lastr[m] == 0)
+                     m--;
+                  usr.dynlastread[i].msg_num = lastr[m];
+
+                  lseek (fdu, pos, 0);
+                  write (fdu, (char *) &usr, sizeof (struct _usr));
+               }
+            }
+
+            pos = tell (fdu);
          }
 
-         pos = tell (fdu);
+         close (fdu);
+
+         if (lastr != NULL)
+            free (lastr);
+
+         printf ("\n");
       }
-
-      close (fdu);
-
-      if (lastr != NULL)
-         free (lastr);
-
-      printf ("\n");
    }
 
    close (fd);
@@ -518,7 +542,7 @@ void Pack_Squish_Areas (void)
 
          sq_dest = MsgOpenArea (filename, MSGAREA_CRIFNEC, MSGTYPE_SQUISH);
          MsgLock (sq_dest);
-         waterid = MsgGetHighWater (sq_ptr);
+         waterid = (int)MsgGetHighWater (sq_ptr);
          text = (char *)malloc (16384);
 
          for (m = 0; m < msgnum; m++) {
@@ -669,7 +693,7 @@ void Create_Fido_Index (void)
    memset (&mail, 0, sizeof (struct _mail));
 
    while ( read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA ) {
-      if ( tsys.quick_board || tsys.pip_board || tsys.squish)
+      if ( tsys.quick_board || tsys.pip_board || tsys.squish || tsys.gold_board)
          continue;
 
       mail.area = tsys.msg_num;
@@ -712,7 +736,8 @@ void Fido_Renum (char *msg_path, int first, int last, int area_n)
 
    getcwd (curdir, 79);
 
-   setdisk (toupper (msg_path[0]) - 'A');
+   if (msg_path[1] == ':')
+      setdisk (toupper (msg_path[0]) - 'A');
    msg_path[strlen(msg_path)-1] = '\0';
    chdir(msg_path);
    msg_path[strlen(msg_path)] = '\\';
@@ -785,6 +810,9 @@ void Fido_Renum (char *msg_path, int first, int last, int area_n)
 
    close(fd);
 
+   setdisk (toupper (curdir[0]) - 'A');
+   chdir (curdir);
+
    sprintf (filename, "%s.BBS", cfg.user_file);
    fd = open(filename, O_RDWR | O_BINARY);
    pos = tell (fd);
@@ -829,9 +857,6 @@ void Fido_Renum (char *msg_path, int first, int last, int area_n)
    }
 
    close(fd);
-
-   setdisk (toupper (curdir[0]) - 'A');
-   chdir(curdir);
 }
 
 void Renum_Fido_Areas (void)
@@ -851,7 +876,7 @@ void Renum_Fido_Areas (void)
    first = last = 0;
 
    while ( read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA ) {
-      if ( tsys.quick_board || tsys.pip_board || tsys.squish)
+      if ( tsys.quick_board || tsys.pip_board || tsys.squish || tsys.gold_board)
          continue;
 
       msgnum = Scan_Fido_Area (tsys.msg_path, &first, &last);
@@ -960,18 +985,19 @@ void Link_Fido_Areas (void)
    msgnum = first = last = 0;
 
    while ( read (fds, (char *)&tsys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA ) {
-      if ( tsys.quick_board || tsys.pip_board || tsys.squish)
+      if ( tsys.quick_board || tsys.pip_board || tsys.squish || tsys.gold_board)
          continue;
-
-      setdisk (toupper (tsys.msg_path[0]) - 'A');
-      tsys.msg_path[strlen(tsys.msg_path)-1] = '\0';
-      chdir(tsys.msg_path);
-      tsys.msg_path[strlen(tsys.msg_path)] = '\\';
 
       msgnum = Scan_Fido_Area (tsys.msg_path, &first, &last);
       ml = (MSGLINK *)malloc (sizeof (MSGLINK) * last);
       if (ml == NULL)
          continue;
+
+      if (tsys.msg_path[1] == ':')
+         setdisk (toupper (tsys.msg_path[0]) - 'A');
+      tsys.msg_path[strlen(tsys.msg_path)-1] = '\0';
+      chdir(tsys.msg_path);
+      tsys.msg_path[strlen(tsys.msg_path)] = '\\';
 
       if (first == 1 && tsys.echomail)
          first++;
@@ -1073,18 +1099,19 @@ void Purge_Fido_Areas (int renum)
    msgnum = first = last = 0;
 
    while ( read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA ) {
-      if ( tsys.quick_board || tsys.pip_board || tsys.squish)
+      if ( tsys.quick_board || tsys.pip_board || tsys.squish || tsys.gold_board)
          continue;
-
-      setdisk (toupper (tsys.msg_path[0]) - 'A');
-      tsys.msg_path[strlen(tsys.msg_path)-1] = '\0';
-      chdir(tsys.msg_path);
-      tsys.msg_path[strlen(tsys.msg_path)] = '\\';
 
       msgnum = Scan_Fido_Area (tsys.msg_path, &first, &last);
 
       if (first == 1 && tsys.echomail)
          first++;
+
+      if (tsys.msg_path[1] == ':')
+         setdisk (toupper (tsys.msg_path[0]) - 'A');
+      tsys.msg_path[strlen(tsys.msg_path)-1] = '\0';
+      chdir(tsys.msg_path);
+      tsys.msg_path[strlen(tsys.msg_path)] = '\\';
 
       clreol ();
       printf("   青 %3d - %-25.25s %-25.25s %d Msg.\r", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "", msgnum);
@@ -1092,7 +1119,16 @@ void Purge_Fido_Areas (int renum)
       if ( tsys.max_age || tsys.age_rcvd )
          Kill_by_Age (tsys.max_age, tsys.age_rcvd, first, last);
 
+      setdisk (toupper (curdir[0]) - 'A');
+      chdir (curdir);
+
       msgnum = Scan_Fido_Area (tsys.msg_path, &first, &last);
+
+      if (tsys.msg_path[1] == ':')
+         setdisk (toupper (tsys.msg_path[0]) - 'A');
+      tsys.msg_path[strlen(tsys.msg_path)-1] = '\0';
+      chdir(tsys.msg_path);
+      tsys.msg_path[strlen(tsys.msg_path)] = '\\';
 
       if ( tsys.max_msgs && tsys.max_msgs < msgnum ) {
          kill = msgnum - tsys.max_msgs;
@@ -1106,8 +1142,11 @@ void Purge_Fido_Areas (int renum)
          }
       }
 
-      if (renum)
+      if (renum) {
+         setdisk (toupper (curdir[0]) - 'A');
+         chdir (curdir);
          Fido_Renum (tsys.msg_path, first, last, tsys.msg_num);
+      }
    }
 
    close (fd);
@@ -1123,7 +1162,8 @@ void Purge_Fido_Areas (int renum)
    ----------------------------------------------------------------------- */
 void Create_Quick_Index (int xlink, int unknow, int renum)
 {
-   int fd, fdidx, fdto, know[200], m, flag;
+   int fd, fdidx, fdto, m, flag;
+   short know[200];
    char filename[60];
    word msgnum;
    long pos;
@@ -1655,14 +1695,579 @@ void Purge_Quick_Areas (int renum)
    for (m = 0; m < 200; m++)
       cnum[m] = 0;
 
+   if (deleted) {
+      printf("\n * Updating USERS lastread pointer\n");
+
+      sprintf (filename, "%sLASTREAD.BBS", cfg.quick_msgpath);
+      fd = open (filename,O_RDWR|O_BINARY);
+
+      pos = 0L;
+      while (read (fd, &lr, sizeof (struct _qlastread)) == sizeof (struct _qlastread)) {
+         for (i = 0; i < 200; i++) {
+            m = 0;
+            while (lastr[m] < lr.msgnum[i] && m < msginfo.totalmsgs)
+               m++;
+            while (m > 0 && lastr[m] == 0)
+               m--;
+            lr.msgnum[i] = lastr[m];
+         }
+
+         lseek (fd, pos, SEEK_SET);
+         write (fd, &lr, sizeof (struct _qlastread));
+         pos = tell (fd);
+      }
+
+      close (fd);
+
+      sprintf (filename, "%sSYSMSG.DAT", cfg.sys_path);
+      fd = open(filename, O_RDONLY|O_BINARY);
+      if (fd == -1)
+         exit (1);
+
+      while ( read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA ) {
+         if ( tsys.quick_board < 1 || tsys.quick_board > 200)
+            continue;
+         cnum[tsys.quick_board-1] = tsys.msg_num;
+      }
+
+      close (fd);
+
+      sprintf (filename, "%s.BBS", cfg.user_file);
+      fd = open(filename, O_RDWR | O_BINARY);
+      pos = tell (fd);
+
+      while (read(fd, (char *) &usr, sizeof(struct _usr)) == sizeof(struct _usr)) {
+         for (area = 0; area < MAXLREAD; area++) {
+            for (m = 0; m < 200; m++) {
+               if (usr.lastread[area].area == cnum[m])
+                  break;
+            }
+
+            if (m < 200 && usr.lastread[area].msg_num) {
+               flag1 = 0;
+
+               for (x = 0; x < msginfo.totalonboard[m]; x++)
+                  if (qren[m][x] > flag1 && qren[m][x] <= usr.lastread[area].msg_num)
+                     flag1 = x + 1;
+
+               usr.lastread[area].msg_num = flag1;
+            }
+         }
+
+         for (area = 0; area < MAXDLREAD; area++) {
+            for (m = 0; m < 200; m++) {
+               if (usr.dynlastread[area].area == cnum[m])
+                  break;
+            }
+
+            if (m < 200 && usr.dynlastread[area].msg_num) {
+               flag1 = 0;
+
+               for (x = 0; x < msginfo.totalonboard[m]; x++)
+                  if (qren[m][x] > flag1 && qren[m][x] <= usr.dynlastread[area].msg_num)
+                     flag1 = x + 1;
+
+               usr.dynlastread[area].msg_num = flag1;
+            }
+         }
+
+         lseek (fd, pos, SEEK_SET);
+         write (fd, (char *) &usr, sizeof(struct _usr));
+
+         pos = tell (fd);
+      }
+
+      close(fd);
+   }
+
+   for (m = 0; m < 200; m ++) {
+      if (qren[m] != NULL)
+#ifdef __OS2__
+         free (qren[m]);
+#else
+         farfree (qren[m]);
+#endif
+   }
+}
+
+void Pack_Quick_Base (int renum)
+{
+   FILE *fph, *fpt, *fpi, *fpto, *outfph, *outfpt;
+   int i;
+   char filename[80], newname[80];
+   unsigned int msgnum;
+   unsigned char text[256];
+   long block, messages, deleted;
+   struct _msghdr msghdr;
+   struct _msgidx msgidx;
+   struct _msginfo msginfo;
+
+   printf (" * Packing QuickBBS Message Base\r\n");
+
+   memset (&msginfo, 0, sizeof (struct _msginfo));
+
+   sprintf (filename, "%sMSGHDR.BBS", cfg.quick_msgpath);
+   if ((fph = fopen (filename, "rb")) == NULL)
+      exit (2);
+
+   block = 0;
+   msgnum = 1;
+   deleted = 0;
+   messages = filelength (fileno (fph)) / sizeof (struct _msghdr);
+
+   while (fread (&msghdr, sizeof (struct _msghdr), 1, fph) == 1) {
+      if (msghdr.msgattr & Q_RECKILL) {
+         deleted++;
+         continue;
+      }
+      if (!msghdr.msgnum || msghdr.board < 1 || msghdr.board > 200) {
+         deleted++;
+         continue;
+      }
+   }
+
+   if (deleted == 0) {
+      fclose (fph);
+      printf (" * No Messages Deleted\r\n");
+      return;
+   }
+
+   messages -= deleted;
+
+   sprintf (filename, "%sMSGTXT.BBS", cfg.quick_msgpath);
+   if ((fpt = fopen (filename, "rb")) == NULL)
+      exit (2);
+   sprintf (filename, "%sMSGIDX.BBS", cfg.quick_msgpath);
+   if ((fpi = fopen (filename, "wb")) == NULL)
+      exit (2);
+   sprintf (filename, "%sMSGTOIDX.BBS", cfg.quick_msgpath);
+   if ((fpto = fopen (filename, "wb")) == NULL)
+      exit (2);
+
+   sprintf (filename, "%sMSGHDR.NEW", cfg.quick_msgpath);
+   if ((outfph = fopen (filename, "wb")) == NULL)
+      exit (2);
+   sprintf (filename, "%sMSGTXT.NEW", cfg.quick_msgpath);
+   if ((outfpt = fopen (filename, "wb")) == NULL)
+      exit (2);
+
+   fseek (fph, 0L, SEEK_SET);
+
+   while (fread (&msghdr, sizeof (struct _msghdr), 1, fph) == 1) {
+      if (msghdr.msgattr & Q_RECKILL)
+         continue;
+      if (!msghdr.msgnum || msghdr.board < 1 || msghdr.board > 200)
+         continue;
+
+      printf ("   Packed Msg.# %d / %ld\r", msgnum, messages);
+
+      fseek (fpt, (long)msghdr.startblock * 256L, SEEK_SET);
+
+      msghdr.startblock = (unsigned int)block;
+      if (renum)
+         msghdr.msgnum = msgnum;
+      fwrite (&msghdr, sizeof (struct _msghdr), 1, outfph);
+
+      for (i = 0; i < msghdr.numblocks; i++) {
+         fread (text, 256, 1, fpt);
+         fwrite (text, 256, 1, outfpt);
+      }
+
+      msgidx.msgnum = msghdr.msgnum;
+      msgidx.board = msghdr.board;
+      fwrite (&msgidx, sizeof (struct _msgidx), 1, fpi);
+
+      fwrite (&msghdr.whoto, 36, 1, fpto);
+
+      if (!msginfo.lowmsg || msghdr.msgnum < msginfo.lowmsg)
+         msginfo.lowmsg = msghdr.msgnum;
+      if (!msginfo.highmsg || msghdr.msgnum > msginfo.highmsg)
+         msginfo.highmsg = msghdr.msgnum;
+      msginfo.totalonboard[msghdr.board - 1]++;
+      msginfo.totalmsgs++;
+
+      block += msghdr.numblocks;
+      msgnum++;
+   }
+
+   fclose (outfpt);
+   fclose (outfph);
+   fclose (fpto);
+   fclose (fpi);
+   fclose (fpt);
+   fclose (fph);
+
+   sprintf (filename, "%sMSGINFO.BBS", cfg.quick_msgpath);
+   if ((fpto = fopen (filename, "wb")) == NULL)
+      exit (2);
+   fwrite (&msginfo, sizeof (struct _msginfo), 1, fpto);
+   fclose (fpto);
+
+   sprintf (filename, "%sMSGHDR.NEW", cfg.quick_msgpath);
+   sprintf (newname, "%sMSGHDR.BBS", cfg.quick_msgpath);
+   unlink (newname);
+   rename (filename, newname);
+
+   sprintf (filename, "%sMSGTXT.NEW", cfg.quick_msgpath);
+   sprintf (newname, "%sMSGTXT.BBS", cfg.quick_msgpath);
+   unlink (newname);
+   rename (filename, newname);
+
+   clreol ();
+}
+
+
+/* -----------------------------------------------------------------------
+
+   Sezione di gestione della base messaggi GOLD.
+
+   ----------------------------------------------------------------------- */
+void Create_Gold_Index (int xlink, int unknow, int renum)
+{
+   int fd, fdidx, fdto, know[500], m, flag;
+   char filename[60];
+   long pos, msgnum;
+   struct _sys tsys;
+   struct _gold_msghdr msghdr;
+   struct _gold_msgidx msgidx;
+   struct _gold_msginfo msginfo;
+
+   msgnum = 1;
+   if (xlink);
+
+   if (unknow) {
+      for (m = 0; m < 500; m++)
+         know[m] = 0;
+
+      sprintf (filename, "%sSYSMSG.DAT", cfg.sys_path);
+      fd = open(filename, O_RDONLY|O_BINARY);
+      if (fd == -1)
+         exit (1);
+
+      while ( read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA ) {
+         if ( !tsys.gold_board )
+            continue;
+
+         know[tsys.gold_board-1] = 1;
+      }
+
+      close (fd);
+   }
+
+   sprintf (filename, "%sMSGHDR.DAT", cfg.quick_msgpath);
+   fd = open (filename, O_RDWR|O_BINARY);
+   if (fd == -1)
+      exit (1);
+
+   printf(" * Regenerating Gold message base indices\n");
+
+   pos = tell (fd);
+
+   memset((char *)&msginfo, 0, sizeof(struct _gold_msginfo));
+
+   sprintf (filename, "%sMSGIDX.DAT", cfg.quick_msgpath);
+   fdidx = open(filename,O_WRONLY|O_BINARY|O_TRUNC);
+
+   sprintf (filename, "%sMSGTOIDX.DAT", cfg.quick_msgpath);
+   fdto = open(filename,O_WRONLY|O_BINARY|O_TRUNC);
+
+   while (read(fd, (char *)&msghdr, sizeof (struct _gold_msghdr)) == sizeof (struct _gold_msghdr)) {
+      flag = 0;
+
+      if (unknow) {
+         if (know[msghdr.board-1] != 1) {
+            msghdr.msgattr |= Q_RECKILL;
+            if (know[msghdr.board-1] != 2) {
+               printf(" * Unknow board #%d\n", msghdr.board);
+               know[msghdr.board-1] = 2;
+            }
+            flag = 1;
+         }
+      }
+
+      if (renum)
+         msghdr.msgnum = msgnum++;
+      else
+         msgnum++;
+
+      if (renum || flag) {
+         lseek (fd, pos, SEEK_SET);
+         write (fd, (char *)&msghdr, sizeof (struct _gold_msghdr));
+         pos = tell (fd);
+      }
+
+      if (flag) {
+         msgidx.msgnum = 0;
+         write (fdto, "\x0B* Deleted *                        ", 36);
+      }
+      else {
+         write (fdto, (char *)&msghdr.whoto, sizeof (struct _msgtoidx));
+         msgidx.msgnum = msghdr.msgnum;
+      }
+
+      msgidx.board = msghdr.board;
+      write (fdidx, (char *)&msgidx, sizeof (struct _gold_msgidx));
+
+      msginfo.totalmsgs++;
+
+      if (!msginfo.lowmsg)
+         msginfo.lowmsg = msghdr.msgnum;
+
+      if (msginfo.lowmsg > msghdr.msgnum)
+         msginfo.lowmsg = msghdr.msgnum;
+      if (msginfo.highmsg < msghdr.msgnum)
+         msginfo.highmsg = msghdr.msgnum;
+
+      if (!flag)
+         msginfo.totalonboard[msgidx.board-1]++;
+   }
+
+   close (fdto);
+   close (fdidx);
+   close (fd);
+
+   sprintf (filename, "%sMSGINFO.DAT", cfg.quick_msgpath);
+   fd = open(filename,O_WRONLY|O_BINARY);
+   write(fd, (char *)&msginfo, sizeof(struct _gold_msginfo));
+   close (fd);
+}
+
+void Purge_Gold_Areas (int renum)
+{
+   #define MAXREADIDX   100
+   int fd, fdidx, max_msgs[500], max_age[500], age_rcvd[500], month[12];
+   int cnum[500], pnum[500], area, flag1, x, m, i;
+   int *qren[500];
+   char filename[60];
+   int fdto, dy, mo, yr, days, flag;
+   word deleted = 0, *lastr, lrpos;
+   long msgnum, pos, tempo, day_now, day_mess;
+   struct tm *tim;
+   struct _gold_msghdr msghdr;
+   struct _gold_msgidx msgidx;
+   struct _gold_msgidx idx[MAXREADIDX];
+   struct _gold_msginfo msginfo;
+   struct _qlastread lr;
+   struct _sys tsys;
+   struct _usr usr;
+
+   month[0] = 31;
+   month[1] = 28;
+   month[2] = 31;
+   month[3] = 30;
+   month[4] = 31;
+   month[5] = 30;
+   month[6] = 31;
+   month[7] = 31;
+   month[8] = 30;
+   month[9] = 31;
+   month[10] = 30;
+   month[11] = 31;
+
+   for (m = 0; m < 500; m++) {
+      max_msgs[m] = 0;
+      max_age[m] = 0;
+      age_rcvd[m] = 0;
+      cnum[m] = 0;
+      pnum[m] = 0;
+   }
+
+   msgnum = 0;
+   flag = 0;
+
+   sprintf (filename, "%sSYSMSG.DAT", cfg.sys_path);
+   fd = open(filename, O_RDONLY|O_BINARY);
+   if (fd == -1)
+      exit (1);
+
+   while ( read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA ) {
+      if ( tsys.gold_board < 1 || tsys.gold_board > 500)
+         continue;
+
+      max_msgs[tsys.gold_board-1] = tsys.max_msgs;
+      max_age[tsys.gold_board-1] = tsys.max_age;
+      age_rcvd[tsys.gold_board-1] = tsys.age_rcvd;
+
+      if (tsys.max_msgs || tsys.max_age || tsys.age_rcvd)
+         flag = 1;
+   }
+
+   close (fd);
+
+   if (!flag)
+      return;
+
+   printf(" * Reading message base data\n");
+
+   memset (&msginfo, 0, sizeof (struct _gold_msginfo));
+
+   sprintf(filename, "%sMSGIDX.DAT", cfg.quick_msgpath);
+   fd = open (filename, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
+
+   do {
+      m = read (fd, (char *)&idx, sizeof (struct _gold_msgidx) * MAXREADIDX);
+      m /= sizeof (struct _gold_msgidx);
+
+      for (x = 0; x < m; x++) {
+         if (idx[x].board && idx[x].msgnum) {
+            if (!msginfo.lowmsg)
+               msginfo.lowmsg = idx[x].msgnum;
+
+            if (msginfo.lowmsg > idx[x].msgnum)
+               msginfo.lowmsg = idx[x].msgnum;
+            if (msginfo.highmsg < idx[x].msgnum)
+               msginfo.highmsg = idx[x].msgnum;
+
+            msginfo.totalmsgs++;
+            msginfo.totalonboard[idx[x].board - 1]++;
+         }
+      }
+   } while (m == MAXREADIDX);
+
+   close(fd);
+
+   printf(" * Purging GoldBase messages\n");
+
+#ifdef __OS2__
+   lastr = (word *)malloc (msginfo.totalmsgs * sizeof (word));
+#else
+   lastr = (word *)farmalloc (msginfo.totalmsgs * sizeof (word));
+#endif
+   if (lastr == NULL) {
+      printf ("MEM Err: LASTREAD allocation.\n");
+      exit (1);
+   }
+   memset (lastr, 0, (unsigned int)msginfo.totalmsgs * sizeof (word));
+   lrpos = 0;
+
+   for (m = 0; m < 500; m++) {
+      if (msginfo.totalonboard[m]) {
+#ifdef __OS2__
+         qren[m] = (int *)malloc (msginfo.totalonboard[m] * (long)sizeof (int));
+#else
+         qren[m] = (int far *)farmalloc (msginfo.totalonboard[m] * (long)sizeof (int));
+#endif
+         if (qren[m] == NULL)
+            exit (2);
+      }
+      else
+         qren[m] = NULL;
+   }
+
+   tempo = time(0);
+   tim = localtime(&tempo);
+
+   day_now = 365 * tim->tm_year;
+   for (m = 0; m < tim->tm_mon; m++)
+      day_now += month[m];
+   day_now += tim->tm_mday;
+
+   sprintf (filename, "%sMSGHDR.DAT", cfg.quick_msgpath);
+   fd = open (filename, O_RDWR|O_BINARY);
+   if (fd == -1)
+      exit (1);
+
+   pos = tell (fd);
+
+   sprintf (filename, "%sMSGIDX.DAT", cfg.quick_msgpath);
+   fdidx = open(filename,O_RDWR|O_BINARY);
+
+   sprintf (filename, "%sMSGTOIDX.DAT", cfg.quick_msgpath);
+   fdto = open(filename,O_RDWR|O_BINARY);
+
+   while (read(fd, (char *)&msghdr, sizeof (struct _gold_msghdr)) == sizeof (struct _gold_msghdr)) {
+      flag = 0;
+      if (msghdr.board >= 1 && msghdr.board <= 500 && msghdr.msgnum) {
+         pnum[msghdr.board-1]++;
+
+         if (max_msgs[msghdr.board-1] && msginfo.totalonboard[msghdr.board-1] > max_msgs[msghdr.board-1]) {
+            msghdr.msgattr |= Q_RECKILL;
+            flag = 1;
+         }
+         else {
+            sscanf(&msghdr.date[1], "%02d-%02d-%02d", &mo, &dy, &yr);
+
+            day_mess = 365 * yr;
+            mo--;
+            for (m = 0; m < mo; m++)
+               day_mess += month[m];
+            day_mess += dy;
+
+            days = (int)(day_now - day_mess);
+
+            if (max_age[msghdr.board-1] && days > max_age[msghdr.board-1]) {
+               msghdr.msgattr |= Q_RECKILL;
+               flag = 1;
+            }
+            else if (age_rcvd[msghdr.board-1] &&
+             ( (msghdr.msgattr & Q_PRIVATE) && (msghdr.msgattr & Q_RECEIVED) ) &&
+             days > age_rcvd[msghdr.board-1]) {
+               msghdr.msgattr |= Q_RECKILL;
+               flag = 1;
+            }
+         }
+      }
+
+      if ( flag ) {
+         deleted++;
+         lseek (fd, pos, SEEK_SET);
+         write (fd, (char *)&msghdr, sizeof (struct _gold_msghdr));
+         msginfo.totalonboard[msghdr.board-1]--;
+         lseek (fdidx, (long)msgnum * sizeof (struct _gold_msgidx), SEEK_SET);
+         read (fdidx, (char *)&msgidx, sizeof (struct _gold_msgidx));
+         msgidx.msgnum = 0;
+         lseek (fdidx, (long)msgnum * sizeof (struct _gold_msgidx), SEEK_SET);
+         write (fdidx, (char *)&msgidx, sizeof (struct _gold_msgidx));
+
+         lseek (fdto, (long)msgnum * 36, SEEK_SET);
+         write (fdto, "\x0B* Deleted *                        ", 36);
+
+         lrpos++;
+      }
+      else {
+         qren[msghdr.board-1][cnum[msghdr.board-1]++] = pnum[msghdr.board-1];
+         lastr[lrpos++] = (word)msghdr.msgnum;
+      }
+
+      if (renum) {
+         msgidx.msgnum = msghdr.msgnum;
+         msgidx.board = msghdr.board;
+
+         write (fdidx, (char *)&msgidx, sizeof (struct _gold_msgidx));
+      }
+
+//      sprintf (filename, "%d", msghdr.msgnum);
+//      printf ("%s%*s", filename, strlen (filename), "\b\b\b\b\b\b\b");
+
+      pos = tell (fd);
+      if ((msgnum % 40) == 0 || flag)
+         printf("   青 Msg.: %lu, Deleted: %u\r", msgnum, deleted);
+
+      msgnum++;
+   }
+
+   close (fdidx);
+   close (fd);
+   close (fdto);
+
+   sprintf (filename, "%sMSGINFO.DAT", cfg.quick_msgpath);
+   fd = open(filename,O_RDWR|O_BINARY);
+   if (fd == -1)
+      exit (1);
+   write (fd, (char *)&msginfo, sizeof (struct _gold_msginfo));
+   close (fd);
+
+   for (m = 0; m < 500; m++)
+      cnum[m] = 0;
+
    printf("\n * Updating USERS lastread pointer\n");
 
-   sprintf (filename, "%sLASTREAD.BBS", cfg.quick_msgpath);
+   sprintf (filename, "%sLASTREAD.DAT", cfg.quick_msgpath);
    fd = open (filename,O_RDWR|O_BINARY);
 
    pos = 0L;
-   while (read (fd, &lr, sizeof (struct _qlastread)) == sizeof (struct _qlastread)) {
-      for (i = 0; i < 200; i++) {
+   while (read (fd, &lr, sizeof (struct _glastread)) == sizeof (struct _glastread)) {
+      for (i = 0; i < 500; i++) {
          m = 0;
          while (lastr[m] < lr.msgnum[i] && m < msginfo.totalmsgs)
             m++;
@@ -1672,7 +2277,7 @@ void Purge_Quick_Areas (int renum)
       }
 
       lseek (fd, pos, SEEK_SET);
-      write (fd, &lr, sizeof (struct _qlastread));
+      write (fd, &lr, sizeof (struct _glastread));
       pos = tell (fd);
    }
 
@@ -1684,9 +2289,9 @@ void Purge_Quick_Areas (int renum)
       exit (1);
 
    while ( read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA ) {
-      if ( tsys.quick_board < 1 || tsys.quick_board > 200)
+      if ( tsys.gold_board < 1 || tsys.gold_board > 500)
          continue;
-      cnum[tsys.quick_board-1] = tsys.msg_num;
+      cnum[tsys.gold_board-1] = tsys.msg_num;
    }
 
    close (fd);
@@ -1697,12 +2302,12 @@ void Purge_Quick_Areas (int renum)
 
    while (read(fd, (char *) &usr, sizeof(struct _usr)) == sizeof(struct _usr)) {
       for (area = 0; area < MAXLREAD; area++) {
-         for (m = 0; m < 200; m++) {
+         for (m = 0; m < 500; m++) {
             if (usr.lastread[area].area == cnum[m])
                break;
          }
 
-         if (m < 200 && usr.lastread[area].msg_num) {
+         if (m < 500 && usr.lastread[area].msg_num) {
             flag1 = 0;
 
             for (x = 0; x < msginfo.totalonboard[m]; x++)
@@ -1714,12 +2319,12 @@ void Purge_Quick_Areas (int renum)
       }
 
       for (area = 0; area < MAXDLREAD; area++) {
-         for (m = 0; m < 200; m++) {
+         for (m = 0; m < 500; m++) {
             if (usr.dynlastread[area].area == cnum[m])
                break;
          }
 
-         if (m < 200 && usr.dynlastread[area].msg_num) {
+         if (m < 500 && usr.dynlastread[area].msg_num) {
             flag1 = 0;
 
             for (x = 0; x < msginfo.totalonboard[m]; x++)
@@ -1738,7 +2343,7 @@ void Purge_Quick_Areas (int renum)
 
    close(fd);
 
-   for (m = 0; m < 200; m ++) {
+   for (m = 0; m < 500; m ++) {
       if (qren[m] != NULL)
 #ifdef __OS2__
          free (qren[m]);
@@ -1746,350 +2351,6 @@ void Purge_Quick_Areas (int renum)
          farfree (qren[m]);
 #endif
    }
-}
-
-int block_used (byte *blocks, unsigned int num)
-{
-   int n, b;
-
-   n = num / 8;
-   b = num % 8;
-
-   return ( (blocks[n] & (0x01 << b)) ? 1 : 0);
-}
-
-void block_set (byte *blocks, unsigned int num)
-{
-   int n, b;
-
-   n = num / 8;
-   b = num % 8;
-
-   blocks[n] |= (0x01 << b);
-}
-
-void block_reset (byte *blocks, unsigned int num)
-{
-   int n, b;
-
-   n = num / 8;
-   b = num % 8;
-
-   blocks[n] &= ~(0x01 << b);
-}
-
-#define MAX_BUFFER   32*256
-#define MAX_HEADBUFF (32*sizeof(struct _msghdr))
-
-char *rbuff = NULL, *wbuff = NULL;
-int bread, bwrite, iread;
-long pread, pwrite;
-char *hrbuff = NULL, *hwbuff = NULL;
-
-int read_block (int fd, char *buffer)
-{
-   if (rbuff == NULL) {
-      rbuff = (char *)malloc (MAX_BUFFER);
-      if (rbuff == NULL)
-         return (-1);
-      bread = 0;
-      lseek (fd, 0L, SEEK_SET);
-      iread = read (fd, rbuff, MAX_BUFFER);
-      pread = iread;
-   }
-
-   if (bread >= MAX_BUFFER) {
-      bread = 0;
-      lseek (fd, pread, SEEK_SET);
-      iread = read (fd, rbuff, MAX_BUFFER);
-      pread += iread;
-   }
-
-   if (bread < iread) {
-      memcpy (buffer, &rbuff[bread], 256);
-      bread += 256;
-      return (256);
-   }
-
-   return (0);
-}
-
-int write_block (int fd, char *buffer)
-{
-   if (wbuff == NULL) {
-      wbuff = (char *)malloc (MAX_BUFFER);
-      if (wbuff == NULL)
-         return (-1);
-      bwrite = 0;
-      pwrite = 0;
-   }
-
-   if (bwrite >= MAX_BUFFER) {
-      lseek (fd, pwrite, SEEK_SET);
-      pwrite += write (fd, wbuff, bwrite);
-      bwrite = 0;
-   }
-
-   memcpy (&wbuff[bwrite], buffer, 256);
-   bwrite += 256;
-   return (256);
-}
-
-int read_header (int fd, struct _msghdr *buffer)
-{
-   if (hrbuff == NULL) {
-      hrbuff = (char *)malloc (MAX_HEADBUFF);
-      if (hrbuff == NULL)
-         return (-1);
-      bread = 0;
-      lseek (fd, 0L, SEEK_SET);
-      iread = read (fd, hrbuff, MAX_HEADBUFF);
-      pread = iread;
-   }
-
-   if (bread >= MAX_HEADBUFF) {
-      bread = 0;
-      lseek (fd, pread, SEEK_SET);
-      iread = read (fd, hrbuff, MAX_HEADBUFF);
-      pread += iread;
-   }
-
-   if (bread < iread) {
-      memcpy (buffer, &hrbuff[bread], sizeof (struct _msghdr));
-      bread += sizeof (struct _msghdr);
-      return (sizeof (struct _msghdr));
-   }
-
-   return (0);
-}
-
-int write_header (int fd, struct _msghdr *buffer)
-{
-   if (hwbuff == NULL) {
-      hwbuff = (char *)malloc (MAX_HEADBUFF);
-      if (hwbuff == NULL)
-         return (-1);
-      bwrite = 0;
-      pwrite = 0;
-   }
-
-   if (bwrite >= MAX_HEADBUFF) {
-      lseek (fd, pwrite, SEEK_SET);
-      pwrite += write (fd, hwbuff, bwrite);
-      bwrite = 0;
-   }
-
-   memcpy (&hwbuff[bwrite], buffer, sizeof (struct _msghdr));
-   bwrite += sizeof (struct _msghdr);
-   return (sizeof (struct _msghdr));
-}
-
-void Pack_Quick_Base (int renum)
-{
-   int fd, fdidx, fdto, dim;
-   word *lastr, *newnum, lrpos, i, m;
-   char filename[60];
-   byte *blocks, buff[256];
-   unsigned int count, msgnum, numblocks;
-   long rpos, wpos, pos;
-   struct _msghdr msghdr;
-   struct _msgidx msgidx;
-   struct _msginfo msginfo;
-   struct _qlastread lr;
-
-   sprintf (filename, "%sMSGINFO.BBS", cfg.quick_msgpath);
-   fd = open(filename,O_RDONLY|O_BINARY);
-   read(fd, (char *)&msginfo, sizeof(struct _msginfo));
-   close (fd);
-
-   sprintf (filename, "%sMSGTXT.BBS", cfg.quick_msgpath);
-   fd = open(filename,O_RDONLY|O_BINARY);
-   if (fd == -1)
-      exit (1);
-   dim = (int)(filelength (fd) / 8) + 1;
-   numblocks = (unsigned int)(filelength (fd) / 256L);
-   close (fd);
-
-   blocks = (byte *)malloc (dim);
-   if (blocks == NULL)
-      exit (1);
-   memset ((char *)blocks, 0, dim);
-
-   lastr = (word *)malloc (msginfo.totalmsgs * sizeof (word));
-   if (lastr == NULL) {
-      printf ("MEM Err: LASTREAD allocation (lastr).\n");
-      exit (1);
-   }
-   memset (lastr, 0, msginfo.totalmsgs * sizeof (word));
-
-   newnum = (word *)malloc (msginfo.totalmsgs * sizeof (word));
-   if (newnum == NULL) {
-      printf ("MEM Err: LASTREAD allocation (newnum).\n");
-      exit (1);
-   }
-   memset (newnum, 0, msginfo.totalmsgs * sizeof (word));
-
-   lrpos = 0;
-
-   sprintf (filename, "%sMSGHDR.BBS", cfg.quick_msgpath);
-   fd = open (filename, O_RDONLY|O_BINARY);
-   if (fd == -1)
-      exit (1);
-
-   while (read(fd, (char *)&msghdr, sizeof (struct _msghdr)) == sizeof (struct _msghdr)) {
-      if ((msghdr.msgattr & Q_RECKILL) || !msghdr.msgnum || !msghdr.board)
-         continue;
-
-      lastr[lrpos++] = msghdr.msgnum;
-
-      for (; msghdr.numblocks > 0; msghdr.numblocks--, msghdr.startblock++)
-         block_set (blocks, msghdr.startblock);
-   }
-
-   close (fd);
-
-   printf(" * Packing MSGTXT.BBS don't interrupt!\n");
-
-   sprintf (filename, "%sMSGTXT.BBS", cfg.quick_msgpath);
-   fd = open(filename,O_RDWR|O_BINARY);
-   if (fd == -1)
-      exit (1);
-
-   count = 0;
-   rpos = tell (fd);
-   wpos = tell (fd);
-
-   while (read_block (fd, buff) == 256) {
-      if (block_used (blocks, count)) {
-         wpos += 256;
-         write_block (fd, buff);
-      }
-
-      count++;
-
-      if ((count % 12) == 0)
-         printf("   青 Block: %u / %u, Written: %u\r", count, numblocks, (unsigned int)(wpos / 256L));
-   }
-
-   printf("   青 Block: %u / %u, Written: %u\r", count, numblocks, (unsigned int)(wpos / 256L));
-
-   if (wbuff != NULL && bwrite) {
-      lseek (fd, pwrite, SEEK_SET);
-      write (fd, wbuff, bwrite);
-   }
-
-   chsize (fd, wpos);
-   close (fd);
-
-   if (wbuff != NULL) {
-      free (wbuff);
-      wbuff = NULL;
-   }
-   if (rbuff != NULL) {
-      free (rbuff);
-      rbuff = NULL;
-   }
-
-   printf("\n * Packing MSGHDR.BBS and create index files\n");
-
-   sprintf (filename, "%sMSGIDX.BBS", cfg.quick_msgpath);
-   fdidx = open(filename,O_RDWR|O_BINARY|O_TRUNC);
-
-   sprintf (filename, "%sMSGTOIDX.BBS", cfg.quick_msgpath);
-   fdto = open(filename,O_RDWR|O_BINARY|O_TRUNC);
-
-   sprintf (filename, "%sMSGHDR.BBS", cfg.quick_msgpath);
-   fd = open(filename,O_RDWR|O_BINARY);
-   if (fd == -1)
-      exit (1);
-
-   lrpos = 0;
-   msgnum = 1;
-   count = 0;
-   rpos = tell (fd);
-   wpos = tell (fd);
-   memset ((char *)&msginfo, 0, sizeof (struct _msginfo));
-
-   while (read_header (fd, &msghdr) == sizeof (struct _msghdr)) {
-      rpos += (long)sizeof (struct _msghdr);
-
-      if (!(msghdr.msgattr & Q_RECKILL) && msghdr.msgnum && msghdr.board) {
-         msghdr.startblock = count;
-         if (renum)
-            msghdr.msgnum = msgnum++;
-         newnum[lrpos++] = msghdr.msgnum;
-         write_header (fd, &msghdr);
-         count += msghdr.numblocks;
-         wpos += (long)sizeof (struct _msghdr);
-
-         msgidx.msgnum = msghdr.msgnum;
-         msgidx.board = msghdr.board;
-
-         write (fdidx, (char *)&msgidx, sizeof (struct _msgidx));
-         write (fdto, msghdr.whoto, 36);
-
-         msginfo.totalmsgs++;
-
-         if (!msginfo.lowmsg)
-            msginfo.lowmsg = msgidx.msgnum;
-
-         if (msginfo.lowmsg > msgidx.msgnum)
-            msginfo.lowmsg = msgidx.msgnum;
-         if (msginfo.highmsg < msgidx.msgnum)
-            msginfo.highmsg = msgidx.msgnum;
-
-         msginfo.totalonboard[msgidx.board-1]++;
-      }
-   }
-
-   if (hwbuff != NULL && bwrite) {
-      lseek (fd, pwrite, SEEK_SET);
-      write (fd, hwbuff, bwrite);
-   }
-
-   chsize (fd, wpos);
-   close (fd);
-   close (fdidx);
-   close (fdto);
-
-   sprintf (filename, "%sMSGINFO.BBS", cfg.quick_msgpath);
-   fd = open(filename,O_WRONLY|O_BINARY);
-   write(fd, (char *)&msginfo, sizeof(struct _msginfo));
-   close (fd);
-
-   free (blocks);
-   if (hwbuff != NULL)
-      free (hwbuff);
-   if (hrbuff != NULL)
-      free (hrbuff);
-
-   printf(" * Updating LASTREAD.BBS pointer\n");
-
-   sprintf (filename, "%sLASTREAD.BBS", cfg.quick_msgpath);
-   fd = open (filename,O_RDWR|O_BINARY);
-
-   pos = 0L;
-   while (read (fd, &lr, sizeof (struct _qlastread)) == sizeof (struct _qlastread)) {
-      for (i = 0; i < 200; i++) {
-         m = 0;
-         while (lastr[m] < lr.msgnum[i] && m < msginfo.totalmsgs)
-            m++;
-         while (m > 0 && lastr[m] == 0)
-            m--;
-         lr.msgnum[i] = newnum[m];
-      }
-
-      lseek (fd, pos, SEEK_SET);
-      write (fd, &lr, sizeof (struct _qlastread));
-      pos = tell (fd);
-   }
-
-   close (fd);
-
-   if (lastr != NULL)
-      free (lastr);
-   if (newnum != NULL)
-      free (newnum);
 }
 
 
@@ -2481,6 +2742,10 @@ void Pack_Pip_Areas (void)
 
          if (i < MAXLREAD) {
             m = usr.lastread[i].msg_num;
+            if (m > msgnum)
+               m = msgnum;
+            if (m < 0)
+               m = 0;
             while (m > 0 && lastr[m] == 0)
                m--;
             usr.lastread[i].msg_num = lastr[m];
@@ -2495,6 +2760,10 @@ void Pack_Pip_Areas (void)
 
             if (i < MAXDLREAD) {
                m = usr.dynlastread[i].msg_num;
+               if (m > msgnum)
+                  m = msgnum;
+               if (m < 0)
+                  m = 0;
                while (m > 0 && lastr[m] == 0)
                   m--;
                usr.dynlastread[i].msg_num = lastr[m];
@@ -2522,18 +2791,18 @@ int argc;
 char *argv[];
 {
    int i, xlink, unknow, renum, pack, purge, overwrite;
-   int link, stats, index, xsquish, xfido, xpip, xquick;
+   int link, stats, index, xsquish, xfido, xpip, xquick, xgold;
 
 #ifdef __OS2__
    printf("\nLMSG; LoraBBS-OS/2 Message maintenance utility, Version %s\n", LMSG_VERSION);
 #else
    printf("\nLMSG; LoraBBS-DOS Message maintenance utility, Version %s\n", LMSG_VERSION);
 #endif
-   printf("      Copyright (c) 1991-94 by Marco Maccaferri, All Rights Reserved\n\n");
+   printf("      Copyright (c) 1991-95 by Marco Maccaferri, All Rights Reserved\n\n");
 
    xlink = unknow = renum = pack = purge = overwrite = 0;
    link = stats = index = 0;
-   xquick = xfido = xsquish = xpip = 0;
+   xquick = xfido = xsquish = xpip = xgold = 0;
 
    for (i = 1; i < argc; i++) {
       if (argv[i][0] != '-') {
@@ -2569,6 +2838,8 @@ char *argv[];
             xsquish = 1;
          if (strchr (argv[i], 'P') != NULL || strchr (argv[i], 'p') != NULL)
             xpip = 1;
+         if (strchr (argv[i], 'G') != NULL || strchr (argv[i], 'g') != NULL)
+            xgold = 1;
       }
       if (!stricmp (argv[i], "-K"))
          purge = 1;
@@ -2583,16 +2854,16 @@ char *argv[];
    if ( (!xlink && !unknow && !renum && !pack && !purge && !overwrite && !link && !stats && !index) || argc == 1 ) {
       printf(" * Command-line parameters:\n\n");
 
-      printf("        <File>   Configuration file name\n");
-      printf("        -I[UR]   Recreate index files & check\n");
-      printf("                 U=Kill unknown boards  R=Renumber\n");
-      printf("        -P[KR]   Pack (compress) message base\n");
-      printf("                 K=Purge  R=Renumber\n");
-      printf("        -K       Purge messages from info in SYSMSG.DAT\n");
-      printf("        -R       Renumber messages\n");
-      printf("        -L       Link messages by subject\n");
-      printf("        -X[FQSP] Exclude message base\n");
-      printf("                 F=Fido  Q=Quick  S=Squish  P=Pipbase\n\n");
+      printf("        <File>    Configuration file name\n");
+      printf("        -I[UR]    Recreate index files & check\n");
+      printf("                  U=Kill unknown boards  R=Renumber\n");
+      printf("        -P[KR]    Pack (compress) message base\n");
+      printf("                  K=Purge  R=Renumber\n");
+      printf("        -K        Purge messages from info in SYSMSG.DAT\n");
+      printf("        -R        Renumber messages\n");
+      printf("        -L        Link messages by subject\n");
+      printf("        -X[FQSPG] Exclude message base\n");
+      printf("                  F=Fido  Q=Quick  S=Squish  P=Pipbase  G=GoldBase\n\n");
 
       printf(" * Please refer to the documentation for a more complete command summary\n\n");
    }
@@ -2607,6 +2878,8 @@ char *argv[];
          }
          if (!xquick)
             Create_Quick_Index (xlink, unknow, renum);
+         if (!xgold)
+            Create_Gold_Index (xlink, unknow, renum);
          if (!xpip)
             Create_Pip_Index ();
       }
@@ -2616,6 +2889,8 @@ char *argv[];
             Purge_Fido_Areas (renum);
          if (!xquick)
             Purge_Quick_Areas (renum);
+         if (!xgold)
+            Purge_Gold_Areas (renum);
          if (!xsquish)
             Purge_Squish_Areas ();
          if (!xpip)

@@ -57,8 +57,7 @@ void dosdate (int *month, int *mday, int *year, int *wday)
 #endif
 }
 
-long timerset (t)
-int t;
+long timerset (int t)
 {
    long l;
    int hours, mins, secs, ths;
@@ -78,8 +77,7 @@ int t;
    return (l);
 }
 
-int timeup (t)
-long t;
+int timeup (long t)
 {
    long l;
 
@@ -88,9 +86,7 @@ long t;
 
    /* If current is less then set by more than max int, then adjust */
    if (l < (t - 65536L))
-      {
       l += PER_HOUR;
-      }
 
    /* Return whether the current is greater than the timer variable */
    return ((l - t) >= 0L);

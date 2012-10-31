@@ -25,12 +25,18 @@
 #include "version.h"
 
 struct _aidx {
-   char areatag[32];
-   byte board;
+//   char areatag[32];
+	unsigned long areatag;
+	byte board;
+	word gold_board;
 };
 
-extern int maxaidx;
+extern int maxaidx,nodes_num;
+extern char nomailproc, nonetmail;
 extern struct _aidx *aidx;
+
+struct _node2name *nametable; // Gestione nomi per aree PRIVATE
+int nodes_num;
 
 int maxakainfo;
 struct _akainfo *akainfo = NULL;
@@ -41,6 +47,7 @@ struct _akainfo *akainfo = NULL;
 #define PACK_ECHOMAIL  0x0001
 #define PACK_NETMAIL   0x0002
 
+unsigned long get_buffer_crc (void *buffer, int length);
 void mail_batch (char *what);
 void open_logfile (void);
 int spawn_program (int swapout, char *outstring);
@@ -48,68 +55,136 @@ void pack_outbound (int);
 void build_aidx (void);
 void rescan_areas (void);
 
+void read_nametable(void)
+{
+	NODEINFO ni;
+	int i=0,fd;
+	char string[128];
+
+
+	sprintf (string, "%sNODES.DAT", config->net_info);
+
+	fd = open (string, O_RDONLY|O_BINARY,S_IREAD|S_IWRITE);
+	if (fd == -1) return;
+	nodes_num=(int)(filelength(fd)/(long)sizeof(NODEINFO));
+
+	nametable=(struct _node2name*)malloc(sizeof(NODE2NAME)*nodes_num);
+	if(!nametable) return;
+
+	while(read (fd, (char *)&ni, sizeof (NODEINFO))==sizeof(NODEINFO)) {
+		strncpy(nametable[i].name,ni.sysop_name,36);
+		nametable[i].zone=ni.zone;
+		nametable[i].net=ni.net;
+		nametable[i].node=ni.node;
+		nametable[i].point=ni.point;
+		i++;
+	}
+	close(fd);
+}
+
+void copy_mail_packet (char *from, char *to)
+{
+	FILE *fps, *fpd;
+	int i;
+	char string[512];
+
+	if (rename (from, to) == 0)
+		return;
+
+	if ((fps = sh_fopen (from, "rb", SH_DENYRW)) == NULL)
+		return;
+
+	if ((fpd = sh_fopen (to, "ab", SH_DENYRW)) == NULL) {
+		fclose (fps);
+		return;
+	}
+
+	if (filelength (fileno (fpd)) > 0L) {
+		fseek (fps, sizeof (struct _pkthdr2), SEEK_SET);
+		fseek (fpd, -2L, SEEK_END);
+	}
+
+	do {
+		i = fread (string, 1, 512, fps);
+		fwrite (string, 1, i, fpd);
+	} while (i == 512);
+
+	fclose (fpd);
+	fclose (fps);
+
+	unlink (from);
+}
+
 void export_mail (who)
 int who;
 {
-   FILE *fp;
-   int maxnodes, wh, i, fd;
-   char filename[80], *p, linea[256], *tag, *location, *forw;
-   struct _fwrd *forward;
-   struct date datep;
-   struct time timep;
-   struct _pkthdr2 pkthdr;
-   struct _wrec_t *wr;
+	FILE *fp;
+	int maxnodes, wh, i, fd;
+	char filename[80], *p, linea[256], *tag, *location, *forw;
+	struct _fwrd *forward;
+	struct date datep;
+	struct time timep;
+	struct _pkthdr2 pkthdr;
+	struct _wrec_t *wr;
 
-   local_status ("Export");
-   scan_system ();
-   
-   if (who & ECHOMAIL_RSN) {
-      mail_batch (config->pre_export);
+	if (nomailproc)
+		return;
 
-      if (!registered)
-         config->replace_tear = 3;
-      status_line ("#Scanning messages");
+	local_status ("Export");
+	scan_system ();
+	read_nametable();
 
-      forward = (struct _fwrd *)malloc (MAX_FORWARD * sizeof (struct _fwrd));
-      if (forward == NULL)
-         return;
 
-      build_aidx ();
+	if (who & ECHOMAIL_RSN) {
+		mail_batch (config->pre_export);
 
-      wh = wopen (12, 0, 24, 79, 0, LGREY|_BLACK, LCYAN|_BLACK);
-      wactiv (wh);
-      wtitle ("PROCESS ECHOMAIL", TLEFT, LCYAN|_BLACK);
-      wprints (0, 0, YELLOW|_BLACK, " Num.  Area tag               Base         Forward to");
-      printc (12, 0, LGREY|_BLACK, 'Ã');
-      printc (12, 52, LGREY|_BLACK, 'Á');
-      printc (12, 79, LGREY|_BLACK, '´');
-      wr = wfindrec (wh);
-      wr->srow++;
-      wr->row++;
+		if (!registered)
+			config->replace_tear = 3;
+		status_line ("#Scanning messages");
 
-      maxnodes = 0;
-      totalmsg = 0;
-      totaltime = timerset (0);
+		forward = (struct _fwrd *)malloc (MAX_FORWARD * sizeof (struct _fwrd));
+		if (forward == NULL) {
+			free(nametable);
+			nametable=NULL;
+			return;
+		}
 
-      if (config->use_areasbbs) {
-         time_release ();
+		build_aidx ();
 
-         fp = fopen (config->areas_bbs, "rt");
-         if (fp != NULL) {
-            fgets(linea, 255, fp);
+		wh = wopen (12, 0, 24, 79, 0, LGREY|_BLACK, LCYAN|_BLACK);
+		wactiv (wh);
+		wtitle ("PROCESS ECHOMAIL", TLEFT, LCYAN|_BLACK);
+		wprints (0, 0, YELLOW|_BLACK, " Num.  Area tag               Base         Forward to");
+		printc (12, 0, LGREY|_BLACK, 'Ã');
+		printc (12, 52, LGREY|_BLACK, 'Á');
+		printc (12, 79, LGREY|_BLACK, '´');
+		wr = wfindrec (wh);
+		wr->srow++;
+		wr->row++;
 
-            while (fgets(linea, 255, fp) != NULL) {
-               if (linea[0] == ';')
-                  continue;
-               while (linea[strlen (linea) -1] == 0x0D || linea[strlen (linea) -1] == 0x0A || linea[strlen (linea) -1] == ' ')
-                  linea[strlen (linea) -1] = '\0';
-               if ((location = strtok (linea, " ")) == NULL)
-                  continue;
+		maxnodes = 0;
+		totalmsg = 0;
+		totaltime = timerset (0);
+
+		if (config->use_areasbbs) {
+			time_release ();
+
+			fp = fopen (config->areas_bbs, "rt");
+			if (fp != NULL) {
+				fgets(linea, 255, fp);
+
+				while (fgets(linea, 255, fp) != NULL) {
+					if (linea[0] == ';')
+						continue;
+					while (linea[strlen (linea) -1] == 0x0D || linea[strlen (linea) -1] == 0x0A || linea[strlen (linea) -1] == ' ')
+						linea[strlen (linea) -1] = '\0';
+					if ((location = strtok (linea, " ")) == NULL)
+						continue;
                if ((tag = strtok (NULL, " ")) == NULL)
                   continue;
                if ((forw = strtok (NULL, "")) == NULL)
                   continue;
-               while (*forw == ' ')
+					while (*forw == ' ')
                   forw++;
                sys.echomail = 1;
                strcpy (sys.echotag, tag);
@@ -130,32 +205,38 @@ int who;
                      release_timeslice ();
                   }
                   num_msg = (int)MsgGetNumMsg (sq_ptr);
-                  if (num_msg)
+						if (num_msg)
                      first_msg = 1;
                   else
                      first_msg = 0;
                   last_msg = num_msg;
                   maxnodes = squish_export_mail (maxnodes, forward);
                   if (maxnodes == -1) {
-                     status_line ("!Error exporting mail");
-                     return;
-                  }
-               }
-               else if (*location == '!') {
-                  sys.pip_board = atoi(++location);
-                  maxnodes = pip_export_mail (maxnodes, forward);
-                  if (maxnodes == -1) {
-                     status_line ("!Error exporting mail");
-                     return;
-                  }
-               }
-               else if (!atoi (location) && stricmp (location, "##")) {
-                  strcpy (sys.msg_path, location);
-                  scan_message_base (0, 0);
-                  maxnodes = fido_export_mail (maxnodes, forward);
-                  if (maxnodes == -1) {
-                     status_line ("!Error exporting mail");
-                     return;
+							status_line ("!Error exporting mail");
+							free(nametable);
+							nametable=NULL;
+							return;
+						}
+					}
+					else if (*location == '!') {
+						sys.pip_board = atoi(++location);
+						maxnodes = pip_export_mail (maxnodes, forward);
+						if (maxnodes == -1) {
+							status_line ("!Error exporting mail");
+							free(nametable);
+							nametable=NULL;
+							return;
+						}
+					}
+					else if (!atoi (location) && stricmp (location, "##")) {
+						strcpy (sys.msg_path, location);
+						scan_message_base (0, 0);
+						maxnodes = fido_export_mail (maxnodes, forward);
+						if (maxnodes == -1) {
+							status_line ("!Error exporting mail");
+							free(nametable);
+							nametable=NULL;
+							return;
                   }
                }
             }
@@ -165,18 +246,29 @@ int who;
       }
 
       time_release ();
-      maxnodes = quick_export_mail (maxnodes, forward);
+      maxnodes = quick_export_mail (maxnodes, forward, 0);
       if (maxnodes == -1) {
-         status_line ("!Error exporting mail");
-         return;
-      }
+			status_line ("!Error exporting mail");
+			free(nametable);
+			nametable=NULL;
+			return;
+		}
 
-      time_release ();
-      sprintf (filename, SYSMSG_PATH, config->sys_path);
+		time_release ();
+		maxnodes = quick_export_mail (maxnodes, forward, 1);
+		if (maxnodes == -1) {
+			status_line ("!Error exporting mail");
+			free(nametable);
+			nametable=NULL;
+			return;
+		}
+
+		time_release ();
+		sprintf (filename, SYSMSG_PATH, config->sys_path);
       fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
       if (fd != -1) {
          while (read(fd, (char *)&sys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA) {
-            if (sys.squish) {
+            if (sys.squish && sys.echomail && !sys.passthrough) {
                if (sq_ptr != NULL) {
                   MsgUnlock (sq_ptr);
                   MsgCloseArea (sq_ptr);
@@ -197,11 +289,13 @@ int who;
                maxnodes = squish_export_mail (maxnodes, forward);
                if (maxnodes == -1) {
                   status_line ("!Error exporting mail");
-                  close (fd);
-                  return;
-               }
+						close (fd);
+						free(nametable);
+						nametable=NULL;
+						return;
+					}
             }
-         }
+			}
 
          if (sq_ptr != NULL) {
             MsgCloseArea (sq_ptr);
@@ -215,13 +309,15 @@ int who;
       fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
       if (fd != -1) {
          while (read(fd, (char *)&sys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA) {
-            if (sys.pip_board) {
+            if (sys.pip_board && sys.echomail && !sys.passthrough) {
                maxnodes = pip_export_mail (maxnodes, forward);
                if (maxnodes == -1) {
                   status_line ("!Error exporting mail");
-                  close (fd);
-                  return;
-               }
+						close (fd);
+						free(nametable);
+						nametable=NULL;
+						return;
+					}
             }
          }
 
@@ -233,109 +329,146 @@ int who;
       fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
       if (fd != -1) {
          while (read(fd, (char *)&sys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA) {
-            if (!sys.pip_board && !sys.squish && !sys.quick_board && sys.echomail) {
+            if (!sys.pip_board && !sys.squish && !sys.quick_board && sys.echomail && !sys.passthrough) {
                scan_message_base (0, 0);
                maxnodes = fido_export_mail (maxnodes, forward);
                if (maxnodes == -1) {
                   status_line ("!Error exporting mail");
-                  close (fd);
-                  return;
-               }
-            }
-         }
+						close (fd);
+						free(nametable);
+						nametable=NULL;
+						return;
+					}
+				}
+			}
 
-         close (fd);
-      }
+			close (fd);
+		}
 
-      gettime (&timep);
-      getdate (&datep);
+		gettime (&timep);
+		getdate (&datep);
 
-      for (i = 0; i < maxnodes; i++) {
-         p = HoldAreaNameMunge (forward[i].zone);
-         if (forward[i].point)
-            sprintf (filename, "%s%04X%04X.PNT\\%08X.XUT", p, forward[i].net, forward[i].node, forward[i].point);
-         else
-            sprintf (filename, "%s%04X%04X.XUT", p, forward[i].net, forward[i].node);
-         fd = open (filename, O_RDWR|O_BINARY);
-         if (fd != -1) {
-            if (filelength (fd) == 0L) {
-               close (fd);
-               unlink (filename);
-            }
-            else {
-               read (fd, (char *)&pkthdr, sizeof (struct _pkthdr2));
-               if (!pkthdr.year && !pkthdr.month && !pkthdr.day) {
-                  pkthdr.hour = timep.ti_hour;
-                  pkthdr.minute = timep.ti_min;
-                  pkthdr.second = timep.ti_sec;
-                  pkthdr.year = datep.da_year;
-                  pkthdr.month = datep.da_mon - 1;
-                  pkthdr.day = datep.da_day;
-                  lseek (fd, 0L, SEEK_SET);
-                  write (fd, (char *)&pkthdr, sizeof (struct _pkthdr2));
-               }
-               close (fd);
-            }
-         }
-      }
+		for (i = 0; i < maxnodes; i++) {
+			p = HoldAreaNameMunge (forward[i].zone);
 
-      wclose ();
-      free (forward);
-      if (aidx != NULL)
-         free (aidx);
-      if (akainfo != NULL)
-         free (akainfo);
+//         if (forward[i].point)
+//            sprintf (linea, "%s%04X%04X.PNT\\%08X.XPR", p, forward[i].net, forward[i].node, forward[i].point);
+//         else
+//            sprintf (linea, "%s%04X%04X.XPR", p, forward[i].net, forward[i].node);
 
-      local_status ("Export");
-      scan_system ();
+			if (forward[i].point)
+				sprintf (filename, "%s%04X%04X.PNT\\%08X.XPR", p, forward[i].net, forward[i].node, forward[i].point);
+			else
+				sprintf (filename, "%s%04X%04X.XPR", p, forward[i].net, forward[i].node);
 
-      mail_batch (config->after_export);
+//         copy_mail_packet (linea, filename);
 
-      if (totalmsg) {
-         status_line ("+%d ECHOmail message(s) forwarded", totalmsg);
-         sysinfo.today.echosent += totalmsg;
-         sysinfo.week.echosent += totalmsg;
-         sysinfo.month.echosent += totalmsg;
-         sysinfo.year.echosent += totalmsg;
-      }
-      else
-         status_line ("+No ECHOmail messages forwarded");
-   }
+			fd = open (filename, O_RDWR|O_BINARY);
+			if (fd != -1) {
+				if (filelength (fd) == 0L) {
+					close (fd);
+					unlink (filename);
+				}
+				else {
+					read (fd, (char *)&pkthdr, sizeof (struct _pkthdr2));
+					if (!pkthdr.year && !pkthdr.month && !pkthdr.day) {
+						pkthdr.hour = timep.ti_hour;
+						pkthdr.minute = timep.ti_min;
+						pkthdr.second = timep.ti_sec;
+						pkthdr.year = datep.da_year;
+						pkthdr.month = datep.da_mon - 1;
+						pkthdr.day = datep.da_day;
+						lseek (fd, 0L, SEEK_SET);
+						write (fd, (char *)&pkthdr, sizeof (struct _pkthdr2));
+					}
+					close (fd);
+				}
+			}
+		}
 
-   if (who & NETMAIL_RSN) {
-      mail_batch (config->pre_pack);
+		wclose ();
+		free (forward);
+		if (aidx != NULL)
+			free (aidx);
+		if (akainfo != NULL)
+			free (akainfo);
 
-      wh = wopen (12, 0, 24, 79, 0, LGREY|_BLACK, LCYAN|_BLACK);
-      wactiv (wh);
-      wtitle ("NETMAIL", TLEFT, LCYAN|_BLACK);
-      wprints (0, 0, YELLOW|_BLACK, " Num.  Area tag               Base         Forward to");
-      printc (12, 0, LGREY|_BLACK, 'Ã');
-      printc (12, 52, LGREY|_BLACK, 'Á');
-      printc (12, 79, LGREY|_BLACK, '´');
-      wr = wfindrec (wh);
-      wr->srow++;
-      wr->row++;
+		local_status ("Export");
+		scan_system ();
 
-      if (fido_export_netmail () == -1) {
-         status_line ("!Error exporting mail");
-         return;
-      }
+		mail_batch (config->after_export);
 
-      wclose ();
-      rescan_areas ();
+		if (totalmsg) {
+			status_line ("+%d ECHOmail message(s) forwarded", totalmsg);
+			sysinfo.today.echosent += totalmsg;
+			sysinfo.week.echosent += totalmsg;
+			sysinfo.month.echosent += totalmsg;
+			sysinfo.year.echosent += totalmsg;
+		}
+		else
+			status_line ("+No ECHOmail messages forwarded");
+	}
 
-      mail_batch (config->after_pack);
-   }
+	if ((who & NETMAIL_RSN) && nonetmail == 0) {
+		mail_batch (config->pre_pack);
 
-   if (!(who & NO_PACK)) {
-      if (!(who & ECHOMAIL_RSN))
+		wh = wopen (12, 0, 24, 79, 0, LGREY|_BLACK, LCYAN|_BLACK);
+		wactiv (wh);
+		wtitle ("NETMAIL", TLEFT, LCYAN|_BLACK);
+		wprints (0, 0, YELLOW|_BLACK, " Num.  Area tag               Base         Forward to");
+		printc (12, 0, LGREY|_BLACK, 'Ã');
+		printc (12, 52, LGREY|_BLACK, 'Á');
+		printc (12, 79, LGREY|_BLACK, '´');
+		wr = wfindrec (wh);
+		wr->srow++;
+		wr->row++;
+
+		memset ((char *)&sys, 0, sizeof (struct _sys));
+		sys.netmail = 1;
+		strcpy (sys.msg_path, netmail_dir);
+		if (fido_export_netmail () == -1) {
+			status_line ("!Error exporting mail");
+			free(nametable);
+			nametable=NULL;
+			return;
+		}
+
+		sprintf (filename, SYSMSG_PATH, config->sys_path);
+		fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+		if (fd != -1) {
+			while (read(fd, (char *)&sys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA) {
+				if (sys.netmail && !stricmp (sys.msg_path, netmail_dir))
+					continue;
+				if (sys.netmail || (sys.internet_mail && config->export_internet)) {
+					if (fido_export_netmail () == -1) {
+						status_line ("!Error exporting mail");
+						free(nametable);
+						nametable=NULL;
+						return;
+					}
+				}
+			}
+
+			close (fd);
+		}
+
+		wclose ();
+		rescan_areas ();
+
+		mail_batch (config->after_pack);
+	}
+
+	if (!(who & NO_PACK)) {
+		if (!(who & ECHOMAIL_RSN))
          pack_outbound (PACK_NETMAIL);
       else
          pack_outbound (PACK_ECHOMAIL);
    }
 
    idle_system ();
-   memset ((char *)&sys, 0, sizeof (struct _sys));
+	memset ((char *)&sys, 0, sizeof (struct _sys));
+	free(nametable);
+	nametable=NULL;
 }
 
 void build_aidx ()
@@ -373,74 +506,20 @@ void build_aidx ()
       aidx = (struct _aidx *)malloc ((int)(((filelength (fd) / SIZEOF_MSGAREA) + 10) * sizeof (struct _aidx)));
       if (aidx == NULL) {
          close (fd);
-         return;
+			return;
       }
 
       i = 0;
 
       while (read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA) {
          aidx[i].board = tsys.quick_board;
-         strcpy (aidx[i++].areatag, tsys.echotag);
+         aidx[i].gold_board = tsys.gold_board;
+         aidx[i++].areatag = get_buffer_crc (tsys.echotag, strlen (tsys.echotag));
       }
 
       close (fd);
 
       maxaidx = i;
    }
-}
-
-int open_packet (int zone, int net, int node, int point, int ai)
-{
-   int mi;
-   char buff[80], *p;
-   struct _pkthdr2 pkthdr;
-
-   p = HoldAreaNameMungeCreate (zone);
-   if (point)
-      sprintf (buff, "%s%04x%04x.PNT\\%08X.XUT", p, net, node, point);
-   else
-      sprintf (buff, "%s%04x%04x.XUT", p, net, node);
-
-   mi = open (buff, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-   if (mi == -1 && point) {
-      sprintf (buff, "%s%04x%04x.PNT", p, net, node);
-      mkdir (buff);
-      sprintf (buff, "%s%04x%04x.PNT\\%08X.XUT", p, net, node, point);
-      mi = open (buff, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-   }
-
-   if (filelength (mi) > 0L)
-      lseek (mi, filelength (mi) - 2, SEEK_SET);
-   else {
-      memset ((char *)&pkthdr, 0, sizeof (struct _pkthdr2));
-      pkthdr.ver = PKTVER;
-      pkthdr.product = 0x4E;
-      pkthdr.serial = ((MAJVERSION << 4) | MINVERSION);
-      pkthdr.capability = 1;
-      pkthdr.cwvalidation = 256;
-      if (config->alias[ai].point && config->alias[ai].fakenet) {
-         pkthdr.orig_node = config->alias[ai].point;
-         pkthdr.orig_net = config->alias[ai].fakenet;
-         pkthdr.orig_point = 0;
-      }
-      else {
-         pkthdr.orig_node = config->alias[ai].node;
-         pkthdr.orig_net = config->alias[ai].net;
-         pkthdr.orig_point = config->alias[ai].point;
-      }
-      pkthdr.orig_zone = config->alias[ai].zone;
-      pkthdr.orig_zone2 = config->alias[ai].zone;
-
-      pkthdr.dest_point = point;
-      pkthdr.dest_node = node;
-      pkthdr.dest_net = net;
-      pkthdr.dest_zone = zone;
-      pkthdr.dest_zone2 = zone;
-
-      add_packet_pw (&pkthdr);
-      write (mi, (char *)&pkthdr, sizeof (struct _pkthdr2));
-   }
-
-   return (mi);
 }
 

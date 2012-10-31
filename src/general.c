@@ -1,4 +1,3 @@
-#pragma inline
 #include <stdio.h>
 #include <dos.h>
 #include <io.h>
@@ -23,41 +22,46 @@
 #include "zmodem.h"
 #include "msgapi.h"
 
-static void display_cpu (void);
+void display_cpu (void);
+
 static void is_4dos (void);
 static void compilation_data(void);
 
-#define MAX_INDEX    500
+#define MAX_INDEX    200
 
-void software_version (arguments)
-char *arguments;
+void software_version (char *arguments)
 {
-   unsigned char c, i;
+   unsigned char i;
 #ifndef __OS2__
+   unsigned char c;
    union REGS inregs, outregs;
 #endif
    unsigned pp;
    float t, u;
    struct diskfree_t df;
 
-   cls();
+   cls ();
 
-   change_attr(LMAGENTA|_BLACK);
-   m_print("%s - The Computer-Based Information System\n", VERSION);
-   m_print("CopyRight (c) 1989-93 by Marco Maccaferri. All Rights Reserved.\n");
+   change_attr (LMAGENTA|_BLACK);
+   m_print ("%s - The Computer-Based Information System\n", VERSION);
+   m_print ("CopyRight (c) 1989-95 by Marco Maccaferri. All Rights Reserved.\n");
+#ifdef __OCC__
+   m_print ("CopyRight (c) 1995 Old Colorado City Communications. All Rights Reserved.\n");
+#endif
 
-   change_attr(LCYAN|_BLACK);
-   m_print("\nJanus revision 0.31 - (C) Copyright 1987-90, Bit Bucket Software Co.\n");
-   m_print("MsgAPI - Copyright 1990, 1991 by Scott J. Dudley.  All rights reserved.\n");
+   change_attr (LCYAN|_BLACK);
+   m_print ("\nJanus revision 0.31 - (C) Copyright 1987-90, Bit Bucket Software Co.\n");
+   m_print ("MsgAPI - Copyright 1990, 1991 by Scott J. Dudley.  All rights reserved.\n");
+   m_print ("BlueWave Offline Mail System. Copyright 1990-94 by Cutting Edge Computing\n");
 
-   compilation_data();
+   compilation_data ();
 
    activation_key ();
    if (registered)
       m_print ("Registered to: %s\n               %s\n\n", config->sysop, config->system_name);
 
 #ifndef __OS2__
-   c = peekb(0xFFFF,0x000E);
+   c = peekb (0xFFFF, 0x000E);
 
    change_attr(WHITE|_BLACK);
    m_print(bbstxt[B_COMPUTER]);
@@ -154,148 +158,6 @@ void is_4dos()
       m_print(bbstxt[B_DOS_4DOS], outregs.h.bl, outregs.h.bh);
 #endif
 }
-
-void display_cpu()
-{
-   short type;
-
-   asm pushf                           // Save old flags
-
-   asm mov     dx, 86                  // Test for 8086
-   asm push    sp                      // If SP decrements before
-   asm pop     ax                      // a value is PUSHed
-   asm cmp     sp, ax                  // it's a real-mode chip
-   asm jne     Exit                    // 8088,8086,80188,80186,NECV20/V30
-
-   asm mov     dx, 286                 // Test for 286
-   asm pushf                           // If NT (Nested Task)
-   asm pop     ax                      // bit (bit 14) in the
-   asm or      ax, 4000h               // flags register
-   asm push    ax                      // can't be set (in real mode)
-   asm popf                            // then it's a 286
-   asm pushf
-   asm pop     ax
-   asm test    ax, 4000h
-   asm jz      Exit
-
-   asm mov     dx, 386                 // Test for 386/486
-   asm .386                            // do some 32-bit stuff
-   asm mov     ebx, esp                // Zero lower 2 bits of ESP
-   asm and     esp, 0FFFFFFFCh         // to avoid AC fault on 486
-   asm pushfd                          // Push EFLAGS register
-   asm pop     eax                     // EAX = EFLAGS
-   asm mov     ecx, eax                // ECX = EFLAGS
-   asm xor     eax, 40000h             // Toggle AC bit(bit 18)
-                                                // in EFLAGS register
-   asm push    eax                     // Push new value
-   asm popfd                           // Put it in EFLAGS
-   asm pushfd                          // Push EFLAGS
-   asm pop     eax                     // EAX = EFLAGS
-   asm and     eax, 40000h             // Isolate bit 18 in EAX
-   asm and     ecx, 40000h             // Isolate bit 18 in ECX
-   asm cmp     eax, ecx                // Is EAX and ECX equal?
-   asm je      A_386                   // Yup, it's a 386
-   asm mov     dx, 486                 // Nope,it's a 486
-A_386:
-   asm push    ecx                     // Restore
-   asm popfd                           // EFLAGS
-   asm mov     esp, ebx                // Restore ESP
-Exit:
-   asm mov     type, dx                // Put CPU type in type
-   asm popf                            // Restore old flags
-
-   m_print (" (CPU 80%d)\n", type);
-}
-
-/*
-   byte present_86 = 0, present_286 = 0, present_386 = 0, present_486 = 0;
-
-// The purpose of this code is to allow the user the ability to identify the
-// processor and coprocessor that is currently in the system.  The algorithm
-// of the program is to first determine the processor id.
-// When that is accomplished, the program continues to then identify whether
-// a coprocessor exists in the system.  If a coprocessor or integrated
-// coprocessor exists, the program will identify the coprocessor id.  If one
-// does not exist, the program then terminates.
-
-// 8086 CPU check
-// Bits 12-15 are always set on the 8086 processor.
-
-   asm mov cx,0F000H      // handy constant   v5.92
-   asm pushf              // save EFLAGS
-   asm pop bx             // store EFLAGS in BX
-   asm mov ax,0fffh       // clear bits 12-15
-   asm and ax,bx          // in EFLAGS
-   asm push ax            // store new EFLAGS value on stack
-   asm popf               // replace current EFLAGS value
-   asm pushf              // set new EFLAGS
-   asm pop ax             // store new EFLAGS in AX
-   asm and ax,cx          // if bits 12-15 are set, v5.92
-   asm cmp ax,cx          // then CPU is an 8086/8088 v5.92
-   present_86 = 1;
-   asm je msgterm         // if CPU is 8086/8088, check for 8087
-
-// 80286 CPU check
-// Bits 12-15 are always clear on the 80286 processor.
-
-   asm or bx,cx           // try to set bits 12-15  v5.92
-   asm push bx
-   asm popf
-   asm pushf
-   asm pop ax
-   asm and ax,cx          // if bits 12-15 are cleared v5.92
-   present_86 = 0;
-   present_286 = 1;
-   asm jz msgterm         // if CPU is 80286, check for 80287
-
-// i386 CPU check
-// The AC bit, bit #18, is a new bit introduced in the EFLAGS register on the
-//  i486 DX CPU to generate alignment faults.  This bit can be set on the
-//  i486 DX CPU, but not on the i386 CPU.
-
-   asm mov bx,sp          // save current stack pointer to align it
-   asm and sp,not 3       // align stack to avoid AC fault
-   asm db 66h
-   asm pushf              // push original EFLAGS
-   asm db 66h
-   asm pop ax             // get original EFLAGS
-   asm db 66h
-   asm mov cx,ax          // save original EFLAGS
-   asm db 66h             // xor EAX,40000h
-   asm xor ax,0           // flip AC bit in EFLAGS
-   asm dw 4               // upper 16-bits of xor constant
-   asm db 66h
-   asm push ax            // save for EFLAGS
-   asm db 66h
-   asm popf               // copy to EFLAGS
-   asm db 66h
-   asm pushf              // push EFLAGS
-   asm db 66h
-   asm pop ax             // get new EFLAGS value
-   asm db 66h
-   asm xor ax,cx          // if AC bit cannot be changed, CPU is
-   present_286 = 0;
-   present_386 = 1;
-   asm je msgterm         // if CPU is i386, now check for 80287/80387 MCP
-
-// i486 DX CPU / i487 SX MCP and i486 SX CPU checking
-
-   present_386 = 0;
-   present_486 = 1;
-
-msgterm:
-   m_print (" (CPU 80");
-   if (present_86)
-      m_print ("86");
-   else if (present_286)
-      m_print ("286");
-   else if (present_386)
-      m_print ("386");
-   else if (present_486)
-      m_print ("486");
-
-   m_print (")\n");
-*/
 
 void display_area_list(type, flag, sig)   /* flag == 1, Normale due colonne */
 int type, flag, sig;                      /* flag == 2, Normale una colonna */
@@ -589,7 +451,7 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
       else {
          lseek(fdi, 0L, SEEK_SET);
          area = atoi(stringa);
-         if (area < 1 || area > MSG_AREAS) {
+         if (area < 1) {
             area = -1;
             do {
                nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
@@ -712,8 +574,8 @@ int sig;
                      continue;
                }
 
-               if (sys.quick_board)
-                  quick_scan_message_base (sys.quick_board, sys.msg_num, 0);
+               if (sys.quick_board || sys.gold_board)
+                  quick_scan_message_base (sys.quick_board, sys.gold_board, sys.msg_num, 0);
                else if (sys.pip_board)
                   pip_scan_message_base (sys.msg_num, 0);
                else if (sys.squish)
@@ -807,7 +669,7 @@ int sig;
       else {
          lseek(fdi, 0L, SEEK_SET);
          area = atoi(stringa);
-         if (area < 1 || area > MSG_AREAS) {
+         if (area < 1) {
             area = -1;
             do {
                nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
@@ -907,14 +769,20 @@ int read_system (int s, int type)
          return (0);
       lseek (fd, (long)i * SIZEOF_MSGAREA, SEEK_SET);
       read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA);
-      close(fd);
 
-      if (usr.priv < tsys.msg_priv)
+      if (usr.priv < tsys.msg_priv) {
+         close(fd);
          return (0);
-      if ((usr.flags & tsys.msg_flags) != tsys.msg_flags)
+      }
+      if ((usr.flags & tsys.msg_flags) != tsys.msg_flags) {
+         close(fd);
          return (0);
+      }
 
-      memcpy (&sys, &tsys, SIZEOF_MSGAREA);
+      lseek (fd, (long)i * SIZEOF_MSGAREA, SEEK_SET);
+      read(fd, (char *)&sys.msg_name, SIZEOF_MSGAREA);
+      close (fd);
+//      memcpy (&sys, &tsys, SIZEOF_MSGAREA);
 
       if (sys.pip_board) {
          sprintf(filename, "%sMPTR%04x.PIP", pip_msgpath, sys.pip_board);
@@ -939,6 +807,11 @@ int read_system (int s, int type)
          if (!dexists (filename))
             return (0);
       }
+      else if (sys.gold_board) {
+         sprintf (filename, "%sMSG*.DAT", fido_msgpath);
+         if (!dexists (filename))
+            return (0);
+      }
       else if (sys.squish) {
          ptr = MsgOpenArea (sys.msg_path, MSGAREA_CRIFNEC, MSGTYPE_SQUISH);
          if (ptr == NULL)
@@ -958,16 +831,22 @@ int read_system (int s, int type)
          ;
       lseek (fd, (long)i * SIZEOF_FILEAREA, SEEK_SET);
       read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA);
-      close(fd);
 
       if (caller && usr.name[0]) {
-         if (usr.priv < tsys.file_priv)
+         if (usr.priv < tsys.file_priv) {
+            close(fd);
             return (0);
-         if ((usr.flags & tsys.file_flags) != tsys.file_flags)
+         }
+         if ((usr.flags & tsys.file_flags) != tsys.file_flags) {
+            close(fd);
             return (0);
+         }
       }
 
-      memcpy (&sys.file_name, &tsys.file_name, SIZEOF_FILEAREA);
+      lseek (fd, (long)i * SIZEOF_FILEAREA, SEEK_SET);
+      read(fd, (char *)&sys.file_name, SIZEOF_FILEAREA);
+      close(fd);
+//      memcpy (&sys.file_name, &tsys.file_name, SIZEOF_FILEAREA);
 
       sys.filepath[strlen (sys.filepath) - 1] = '\0';
       if (!dexists (sys.filepath)) {
@@ -1200,7 +1079,7 @@ int logoff_procedure()
    return (1);
 }
 
-void update_user()
+void update_user (void)
 {
    int online, fd, i, m, fflag, posit;
    char filename[80];
@@ -1211,26 +1090,26 @@ void update_user()
    if (!local_mode)
       FLUSH_OUTPUT ();
 
-   if (usr.name[0] && usr.city[0] && usr.pwd[0]) {
-      sprintf (filename, USERON_NAME, config->sys_path);
-      fd = sh_open (filename, SH_DENYNONE, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
-
-      while (fd != -1) {
+   sprintf (filename, USERON_NAME, config->sys_path);
+   if ((fd = sh_open (filename, SH_DENYNONE, O_RDWR|O_BINARY, S_IREAD|S_IWRITE)) != -1) {
+      for (;;) {
          prev = tell (fd);
 
          if (read (fd, (char *)&useron, sizeof (struct _useron)) != sizeof (struct _useron))
             break;
 
-         if (!strcmp (useron.name, usr.name) && useron.line == line_offset) {
+         if (useron.line == line_offset) {
             lseek (fd, prev, SEEK_SET);
-            memset ((char *)&useron, 0, sizeof(struct _useron));
-            write (fd, (char *)&useron, sizeof(struct _useron));
+            memset ((char *)&useron, 0, sizeof (struct _useron));
+            write (fd, (char *)&useron, sizeof (struct _useron));
             break;
          }
       }
 
       close (fd);
+   }
 
+   if (usr.name[0] && usr.city[0] && usr.pwd[0]) {
       fflag = 0;
       posit = 0;
 
@@ -1305,18 +1184,17 @@ static void compilation_data (void)
 #ifdef __OS2__
   #define COMPILER      "Borland C"
   #define COMPVERMAJ    1
-  #define COMPVERMIN    0
+  #define COMPVERMIN    50
 #else
   #define COMPILER      "Borland C"
   #define COMPVERMAJ    3
   #define COMPVERMIN    10
 #endif
 
-  m_print(bbstxt[B_COMPILER], __DATE__,__TIME__,COMPILER,COMPVERMAJ,COMPVERMIN);
+  m_print (bbstxt[B_COMPILER], __DATE__, __TIME__, COMPILER, COMPVERMAJ, COMPVERMIN);
 }
 
-void show_lastcallers(args)
-char *args;
+void show_lastcallers (char *args)
 {
    int fd, i, line;
    char linea[82], filename[80];
@@ -1346,8 +1224,7 @@ char *args;
    line = 5;
    i = atoi(args);
 
-   while (read(fd, (char *)&lc, sizeof(struct _lastcall)) == sizeof(struct _lastcall))
-   {
+   while (read(fd, (char *)&lc, sizeof(struct _lastcall)) == sizeof(struct _lastcall)) {
       if (i && lc.line != i)
          continue;
 
@@ -1356,7 +1233,7 @@ char *args;
       m_print(linea);
       change_attr(WHITE|_BLACK);
       m_print("%2d    ", lc.line);
-      m_print("%6u ", lc.baud);
+      m_print("%6lu ", (long)lc.baud * 100L);
       m_print("    %s ", lc.logon);
       m_print("  %s ", lc.logoff);
       m_print(" %5d  ", lc.times);
@@ -1373,7 +1250,7 @@ char *args;
    m_print (bbstxt[B_ONE_CR]);
 
    if (line)
-      press_enter();
+      press_enter ();
 }
 
 void bulletin_menu (args)
@@ -1466,7 +1343,7 @@ void read_comment ()
 {
    FILE *fp;
    int line = 1;
-   char filename[130], *p;
+   char filename[130];
    struct _msg msgt;
 
    sprintf(filename,"%sNEXT%d.BBS",config->sys_path,line_offset);

@@ -26,7 +26,7 @@ extern int msg_parent, msg_child;
 int read0(unsigned char *, FILE *);
 void pipstring(unsigned char *, FILE *);
 void write0(unsigned char *, FILE *);
-int full_pip_msg_read(unsigned int, unsigned int, char);
+int full_pip_msg_read(unsigned int, unsigned int, char, int);
 
 void pipstring(s, f)
 unsigned char *s;
@@ -300,18 +300,23 @@ char upd;
       else
          lastread = 0;
    }
+
+   if (lastread < 0)
+      lastread = 0;
 }
 
-int full_pip_msg_read(area, msgn, mark)
+int full_pip_msg_read(area, msgn, mark, fakenum)
 unsigned int area, msgn;
 char mark;
+int fakenum;
 {
    FILE *f1,*f2;
    MSGPTR hdr;
    MSGPKTHDR mpkt;
-   char buff[86], wrp[80], *p, c, fn[80];
+   char buff[150], wrp[150], *p, c, fn[80], okludge;
    byte a;
    int line, i, colf, shead, m, z;
+   long startpos;
    struct _msg msgt;
 
    msgn--;
@@ -342,11 +347,11 @@ char mark;
       return (0);
    }
 
-   if (!(mark&SET_NEW) || !((hdr.status&SET_MPTR_RCVD) || (hdr.status&SET_MPTR_DEL)))
-   {
+   if (!(mark&SET_NEW) || !((hdr.status&SET_MPTR_RCVD) || (hdr.status&SET_MPTR_DEL))) {
       fseek(f2,hdr.pos,SEEK_SET);
       fread(&mpkt,sizeof(mpkt),1,f2);
 
+      okludge = 0;
       line = 2;
       shead = 0;
       colf = 0;
@@ -354,10 +359,10 @@ char mark;
       msg_fzone = msg_tzone = config->alias[sys.use_alias].zone;
       msg_fpoint = msg_tpoint = 0;
 
-      read0(msgt.date,f2);
-      read0(msgt.to,f2);
-      read0(msgt.from,f2);
-      read0(msgt.subj,f2);
+      read0 (msgt.date,f2);
+      read0 (msgt.to,f2);
+      read0 (msgt.from,f2);
+      read0 (msgt.subj,f2);
 
       msgt.orig_net = mpkt.fromnet;
       msgt.orig = mpkt.fromnode;
@@ -366,20 +371,17 @@ char mark;
 
       if (mpkt.attribute & SET_PKT_PRIV)
          msgt.attr |= MSGPRIVATE;
-      if (hdr.status & SET_MPTR_RCVD) {
+      if (hdr.status & SET_MPTR_RCVD)
          msgt.attr |= MSGREAD;
-      }
 
-      if(msgt.attr & MSGPRIVATE)
-      {
-         if(stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && usr.priv != SYSOP)
-         {
+      if(msgt.attr & MSGPRIVATE) {
+         if(stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && stricmp(msgt.from,usr.handle) && stricmp(msgt.to,usr.handle) && usr.priv != SYSOP) {
             fclose(f1);
             fclose(f2);
             return(0);
          }
       }
-      if (!stricmp (msgt.to,usr.name))
+      if (!stricmp (msgt.to,usr.name) || !stricmp (msgt.to,usr.handle))
          mark |= SET_MARK;
 
       msgt.dest_net = mpkt.tonet;
@@ -398,33 +400,28 @@ char mark;
 
       allow_reply = 1;
       i = 0;
+      startpos = ftell (f2);
 
-      while ((a=(byte)fgetc(f2)) != 0 && !feof(f2))
-      {
+      while ((a = (byte)fgetc (f2)) != 0 && !feof (f2)) {
          c = a;
 
-         switch(mpkt.pktype)
-         {
+         switch (mpkt.pktype) {
             case 2:
                c = a;
                break;
             case 10:
-               if (a!=10)
-               {
+               if (a != 10) {
                   if (a == 141)
                      a='\r';
 
-                  if (a<128)
-                     c=a;
-                  else
-                  {
-                     if (a==128)
-                     {
-                        a=(byte)fgetc(f2);
-                        c=(a)+127;
+                  if (a < 128)
+                     c = a;
+                  else {
+                     if (a == 128) {
+                        a = (byte)fgetc (f2);
+                        c = (a) + 127;
                      }
-                     else
-                     {
+                     else {
                         buff[i] = '\0';
                         strcat(buff,pip[a-128]);
                         i += strlen(pip[a-128]);
@@ -436,19 +433,17 @@ char mark;
                   c='\0';
                break;
             default:
-               return(1);
+               return (1);
          }
 
          if (c == '\0')
             continue;
          buff[i++] = c;
 
-         if (c == 0x0D)
-         {
+         if (c == 0x0D) {
             buff[i-1]='\0';
 
-            if(buff[0] == 0x01)
-            {
+            if(buff[0] == 0x01 && !okludge) {
                if (!strncmp(&buff[1],"INTL",4) && !shead)
                   sscanf(&buff[6],"%d:%d/%d %d:%d/%d",&msg_tzone,&i,&i,&msg_fzone,&i,&i);
                if (!strncmp(&buff[1],"TOPT",4) && !shead)
@@ -458,45 +453,44 @@ char mark;
                i=0;
                continue;
             }
-            else if (!shead)
-            {
-               line = msg_attrib(&msgt,msgn+1,line,0);
+            else if (!shead) {
+               line = msg_attrib(&msgt,fakenum ? fakenum : msgn+1,line,0);
                change_attr(LGREY|_BLUE);
                del_line();
                change_attr(CYAN|_BLACK);
                m_print(bbstxt[B_ONE_CR]);
                shead = 1;
                line++;
+               okludge = 1;
+               fseek (f2, startpos, SEEK_SET);
+               i = 0;
+               continue;
             }
 
-            if(!strncmp(buff,"SEEN-BY",7))
-            {
+            if (!usr.kludge && (!strncmp(buff,"SEEN-BY",7) || buff[0] == 0x01)) {
                i=0;
                continue;
             }
 
-            if(buff[0] == 0x01)
-            {
-               change_attr(YELLOW|_BLUE);
-               m_print("%s\n",&buff[1]);
+            if (buff[0] == 0x01 || !strncmp (buff, "SEEN-BY", 7)) {
+               m_print("%s\n",&buff[1]);
                change_attr(LGREY|BLACK);
             }
-            else
-            {
+            else if (!strncmp (buff, "SEEN-BY", 7)) {
+               m_print ("%s\n", buff);
+               change_attr (LGREY|BLACK);
+            }
+            else {
                p = &buff[0];
 
-               if(((strchr(buff,'>') - p) < 6) && (strchr(buff,'>')))
-               {
-                  if(!colf)
-                  {
+               if(((strchr(buff,'>') - p) < 6) && (strchr(buff,'>'))) {
+                  if(!colf) {
                      change_attr(LGREY|BLACK);
                      colf=1;
                   }
                }
-               else
-               {
-                  if(colf)
-                  {
+               else {
+                  if(colf) {
                      change_attr(CYAN|BLACK);
                      colf=0;
                   }
@@ -513,15 +507,12 @@ char mark;
 
             i=0;
 
-            if(!(++line < (usr.len-1)) && usr.more)
-            {
-               if(!continua())
-               {
+            if(!(++line < (usr.len-1)) && usr.more) {
+               if(!continua()) {
                   line = 1;
                   break;
                }
-               else
-               {
+               else {
                   while (line > 5) {
                      cpos(line--, 1);
                      del_line();
@@ -529,9 +520,8 @@ char mark;
                }
             }
          }
-         else
-         {
-            if(i<(usr.width-2))
+         else {
+            if(i < (usr.width - 1))
                continue;
 
             buff[i]='\0';
@@ -547,15 +537,18 @@ char mark;
             buff[i]='\0';
             wrp[m]='\0';
 
-            if (!shead)
-            {
-               line = msg_attrib(&msgt,msgn+1,line,0);
+            if (!shead) {
+               line = msg_attrib(&msgt,fakenum ? fakenum : msgn+1,line,0);
                change_attr(LGREY|_BLUE);
                del_line();
                change_attr(CYAN|_BLACK);
                m_print(bbstxt[B_ONE_CR]);
                shead = 1;
                line++;
+               okludge = 1;
+               fseek (f2, startpos, SEEK_SET);
+               i = 0;
+               continue;
             }
 
             if (((strchr(buff,'>') - buff) < 6) && (strchr(buff,'>')))
@@ -634,21 +627,22 @@ char mark;
    return (1);
 }
 
-int pip_msg_read(area, msgn, mark, flag)
+int pip_msg_read(area, msgn, mark, flag, fakenum)
 unsigned int area, msgn;
 char mark;
-int flag;
+int flag, fakenum;
 {
    FILE *f1,*f2;
    MSGPTR hdr;
    MSGPKTHDR mpkt;
-   char buff[86], wrp[80], *p, c, fn[80];
+   char buff[150], wrp[150], *p, c, fn[80], okludge;
    byte a;
    int line, i, colf, shead, m, z;
+   long startpos;
    struct _msg msgt;
 
    if (usr.full_read && !flag)
-      return(full_pip_msg_read(area, msgn, mark));
+      return(full_pip_msg_read(area, msgn, mark, fakenum));
 
    msgn--;
 
@@ -658,35 +652,31 @@ int flag;
    if (f1 == NULL)
       return (0);
 
-   if (fseek(f1,sizeof(hdr)*msgn,SEEK_SET))
-   {
+   if (fseek(f1,sizeof(hdr)*msgn,SEEK_SET)) {
       fclose(f1);
       return (0);
    }
-   if (fread(&hdr,sizeof(hdr),1,f1)==0)
-   {
+   if (fread(&hdr,sizeof(hdr),1,f1)==0) {
       fclose(f1);
       return (0);
    }
-   if (hdr.status & SET_MPTR_DEL)
-   {
+   if (hdr.status & SET_MPTR_DEL) {
       fclose(f1);
       return (0);
    }
 
    sprintf(fn,"%sMPKT%04x.PIP",pip_msgpath,area);
    f2 = fopen(fn,"rb+");
-   if (f2 == NULL)
-   {
+   if (f2 == NULL) {
       fclose(f1);
       return (0);
    }
 
-   if (!(mark&SET_NEW) || !((hdr.status&SET_MPTR_RCVD) || (hdr.status&SET_MPTR_DEL)))
-   {
+   if (!(mark&SET_NEW) || !((hdr.status&SET_MPTR_RCVD) || (hdr.status&SET_MPTR_DEL))) {
       fseek(f2,hdr.pos,SEEK_SET);
       fread(&mpkt,sizeof(mpkt),1,f2);
 
+      okludge = 0;
       line = 2;
       shead = 0;
       colf = 0;
@@ -694,10 +684,10 @@ int flag;
       msg_fzone = msg_tzone = config->alias[sys.use_alias].zone;
       msg_fpoint = msg_tpoint = 0;
 
-      read0(msgt.date,f2);
-      read0(msgt.to,f2);
-      read0(msgt.from,f2);
-      read0(msgt.subj,f2);
+      read0 (msgt.date, f2);
+      read0 (msgt.to, f2);
+      read0 (msgt.from, f2);
+      read0 (msgt.subj, f2);
 
       msgt.orig_net = mpkt.fromnet;
       msgt.orig = mpkt.fromnode;
@@ -709,16 +699,14 @@ int flag;
       if (mpkt.attribute & SET_PKT_RCVD)
          msgt.attr |= MSGREAD;
 
-      if(msgt.attr & MSGPRIVATE)
-      {
-         if(stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && usr.priv != SYSOP)
-         {
+      if(msgt.attr & MSGPRIVATE) {
+         if(stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && stricmp(msgt.from,usr.handle) && stricmp(msgt.to,usr.handle) && usr.priv != SYSOP) {
             fclose(f1);
             fclose(f2);
             return(0);
          }
       }
-      if (!stricmp (msgt.to,usr.name))
+      if (!stricmp (msgt.to,usr.name) || !stricmp (msgt.to,usr.handle))
          mark |= SET_MARK;
 
       msg_parent = (int)hdr.prev + 1;
@@ -733,31 +721,30 @@ int flag;
          msg_tpoint = mpkt.point;
       memcpy ((char *)&msg, (char *)&msgt, sizeof (struct _msg));
 
+      change_attr (WHITE|_BLACK);
+      m_print (" * %s\n", sys.msg_name);
+
       change_attr(CYAN|_BLACK);
       allow_reply = 1;
       i = 0;
+      startpos = ftell (f2);
 
-      while ((a=(byte)fgetc(f2)) != 0 && !feof(f2))
-      {
+      while ((a=(byte)fgetc(f2)) != 0 && !feof(f2)) {
          c = a;
 
-         switch(mpkt.pktype)
-         {
+         switch(mpkt.pktype) {
             case 2:
                c = a;
                break;
             case 10:
-               if (a!=10)
-               {
+               if (a!=10) {
                   if (a == 141)
                      a='\r';
 
                   if (a<128)
                      c=a;
-                  else
-                  {
-                     if (a==128)
-                     {
+                  else {
+                     if (a==128) {
                         a=(byte)fgetc(f2);
                         c=(a)+127;
                      }
@@ -781,56 +768,53 @@ int flag;
             continue;
          buff[i++] = c;
 
-         if (c == 0x0D)
-         {
+         if (c == 0x0D) {
             buff[i-1]='\0';
 
-            if(buff[0] == 0x01)
-            {
+            if(buff[0] == 0x01 && !okludge) {
                if (!strncmp(&buff[1],"INTL",4) && !shead)
                   sscanf(&buff[6],"%d:%d/%d %d:%d/%d",&msg_tzone,&i,&i,&msg_fzone,&i,&i);
                if (!strncmp(&buff[1],"TOPT",4) && !shead)
                   sscanf(&buff[6],"%d",&msg_tpoint);
                if (!strncmp(&buff[1],"FMPT",4) && !shead)
                   sscanf(&buff[6],"%d",&msg_fpoint);
-               i=0;
+               i = 0;
                continue;
             }
-            else if (!shead)
-            {
-               line = msg_attrib(&msgt,msgn+1,line,0);
+            else if (!shead) {
+               line = msg_attrib(&msgt,fakenum ? fakenum : msgn+1,line,0);
                m_print(bbstxt[B_ONE_CR]);
                shead = 1;
+               okludge = 1;
+               fseek (f2, startpos, SEEK_SET);
+               i = 0;
+               continue;
             }
 
-            if(!strncmp(buff,"SEEN-BY",7))
-            {
+            if(!usr.kludge && (!strncmp(buff,"SEEN-BY",7) || buff[0] == 0x01)) {
                i=0;
                continue;
             }
 
-            if(buff[0] == 0x01)
-            {
-               change_attr(YELLOW|_BLUE);
-               m_print("%s\n",&buff[1]);
+            if(buff[0] == 0x01) {
+               m_print("%s\n",&buff[1]);
                change_attr(LGREY|BLACK);
             }
-            else
-            {
+            else if (!strncmp (buff, "SEEN-BY", 7)) {
+               m_print ("%s\n", buff);
+               change_attr (LGREY|BLACK);
+            }
+            else {
                p = &buff[0];
 
-               if(((strchr(buff,'>') - p) < 6) && (strchr(buff,'>')))
-               {
-                  if(!colf)
-                  {
+               if(((strchr(buff,'>') - p) < 6) && (strchr(buff,'>'))) {
+                  if(!colf) {
                      change_attr(LGREY|BLACK);
                      colf=1;
                   }
                }
-               else
-               {
-                  if(colf)
-                  {
+               else {
+                  if(colf) {
                      change_attr(CYAN|BLACK);
                      colf=0;
                   }
@@ -850,19 +834,16 @@ int flag;
             if(flag == 1)
                     line=1;
 
-            if(!(++line < (usr.len-1)) && usr.more)
-            {
+            if(!(++line < (usr.len-1)) && usr.more) {
                line = 1;
-               if(!continua())
-               {
+               if(!continua()) {
                   flag=1;
                   break;
                }
             }
          }
-         else
-         {
-            if(i<(usr.width-2))
+         else {
+            if(i<(usr.width-1))
                continue;
 
             buff[i]='\0';
@@ -878,25 +859,24 @@ int flag;
             buff[i]='\0';
             wrp[m]='\0';
 
-            if (!shead)
-            {
-               line = msg_attrib(&msgt,msgn+1,line,0);
+            if (!shead) {
+               line = msg_attrib(&msgt,fakenum ? fakenum : msgn+1,line,0);
                m_print(bbstxt[B_ONE_CR]);
                shead = 1;
+               okludge = 1;
+               fseek (f2, startpos, SEEK_SET);
+               i = 0;
+               continue;
             }
 
-            if (((strchr(buff,'>') - buff) < 6) && (strchr(buff,'>')))
-            {
-               if(!colf)
-               {
+            if (((strchr(buff,'>') - buff) < 6) && (strchr(buff,'>'))) {
+               if(!colf) {
                   change_attr(LGREY|_BLACK);
                   colf=1;
                }
             }
-            else
-            {
-               if(colf)
-               {
+            else {
+               if(colf) {
                   change_attr(CYAN|_BLACK);
                   colf=0;
                }
@@ -913,11 +893,9 @@ int flag;
             if(flag == 1)
                line=1;
 
-            if(!(++line < (usr.len-1)) && usr.more)
-            {
+            if(!(++line < (usr.len-1)) && usr.more) {
                line = 1;
-               if(!continua())
-               {
+               if(!continua()) {
                   flag=1;
                   break;
                }
@@ -928,8 +906,7 @@ int flag;
          }
       }
 
-      if (mark&(SET_MARK|SET_DEL))
-      {
+      if (mark&(SET_MARK|SET_DEL)) {
           hdr.status|=(mark&SET_DEL)?SET_MPTR_DEL:SET_MPTR_RCVD; /* bit received/deleted set to on*/
           fseek(f1,sizeof(hdr)*msgn,SEEK_SET);
           if (fwrite(&hdr,sizeof(hdr),1,f1)==0)

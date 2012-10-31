@@ -25,8 +25,15 @@
 #include "arc.h"
 #include "exec.h"
 
-extern char no_description, no_check, no_external;
+typedef struct {
+   char name[13];
+   word area;
+   long datpos;
+} FILEIDX;
 
+extern char no_description, no_check, no_external, no_precheck;
+
+void general_door (char *s, int flag);
 void open_logfile (void);
 int spawn_program (int swapout, char *outstring);
 void check_uploads (FILE *xferinfo, char *path);
@@ -59,6 +66,7 @@ static void Read_Zip(int);
 static int Zip_Read_Directory(int, long, int);
 static void Read_Arj(int);
 static void Read_Sqz(int);
+static void Read_Rar(int fd);
 
 char *memstr(char *, char *, int, int);
 
@@ -92,54 +100,60 @@ static char *my_strtok (char *s1, char *s2)
     return (tok);
 }
 
-void display_contents()
+void display_contents (void)
 {
-   struct _lhhead *lhhead;
-
-   byte buffer[SEEK_SIZE+10];
-   char filename[14], an[80];
-
    int arcfile;
+   char *p, filename[20], an[80];
+   byte buffer[SEEK_SIZE + 10];
+   struct _lhhead *lhhead;
 
    if (!get_command_word (filename, 12)) {
       m_print (bbstxt[B_WHICH_ARCHIVE]);
-      input (filename,12);
+      input (filename, 12);
       if (!filename[0] || !CARRIER)
          return;
    }
 
+   if ((p = strchr (filename, '.')) == NULL)
+      p = strchr (filename, '\0');
+
    sprintf (an, "%s%s", sys.filepath, filename);
-   if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
-      strcat (filename, ".ARJ");
+   if ((arcfile = shopen (an, O_RDONLY|O_BINARY)) == -1) {
+      strcpy (p, ".ARJ");
       sprintf (an, "%s%s", sys.filepath, filename);
 
       if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
-         strcpy (&filename[strlen (filename) - 4], ".ZIP");
+         strcpy (p, ".ZIP");
          sprintf (an, "%s%s", sys.filepath, filename);
 
          if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
-            strcpy (&filename[strlen (filename) - 4], ".LZH");
+            strcpy (p, ".LZH");
             sprintf (an, "%s%s", sys.filepath, filename);
 
             if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
-               strcpy (&filename[strlen (filename) - 4], ".LHA");
+               strcpy (p, ".LHA");
                sprintf (an, "%s%s", sys.filepath, filename);
 
                if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
-                  strcpy (&filename[strlen (filename) - 4], ".PAK");
+                  strcpy (p, ".PAK");
                   sprintf (an, "%s%s", sys.filepath, filename);
 
                   if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
-                     strcpy (&filename[strlen (filename) - 4], ".ARC");
+                     strcpy (p, ".ARC");
                      sprintf (an, "%s%s", sys.filepath, filename);
 
                      if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
-                        strcpy (&filename[strlen (filename) - 4], ".SQZ");
+                        strcpy (p, ".SQZ");
                         sprintf (an, "%s%s", sys.filepath, filename);
 
                         if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
-                           m_print (bbstxt[B_ARC_NOTFOUND]);
-                           return;
+                           strcpy (p, ".RAR");
+                           sprintf (an, "%s%s", sys.filepath, filename);
+
+                           if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
+                              m_print (bbstxt[B_ARC_NOTFOUND]);
+                              return;
+                           }
                         }
                      }
                   }
@@ -155,9 +169,10 @@ void display_contents()
    lseek(arcfile,0L,SEEK_SET);
 
    lhhead=(struct _lhhead *)buffer;
-
    if (*buffer=='P' && *(buffer+1)=='K')
       Read_Zip(arcfile);
+   else if (*buffer==0x52 && *(buffer+1)==0x61 && *(buffer+2)==0x72)
+      Read_Rar(arcfile);
    else if (*buffer=='H' && *(buffer+1)=='L' && *(buffer+2)=='S' && *(buffer+3)=='Q' && *(buffer+4)=='Z')
       Read_Sqz(arcfile);
    else if (lhhead->method[0]=='-' && lhhead->method[1]=='l' &&
@@ -709,403 +724,104 @@ static void Read_Sqz (int lzhfile)
    }
 }
 
-void hslink_protocol (name, path, global)
-char *name, *path;
-int global;
+#define IGNORE_BLOCK    0x4000
+#define ADD_SIZE        0x8000
+
+#define MARKER_BLOCK    0x72
+#define ARCHIVE_HEADER  0x73
+#define FILE_HEADER     0x74
+#define COMMENT_HEADER  0x75
+#define EXTRA_INFO      0x76
+
+typedef struct {
+   unsigned short crc;
+   unsigned char  type;
+   unsigned short flags;
+   unsigned short size;
+} MAIN_HEAD;
+
+typedef struct {
+   unsigned long  pack_size;
+   unsigned long  unpack_size;
+   unsigned char  host_os;
+   unsigned long  file_crc;
+   unsigned long  datetime;
+   unsigned char  rara_version;
+   unsigned char  method;
+   unsigned short namesize;
+   unsigned long  attributes;
+} FILE_HEAD;
+
+static void Read_Rar(int fd)
 {
-   FILE *fp, *fp2;
-   int fd, *varr;
-   char dir[20], filename[150], *p, ext[5], stringa[60], isupld;
-   long started, bytes;
-   struct ffblk blk;
-   struct _sys tsys;
+   char fname[128];
+   int line, num_files;
+   long total_compressed, total_uncompressed, extra_size;
+   MAIN_HEAD head;
+   FILE_HEAD fhead;
 
-   sprintf (filename, "%sHSLINK%d.LST", config->sys_path, line_offset);
-   fp = fopen (filename, "wt");
+   num_files = 0;
+   total_compressed = total_uncompressed = 0L;
+   line = 4;
 
-   if (name != NULL) {
-      while (get_string (name, dir) != NULL) {
-         sprintf (filename, "%s%s", path, dir);
+   m_print (bbstxt[B_LZHARC_HEADER]);
+   m_print (bbstxt[B_LZHARC_UNDERLINE]);
 
-         if (findfirst(filename,&blk,0)) {
-            sprintf (filename, "%sSYSFILE.DAT", config->sys_path);
-            fd = shopen (filename, O_RDONLY|O_BINARY);
+   for (;;) {
+      if (read (fd, &head, sizeof (MAIN_HEAD)) < sizeof (MAIN_HEAD))
+         break;
 
-            if (global) {
-               while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
-                  if (usr.priv < tsys.file_priv || tsys.no_global_search)
-                     continue;
-                  if((usr.flags & tsys.file_flags) != tsys.file_flags)
-                     continue;
-                  if (usr.priv < tsys.download_priv)
-                     continue;
-                  if((usr.flags & tsys.download_flags) != tsys.download_flags)
-                     continue;
+      if (head.type == FILE_HEADER) {
+         if (read (fd, &fhead, sizeof (FILE_HEAD)) < sizeof (FILE_HEAD))
+            break;
+         read (fd, fname, fhead.namesize);
+         fname[fhead.namesize] = '\0';
 
-                  sprintf (filename, "%s%s", tsys.filepath, dir);
+         m_print (bbstxt[B_LZHARC_FORMAT],
+             fname,
+             fhead.unpack_size,
+             fhead.pack_size,
+             (int)(100-((fhead.pack_size*100)/fhead.unpack_size)),
+             ts_day (fhead.datetime),
+             ts_month (fhead.datetime),
+             ts_year (fhead.datetime) % 100,
+             ts_hour (fhead.datetime),
+             ts_min (fhead.datetime));
 
-                  if (!findfirst (filename, &blk, 0))
-                     break;
-               }
-            }
+         total_compressed += fhead.pack_size;
+         total_uncompressed += fhead.unpack_size;
 
-            close (fd);
+         num_files++;
+
+         if (head.flags & 0x08) {
          }
 
-         fprintf (fp, "%s\n", filename);
+         lseek (fd, (long)(head.size - 7 - sizeof (FILE_HEAD) - fhead.namesize), SEEK_CUR);
+         lseek (fd, fhead.pack_size, SEEK_CUR);
+
+         if ((line = more_question (line)) == 0 || !CARRIER)
+            break;
       }
-   }
-
-   fclose (fp);
-   sprintf (filename, "HSLINK -P%d -U%s -LF%sHSLINK%d.LOG @%sHSLINK%d.LST", com_port + 1, sys.uppath, config->sys_path, line_offset, config->sys_path, line_offset);
-
-   varr = ssave ();
-//   MDM_DISABLE ();
-   cclrscrn(LGREY|_BLACK);
-   showcur();
-   fclose (logf);
-
-   spawn_program (registered, filename);
-
-/*
-   com_install (com_port);
-   com_baud (rate);
-*/
-   if (varr != NULL)
-      srestore (varr);
-   open_logfile ();
-   wactiv (mainview);
-
-   sprintf (filename, "%sHSLINK%d.LST", config->sys_path, line_offset);
-   unlink (filename);
-
-   sprintf (filename, "%sHSLINK%d.LOG", config->sys_path, line_offset);
-   fp = fopen (filename, "rt");
-   if (fp == NULL) {
-      m_print(bbstxt[B_TRANSFER_ABORT]);
-      return;
-   }
-
-   sprintf (filename, "XFER%d", line_offset);
-   fp2 = fopen (filename, "wt");
-   isupld = 0;
-
-   while (fgets (filename, 145, fp) != NULL) {
-      while (filename[strlen (filename) -1] == 0x0D || filename[strlen (filename) -1] == 0x0A)
-         filename[strlen (filename) -1] = '\0';
-
-      p = strtok (filename, " ");
-      if (p[0] == 'R') {
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         fprintf (fp2, "%s\n", strupr (p));
-         isupld = 1;
-      }
-   }
-
-   if (isupld)
-      check_uploads (fp2, path);
-
-   fclose (fp2);
-
-   sprintf (filename, "XFER%d", line_offset);
-   unlink (filename);
-
-   rewind (fp);
-
-   while (fgets (filename, 145, fp) != NULL) {
-      while (filename[strlen (filename) -1] == 0x0D || filename[strlen (filename) -1] == 0x0A)
-         filename[strlen (filename) -1] = '\0';
-
-      p = strtok (filename, " ");
-      if (p[0] == 'H') {
-         p = strtok (NULL, " ");
-         bytes = atol (p);
-         usr.upld += (int)(bytes / 1024L) + 1;
-         usr.n_upld++;
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         cps = atoi (p);
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-
-         started = (cps * 1000L) / ((long) rate);
-         status_line ((char *) msgtxt[M_CPS_MESSAGE], cps, bytes, started);
-         status_line ("%s-H %s%s", msgtxt[M_FILE_RECEIVED], (strchr (p, '\\') == NULL) ? sys.uppath : "", strupr (p));
-
-         fnsplit (p, NULL, NULL, dir, ext);
-         strcat (dir, ext);
-
-         do {
-            m_print(bbstxt[B_DESCRIBE],strupr(dir));
-            CLEAR_INBOUND ();
-            input(stringa,54);
-            if (!CARRIER)
-               break;
-         } while (strlen(stringa) < 5);
-
-         sprintf(filename,"%sFILES.BBS",sys.uppath);
-         fp2 = fopen(filename,"at");
-         sprintf (filename, "%c  0%c ", config->dl_counter_limits[0], config->dl_counter_limits[1]);
-         fprintf(fp,"%-12s %s%s\n", dir, config->keep_dl_count ? filename : "", stringa);
-         if (config->put_uploader)
-            fprintf (fp, bbstxt[B_UPLOADER_NAME], usr.name);
-         fclose(fp2);
-
-         if (function_active == 3)
-            f3_status ();
-      }
-      else if (p[0] == 'h' || p[0] == 'l' || p[0] == 'e') {
-         p = strtok (NULL, " ");
-         bytes = atol (p);
-         usr.dnld += (int)(bytes / 1024L) + 1;
-         usr.dnldl += (int)(bytes / 1024L) + 1;
-         usr.n_dnld++;
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         cps = atoi (p);
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-
-         sprintf (filename, "%s%s", (strchr (p, '\\') == NULL) ? sys.filepath : "", strupr (p));
-         if (config->keep_dl_count)
-            update_filestat (filename);
-         download_report (filename, 2, NULL);
-
-         started = (cps * 1000L) / ((long) rate);
-         status_line ((char *) msgtxt[M_CPS_MESSAGE], cps, bytes, started);
-         status_line ("+DL-H %s%s", (strchr (p, '\\') == NULL) ? sys.filepath : "", strupr (p));
-
-         if (function_active == 3)
-            f3_status ();
-      }
-   }
-
-   fclose (fp);
-   sprintf (filename, "%sHSLINK%d.LOG", config->sys_path, line_offset);
-   unlink (filename);
-
-   m_print(bbstxt[B_TRANSFER_OK]);
-}
-
-void puma_protocol (name, path, global, upload)
-char *name, *path;
-int global, upload;
-{
-   FILE *fp, *fp2;
-   int fd, *varr;
-   char dir[20], filename[150], *p, ext[5], stringa[60], isupld;
-   long started, bytes;
-   struct ffblk blk;
-   struct _sys tsys;
-
-   if (name != NULL) {
-      sprintf (filename, "%sPUMA%d.LST", config->sys_path, line_offset);
-      fp = fopen (filename, "wt");
-
-      while (get_string (name, dir) != NULL) {
-         sprintf (filename, "%s%s", path, dir);
-
-         if (findfirst(filename,&blk,0)) {
-            sprintf (filename, "%sSYSFILE.DAT", config->sys_path);
-            fd = shopen (filename, O_RDONLY|O_BINARY);
-
-            if (global) {
-               while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
-                  if (usr.priv < tsys.file_priv || tsys.no_global_search)
-                     continue;
-                  if((usr.flags & tsys.file_flags) != tsys.file_flags)
-                     continue;
-                  if (usr.priv < tsys.download_priv)
-                     continue;
-                  if((usr.flags & tsys.download_flags) != tsys.download_flags)
-                     continue;
-
-                  sprintf (filename, "%s%s", tsys.filepath, dir);
-
-                  if (!findfirst (filename, &blk, 0))
-                     break;
-               }
-            }
-
-            close (fd);
+      else {
+         if (head.flags & ADD_SIZE) {
+            read (fd, &extra_size, 4);
+            lseek (fd, extra_size, SEEK_CUR);
          }
-
-         fprintf (fp, "%s\n", filename);
-      }
-
-      fclose (fp);
-   }
-
-   if (upload)
-      sprintf (filename, "PUMA P%d L%sPUMA%d.LOG R %s", com_port + 1, config->sys_path, line_offset, sys.uppath);
-   else
-      sprintf (filename, "PUMA P%d L%sPUMA%d.LOG S @%sPUMA%d.LST", com_port + 1, config->sys_path, line_offset, config->sys_path, line_offset);
-
-   varr = ssave ();
-//   MDM_DISABLE ();
-   cclrscrn(LGREY|_BLACK);
-   showcur();
-   fclose (logf);
-
-   spawn_program (registered, filename);
-
-/*
-   com_install (com_port);
-   com_baud (rate);
-*/
-   if (varr != NULL)
-      srestore (varr);
-
-   open_logfile ();
-   wactiv (mainview);
-
-   sprintf (filename, "%sPUMA%d.LST", config->sys_path, line_offset);
-   unlink (filename);
-
-   sprintf (filename, "%sPUMA%d.LOG", config->sys_path, line_offset);
-   fp = fopen (filename, "rt");
-   if (fp == NULL) {
-      m_print(bbstxt[B_TRANSFER_ABORT]);
-      return;
-   }
-
-   sprintf (filename, "XFER%d", line_offset);
-   fp2 = fopen (filename, "wt");
-   isupld = 0;
-
-   while (fgets (filename, 145, fp) != NULL) {
-      while (filename[strlen (filename) -1] == 0x0D || filename[strlen (filename) -1] == 0x0A)
-         filename[strlen (filename) -1] = '\0';
-
-      p = strtok (filename, " ");
-      if (p[0] == 'R') {
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         fprintf (fp2, "%s\n", strupr (p));
-         isupld = 1;
+         lseek (fd, (long)(head.size - sizeof (MAIN_HEAD)), SEEK_CUR);
       }
    }
 
-   if (isupld)
-      check_uploads (fp2, path);
+   if (line) {
+      m_print (bbstxt[B_LZHARC_END]);
 
-   fclose (fp2);
+      if (total_uncompressed)
+          m_print (bbstxt[B_LZHARC_END_FORMAT],
+             total_uncompressed,
+             total_compressed,
+             (int)(100-((total_compressed*100)/total_uncompressed)));
 
-   sprintf (filename, "XFER%d", line_offset);
-   unlink (filename);
-
-   rewind (fp);
-
-   while (fgets (filename, 145, fp) != NULL) {
-      while (filename[strlen (filename) -1] == 0x0D || filename[strlen (filename) -1] == 0x0A)
-         filename[strlen (filename) -1] = '\0';
-
-      p = strtok (filename, " ");
-      if (p[0] == 'R') {
-         p = strtok (NULL, " ");
-         bytes = atol (p);
-         usr.upld += (int)(bytes / 1024L) + 1;
-         usr.n_upld++;
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         cps = atoi (p);
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-
-         started = (cps * 1000L) / ((long) rate);
-         status_line ((char *) msgtxt[M_CPS_MESSAGE], cps, bytes, started);
-         status_line ("%s-P %s%s", msgtxt[M_FILE_RECEIVED], (strchr (p, '\\') == NULL) ? sys.uppath : "", strupr (p));
-
-         fnsplit (p, NULL, NULL, dir, ext);
-         strcat (dir, ext);
-
-         do {
-            m_print(bbstxt[B_DESCRIBE],strupr(dir));
-            CLEAR_INBOUND ();
-            input(stringa,54);
-            if (!CARRIER)
-               break;
-         } while (strlen(stringa) < 5);
-
-         sprintf(filename,"%sFILES.BBS",sys.uppath);
-         fp2 = fopen(filename,"at");
-         sprintf (filename, "%c  0%c ", config->dl_counter_limits[0], config->dl_counter_limits[1]);
-         fprintf(fp,"%-12s %s%s\n", dir, config->keep_dl_count ? filename : "", stringa);
-         if (config->put_uploader)
-            fprintf (fp, bbstxt[B_UPLOADER_NAME], usr.name);
-         fclose(fp2);
-
-         if (function_active == 3)
-            f3_status ();
-      }
-      else if (p[0] == 'S') {
-         p = strtok (NULL, " ");
-         bytes = atol (p);
-         usr.dnld += (int)(bytes / 1024L) + 1;
-         usr.dnldl += (int)(bytes / 1024L) + 1;
-         usr.n_dnld++;
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         cps = atoi (p);
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-         p = strtok (NULL, " ");
-
-         sprintf (filename, "%s%s", (strchr (p, '\\') == NULL) ? sys.filepath : "", strupr (p));
-         if (config->keep_dl_count)
-            update_filestat (filename);
-         download_report (filename, 2, NULL);
-
-         started = (cps * 1000L) / ((long) rate);
-         status_line ((char *) msgtxt[M_CPS_MESSAGE], cps, bytes, started);
-         status_line ("+DL-P %s%s", (strchr (p, '\\') == NULL) ? sys.filepath : "", strupr (p));
-
-         if (function_active == 3)
-            f3_status ();
-      }
+      press_enter ();
    }
-
-   fclose (fp);
-   sprintf (filename, "%sPUMA%d.LOG", config->sys_path, line_offset);
-   unlink (filename);
-
-   m_print(bbstxt[B_TRANSFER_OK]);
 }
 
 void display_external_protocol (int id)
@@ -1235,6 +951,7 @@ void general_external_protocol (char *name, char *path, int id, int global, int 
    if (!dl) {
       path[strlen (path) - 1] = '\0';
       strsrep (filename, "%1", path);
+      strsrep (filename, "%v", path);
       path[strlen (path)] = '\\';
       strsrep (filename, "%2", name);
    }
@@ -1288,7 +1005,7 @@ void general_external_protocol (char *name, char *path, int id, int global, int 
          translate_filenames (filename, 0, NULL);
          fp = fopen (filename, "rt");
          if (fp == NULL) {
-            m_print(bbstxt[B_TRANSFER_ABORT]);
+            m_print (bbstxt[B_TRANSFER_ABORT]);
             return;
          }
 
@@ -1319,16 +1036,8 @@ void general_external_protocol (char *name, char *path, int id, int global, int 
                }
          }
 
-         if (isupld && !no_check) {
-            fseek (fp2, 0L, SEEK_SET);
-            check_uploads (fp2, path);
-         }
-
          timer (10);
          fclose (fp2);
-
-         sprintf (filename, "XFER%d", line_offset);
-         unlink (filename);
 
          rewind (fp);
 
@@ -1358,8 +1067,8 @@ void general_external_protocol (char *name, char *path, int id, int global, int 
 
                   if (i == prot.size) {
                      bytes = atol (p);
-                     usr.upld += (int)(bytes / 1024L) + 1;
-                     usr.n_upld++;
+//                     usr.upld += (int)(bytes / 1024L) + 1;
+//                     usr.n_upld++;
                   }
                   else if (i == prot.cps)
                      cps = atoi (p);
@@ -1448,6 +1157,30 @@ void general_external_protocol (char *name, char *path, int id, int global, int 
          }
 
          fclose (fp);
+
+         sprintf (filename, "XFER%d", line_offset);
+         if ((fp2 = fopen (filename, "rt")) != NULL) {
+            if (isupld && !no_check) {
+               fseek (fp2, 0L, SEEK_SET);
+               check_uploads (fp2, path);
+            }
+
+            rewind (fp2);
+
+            while (fgets (filename, 78, fp2) != NULL) {
+               filename[strlen (filename) - 1] = '\0';
+               if (!findfirst (filename, &blk, 0)) {
+                  usr.upld += (int)(blk.ff_fsize / 1024L) + 1;
+                  usr.n_upld++;
+
+                  if (function_active == 3)
+                     f3_status ();
+               }
+            }
+
+            fclose (fp2);
+            unlink (filename);
+         }
 
          strcpy (filename, prot.log_name);
          translate_filenames (filename, 0, NULL);
@@ -1555,18 +1288,20 @@ void check_uploads (xferinfo, path)
 FILE *xferinfo;
 char *path;
 {
-   FILE *fp;
-   int fd;
+   FILE *fp, *fpi;
+   int found;
    char filename[80], stringa[80], name[20], ext[5], *p, origname[20];
+   char our_wildcard[14], their_wildcard[14];
    struct ffblk blk;
    struct _sys tsys;
+   FILEIDX fidx;
 
    m_print (bbstxt[B_CHECK_UPLOADS]);
 
-   sprintf (filename, "%sSYSFILE.DAT", config->sys_path);
-   fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
-   if (fd == -1)
-      return;
+//   sprintf (filename, "%sSYSFILE.DAT", config->sys_path);
+//   fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
+//   if (fd == -1)
+//      return;
 
    sprintf (filename, "%sNOCHECK.CFG", config->sys_path);
    fp = fopen (filename, "rt");
@@ -1593,6 +1328,50 @@ char *path;
       }
 
       if (fp == NULL || stricmp (filename, origname)) {
+         found = 0;
+         prep_match (name, their_wildcard);
+         if ((fpi = sh_fopen ("FILES.IDX", "rb", SH_DENYNONE)) != NULL) {
+            while (fread (&fidx, sizeof (FILEIDX), 1, fpi) == 1) {
+               prep_match (fidx.name, our_wildcard);
+               if (!match (our_wildcard, their_wildcard)) {
+                  found = 1;
+                  if (read_system2 (fidx.area, 2, &tsys)) {
+                     m_print (bbstxt[B_ALREADY_HAVE], name, tsys.file_num, tsys.file_name);
+                     sprintf (filename, "%s%s", path, origname);
+                     if (!findfirst (filename, &blk, 0)) {
+                        unlink (filename);
+                        allowed -= (int) (blk.ff_fsize * 10 / rate + 53) / 54;
+                     }
+                     status_line ("+Duplicate upload: %s (area #%d)", origname, tsys.file_num);
+                  }
+                  break;
+               }
+            }
+            fclose (fp);
+         }
+
+         if (!found) {
+            if ((fpi = sh_fopen ("CDROM.IDX", "rb", SH_DENYNONE)) != NULL) {
+               while (fread (&fidx, sizeof (FILEIDX), 1, fpi) == 1) {
+                  prep_match (fidx.name, our_wildcard);
+                  if (!match (our_wildcard, their_wildcard)) {
+                     found = 1;
+                     if (read_system2 (fidx.area, 2, &tsys)) {
+                        m_print (bbstxt[B_ALREADY_HAVE], name, tsys.file_num, tsys.file_name);
+                        sprintf (filename, "%s%s", path, origname);
+                        if (!findfirst (filename, &blk, 0)) {
+                           unlink (filename);
+                           allowed -= (int) (blk.ff_fsize * 10 / rate + 53) / 54;
+                        }
+                        status_line ("+Duplicate upload: %s (area #%d)", origname, tsys.file_num);
+                     }
+                     break;
+                  }
+               }
+               fclose (fp);
+            }
+         }
+/*
          lseek (fd, 0L, SEEK_SET);
 
          while (read (fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
@@ -1608,6 +1387,7 @@ char *path;
                break;
             }
          }
+*/
       }
 
       sprintf (filename, "%s%s", path, origname);
@@ -1620,11 +1400,11 @@ char *path;
    if (fp != NULL)
       fclose (fp);
 
-   close (fd);
+//   close (fd);
    rewind (xferinfo);
 }
 
-#define MAX_INDEX    500
+#define MAX_INDEX    200
 
 void upload_filebox ()
 {
@@ -1690,11 +1470,11 @@ retry:
 
    olduploader = config->put_uploader;
    config->put_uploader = 1;
-   no_check = 1;
+   no_precheck = no_check = 1;
 
    upload_file (filename, -1);
 
-   no_external = no_check = 0;
+   no_precheck = no_external = no_check = 0;
    config->put_uploader = olduploader;
 
    m_print (bbstxt[B_SEND_ANOTHER]);
@@ -2215,7 +1995,7 @@ void tag_files (int only_one)
 
                      fprintf (fp, "%s%s %ld\n", tsys.filepath, blk.ff_name, blk.ff_fsize);
 
-                     byte_sec = rate / 11;
+                     byte_sec = (int)(rate / 11);
                      i = (int)((blk.ff_fsize + (blk.ff_fsize / 1024)) / byte_sec);
                      min = i / 60;
                      sec = i - min * 60;
@@ -2251,7 +2031,7 @@ void tag_files (int only_one)
 
                fprintf (fp, "%s%s %ld\n", sys.filepath, blk.ff_name, blk.ff_fsize);
 
-               byte_sec = rate / 11;
+               byte_sec = (int)(rate / 11);
                i = (int)((blk.ff_fsize + (blk.ff_fsize / 1024)) / byte_sec);
                min = i / 60;
                sec = i - min * 60;
@@ -2374,7 +2154,7 @@ void list_tagged_files (int remove)
    }
 }
 
-int download_tagged_files (void)
+int download_tagged_files (char *fname)
 {
    FILE *fp, *fpx;
    int i, m, nfiles, byte_sec, min, sec, protocol;
@@ -2384,6 +2164,20 @@ int download_tagged_files (void)
    sprintf (filename, "F-TAG%d.TMP", config->line_offset);
    if ((fp = fopen (filename, "rt")) == NULL)
       return (0);
+
+   // Se fname e' diverso da NULL significa che c'e' un file in piu' da
+   // prendere oltre a quello del QWK: viene aggiunto alla lista dei files
+   // da prelevare.
+   if (fname != NULL) {
+      fclose (fp);
+
+      fp = fopen (filename, "at");
+      fprintf (fp, "%s 0\n", fname);
+      fclose (fp);
+
+      if ((fp = fopen (filename, "rt")) == NULL)
+         return (0);
+   }
 
    logoffafter = 0;
    nfiles = 0;
@@ -2451,7 +2245,7 @@ int download_tagged_files (void)
    m_print (bbstxt[B_FILE_MASK], strupr (filename));
    m_print (bbstxt[B_LEN_MASK], fl);
 
-   byte_sec = rate / 11;
+   byte_sec = (int)(rate / 11);
    i = (int)((fl + (fl / 1024)) / byte_sec);
    min = i / 60;
    sec = i - min * 60;
@@ -2509,15 +2303,7 @@ int download_tagged_files (void)
    i = 0;
    download_report (NULL, 1, NULL);
 
-   if (protocol == 4) {
-      sprintf (filename, "%sHSLINK%d.LST", config->sys_path, line_offset);
-      fpx = fopen (filename, "wt");
-   }
-   else if (protocol == 5) {
-      sprintf (filename, "%sPUMA%d.LST", config->sys_path, line_offset);
-      fpx = fopen (filename, "wt");
-   }
-   else if (protocol >= 10) {
+   if (protocol >= 10) {
       sprintf (filename, "%sEXTRN%d.LST", config->sys_path, line_offset);
       fpx = fopen (filename, "wt");
    }
@@ -2532,20 +2318,20 @@ int download_tagged_files (void)
 
       if (protocol == 1 || protocol == 2 || protocol == 3 || protocol == 6) {
          timer (10);
-         m = i = 0;
+         m = 0;
 
          switch (protocol) {
             case 1:
-               m = send (p, 'X');
+               m = fsend (p, 'X');
                break;
             case 2:
-               m = send (p, 'Y');
+               m = fsend (p, 'Y');
                break;
             case 3:
                m = send_Zmodem (p, NULL, i, 0);
                break;
             case 6:
-               m = send (p, 'S');
+               m = fsend (p, 'S');
                break;
          }
 
@@ -2574,25 +2360,15 @@ int download_tagged_files (void)
          fprintf (fpx, "%s\n", p);
    }
 
-   if (protocol == 4) {
-      fclose (fpx);
-      hslink_protocol (NULL, NULL, 0);
-   }
-   else if (protocol == 5) {
-      fclose (fpx);
-      puma_protocol (NULL, NULL, 0, 0);
-   }
-   else if (protocol >= 10) {
+   if (protocol >= 10) {
       fclose (fpx);
       general_external_protocol (NULL, NULL, protocol, 0, 1);
    }
    else {
-      if (m) {
-         if (protocol == 3)
-            send_Zmodem (NULL, NULL, ((i) ? END_BATCH : NOTHING_TO_DO), 0);
-         else if (protocol == 6)
-            send (NULL, 'S');
-      }
+      if (protocol == 3)
+         send_Zmodem (NULL, NULL, ((i) ? END_BATCH : NOTHING_TO_DO), 0);
+      else if (protocol == 6)
+         fsend (NULL, 'S');
    }
 
 abort_xfer:
@@ -2635,17 +2411,15 @@ abort_xfer:
 void check_virus (char *rqname)
 {
    int *varr;
-   char drive[80], path[80], fname[16], ext[6], complete[140];
+   char drive[80], path[80], fname[16], ext[6], complete[140], *p;
 
-   if (!dexists ("VIRSCAN.BAT"))
+   strcpy (complete, config->upload_check);
+   if ((p = strtok (complete, " ")) == NULL)
       return;
-
-   fclose (logf);
-
-   if ((varr = ssave ()) == NULL)
+   if (strchr (p, '.') == NULL)
+      strcat (p, ".*");
+   if (!dexists (p))
       return;
-   clown_clear ();
-   showcur();
 
    strupr (rqname);
    fnsplit (rqname, path, drive, fname, ext);
@@ -2653,13 +2427,12 @@ void check_virus (char *rqname)
    strupr (fname);
    strupr (ext);
 
-   sprintf (complete, "VIRSCAN %s %s %s %s", rqname, path, fname, ext);
-   spawn_program (registered, complete);
+   strcpy (complete, config->upload_check);
+   strsrep (complete, "%1", rqname);
+   strsrep (complete, "%2", path);
+   strsrep (complete, "%3", fname);
+   strsrep (complete, "%4", ext);
 
-   srestore (varr);
-
-   open_logfile ();
-
-   hidecur();
+   general_door (complete, 1);
 }
 

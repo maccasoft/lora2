@@ -28,15 +28,11 @@ static char *string = NULL;
 
 void open_logfile (void)
 {
-   if ((logf = sh_fopen (log_name, "at", SH_DENYNONE)) == NULL)
+   translate_filenames (log_name, '\0', "");
+   if ((logf = sh_fopen (log_name, "at", SH_DENYWR)) == NULL)
       return;
 
-   if (config->logbuffer > 64)
-      config->logbuffer = 64;
-   if (config->logbuffer < 0)
-      config->logbuffer = 0;
-
-   setvbuf (logf, NULL, _IOFBF, (int)config->logbuffer * 1024);
+   setvbuf (logf, NULL, _IOFBF, (int)config->logbuffer * 16);
 }
 
 void status_line (char *format, ...)
@@ -52,18 +48,18 @@ void status_line (char *format, ...)
    if (string == NULL || strlen (format) > 256)
       return;
 
-   va_start(var_args,format);
-   vsprintf(string,format,var_args);
-   va_end(var_args);
+   va_start (var_args, format);
+   vsprintf (string, format, var_args);
+   va_end (var_args);
 
    tempo = time(0);
    tim   = localtime(&tempo);
 
    if (logf != NULL) {
       if (frontdoor)
-         fprintf(logf,"%c %02d:%02d:%02d  %s\n", string[0], tim->tm_hour, tim->tm_min, tim->tm_sec, &string[1]);
+         fprintf (logf, "%c %02d:%02d:%02d  %s\n", string[0], tim->tm_hour, tim->tm_min, tim->tm_sec, &string[1]);
       else
-         fprintf(logf,"%c %02d %3s %02d:%02d:%02d LORA %s\n", string[0], tim->tm_mday, mtext[tim->tm_mon], tim->tm_hour, tim->tm_min, tim->tm_sec, &string[1]);
+         fprintf (logf, "%c %02d %3s %02d:%02d:%02d LORA %s\n", string[0], tim->tm_mday, mtext[tim->tm_mon], tim->tm_hour, tim->tm_min, tim->tm_sec, &string[1]);
    }
 
    if (!caller && !emulator) {
@@ -73,10 +69,12 @@ void status_line (char *format, ...)
       prints (11, 1, WHITE|_BLACK, tmpdata);
    }
 
-//   fflush(logf);
+   if (!config->logbuffer) {
+      fflush (logf);
 #ifndef __OS2__
-//   real_flush(fileno(logf));
+      real_flush (fileno (logf));
 #endif
+   }
 }
 
 extern long elapsed;

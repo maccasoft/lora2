@@ -296,11 +296,11 @@ void main (void)
          printf ("%04u\n", serial);
       }
 
-      if (serial < 4001 || serial > 4999) {
-         printf ("\n\aInvalid serial number.\n\n");
-         serial = 0;
-         unlink ("LORAKEY.DAT");
-      }
+//      if (serial < 3001 || serial > 3999) {
+//         printf ("\n\aInvalid serial number.\n\n");
+//         serial = 0;
+//         unlink ("LORAKEY.DAT");
+//      }
    } while (serial == 0);
 
    if (point) {

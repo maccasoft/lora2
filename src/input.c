@@ -59,14 +59,12 @@ int width;
    chars_input(s,width,INPUT_UPDATE);
 }
 
-void chars_input(s,width,flag)
-char *s;
-int width, flag;
+void chars_input (char *s, int width, int flag)
 {
    char autozm[10];
    unsigned char c;
    int i, upper;
-   long inactive, warning;
+   long inactive, warning, checktime;
 
    upper = 1;
    online_msg = timerset(200);
@@ -151,8 +149,21 @@ int width, flag;
             else if (local_kbd != -1)
                break;
 
+            checktime = time (NULL);
+
             time_release ();
             release_timeslice ();
+
+            if (freeze && config->inactivity_timeout) {
+               if (time (NULL) - checktime > 10) {
+                  freeze = 0;
+
+                  inactive = timerset (0);
+                  warning = timerset (0);
+                  inactive += config->inactivity_timeout * 6000L;
+                  warning += config->inactivity_timeout * 6000L - 2000L;
+               }
+            }
          }
 
          if (local_kbd == -1)
@@ -200,8 +211,21 @@ int width, flag;
                return;
             }
 
+            checktime = time (NULL);
+
             time_release ();
             release_timeslice ();
+
+            if (freeze && config->inactivity_timeout) {
+               if (time (NULL) - checktime > 10) {
+                  freeze = 0;
+
+                  inactive = timerset (0);
+                  warning = timerset (0);
+                  inactive += config->inactivity_timeout * 6000L;
+                  warning += config->inactivity_timeout * 6000L - 2000L;
+               }
+            }
          }
 
          c = (unsigned char)local_kbd;

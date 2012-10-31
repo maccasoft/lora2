@@ -65,17 +65,17 @@ int tenths;
 {
    long timeout, timerset ();
 
-   if (PEEKBYTE () >= 0)
+   if (CHAR_AVAIL ())
       return (MODEM_IN ());
 
    timeout = timerset (tenths * 10);
 
    do
       {
-      if (PEEKBYTE () >= 0)
+      if (CHAR_AVAIL ())
          return MODEM_IN ();
 
-      if (!(MODEM_STATUS () & carrier_mask))
+      if (!CARRIER)
          return RCDO;
 
       if (local_kbd == 0x1B)
@@ -199,8 +199,8 @@ int Z_GetHeader (hdr)
 byte *hdr;
 {
 
-   register int c;
-   register int n;
+   int c;
+   long n;
    int cancount;
 
 #ifdef DEBUG

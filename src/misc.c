@@ -10,11 +10,11 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <sys\stat.h>
+
 #ifdef __OS2__
 #include <conio.h>
 
 #define INCL_DOS
-#define INCL_NOPMAPI
 #define INCL_VIO
 #include <os2.h>
 #else
@@ -31,6 +31,9 @@
 #include "msgapi.h"
 #include "externs.h"
 #include "prototyp.h"
+
+#define isLORA       0x4E
+#include "version.h"
 
 char *firstchar(char *, char *, int);
 
@@ -117,7 +120,10 @@ char *s;
 {
 	int m, flag=0;
 
-	for(m=0;m<80;m++) {
+    if (s == NULL)
+       return (NULL);
+
+    for(m=0;m<80;m++) {
 		if(s[m] == '\0')
 			return (s);
                 if(s[m] == ' ' || s[m] == '_' || s[m] == '\'' ||
@@ -134,7 +140,7 @@ char *s;
 			s[m]=tolower(s[m]);
 	}
 
-	return(s);
+    return (s);
 }
 
 int dexists (filename)
@@ -661,11 +667,21 @@ int scrollbox(int sy,int sx,int ey,int ex,int num,int direction)
 #endif
 }
 
-int isbundle (char *n)
+int isbundle (char *name)
 {
-   strupr (n);
+   int i, n;
 
-   return ((strstr (n, ".MO") || strstr (n, ".TU") || strstr (n, ".WE") || strstr (n, ".TH") || strstr (n, ".FR") || strstr (n, ".SA") || strstr (n, ".SU")));
+   if ((n = strlen (name)) < 12)
+      return (0);
+
+   strupr (name);
+
+   for (i = n - 12; i < n - 4; i++) {
+      if ((!isdigit (name[i])) && ((name[i] > 'F') || (name[i] < 'A')))
+         return (0);
+   }
+
+   return ((strstr (name, ".MO") || strstr (name, ".TU") || strstr (name, ".WE") || strstr (name, ".TH") || strstr (name, ".FR") || strstr (name, ".SA") || strstr (name, ".SU")));
 }
 
 void release_timeslice ()
@@ -684,7 +700,7 @@ void release_timeslice ()
    else
       msdos_pause ();
 #else
-   DosSleep (30L);
+   DosSleep (5L);
 #endif
 }
 
@@ -751,7 +767,6 @@ FILE *fp;
 {
    int i, c;
 
-//   max--;
    i = 0;
 
    while (i < max) {
@@ -761,9 +776,15 @@ FILE *fp;
          else
             break;
       }
-      dest[i++] = (char )c;
-      if ((char )c == '\0')
+
+      dest[i] = (char )c;
+      if ((char )c == '\0') {
+         if (i > 0)
+            ungetc (c, fp);
          break;
+      }
+
+      i++;
       if ((char )c == 0x0D) {
          if ((c = fgetc (fp)) == 0x0A)
             dest[i++] = (char )c;
@@ -808,36 +829,194 @@ int m_getch (void)
 int get_emsi_field (char *s)
 {
    char c;
-   int i = 0, start = 0;
+   int i = 0, start = 0, value;
    long t;
 
    t = timerset (100);
 
    while (CARRIER && !timeup (t)) {
-      while (PEEKBYTE() == -1) {
+      while (PEEKBYTE () == -1) {
          if (!CARRIER || timeup (t))
             return (0);
       }
 
-      c = (char)TIMED_READ(1);
+      c = (char)TIMED_READ (1);
       t = timerset (100);
 
       if (!start && c != '{')
          continue;
 
-      if (c == '{') {
+      if (c == '{' && !start) {
          start = 1;
          continue;
       }
 
-      if (c == '}' && start)
-         break;
+      if (c == '}' && start) {
+         if (PEEKBYTE () != '}')
+            break;
+         else
+            c = (char)TIMED_READ (1);
+      }
+
+      if (c == ']') {
+         if (PEEKBYTE () == ']')
+            c = (char)TIMED_READ (1);
+      }
+
+      if (c == '\\') {
+         if ((c = (char)TIMED_READ (1)) != '\\') {
+            c = toupper (c);
+            value = (c >= 'A') ? (c - 55) : (c - '0');
+            value *= 16;
+            c = (char)TIMED_READ (1);
+            c = toupper (c);
+            value += (c >= 'A') ? (c - 55) : (c - '0');
+            c = (char)value;
+         }
+      }
 
       s[i++] = c;
    }
 
    s[i] = '\0';
    return (1);
+}
+
+#define x32crc(c,crc) (cr3tab[((int) crc ^ c) & 0xff] ^ ((crc >> 8) & 0x00FFFFFFL))
+
+unsigned long get_buffer_crc (void *buffer, int length)
+{
+   int i;
+   unsigned long crc = 0xFFFFFFFFL;
+   unsigned char *b;
+
+   b = (unsigned char *)buffer;
+
+   for (i = 0; i < length; i++)
+      crc = x32crc (*b++, crc);
+
+   return (crc);
+}
+
+int open_packet (int zone, int net, int node, int point, int ai)
+{
+   int mi;
+   char buff[80], *p;
+   struct _pkthdr2 pkthdr;
+
+   p = HoldAreaNameMungeCreate (zone);
+   if (point)
+      sprintf (buff, "%s%04x%04x.PNT\\%08X.XPR", p, net, node, point);
+   else
+      sprintf (buff, "%s%04x%04x.XPR", p, net, node);
+
+   mi = open (buff, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+   if (mi == -1 && point) {
+      sprintf (buff, "%s%04x%04x.PNT", p, net, node);
+      mkdir (buff);
+      sprintf (buff, "%s%04x%04x.PNT\\%08X.XPR", p, net, node, point);
+      mi = open (buff, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+   }
+
+   if (filelength (mi) > 0L)
+      lseek (mi, filelength (mi) - 2, SEEK_SET);
+   else {
+      memset ((char *)&pkthdr, 0, sizeof (struct _pkthdr2));
+      pkthdr.ver = PKTVER;
+      pkthdr.product = 0x4E;
+      pkthdr.serial = ((MAJVERSION << 4) | MINVERSION);
+      pkthdr.capability = 1;
+      pkthdr.cwvalidation = 256;
+      if (config->alias[ai].point && config->alias[ai].fakenet) {
+         pkthdr.orig_node = config->alias[ai].point;
+         pkthdr.orig_net = config->alias[ai].fakenet;
+         pkthdr.orig_point = 0;
+      }
+      else {
+         pkthdr.orig_node = config->alias[ai].node;
+         pkthdr.orig_net = config->alias[ai].net;
+         pkthdr.orig_point = config->alias[ai].point;
+      }
+      pkthdr.orig_zone = config->alias[ai].zone;
+      pkthdr.orig_zone2 = config->alias[ai].zone;
+
+      pkthdr.dest_point = point;
+      pkthdr.dest_node = node;
+      pkthdr.dest_net = net;
+      pkthdr.dest_zone = zone;
+      pkthdr.dest_zone2 = zone;
+
+      add_packet_pw (&pkthdr);
+      write (mi, (char *)&pkthdr, sizeof (struct _pkthdr2));
+   }
+
+   return (mi);
+}
+
+int prep_match (char *template, char *dep)
+{
+   register int i,delim;
+   register char *sptr;
+   int start;
+
+   memset (dep, 0, 15);
+   sptr = template;
+
+   for(start=i=0; sptr[i]; i++)
+      if ((sptr[i]=='\\') || (sptr[i]==':'))
+         start = i+1;
+
+   if(start)
+      sptr += start;
+   delim = 8;
+
+   strupr(sptr);
+
+   for(i=0; *sptr && i < 12; sptr++)
+      switch(*sptr) {
+         case '.':
+            if (i>8)
+               return(-1);
+            while(i<8)
+               dep[i++] = ' ';
+            dep[i++] = *sptr;
+            delim = 12;
+            break;
+         case '*':
+            while(i<delim)
+               dep[i++] = '?';
+            break;
+         default:
+            dep[i++] = *sptr;
+            break;
+      }
+
+   while(i<12) {
+      if (i == 8)
+         dep[i++] = '.';
+      else
+         dep[i++] = ' ';
+   }
+   dep[i] = '\0';
+
+   return 0;
+}
+
+int match (char *s1, char *s2)
+{
+   register char *i,*j;
+
+   i = s1;
+   j = s2;
+
+   while(*i) {
+      if((*j != '?') && (*i != *j))
+         return(1);
+      i++;
+      j++;
+   }
+
+   return 0;
 }
 
 

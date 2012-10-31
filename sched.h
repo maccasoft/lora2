@@ -54,23 +54,23 @@
 *********************************************************************/
 typedef struct _event
 {
-   int days;                                     /* Bit field for which days
+   short days;                                     /* Bit field for which days
                                                   * to execute */
-   int minute;                                   /* Minutes after midnight to
+   short minute;                                   /* Minutes after midnight to
                                                   * start event */
-   int length;                                   /* Number of minutes event
+   short length;                                   /* Number of minutes event
                                                   * runs */
-   int errlevel[9];                              /* Errorlevel exits */
-   int last_ran;                                 /* Day of month last ran */
-   int behavior;                                 /* Behavior mask */
-   int echomail;                                 /* Echomail behavior mask */
-   int wait_time;                                /* Average number of seconds
+   short errlevel[9];                              /* Errorlevel exits */
+   short last_ran;                                 /* Day of month last ran */
+   short behavior;                                 /* Behavior mask */
+   short echomail;                                 /* Echomail behavior mask */
+   short wait_time;                                /* Average number of seconds
                                                   * to wait between dials */
-   int with_connect;                             /* Number of calls to make
+   short with_connect;                             /* Number of calls to make
                                                   * with carrier */
-   int no_connect;                               /* Number of calls to make
+   short no_connect;                               /* Number of calls to make
                                                   * without carrier */
-   int node_cost;                                /* Maximum cost node to call
+   short node_cost;                                /* Maximum cost node to call
                                                   * during this event */
    char cmd[32];                                 /* Chars to append to
                                                   * packer, aftermail and
@@ -78,12 +78,12 @@ typedef struct _event
    char month;                                   /* Month when to do it   */
    char day;                                     /* Day of month to do it */
    char err_extent[6][4];                        /* 3 byte extensions for errorlevels 4-9 */
-   int extra[1];                                 /* Extra space for later */
+   short extra[1];                                 /* Extra space for later */
 
-   int res_zone;
-   int res_net;
-   int res_node;
-   int res_point;
+   short res_zone;
+   short res_net;
+   short res_node;
+   short res_point;
 
    char route_tag[16];
 } EVENT;

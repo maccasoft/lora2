@@ -23,14 +23,22 @@
 #define DOWN_FILES  0x0020
 #define NO_MESSAGE  0x0040
 
-char no_external = 0, no_description = 0, no_check = 0;
+typedef struct {
+   char name[13];
+   word area;
+   long datpos;
+} FILEIDX;
 
+extern short tcpip;
+char no_external = 0, no_description = 0, no_check = 0, no_precheck = 0;
+
+void stripcrlf (char *linea);
 int exist_system_file (char *name);
 void m_print2(char *format, ...);
 char *translate_ansi (char *);
 void check_uploads (FILE *xferinfo, char *path);
 void update_filestat (char *rqname);
-int download_tagged_files (void);
+int download_tagged_files (char *fname);
 void tag_files (int);
 void ask_birthdate (void);
 int m_getch (void);
@@ -717,7 +725,7 @@ void download_report (char *rqname, int id, char *filelist)
          if (fp2 != NULL) {
             while (!feof (fp2)) {
                path[0] = 0;
-               if (fgets (path, 255, fp2) == NULL)
+               if (fgets (path, 70, fp2) == NULL)
                   break;
                if (!strnicmp (path, name, strlen (name))) {
                   path[strlen(path)-1] = 0;
@@ -758,6 +766,14 @@ int global;
    struct ffblk blk;
    struct _sys tsys;
 
+#if defined (__OCC__) || defined (__TCPIP__)
+   if (tcpip && usr.priv < SYSOP) {
+      m_print ("\nSorry, file transfer not available on TCP/IP\n");
+      press_enter ();
+      return;
+   }
+#endif
+
    fnsplit (st, path, dir, name, ext);
    strcat (path, dir);
    strcat (name, ext);
@@ -779,7 +795,7 @@ int global;
       killafter = 1;
    }
    else if (global != -2 && global != -3) {
-      if (download_tagged_files ())
+      if (download_tagged_files (st))
          return;
    }
    else
@@ -849,12 +865,12 @@ int global;
       while (get_string (name, dir) != NULL) {
          sprintf (filename, "%s%s", path, dir);
 
-         if (findfirst(filename,&blk,0)) {
+         if (findfirst (filename, &blk, 0)) {
             sprintf (filename, "%sSYSFILE.DAT", config->sys_path);
             fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
 
             if (global) {
-               while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
+               while (read (fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
                   if (usr.priv < tsys.file_priv)
                      continue;
                   if ((usr.flags & tsys.file_flags) != tsys.file_flags)
@@ -878,16 +894,16 @@ int global;
 
          switch (protocol) {
             case 1:
-               m = send (filename, 'X');
+               m = fsend (filename, 'X');
                break;
             case 2:
-               m = send (filename, 'Y');
+               m = fsend (filename, 'Y');
                break;
             case 3:
                m = send_Zmodem (filename, dir, i, 0);
                break;
             case 6:
-               m = send (filename, 'S');
+               m = fsend (filename, 'S');
                break;
          }
 
@@ -901,7 +917,7 @@ int global;
          download_report (filename, 2, tsys.filelist);
          i++;
 
-         if (!sys.freearea || st == NULL) {
+         if (!tsys.freearea || st == NULL) {
             usr.dnld += (int)(blk.ff_fsize / 1024L) + 1;
             usr.dnldl += (int)(blk.ff_fsize / 1024L) + 1;
             usr.n_dnld++;
@@ -917,7 +933,7 @@ int global;
       if (protocol == 3)
          send_Zmodem (NULL, NULL, ((i) ? END_BATCH : NOTHING_TO_DO), 0);
       else if (protocol == 6)
-         send (NULL, 'S');
+         fsend (NULL, 'S');
 
 abort_xfer:
       wactiv (mainview);
@@ -932,13 +948,6 @@ abort_xfer:
 
    else if (protocol >= 10)
       general_external_protocol (name, path, protocol, killafter ? -1 : global, 1);
-
-   else {
-      if (protocol == 4)
-         hslink_protocol (name, path, global);
-      else if (protocol == 5)
-         puma_protocol (name, path, global, 0);
-   }
 
    download_report (NULL, 4, NULL);
 
@@ -1065,7 +1074,7 @@ int flag;
    m_print (bbstxt[B_FILE_MASK], strupr (back));
    m_print (bbstxt[B_LEN_MASK], fl);
 
-   byte_sec = rate / 11;
+   byte_sec = (int)(rate / 11);
    i = (int)((fl + (fl / 1024)) / byte_sec);
    min = i / 60;
    sec = i - min * 60;
@@ -1138,10 +1147,11 @@ char *f;
 int check_upload_names (char *origname, char *path)
 {
    FILE *fp;
-   int fd;
-   char filename[80], stringa[80], *p, name[14];
+   int found;
+   char filename[80], stringa[80], *p, name[14], our_wildcard[14], their_wildcard[14];
    struct ffblk blk;
    struct _sys tsys;
+   FILEIDX fidx;
 
    strcpy (name, origname);
    sprintf (filename, "%sNOCHECK.CFG", config->sys_path);
@@ -1153,8 +1163,8 @@ int check_upload_names (char *origname, char *path)
             return (0);
          }
       }
+      fclose (fp);
    }
-   fclose (fp);
 
    if ((p = strchr (name, '.')) != NULL) {
       if (!stricmp (p, ".ZIP") || !stricmp (p, ".ARJ") || !stricmp (p, ".LZH") || !stricmp (p, ".LHA") || !stricmp (p, ".ARC"))
@@ -1169,10 +1179,41 @@ int check_upload_names (char *origname, char *path)
       return (-1);
    }
 
-   sprintf (filename, "%sSYSFILE.DAT", config->sys_path);
-   if ((fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
-      return (0);
+//   sprintf (filename, "%sSYSFILE.DAT", config->sys_path);
+//   if ((fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+//      return (0);
 
+   found = 0;
+   prep_match (name, their_wildcard);
+   if ((fp = sh_fopen ("FILES.IDX", "rb", SH_DENYNONE)) != NULL) {
+      while (fread (&fidx, sizeof (FILEIDX), 1, fp) == 1) {
+         prep_match (fidx.name, our_wildcard);
+         if (!match (our_wildcard, their_wildcard)) {
+            found = 1;
+            if (read_system2 (fidx.area, 2, &tsys))
+               m_print (bbstxt[B_ALREADY_HAVE], name, tsys.file_num, tsys.file_name);
+            break;
+         }
+      }
+      fclose (fp);
+   }
+
+   if (!found) {
+      prep_match (name, their_wildcard);
+      if ((fp = sh_fopen ("CDROM.IDX", "rb", SH_DENYNONE)) != NULL) {
+         while (fread (&fidx, sizeof (FILEIDX), 1, fp) == 1) {
+            prep_match (fidx.name, our_wildcard);
+            if (!match (our_wildcard, their_wildcard)) {
+               found = 1;
+               if (read_system2 (fidx.area, 2, &tsys))
+                  m_print (bbstxt[B_ALREADY_HAVE], name, tsys.file_num, tsys.file_name);
+               break;
+            }
+         }
+         fclose (fp);
+      }
+   }
+/*
    while (read (fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
       if (!stricmp (tsys.filepath, path))
          continue;
@@ -1183,8 +1224,9 @@ int check_upload_names (char *origname, char *path)
          return (-1);
       }
    }
+*/
 
-   close (fd);
+//   close (fd);
    return (0);
 }
 
@@ -1246,6 +1288,14 @@ void upload_file (char *st, char pr)
    struct ffblk blk;
    PROTOCOL prot;
 
+#if defined (__OCC__) || defined (__TCPIP__)
+   if (tcpip && usr.priv < SYSOP) {
+      m_print ("\nSorry, file transfer not available on TCP/IP\n");
+      press_enter ();
+      return;
+   }
+#endif
+
    if (pr == 0 || pr == -1) {
       if (pr == 0)
          read_system_file ("PREUPLD");
@@ -1284,7 +1334,7 @@ void upload_file (char *st, char pr)
       close (i);
    }
 
-   if (!no_check && !name[0]) {
+   if (!no_precheck && !name[0]) {
       if (!get_command_word (name, 14)) {
          m_print (bbstxt[B_UPLOAD_NAME]);
          input (name, 14);
@@ -1401,10 +1451,6 @@ abort_xfer:
       CLEAR_INBOUND();
       if (i || file != NULL) {
          m_print(bbstxt[B_TRANSFER_OK]);
-         if (!no_check) {
-            check_uploads (xferinfo, path);
-            m_print(bbstxt[B_THANKS],usr.name);
-         }
          timer (10);
       }
       else {
@@ -1418,17 +1464,18 @@ abort_xfer:
          return;
       }
 
-      rewind (xferinfo);
-      fpos = filelength(fileno (xferinfo));
+      // Chiede le descrizioni dei files mandati
+      if (!no_description) {
+         rewind (xferinfo);
+         fpos = filelength(fileno (xferinfo));
 
-      while(ftell(xferinfo) < fpos) {
-         fgets(filename,78,xferinfo);
-         filename[strlen(filename) - 1] = '\0';
+         while (ftell(xferinfo) < fpos) {
+            fgets(filename,78,xferinfo);
+            filename[strlen(filename) - 1] = '\0';
 
-         fnsplit(filename,NULL,NULL,name,ext);
-         strcat(name,ext);
+            fnsplit(filename,NULL,NULL,name,ext);
+            strcat(name,ext);
 
-         if (!no_description) {
             sprintf (filename, "%s%s", path, name);
             if (!dexists (filename))
                continue;
@@ -1456,10 +1503,30 @@ abort_xfer:
                fclose(fp);
             }
          }
+      }
 
-         sprintf(filename,"%s\\%s",path,name);
-         if (!findfirst(filename,&blk,0)) {
-            usr.upld+=(int)(blk.ff_fsize/1024L)+1;
+      // Effettua il controllo dei files ed eventualmente cambia le
+      // descrizioni inviate dall'uploader
+      if (!no_check) {
+         check_uploads (xferinfo, path);
+         m_print(bbstxt[B_THANKS],usr.name);
+      }
+
+      // Aggiorna i contatori dell'utente con i kbytes mandati e il numero
+      // di files totali.
+      rewind (xferinfo);
+      fpos = filelength (fileno (xferinfo));
+
+      while (ftell (xferinfo) < fpos) {
+         fgets(filename,78,xferinfo);
+         filename[strlen(filename) - 1] = '\0';
+
+         fnsplit(filename,NULL,NULL,name,ext);
+         strcat(name,ext);
+
+         sprintf (filename,"%s\\%s",path,name);
+         if (!findfirst (filename, &blk, 0)) {
+            usr.upld += (int)(blk.ff_fsize / 1024L) + 1;
             usr.n_upld++;
 
             if (function_active == 3)
@@ -1472,15 +1539,6 @@ abort_xfer:
 
    else if (protocol >= 10)
       general_external_protocol (prot.batch ? NULL : name, path, protocol, 0, 0);
-
-   else {
-      if (protocol == 4)
-         hslink_protocol (NULL, NULL, 0);
-      else if (protocol == 5)
-         puma_protocol (NULL, NULL, 0, 1);
-      wactiv (mainview);
-      allowed += (int)((time(NULL) - start_upload) / 60);
-   }
 
    sprintf (filename, "XFER%d", line_offset);
    unlink (filename);
@@ -1521,10 +1579,6 @@ int selprot (void)
                   m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[2][0], &protocols[2][1]);
                if (config->prot_sealink || no_external)
                   m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[5][0], &protocols[5][1]);
-               if (config->hslink && !no_external)
-                  m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[3][0], &protocols[3][1]);
-               if (config->puma && !no_external)
-                  m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[4][0], &protocols[4][1]);
 
                if (!no_external) {
                   sprintf (filename, "%sPROTOCOL.DAT", config->sys_path);
@@ -1577,14 +1631,6 @@ int selprot (void)
          case 'Z':
             if (config->prot_zmodem || no_external)
                return (3);
-            break;
-         case 'H':
-            if (config->hslink && !no_external)
-               return (4);
-            break;
-         case 'P':
-            if (config->puma && !no_external)
-               return (5);
             break;
          case 'S':
             if (config->prot_sealink || no_external)
@@ -2100,7 +2146,7 @@ done:
    return (NULL);
 }
 
-int send(fname,protocol)
+int fsend(fname,protocol)
 char *fname, protocol;
 {
    register int i, j;
@@ -2133,7 +2179,7 @@ char *fname, protocol;
    real_errs = 0;
    wh = -1;
 
-   full_window = rate/400;
+   full_window = (int)(rate / 400);
 
    if (small_window && full_window > 6)
       full_window = 6;
@@ -3010,8 +3056,8 @@ reask_question:
 void file_kill (int fbox, char *n_file)
 {
    FILE *fps, *fpd;
-   int i;
-   char filename[80], file[14], buffer[130], *p;
+   int i, godelete;
+   char filename[80], file[14], *buffer, *p;
    struct ffblk blk;
 
    if (n_file == NULL) {
@@ -3025,13 +3071,18 @@ void file_kill (int fbox, char *n_file)
    else
       strcpy (filename, n_file);
 
+   if ((buffer = (char *)malloc (2048)) == NULL)
+      return;
+
    if (fbox) {
-      while ((p = strchr (filename, '\\')) != NULL)
-         strcpy (filename, ++p);
-      strcpy (file, filename);
+      if (n_file != NULL) {
+         while ((p = strchr (filename, '\\')) != NULL)
+            strcpy (filename, ++p);
+         strcpy (file, filename);
+      }
       sprintf (filename, "%s%08lx\\%s", config->boxpath, usr.id, file);
    }
-   else
+   else if (n_file == NULL)
       sprintf (filename,"%s%s", sys.filepath, file);
 
    if (!findfirst (filename, &blk, 0))
@@ -3063,13 +3114,25 @@ void file_kill (int fbox, char *n_file)
                }
 
                rename (filename, buffer);
+               godelete = 0;
+
                fpd = fopen (filename, "wt");
                fps = fopen (buffer, "rt");
-               while (fgets (buffer, 128, fps) != NULL) {
-                  if (!strncmp (buffer, blk.ff_name, strlen(blk.ff_name)))
+
+               while (fgets (buffer, 2040, fps) != NULL) {
+                  if (godelete) {
+                     if (buffer[1] == '>')
+                        continue;
+                     else
+                        godelete = 0;
+                  }
+                  if (!strncmp (buffer, blk.ff_name, strlen (blk.ff_name))) {
+                     godelete = 1;
                      continue;
+                  }
                   fputs (buffer, fpd);
                }
+
                fclose (fps);
                fclose (fpd);
             }
@@ -3078,5 +3141,7 @@ void file_kill (int fbox, char *n_file)
 
    else if (!fbox)
       m_print (bbstxt[B_NOTFOUND], file);
+
+   free (buffer);
 }
 

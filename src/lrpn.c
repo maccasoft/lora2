@@ -394,7 +394,7 @@ void rpnProcessChar(int c)
 char *rpnProcessString (char *p)
 {
    while (*p && *p >= 32 && *p != 0x0A && *p != 0x0D)
-      rpnProcessChar (*p);
+      rpnProcessChar (*p++);
    p--;
    return (p);
 }

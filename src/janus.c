@@ -46,7 +46,7 @@ static void rxclose(word);
 static void endbatch(void);
 static void j_message(word,char *,...);
 static void j_status(char *,...);
-static int j_error(byte *,byte *);
+static int j_error (byte *msg, byte *fname);
 static void long_set_timer(long *,word);
 static int long_time_gone(long *);
 static int rcvrawbyte(void);
@@ -175,9 +175,13 @@ void Janus(void) {
    if (TimeoutSecs < 30)
       TimeoutSecs = 30;
    long_set_timer(&brain_dead,120);
-   txblkmax = rate/300 * 128;
-   if (txblkmax > BUFMAX)
+   if (rate > 64000L)
       txblkmax = BUFMAX;
+   else {
+      txblkmax = (word)(rate / 300 * 128);
+      if (txblkmax > BUFMAX)
+         txblkmax = BUFMAX;
+   }
    txblklen = txblkmax;
    goodbytes = goodneeded = 0;
    Txfile = -1;
@@ -1503,20 +1507,18 @@ reject:     sendpkt(NULL,0,HALTPKT);
 static void j_message(word pos,char *va_alist,...)
 {
    va_list arg_ptr;
-   int y, l;
-
+   int l;
    char buf[128];
-   y = pos;
-   if (y);
-   va_start(arg_ptr, va_alist);
-   wgotoxy(y,MSG_X);
 
-   (void) vsprintf(buf,va_alist,arg_ptr);
+   va_start (arg_ptr, va_alist);
+   wgotoxy (pos, MSG_X);
 
-   for (l = 25-strlen(buf); l > 0; --l)
-      strcat(buf," ");
-   wputs(buf);
-   va_end(arg_ptr);
+   (void) vsprintf (buf, va_alist, arg_ptr);
+
+   for (l = 25 - strlen (buf); l > 0; --l)
+      strcat (buf, " ");
+   wputs (buf);
+   va_end (arg_ptr);
 }
 
 
@@ -1539,19 +1541,18 @@ static void j_status(char *va_alist,...)
 /*****************************************************************************/
 /* Print & log error message without messing up display                      */
 /*****************************************************************************/
-static int j_error(byte *msg,byte *fname) {
-   if (msg == NULL);
-   if (fname == NULL);
-
-   return 0;
+static int j_error (byte *msg, byte *fname)
+{
+   return (0);
 }
 
 
 /*****************************************************************************/
 /* Compute future timehack for later reference                               */
 /*****************************************************************************/
-static void long_set_timer(long *Buffer,word Duration) {
-   time(Buffer);
+static void long_set_timer(long *Buffer,word Duration)
+{
+   time (Buffer);
    *Buffer += (long)Duration;
 }
 
@@ -1617,6 +1618,7 @@ static int rcvrawbyte(void)
       if (time (NULL) > timeval)
          return BUFEMPTY;
       time_release ();
+      release_timeslice ();
    }
 
    return MODEM_IN ();
@@ -1656,7 +1658,9 @@ static void xfer_summary(char *xfertype,char *fname,long *len,int y) {
    sprintf(buf,"%s %12.12s;        0/%8ldb,%4d min.                       ",
       xfertype, fname, *len, (int)((*len*10/rate*100/JANUS_EFFICIENCY+59)/60));
    wputs(buf);
+
    time_release ();
+   release_timeslice ();
 }
 
 

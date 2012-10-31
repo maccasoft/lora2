@@ -14,7 +14,6 @@
 
 #ifdef __OS2__
 #define INCL_DOSPROCESS
-#define INCL_NOPMAPI
 #include <os2.h>
 #endif
 
@@ -89,8 +88,8 @@ void update_statusline (void)
       return;
 
    wactiv (status);
-   sprintf (string, "COM%d ³ %5u %s", com_port + 1, rate, "N81");
-   wprints (0, 24, LGREY|_BLUE, string);
+   sprintf (string, "COM%d ³ %6lu %s", com_port + 1, rate, "N81");
+   wprints (0, 23, LGREY|_BLUE, string);
    wactiv (mainview);
 }
 
@@ -113,7 +112,7 @@ void change_baud (void)
    wmenuitem (6, 1, " 19200 ", 0, 19200, 0, NULL, 0, 0);
    wmenuitem (7, 1, " 38400 ", 0, 38400U, 0, NULL, 0, 0);
    wmenuitem (8, 1, " 57600 ", 0, 57600U, 0, NULL, 0, 0);
-   wmenuend (rate, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
+   wmenuend ((unsigned)rate, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
    m = wmenuget ();
    wclose ();
@@ -244,13 +243,10 @@ static long get_phone_cost (char *phone, long online)
 void terminal_emulator ()
 {
    FILE *fp_cap;
-   int i, relflag, cdflag = -1, *varr, *varr2, pos, origrate, m;
+   int i, relflag, cdflag = -1, *varr, *varr2, pos, m;
    char string[90], c, *cmd, cmdname[60];
    DIALREC dir;
-   long olc;
-#ifdef __OS2__
-   long uvio;
-#endif
+   long olc, origrate;
 
    setkbloop (NULL);
    status_line ("+Starting terminal emulator");
@@ -267,11 +263,11 @@ void terminal_emulator ()
 
    status = wopen (24, 0, 24, 79, 5, LGREY|_BLUE, LGREY|_BLUE);
    wactiv (status);
-   sprintf (string, " ALT-Z for Menu       ³ COM%d ³ %5u %s ³    ³          ³       ³             ", com_port + 1, rate, "N81");
+   sprintf (string, " ALT-Z for Menu      ³ COM%d ³ %6lu %s ³    ³          ³       ³            ", com_port + 1, rate, "N81");
    wprints (0, 0, LGREY|_BLUE, string);
    wprints (0, 48, LGREY|_BLUE, config->avatar ? "Ansi/Avt" : "Ansi");
 
-   wactiv(mainview);
+   wactiv (mainview);
    showcur ();
 
    memset (&dir, 0, sizeof (DIALREC));
@@ -286,9 +282,6 @@ void terminal_emulator ()
 
    XON_DISABLE ();
    _BRK_DISABLE ();
-#ifdef __OS2__
-   uvio = timerset (0);
-#endif
 
    for (;;) {
       relflag = 1;
@@ -300,11 +293,11 @@ void terminal_emulator ()
             online_elapsed = time (NULL);
 
             if (mdm_flags == NULL) {
-               status_line(msgtxt[M_READY_CONNECT],rate, "", "");
+               status_line (msgtxt[M_READY_CONNECT], rate, "", "");
                mdm_flags = "";
             }
             else
-               status_line(msgtxt[M_READY_CONNECT],rate, "/", mdm_flags);
+               status_line (msgtxt[M_READY_CONNECT], rate, "/", mdm_flags);
 
             showcur ();
             cdflag = 1;
@@ -313,7 +306,7 @@ void terminal_emulator ()
       else {
          if (cdflag != 0) {
             hidecur ();
-            prints (24, 0, LGREY|_BLUE, " ALT-Z for Menu       ");
+            prints (24, 0, LGREY|_BLUE, " ALT-Z for Menu      ");
             prints (24, 67, LGREY|_BLUE, "  Offline   ");
 
             if (online_elapsed)
@@ -420,28 +413,13 @@ void terminal_emulator ()
                   pos = 0;
             }
 
-#ifdef __OS2__
-            if (timeup (uvio)) {
-               VioUpdate ();
-               uvio = timerset (40);
-            }
-#endif
-
             if (++m > (rate / 10))
                break;
          }
+      }
 #ifdef __OS2__
+      else
          VioUpdate ();
-         uvio = timerset (10);
-#endif
-      }
-#ifdef __OS2__
-      else {
-         if (!CARRIER || timeup (uvio)) {
-            VioUpdate ();
-            uvio = timerset (10);
-         }
-      }
 #endif
 
       if (kbmhit ()) {
@@ -478,7 +456,7 @@ void terminal_emulator ()
                         }
 
                         update_statusline ();
-                        sprintf (string, " %-20.20s", dir.name);
+                        sprintf (string, " %-19.19s", dir.name);
                         prints (24, 0, LGREY|_BLUE, string);
 
                         if (!config->lock_baud)
@@ -490,7 +468,6 @@ void terminal_emulator ()
                   else
                      memset (&dir, 0, sizeof (DIALREC));
                   break;
-
 
                // ALT-B Change baud rate
                case 0x3000:
@@ -523,6 +500,32 @@ void terminal_emulator ()
                   }
                   else
                      fp_cap = open_capture (NULL);
+                  break;
+
+               // ALT-N Send user's name
+               case 0x3100:
+                  wopen (10, 22, 14, 57, 3, LCYAN|_BLACK, LCYAN|_BLACK);
+                  wshadow (LGREY|_BLACK);
+
+                  wcenters (1, LGREY|_BLACK, "Sending user name");
+                  m_print ("%s", config->sysop);
+
+                  timer (20);
+                  wclose ();
+                  break;
+
+               // ALT-S Send active password
+               case 0x1F00:
+                  if (dir.password[0]) {
+                     wopen (10, 22, 14, 57, 3, LCYAN|_BLACK, LCYAN|_BLACK);
+                     wshadow (LGREY|_BLACK);
+
+                     wcenters (1, LGREY|_BLACK, "Sending active password");
+                     m_print ("%s", dir.password);
+
+                     timer (20);
+                     wclose ();
+                  }
                   break;
 
                // ALT-Z Menu' pull-down
@@ -714,7 +717,7 @@ static void set_selection (void)
 static void terminal_select_file (char *title, int upload, DIALREC *dialrec)
 {
    FILE *fp;
-   int fd, i, protocol, x = 0;
+   int fd, i, protocol, x = 0, taginit = -1;
    char filename[80], *p, filetosend[80], *exts[100];
    struct ffblk blk;
    PROTOCOL prot;
@@ -734,9 +737,10 @@ static void terminal_select_file (char *title, int upload, DIALREC *dialrec)
    sprintf (filename, "%sPROTOCOL.DAT", config->sys_path);
    fd = sh_open (filename, O_RDONLY|O_BINARY, SH_DENYWR, S_IREAD|S_IWRITE);
    if (fd != -1) {
-      while (read (fd, &prot, sizeof (PROTOCOL)) == sizeof (PROTOCOL))
+      while (read (fd, &prot, sizeof (PROTOCOL)) == sizeof (PROTOCOL)) {
          if (prot.active)
             i++;
+      }
    }
 
    wopen (3, 27, 4 + i, 70, 3, RED|_LGREY, BLUE|_LGREY);
@@ -745,14 +749,26 @@ static void terminal_select_file (char *title, int upload, DIALREC *dialrec)
 
    wmenubegc ();
    i = 0;
-   if (config->prot_zmodem)
+   if (config->prot_zmodem) {
+      if (taginit == -1)
+         taginit = 1;
       wmenuitem (i++, 0, " Z - ZModem (internal) ", 'Z', 1, M_CLALL, set_selection, 0, 0);
-   if (config->prot_xmodem)
+   }
+   if (config->prot_xmodem) {
+      if (taginit == -1)
+         taginit = 2;
       wmenuitem (i++, 0, " X - XModem ", 'X', 2, M_CLALL, set_selection, 0, 0);
-   if (config->prot_1kxmodem)
+   }
+   if (config->prot_1kxmodem) {
+      if (taginit == -1)
+         taginit = 3;
       wmenuitem (i++, 0, " 1 - 1k-Xmodem ", '1', 3, M_CLALL, set_selection, 0, 0);
-   if (config->prot_sealink)
+   }
+   if (config->prot_sealink) {
+      if (taginit == -1)
+         taginit = 4;
       wmenuitem (i++, 0, " S - SEAlink ", 'S', 4, M_CLALL, set_selection, 0, 0);
+   }
 
    x = 0;
    if (fd != -1) {
@@ -764,6 +780,8 @@ static void terminal_select_file (char *title, int upload, DIALREC *dialrec)
             if (exts[x] == NULL)
                continue;
             strcpy (exts[x], filename);
+            if (taginit == -1)
+               taginit = x + 10;
             wmenuitem (i++, 0, exts[x], prot.hotkey, x + 10, M_CLALL, set_selection, 0, 0);
             x++;
          }
@@ -771,7 +789,7 @@ static void terminal_select_file (char *title, int upload, DIALREC *dialrec)
    close (fd);
 
    exts[x] = NULL;
-   wmenuend (1, M_VERT|M_SAVE, 42, 0, BLUE|_LGREY, WHITE|_LGREY, DGREY|_LGREY, YELLOW|_BLACK);
+   wmenuend (taginit, M_VERT|M_SAVE, 42, 0, BLUE|_LGREY, WHITE|_LGREY, DGREY|_LGREY, YELLOW|_BLACK);
 
    if (wmenuget () == -1) {
       wclose ();
@@ -842,15 +860,15 @@ static void terminal_select_file (char *title, int upload, DIALREC *dialrec)
                      break;
 
                   case 2:
-                     send (filetosend, 'X');
+                     fsend (filetosend, 'X');
                      break;
 
                   case 3:
-                     send (filetosend, 'Y');
+                     fsend (filetosend, 'Y');
                      break;
 
                   case 4:
-                     send (filetosend, 'S');
+                     fsend (filetosend, 'S');
                      break;
 
                   default:
@@ -867,7 +885,7 @@ static void terminal_select_file (char *title, int upload, DIALREC *dialrec)
       if (protocol == 1)
          send_Zmodem (NULL, NULL, ((i) ? END_BATCH : NOTHING_TO_DO), 0);
       else if (protocol == 4)
-         send (NULL, 'S');
+         fsend (NULL, 'S');
       else if (protocol >= 10) {
          general_external_protocol (NULL, dialrec->download[0] ? dialrec->download : config->dl_path, protocol, 0, 1);
          sprintf (filename, "%sEXTRN%d.LST", config->sys_path, line_offset);

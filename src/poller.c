@@ -45,9 +45,10 @@ int get_emsi_field (char *);
 int poll(max_tries, bad, zone, net, node)
 int max_tries, bad, zone, net, node;
 {
-   int tries, i, j, wh, m;
+   int fd, tries, i, j, wh, m;
    char buffer[70], jan, waz, ems;
    long t1, t2, tu;
+   NODEINFO ni;
 
    if (CARRIER) {
       dial_system ();
@@ -88,22 +89,36 @@ int max_tries, bad, zone, net, node;
    sysinfo.month.outcalls++;
    sysinfo.year.outcalls++;
 
-   for (i=0; i < MAX_ALIAS; i++)
-      if (zone && config->alias[i].zone == zone)
+//   for (i=0; i < MAX_ALIAS; i++)
+//      if (zone && config->alias[i].zone == zone)
+//         break;
+//   if (i == MAX_ALIAS)
+//      assumed = 0;
+//   else
+//      assumed = i;
+
+//   for (i = 0; i < MAX_ALIAS; i++)
+//      if ( config->alias[i].point && config->alias[i].net == net && config->alias[i].node == node && (!remote_zone || config->alias[i].zone == zone) )
+//         break;
+
+//   if (i < MAX_ALIAS)
+//      assumed = i;
+
+   assumed = 0;
+
+   sprintf (buffer, "%sNODES.DAT", config->net_info);
+   if ((fd = sh_open (buffer, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+      return (0);
+
+   while (read (fd, (char *)&ni, sizeof (NODEINFO)) == sizeof (NODEINFO))
+      if (zone == ni.zone && net == ni.net && node == ni.node && ni.point == 0) {
+         assumed = ni.mailer_aka;
          break;
-   if (i == MAX_ALIAS)
-      assumed = 0;
-   else
-      assumed = i;
+      }
 
-   for (i = 0; i < MAX_ALIAS; i++)
-      if ( config->alias[i].point && config->alias[i].net == net && config->alias[i].node == node && (!remote_zone || config->alias[i].zone == zone) )
-         break;
+   close (fd);
 
-   if (i < MAX_ALIAS)
-      assumed = i;
-
-   for(tries=0;tries < max_tries;tries++) {
+   for (tries = 0; tries < max_tries; tries++) {
       if (tries) {
          modem_hangup ();
 
@@ -134,14 +149,14 @@ int max_tries, bad, zone, net, node;
       CLEAR_OUTBOUND();
 
       i = nodelist.rate * 300;
-      if (i > speed)
-         i = speed;
+      if ((long)i > speed)
+         i = (word)speed;
       if (!config->lock_baud)
-         com_baud(i);
-      rate = i;
+         com_baud ((long)i);
+      rate = (long)i;
       answer_flag = 1;
 
-      sprintf (buffer, "%u Baud", rate);
+      sprintf (buffer, "%ld Baud", rate);
       wcenters (4, BLUE|_LGREY, buffer);
 
       if (nodelist.phone[0] == '\"') {
@@ -167,6 +182,8 @@ int max_tries, bad, zone, net, node;
       else {
          prints (7, 65, YELLOW|_BLACK, "Hangup    ");
          modem_hangup ();
+         prints (7, 65, YELLOW|_BLACK, "Modem init");
+         initialize_modem ();
          if (local_kbd == 0x1B || local_kbd == ' ') {
             local_kbd = -1;
             break;
@@ -213,6 +230,11 @@ online_out:
    remote_point = 0;
    remote_capabilities = 0;
    local_mode = snooping = 0;
+
+   filepath = config->norm_filepath;
+   request_list = config->norm_okfile;
+   max_requests = config->norm_max_requests;
+   max_kbytes = config->norm_max_kbytes;
 
    prints (7, 65, YELLOW|_BLACK, "Sync.  ");
 
@@ -470,6 +492,11 @@ int mail_session()
    if (!config->enterbbs[0])
       strcpy (config->enterbbs, msgtxt[M_PRESS_ESCAPE]);
 
+   filepath = config->norm_filepath;
+   request_list = config->norm_okfile;
+   max_requests = config->norm_max_requests;
+   max_kbytes = config->norm_max_kbytes;
+
    pwpos = NULL;
    iemsi = 0;
    flag = 0;
@@ -539,18 +566,20 @@ int mail_session()
 
             if (!strnicmp (buffer, "**EMSI_INQC816", 14))
                emsi_handshake (0);
-            else if (!strnicmp (buffer, "**EMSI_ICI", 10)) {
-               iemsi_handshake ();
-               if (iemsi) {
-                  m_print2 ("\n\n");
-                  snooping = oldsnoop;
-                  timer (5);
+            else if (config->use_iemsi) {
+               if (!strnicmp (buffer, "**EMSI_ICI", 10)) {
+                  iemsi_handshake ();
+                  if (iemsi) {
+                     m_print2 ("\n\n");
+                     snooping = oldsnoop;
+                     timer (5);
 
-                  return(0);
+                     return(0);
+                  }
                }
+               else if (!strnicmp (buffer, "**EMSI_CLIFA8C", 14))
+                  m_print2 (iemsi_req);
             }
-            else if (!strnicmp (buffer, "**EMSI_CLIFA8C", 14))
-               m_print2 (iemsi_req);
             break;
 
          case ' ':
@@ -566,7 +595,8 @@ int mail_session()
                }
             }
             else {
-               m_print2 (iemsi_req);
+               if (config->use_iemsi)
+                  m_print2 (iemsi_req);
                if (config->enterbbs[0] == '@')
                   read_file (&config->enterbbs[1]);
                else
@@ -1032,11 +1062,15 @@ resend:
       goto resend;
    string[35] = '\0';
    strcpy (iusr.name, fancy_str (strbtrim (string)));
+   if (iusr.name[strlen (iusr.name) - 1] == '.')
+      iusr.name[strlen (iusr.name) - 1] = '\0';
 
    if (!get_emsi_field (string))         // Alias
       goto resend;
    string[35] = '\0';
    strcpy (iusr.handle, fancy_str (string));
+   if (iusr.handle[strlen (iusr.handle) - 1] == '.')
+      iusr.handle[strlen (iusr.handle) - 1] = '\0';
 
    if (!get_emsi_field (string))         // Location
       goto resend;

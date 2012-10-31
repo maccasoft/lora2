@@ -14,7 +14,6 @@
 
 #ifdef __OS2__
 #define INCL_DOS
-#define INCL_NOPMAPI
 #define INCL_VIO
 #include <os2.h>
 #endif
@@ -209,6 +208,7 @@ void build_call_queue (int force)
    next_call = 0;
 
    wfill (14, 1, 21, 51, ' ', LCYAN|_BLACK);
+   time_release ();
 
    if (!force) {
       sprintf (filename, "%sQUEUE.DAT", config->sys_path);
@@ -362,8 +362,6 @@ void build_call_queue (int force)
 
                   if (max_call <= i)
                      max_call = i + 1;
-
-                  time_release ();
                }
 
                // E' stata trovata la directory per i point .PNT
@@ -525,9 +523,7 @@ void build_call_queue (int force)
                            if (max_call <= i)
                               max_call = i + 1;
                         }
-
-                        time_release ();
-                     } while(!findnext(&blkp));
+                     } while (!findnext (&blkp));
                }
 
                // Si tratta del contatore dei tentativi di chiamata .$$?
@@ -558,12 +554,10 @@ void build_call_queue (int force)
                   if (max_call <= i)
                      max_call = i + 1;
                }
-
-               time_release ();
-            } while(!findnext(&blk));
-
-         time_release ();
+            } while (!findnext (&blk));
       } while (!findnext (&blko));
+
+   time_release ();
 
    m = 0;
    for (i = 0; i < max_call; i++) {
@@ -871,7 +865,7 @@ void clear_status()
 {
    int wh;
 
-   if (!snooping)
+   if (!snooping || local_mode == 2)
       return;
 
    wh = whandle();
@@ -888,27 +882,24 @@ void f1_status()
    int wh, i;
    char j[80], jn[36];
 
-   if (!usr.name[0] || !snooping)
+   if (!usr.name[0] || !snooping || local_mode == 2)
       return;
 
-   wh = whandle();
-   wactiv(status);
-   wfill(0,0,1,64,' ',BLACK|_LGREY);
+   wh = whandle ();
+   wactiv (status);
+   wfill (0, 0, 1, 64, ' ', BLACK|_LGREY);
 
-   strcpy(jn, usr.name);
-   jn[22] = '\0';
-   sprintf(j, "%s from %s at %d baud", jn,
-                                     usr.city,
-                                     local_mode ? 0 : rate);
-   wprints(0,1,BLACK|_LGREY,j);
+   strcpy (jn, usr.name);
+   jn[20] = '\0';
+   sprintf (j, "%s from %s at %lu baud", jn, usr.city, local_mode ? 0L : rate);
+   wprints (0, 1, BLACK|_LGREY, j);
 
    if (lorainfo.wants_chat)
       wprints(0,58,BLACK|_LGREY|BLINK,"[CHAT]");
 
    wprints(1,1,BLACK|_LGREY,"Level:");
    for (i=0;i<12;i++)
-      if (levels[i].p_length == usr.priv)
-      {
+      if (levels[i].p_length == usr.priv) {
          wprints(1,8,BLACK|_LGREY,levels[i].p_string);
          break;
       }
@@ -941,7 +932,7 @@ char *pwd, *name, *city;
    int wh;
    char j[80], jn[36];
 
-   if (!snooping)
+   if (!snooping || local_mode == 2)
       return;
 
    wh = whandle();
@@ -949,10 +940,8 @@ char *pwd, *name, *city;
    wfill(0,0,1,64,' ',BLACK|_LGREY);
 
    strcpy(jn, name);
-   jn[22] = '\0';
-   sprintf(j, "%s of %s at %d baud", jn,
-                                     city,
-                                     local_mode ? 0 : rate);
+   jn[20] = '\0';
+   sprintf(j, "%s of %s at %lu baud", jn, city, local_mode ? 0 : rate);
    wprints(0,1,BLACK|_LGREY,j);
 
    wprints(1,1,BLACK|_LGREY,"Pwd:");
@@ -986,7 +975,7 @@ void f2_status()
    int wh;
    char j[80];
 
-   if (!snooping)
+   if (!snooping || local_mode == 2)
       return;
 
    wh = whandle();
@@ -1101,7 +1090,7 @@ void f3_status()
    char j[80];
    long flag;
 
-   if (!snooping)
+   if (!snooping || local_mode == 2)
       return;
 
    wh = whandle ();
@@ -1133,7 +1122,7 @@ void f4_status()
    int wh, sc;
    char j[80];
 
-   if (!snooping)
+   if (!snooping || local_mode == 2)
       return;
 
    wh = whandle();
@@ -1168,7 +1157,7 @@ void f9_status()
 {
    int wh;
 
-   if (!snooping)
+   if (!snooping || local_mode == 2)
       return;
 
    wh = whandle();
@@ -1267,16 +1256,17 @@ void system_crash (void)
             break;
 
          if (!usr.deleted) {
-            crc = crc_name (usr.name);
-            usr.id = crc;
-            usridx.id = crc;
+            usr.id = usridx.id = crc_name (usr.name);
+            usr.alias_id = usridx.alias_id = crc_name (usr.handle);
          }
-         else
-            crc = 0L;
+         else {
+            usr.id = usridx.id = 0L;
+            usr.alias_id = usridx.alias_id = 0L;
+         }
 
          lseek (fd, prev, SEEK_SET);
-         write (fd, (char *)&usr, sizeof(struct _usr));
-         write (fdidx, (char *)&usridx, sizeof(struct _usridx));
+         write (fd, (char *)&usr, sizeof (struct _usr));
+         write (fdidx, (char *)&usridx, sizeof (struct _usridx));
 
          nusers++;
       }
@@ -1375,7 +1365,7 @@ void system_crash (void)
          sysidx.flags = tsys.file_flags;
          sysidx.area = tsys.file_num;
          strcpy (sysidx.key, tsys.short_name);
-         sysidx.sig = tsys.msg_sig;
+         sysidx.sig = tsys.file_sig;
          write (fdidx, (char *)&sysidx, sizeof (struct _sys_idx));
       }
    }
@@ -1387,7 +1377,7 @@ void system_crash (void)
    build_nodelist_index (0);
 }
 
-void get_last_caller()
+void get_last_caller (void)
 {
    int fd, fdd, v;
    char filename[80], destname[80];
@@ -1451,7 +1441,7 @@ void get_last_caller()
       strcpy(lastcall.name, msgtxt[M_NEXT_NONE]);
 }
 
-void set_last_caller()
+void set_last_caller (void)
 {
    int fd, i, m;
    char filename[80];
@@ -1469,12 +1459,12 @@ void set_last_caller()
    lc.line = line_offset;
    strcpy(lc.name, usr.name);
    strcpy(lc.city, usr.city);
-   lc.baud = local_mode ? 0 : rate;
+   lc.baud = local_mode ? 0 : (int)(rate / 100);
    lc.times = usr.times;
-   strncpy(lc.logon, &usr.ldate[11], 5);
+   strncpy (lc.logon, &usr.ldate[11], 5);
 
    data (filename);
-   strncpy(lc.logoff, &filename[11], 5);
+   strncpy (lc.logoff, &filename[11], 5);
 
    write(fd, (char *)&lc, sizeof(struct _lastcall));
 
@@ -1533,8 +1523,7 @@ static void create_quickbase_file ()
 
    sprintf(filename,"%sMSGIDX.BBS",fido_msgpath);
    fd = shopen(filename,O_RDONLY|O_BINARY);
-   if (fd == -1)
-   {
+   if (fd == -1) {
       fd = cshopen(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
       if (fd == -1)
          return;
@@ -1545,8 +1534,7 @@ static void create_quickbase_file ()
 
    sprintf(filename,"%sMSGHDR.BBS",fido_msgpath);
    fd = shopen(filename,O_RDONLY|O_BINARY);
-   if (fd == -1)
-   {
+   if (fd == -1) {
       fd = cshopen(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
       if (fd == -1)
          return;
@@ -1557,8 +1545,7 @@ static void create_quickbase_file ()
 
    sprintf(filename,"%sMSGTOIDX.BBS",fido_msgpath);
    fd = shopen(filename,O_RDONLY|O_BINARY);
-   if (fd == -1)
-   {
+   if (fd == -1) {
       fd = cshopen(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
       if (fd == -1)
          return;
@@ -1569,8 +1556,7 @@ static void create_quickbase_file ()
 
    sprintf(filename,"%sMSGTXT.BBS",fido_msgpath);
    fd = shopen(filename,O_RDONLY|O_BINARY);
-   if (fd == -1)
-   {
+   if (fd == -1) {
       fd = cshopen(filename,O_WRONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
       if (fd == -1)
          return;
@@ -1580,72 +1566,15 @@ static void create_quickbase_file ()
 
    if (creating)
       status_line ("!Creating QuickBBS message base files");
-
-   if (msginfo.totalmsgs == nhdr &&
-       msginfo.totalmsgs == nidx &&
-       msginfo.totalmsgs == nto)
-      return;
-
-/*
-   wputs ("* Rebuilding QuickBBS message base files\n");
-   status_line ("!Rebuilding QuickBBS message base files");
-
-   sprintf(filename,"%sMSGHDR.BBS",fido_msgpath);
-   fd = shopen(filename,O_RDONLY|O_BINARY);
-   if (fd == -1)
-   {
-      fd = cshopen(filename,O_RDONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
-      if (fd == -1)
-         return;
-      creating = 1;
-   }
-
-   memset((char *)&msginfo, 0, sizeof(struct _msginfo));
-   msginfo.lowmsg = 65535U;
-
-   sprintf(filename,"%sMSGIDX.BBS",fido_msgpath);
-   fdidx = shopen(filename,O_WRONLY|O_BINARY|O_TRUNC);
-
-   sprintf(filename,"%sMSGTOIDX.BBS",fido_msgpath);
-   fdto = shopen(filename,O_WRONLY|O_BINARY|O_TRUNC);
-
-   while (read(fd, (char *)&msghdr, sizeof (struct _msghdr)) == sizeof (struct _msghdr))
-   {
-      if (msghdr.msgattr & Q_RECKILL)
-      {
-         msgidx.msgnum = 0;
-         write (fdto, "\x0B* Deleted *                        ", 36);
-      }
-      else
-      {
-         write (fdto, (char *)&msghdr.whoto, sizeof (struct _msgtoidx));
-         msgidx.msgnum = msghdr.msgnum;
-         msginfo.totalonboard[msgidx.board-1]++;
-      }
-      msgidx.board = msghdr.board;
-      write (fdidx, (char *)&msgidx, sizeof (struct _msgidx));
-      msginfo.totalmsgs++;
-      if (msginfo.lowmsg > msgidx.msgnum)
-         msginfo.lowmsg = msgidx.msgnum;
-      if (msginfo.highmsg < msgidx.msgnum)
-         msginfo.highmsg = msgidx.msgnum;
-   }
-
-   close (fdto);
-   close (fdidx);
-   close (fd);
-
-   sprintf(filename,"%sMSGINFO.BBS",fido_msgpath);
-   fd = shopen(filename,O_WRONLY|O_BINARY);
-   write(fd, (char *)&msginfo, sizeof(struct _msginfo));
-   close (fd);
-*/
 }
 
 void set_security ()
 {
    word ch;
    byte news;
+
+   if (local_mode == 2)
+      return;
 
    wactiv (status);
    clear_status ();
@@ -1818,6 +1747,9 @@ void set_flags (void)
    int i, x;
    char j[10], f1[10], f2[10], f3[10], f4[10];
    long news, flag;
+
+   if (local_mode == 2)
+      return;
 
    wactiv (status);
    clear_status ();

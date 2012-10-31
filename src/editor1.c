@@ -40,7 +40,7 @@ void add_quote_string (char *str, char *from)
    strcpy (str, string);
 }
 
-void add_quote_header (FILE *fp, char *from, char *to, char *dt, char *tm)
+void add_quote_header (FILE *fp, char *from, char *to, char *subj, char *dt, char *tm)
 {
    char result[180], *date, *time;
 
@@ -58,6 +58,7 @@ void add_quote_header (FILE *fp, char *from, char *to, char *dt, char *tm)
    strsrep (result, "#", (from == NULL) ? "" : from);
    strsrep (result, "`", (date == NULL) ? "" : date);
    strsrep (result, "~", (time == NULL) ? "" : time);
+   strsrep (result, "!", (subj == NULL) ? "" : subj);
 
    if (fp != NULL)
       fprintf (fp, "%s\n\n", result);
@@ -88,7 +89,7 @@ FILE *sm;
          return(0);
       }
 
-      if(stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name)) {
+      if(stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && stricmp(msgt.from,usr.handle) && stricmp(msgt.to,usr.handle)) {
          fclose(fp);
          return(0);
       }
@@ -125,6 +126,10 @@ FILE *sm;
 
       if (c == 0x0D) {
          buff[i-1]='\0';
+         if (!strnicmp (buff, msgtxt[M_TEAR_LINE], 4))
+            buff[1] = '+';
+         if (!strnicmp (buff, msgtxt[M_ORIGIN_LINE], 10))
+            buff[3] = '0';
 
          if ((p = strchr (buff, 0x01)) != NULL) {
             if (!strncmp(&p[1],"INTL",4) && !shead)
@@ -135,13 +140,12 @@ FILE *sm;
                sscanf(&p[6],"%d",&msg_fpoint);
          }
          else if (!shead) {
-            if (flags & INCLUDE_HEADER) {
+            if (flags & INCLUDE_HEADER)
                text_header (&msgt,msg_num,fpq);
-            }
             else if (flags & QWK_TEXTFILE)
                qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
             else if (flags & QUOTE_TEXT)
-               add_quote_header (fpq, msgt.from, msgt.to, msgt.date, NULL);
+               add_quote_header (fpq, msgt.from, msgt.to, msgt.subj, msgt.date, NULL);
             shead = 1;
          }
 
@@ -185,6 +189,10 @@ FILE *sm;
 
          buff[i]='\0';
          wrp[m]='\0';
+         if (!strnicmp (buff, msgtxt[M_TEAR_LINE], 4))
+            buff[1] = '+';
+         if (!strnicmp (buff, msgtxt[M_ORIGIN_LINE], 10))
+            buff[3] = '0';
 
          if (!shead) {
             if (flags & INCLUDE_HEADER) {
@@ -193,7 +201,7 @@ FILE *sm;
             else if (flags & QWK_TEXTFILE)
                qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
             else if (flags & QUOTE_TEXT)
-               add_quote_header (fpq, msgt.from, msgt.to, msgt.date, NULL);
+               add_quote_header (fpq, msgt.from, msgt.to, msgt.subj, msgt.date, NULL);
             shead = 1;
          }
 
@@ -208,6 +216,7 @@ FILE *sm;
             add_quote_string (buff, msgt.from);
          else
             buff[0] = '\0';
+
          strcat (buff, wrp);
          i = strlen (buff);
       }
@@ -286,14 +295,17 @@ int quote;
    securetmp = lastread;
 
    if (quote) {
-      if (sys.quick_board)
-         quick_write_message_text(lastread, 2, filename, NULL);
-      else if (sys.pip_board)
-         pip_write_message_text(lastread, 2, filename, NULL);
-      else if (sys.squish)
-         squish_write_message_text(lastread, 2, filename, NULL);
-      else
-         write_message_text(lastread, 2, filename, NULL);
+      m_print (bbstxt[B_REPLYTEXT]);
+      if (yesno_question (DEF_YES) == DEF_YES) {
+         if (sys.quick_board || sys.gold_board)
+            quick_write_message_text (lastread, 2, filename, NULL);
+         else if (sys.pip_board)
+            pip_write_message_text (lastread, 2, filename, NULL);
+         else if (sys.squish)
+            squish_write_message_text (lastread, 2, filename, NULL);
+         else
+            write_message_text (lastread, 2, filename, NULL);
+      }
    }
 
    if (stat (filename, &st1))
@@ -324,7 +336,7 @@ int quote;
 
    cls ();
 
-   if (sys.quick_board)
+   if (sys.quick_board || sys.gold_board)
       quick_save_message (filename);
    else if (sys.pip_board)
       pip_save_message (filename);
@@ -454,7 +466,7 @@ long *qpos;
       QMsgHead->Msgstat = '*';
    else {
       if (!sys.echomail) {         /* Local area */
-         if ((msg_ptr->attr & MSGREAD) && !stricmp (msg_ptr->to, usr.name))
+         if ((msg_ptr->attr & MSGREAD) && (!stricmp (msg_ptr->to, usr.name) || !stricmp (msg_ptr->to, usr.handle)))
             QMsgHead->Msgstat = '-';
          else
             QMsgHead->Msgstat = ' ';

@@ -6,11 +6,9 @@
 
 #ifdef __OS2__
 #define INCL_DOS
-#define INCL_DOSDEVICES
 #define INCL_DOSDEVIOCTL
-#define INCL_DOSSEMAPHORES
-#define INCL_NOPMAPI
 #include <os2.h>
+#include <conio.h>
 #endif
 
 #include <cxl\cxlvid.h>
@@ -22,9 +20,65 @@
 #include "externs.h"
 #include "prototyp.h"
 
+int socket = 0;
+short tcpip = 0;
+
 static void empty_delay (void);
 extern int blanked, to_row;
 extern long timeout;
+
+#ifdef __OS2__
+#define ioc(x,y)       ((x<<8)|y)
+
+#define FIONBIO         ioc('f', 126)
+#define FIONREAD        ioc('f', 127)
+#define MSG_PEEK        0x2
+
+struct in_addr {
+   unsigned long  s_addr;
+};
+
+struct sockaddr_in {
+   short          sin_family;
+   unsigned short sin_port;
+   struct in_addr sin_addr;
+   char           sin_zero[8];
+};
+
+struct sockaddr {
+   unsigned short sa_family;              /* address family */
+   char           sa_data[14];            /* up to 14 bytes of direct address */
+};
+
+int _pascal sock_init( void );
+
+int __syscall send( int, char *, int, int );
+int __syscall recv( int, char *, int, int );
+int __syscall ioctl( int, int, char *, int );
+int __syscall getpeername( int, struct sockaddr *, int * );
+int __syscall soclose( int );
+
+char *tcpip_name (char *a)
+{
+#if defined (__OCC__) || defined (__TCPIP__)
+   int namelen;
+   struct sockaddr_in client;
+
+   namelen = sizeof (client);
+   getpeername (socket, (struct sockaddr *)&client, &namelen);
+   sprintf (a, "%ld.%ld.%ld.%ld", (client.sin_addr.s_addr & 0xFFL), (client.sin_addr.s_addr & 0xFF00L) >> 8, (client.sin_addr.s_addr & 0xFF0000L) >> 16, (client.sin_addr.s_addr & 0xFF000000L) >> 24);
+#endif
+
+   return (a);
+}
+
+#else
+
+char *tcpip_name (char *a)
+{
+   return (a);
+}
+#endif
 
 void initialize_modem (void)
 {
@@ -39,8 +93,7 @@ int wait_for_connect(to)
 int to;
 {
    int i;
-   unsigned int brate;
-   long t1;
+   long t1, brate;
 
    if (config->modem_timeout)
       t1 = timerset (config->modem_timeout * 100);
@@ -50,7 +103,7 @@ int to;
       timeout = t1;
       to_row = 8;
    }
-   brate = 0;
+   brate = 0L;
 
    do {
       if (!to && local_kbd == ' ') {
@@ -82,67 +135,79 @@ int to;
       else {
          switch(i) {
          case 1:
-            brate = 300;
+            brate = 300L;
             break;
          case 5:
-            brate = 1200;
+            brate = 1200L;
             break;
          case 11:
-            brate = 2400;
+            brate = 2400L;
             break;
          case 18:
-            brate = 4800;
+            brate = 4800L;
             break;
          case 16:
-            brate = 7200;
+            brate = 7200L;
             break;
          case 12:
-            brate = 9600;
+            brate = 9600L;
             break;
          case 17:
-            brate = 12000;
+            brate = 12000L;
             break;
          case 15:
-            brate = 14400;
+            brate = 14400L;
             break;
          case 19:
-            brate = 16800;
+            brate = 16800L;
             break;
          case 13:
-            brate = 19200;
+            brate = 19200L;
             break;
          case 14:
-            brate = 38400U;
+            brate = 38400L;
             break;
          case 20:
-            brate = 57600U;
+            brate = 57600L;
             break;
          case 21:
-            brate = 21600;
+            brate = 21600L;
             break;
          case 22:
-            brate = 28800;
+            brate = 28800L;
             break;
          case 23:
-            brate = 38000U;
+            brate = 38000L;
             break;
          case 24:
-            brate = 56000U;
+            brate = 56000L;
             break;
          case 25:
-            brate = 64000U;
+            brate = 64000L;
+            break;
+         case 26:
+            brate = 128000L;
+            break;
+         case 27:
+            brate = 256000L;
+            break;
+         case 28:
+            brate = 24000L;
+            break;
+         case 29:
+            brate = 26400L;
             break;
          case 40:
             brate = config->speed;
             break;
          case 50:
-            brate = 65535U;
+            brate = -1;
             break;
          }
 
          if (brate) {
             rate = brate;
-            if (brate != 65535U) {
+            if (brate != -1) {
                if (!lock_baud)
                   com_baud(brate);
                MNP_Filter();
@@ -184,12 +249,14 @@ int modem_response()
 
    for (;;) {
       if (CHAR_AVAIL ())
-         c = MODEM_IN();
+         c = MODEM_IN ();
       else {
          t1 = timerset (100);
-         while (!CHAR_AVAIL ())
+         while (!CHAR_AVAIL ()) {
             if (timeup (t1))
                return (-1);
+            release_timeslice ();
+         }
          c = MODEM_IN();
       }
 
@@ -210,6 +277,8 @@ int modem_response()
          c = '\0';
          mdm_flags = (char *)&stringa[i+1];
       }
+      else if (spcount == 1 && !isdigit (c))
+         spcount = 0;
 
       stringa[i++] = c;
 
@@ -243,16 +312,19 @@ int modem_response()
       }
    }
 
+   strupr (stringa);
    if (config->fax_response[0] && !strnicmp (stringa, config->fax_response, strlen (config->fax_response)))
       return (50);
 
    if (!strnicmp (stringa, "CONNECT", 7) || !strnicmp (stringa, "CARRIER", 7)) {
-      if(!stricmp (&stringa[7]," 300"))
+      if(!stricmp (&stringa[7]," 300") || stringa[7] == '\0')
          return (1);
       else if(!stricmp (&stringa[7]," 1200"))
          return (5);
-      else if(!stricmp (&stringa[7]," 1275"))
+      else if(!stricmp (&stringa[7]," 1275") || !stricmp (&stringa[7], " 1200TX"))
          return (10);
+      else if(!stricmp (&stringa[7]," 24000"))
+         return (28);
       else if(!stricmp (&stringa[7]," 2400"))
          return (11);
       else if(!stricmp (&stringa[7]," 9600"))
@@ -273,6 +345,8 @@ int modem_response()
          return (13);
       else if(!stricmp (&stringa[7]," 21600"))
          return (21);
+      else if(!stricmp (&stringa[7]," 26400"))
+         return (29);
       else if(!stricmp (&stringa[7]," 28800"))
          return (22);
       else if(!stricmp (&stringa[7]," 38000"))
@@ -285,6 +359,10 @@ int modem_response()
          return (14);
       else if(!stricmp(&stringa[7]," 57600"))
          return (20);
+      else if(!stricmp (&stringa[7]," 128000"))
+         return (26);
+      else if(!stricmp (&stringa[7]," 256000"))
+         return (27);
       else if(!stricmp(&stringa[7]," FAX"))
          return (50);
       else
@@ -400,7 +478,6 @@ void mdm_sendcmd(value)
 char *value;
 {
    register int i;
-   long t;
 
    SET_DTR_ON ();
    if (value == NULL)
@@ -437,21 +514,23 @@ char *value;
       }
 }
 
-void modem_hangup()
+void modem_hangup (void)
 {
-   if (local_mode)
+   if (local_mode || tcpip != 0)
       return;
 
-   SET_DTR_OFF();
-   timer (5);
-   SET_DTR_ON();
-
-   mdm_sendcmd (config->hangup_string);
+   if (!config->hangup_string[0]) {
+      SET_DTR_OFF ();
+      timer (10);
+      SET_DTR_ON ();
+   }
+   else
+      mdm_sendcmd (config->hangup_string);
 
    if (CARRIER)
       status_line("!Unable to drop carrier");
 
-   CLEAR_INBOUND();
+   CLEAR_INBOUND ();
    timer (5);
 
    answer_flag = 0;
@@ -531,7 +610,7 @@ void MNP_Filter ()
 
 void FLUSH_OUTPUT ()
 {
-   if (local_mode)
+   if (local_mode || tcpip != 0)
       return;
 
    UNBUFFER_BYTES ();
@@ -541,7 +620,7 @@ void FLUSH_OUTPUT ()
 
 static void empty_delay ()
 {
-   if (local_mode)
+   if (local_mode || tcpip != 0)
       return;
 
    while (CARRIER && !OUT_EMPTY()) {
@@ -551,7 +630,7 @@ static void empty_delay ()
 }
 
 #ifdef __OS2__
-HFILE hfComHandle = -1;
+HFILE hfComHandle = NULLHANDLE;
 
 /* transmitter stuff */
 #define TSIZE 512
@@ -577,63 +656,88 @@ USHORT DosDevIOCtl32(PVOID pData, USHORT cbData, PVOID pParms, USHORT cbParms,
 
 unsigned int ComInit (unsigned char port)
 {
+   int i;
    char str[30];
    ULONG action;
    MODEMSTATUS ms;
    UINT data;
    DCBINFO dcbCom;
 
-   sprintf (str, "COM%d", port + 1);
+   if (tcpip == 0) {
+      sprintf (str, "COM%d", port + 1);
 
-   if (hfComHandle == -1) {
-      if (DosOpen ((PSZ) str, &hfComHandle, &action, 0L, FILE_NORMAL, FILE_OPEN, OPEN_ACCESS_READWRITE|OPEN_SHARE_DENYNONE, 0L))
+      if (hfComHandle == NULLHANDLE) {
+         if (DosOpen ((PSZ) str, &hfComHandle, &action, 0L, FILE_NORMAL, FILE_OPEN, OPEN_ACCESS_READWRITE|OPEN_SHARE_DENYNONE, 0L))
+            return (0);
+      }
+
+      XON_DISABLE ();
+      if (DevIOCtl(&dcbCom,sizeof(DCBINFO),NULL,0,ASYNC_GETDCBINFO, IOCTL_ASYNC, hfComHandle))
+         return (0);
+
+      /* turn off IDSR, ODSR */
+      if (config->terminal)
+         dcbCom.fbCtlHndShake &= ~(MODE_DSR_HANDSHAKE | MODE_DSR_SENSITIVITY);
+
+      /* raise DTR, CTS output flow control */
+      if (config->terminal)
+         dcbCom.fbCtlHndShake &= ~(MODE_DTR_CONTROL | MODE_CTS_HANDSHAKE);
+      else
+         dcbCom.fbCtlHndShake |= (MODE_DTR_CONTROL | MODE_CTS_HANDSHAKE);
+
+      /* turn off XON/XOFF flow control, error replacement off, null
+       * stripping off, break replacement off */
+      dcbCom.fbFlowReplace &= ~(MODE_AUTO_TRANSMIT | MODE_AUTO_RECEIVE |
+                                MODE_ERROR_CHAR | MODE_NULL_STRIPPING |
+                                MODE_BREAK_CHAR);
+
+      /* RTS enable */
+      if (config->terminal)
+         dcbCom.fbFlowReplace |= MODE_RTS_CONTROL;
+
+/*    dcbCom.fbTimeout |= (MODE_NO_WRITE_TIMEOUT | MODE_NOWAIT_READ_TIMEOUT); */
+      dcbCom.fbTimeout |= (MODE_NOWAIT_READ_TIMEOUT);
+      dcbCom.fbTimeout &= ~(MODE_NO_WRITE_TIMEOUT);
+
+      dcbCom.usReadTimeout = 100;
+      dcbCom.usWriteTimeout = 100;
+   
+      if (DevIOCtl (NULL, 0, &dcbCom, sizeof (DCBINFO), ASYNC_SETDCBINFO, IOCTL_ASYNC, hfComHandle))
+         return (0);
+
+      ms.fbModemOn = RTS_ON;
+      ms.fbModemOff = 255;
+
+      if (DevIOCtl (&data, sizeof(data), &ms, sizeof(ms), ASYNC_SETMODEMCTRL, IOCTL_ASYNC, hfComHandle))
          return (0);
    }
+#if defined (__OCC__) || defined (__TCPIP__)
+   else {
+      sock_init ();
 
-   XON_DISABLE ();
-   if (DevIOCtl(&dcbCom,sizeof(DCBINFO),NULL,0,ASYNC_GETDCBINFO, IOCTL_ASYNC, hfComHandle))
-      return (0);
-
-   /* turn off IDSR, ODSR */
-/* dcbCom.fbCtlHndShake &= ~(MODE_DSR_HANDSHAKE | MODE_DSR_SENSITIVITY); */
-
-   /* raise DTR, CTS output flow control */
-   dcbCom.fbCtlHndShake |= (MODE_DTR_CONTROL | MODE_CTS_HANDSHAKE);
-
-   /* turn off XON/XOFF flow control, error replacement off, null
-    * stripping off, break replacement off */
-   dcbCom.fbFlowReplace &= ~(MODE_AUTO_TRANSMIT | MODE_AUTO_RECEIVE |
-                             MODE_ERROR_CHAR | MODE_NULL_STRIPPING |
-                             MODE_BREAK_CHAR);
-
-   /* RTS enable */
-/* dcbCom.fbFlowReplace |= MODE_RTS_CONTROL; */
-
-/* dcbCom.fbTimeout |= (MODE_NO_WRITE_TIMEOUT | MODE_NOWAIT_READ_TIMEOUT); */
-   dcbCom.fbTimeout |= (MODE_NOWAIT_READ_TIMEOUT);
-   dcbCom.fbTimeout &= ~(MODE_NO_WRITE_TIMEOUT);
-
-   dcbCom.usReadTimeout = 1000;
-   dcbCom.usWriteTimeout = 1000;
-   
-   if (DevIOCtl (NULL, 0, &dcbCom, sizeof (DCBINFO), ASYNC_SETDCBINFO, IOCTL_ASYNC, hfComHandle))
-      return (0);
-
-   ms.fbModemOn = RTS_ON;
-   ms.fbModemOff = 255;
-
-   if (DevIOCtl (&data, sizeof(data), &ms, sizeof(ms), ASYNC_SETMODEMCTRL, IOCTL_ASYNC, hfComHandle))
-      return (0);
+      i = 1;
+      ioctl (socket, FIONBIO, (char *)&i, sizeof (int));
+      for (;;) {
+         if (ioctl (socket, FIONREAD, (char *)&i, sizeof (int *)) != 0)
+            break;
+         if (i == 0)
+            break;
+         recv (socket, rbuf, sizeof (rbuf), 0);
+      }
+   }
+#endif
 
    return (0x1954);
 }
 
 void com_kick(void)
 {
-   if (hfComHandle == -1)
-       return;
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return;
 
-   DevIOCtl (NULL, 0L, NULL, 0L, ASYNC_STARTTRANSMIT, IOCTL_ASYNC, hfComHandle);
+      DevIOCtl (NULL, 0L, NULL, 0L, ASYNC_STARTTRANSMIT, IOCTL_ASYNC, hfComHandle);
+   }
 }
 
 void MDM_ENABLE (unsigned rate)
@@ -646,53 +750,75 @@ void MDM_DISABLE (void)
    MODEMSTATUS ms;
    UINT data;
 
-   if (hfComHandle != -1) {
-      ms.fbModemOn = RTS_ON|DTR_ON;
-      ms.fbModemOff = 0;
+   if (tcpip == 0) {
+      if (hfComHandle != NULLHANDLE) {
+         ms.fbModemOn = RTS_ON|DTR_ON;
+         ms.fbModemOff = 255;
    
-      DevIOCtl (&data, sizeof(data), &ms, sizeof(ms), ASYNC_SETMODEMCTRL, IOCTL_ASYNC, hfComHandle);
+         DevIOCtl (&data, sizeof(data), &ms, sizeof(ms), ASYNC_SETMODEMCTRL, IOCTL_ASYNC, hfComHandle);
 
-      DosClose (hfComHandle);
-      hfComHandle = -1;
+         DosClose (hfComHandle);
+         hfComHandle = NULLHANDLE;
+      }
    }
+#if defined (__OCC__) || defined (__TCPIP__)
+   else
+      soclose (socket);
+#endif
 }
 
 int com_out_empty (void)
 {
    RXQUEUE q;
 
-   DevIOCtl (&q, sizeof (RXQUEUE), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle);
+   if (tcpip == 0) {
+      DevIOCtl (&q, sizeof (RXQUEUE), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle);
 
-   if (q.cch == 0)
-      return (1);
+      if (q.cch == 0)
+         return (1);
+      else
+         return (0);
+   }
    else
-      return (0);
+      return (1);
 }
 
 void UNBUFFER_BYTES (void)
 {
    ULONG written, pos;
 
-   if (hfComHandle == -1)
-      return;
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return;
 
-   if (tpos) {
-      pos = 0;
-//      do {
-         DosWrite (hfComHandle, (PVOID)&tBuff[pos], (long)tpos, &written);
-//         pos += written;
-//         tpos -= written;
-//         if (!CARRIER)
-//            break;
-//      } while (tpos > 0);
+      if (tpos) {
+         pos = 0;
+         do {
+            DosWrite (hfComHandle, (PVOID)&tBuff[pos], (long)tpos, &written);
+            if (written < tpos) {
+               pos += written;
+               tpos -= written;
+               DosSleep (1L);
+            }
+         } while (written < tpos);
+         tpos = 0;
+      }
+   }
+#if defined (__OCC__) || defined (__TCPIP__)
+   else {
+//      fwrite (tBuff, tpos, 1, stdout);
+      send (socket, tBuff, tpos, 0);
       tpos = 0;
    }
+#endif
 }
 
 void BUFFER_BYTE (unsigned char ch)
 {
-   if (hfComHandle == -1)
-      return;
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return;
+   }
 
    if (tpos >= TSIZE)
       UNBUFFER_BYTES ();
@@ -706,62 +832,110 @@ void do_break (int a)
 
 int PEEKBYTE (void)
 {
+   int i;
    ULONG bytesRead;
    RXQUEUE q;
 
-   if (hfComHandle == -1)
-      return (-1);
-
-   UNBUFFER_BYTES ();
-
-   if (rpos >= Rbytes) {
-      rpos = Rbytes = 0;
-
-      if (DevIOCtl (&q, sizeof (RXQUEUE), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
          return (-1);
 
-      // if there is a byte or more waiting, then read one.
-      if (q.cch > 0) {
-         if (q.cch > RSIZE)
-            q.cch = RSIZE;
-         DosRead (hfComHandle, (PVOID)rbuf, (long)q.cch, &bytesRead);
-         Rbytes += bytesRead;
-      }
-   }
+      UNBUFFER_BYTES ();
 
-   if (rpos < Rbytes)
-      return ((unsigned int)rbuf[rpos]);
-   else
-      return (-1);
+      if (rpos >= Rbytes) {
+         rpos = Rbytes = 0;
+
+         if (DevIOCtl (&q, sizeof (RXQUEUE), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
+            return (-1);
+
+         // if there is a byte or more waiting, then read one.
+         if (q.cch > 0) {
+            if (q.cch > RSIZE)
+               q.cch = RSIZE;
+            DosRead (hfComHandle, (PVOID)rbuf, (long)q.cch, &bytesRead);
+            Rbytes += bytesRead;
+         }
+      }
+
+      if (rpos < Rbytes)
+         return ((unsigned int)rbuf[rpos]);
+      else
+         return (-1);
+   }
+#if defined (__OCC__) || defined (__TCPIP__)
+   else {
+      UNBUFFER_BYTES ();
+
+      if (rpos >= Rbytes) {
+         rpos = Rbytes = 0;
+
+         i = 0;
+         if (ioctl (socket, FIONREAD, (char *)&i, sizeof (int *)) != 0)
+            return (-1);
+
+         // if there is a byte or more waiting, then read one.
+         if (i > 0)
+            Rbytes += recv (socket, rbuf, sizeof (rbuf), 0);
+      }
+
+      if (rpos < Rbytes)
+         return ((unsigned int)rbuf[rpos]);
+      else
+         return (-1);
+   }
+#endif
 }                    
 
 static int check_byte_in (void)
 {
+   int i;
    ULONG bytesRead;
    RXQUEUE q;
 
-   if (hfComHandle == -1)
-      return (-1);
-
-   if (rpos >= Rbytes) {
-      rpos = Rbytes = 0;
-
-      if (DevIOCtl (&q, sizeof (RXQUEUE), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
          return (-1);
 
-      // if there is a byte or more waiting, then read one.
-      if (q.cch > 0) {
-         if (q.cch > RSIZE)
-            q.cch = RSIZE;
-         DosRead (hfComHandle, (PVOID)rbuf, (long)q.cch, &bytesRead);
-         Rbytes += bytesRead;
-      }
-   }
+      if (rpos >= Rbytes) {
+         rpos = Rbytes = 0;
 
-   if (rpos < Rbytes)
-      return ((unsigned int)rbuf[rpos]);
-   else
-      return (-1);
+         if (DevIOCtl (&q, sizeof (RXQUEUE), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
+            return (-1);
+
+         // if there is a byte or more waiting, then read one.
+         if (q.cch > 0) {
+            if (q.cch > RSIZE)
+               q.cch = RSIZE;
+            DosRead (hfComHandle, (PVOID)rbuf, (long)q.cch, &bytesRead);
+            Rbytes += bytesRead;
+         }
+      }
+
+      if (rpos < Rbytes)
+         return ((unsigned int)rbuf[rpos]);
+      else
+         return (-1);
+   }
+#if defined (__OCC__) || defined (__TCPIP__)
+   else {
+      if (rpos >= Rbytes) {
+         rpos = Rbytes = 0;
+
+         i = 0;
+         if (ioctl (socket, FIONREAD, (char *)&i, sizeof (int *)) != 0)
+            return (-1);
+
+         // if there is a byte or more waiting, then read one.
+         if (i > 0)
+            Rbytes += recv (socket, rbuf, sizeof (rbuf), 0);
+      }
+
+      if (rpos < Rbytes)
+         return ((unsigned int)rbuf[rpos]);
+      else
+         return (-1);
+   }
+#endif
 }                    
 
 void CLEAR_OUTBOUND (void)
@@ -769,10 +943,13 @@ void CLEAR_OUTBOUND (void)
    UINT data;
    char parm = 0;
    
-   if (hfComHandle == -1)
-      return;
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return;
 
-   DevIOCtl (&data, sizeof (data), &parm, sizeof (parm), DEV_FLUSHOUTPUT, IOCTL_GENERAL, hfComHandle);
+      DevIOCtl (&data, sizeof (data), &parm, sizeof (parm), DEV_FLUSHOUTPUT, IOCTL_GENERAL, hfComHandle);
+   }
+
    tpos = 0;
 }
 
@@ -781,10 +958,13 @@ void CLEAR_INBOUND (void)
    UINT data;
    char parm = 0;
    
-   if (hfComHandle == -1)
-      return;
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return;
 
-   DevIOCtl (&data, sizeof (data), &parm, sizeof (parm), DEV_FLUSHINPUT, IOCTL_GENERAL, hfComHandle);
+      DevIOCtl (&data, sizeof (data), &parm, sizeof (parm), DEV_FLUSHINPUT, IOCTL_GENERAL, hfComHandle);
+   }
+
    rpos = Rbytes = 0;
 }
 
@@ -792,68 +972,111 @@ void SENDBYTE (unsigned char c)
 {
    ULONG written;
 
-   if (hfComHandle == -1)
-      return;
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return;
 
-   UNBUFFER_BYTES ();
-//   do {
+      UNBUFFER_BYTES ();
       DosWrite (hfComHandle, (PVOID)&c, 1L, &written);
-//      if (written < 1 && CARRIER) {
-//         com_kick ();
-//      }
-//   } while (written < 1);
+   }
+#if defined (__OCC__) || defined (__TCPIP__)
+   else {
+      UNBUFFER_BYTES ();
+      send (socket, (char *)&c, 1, 0);
+   }
+#endif
 }
 
 int MODEM_STATUS (void)
 {
    UINT result = 0;
-   UCHAR data = 0;
+   UCHAR data = 0, socks[32];
 
-   if (hfComHandle == -1)
-      return (0);
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return (0);
 
-   DevIOCtl (&data, sizeof (UCHAR), NULL, 0, ASYNC_GETMODEMINPUT, IOCTL_ASYNC, hfComHandle);
-   result = data;
+      DevIOCtl (&data, sizeof (UCHAR), NULL, 0, ASYNC_GETMODEMINPUT, IOCTL_ASYNC, hfComHandle);
+      result = data;
 
-   if (check_byte_in () >= 0)
-      result |= DATA_READY;
+      if (check_byte_in () >= 0)
+         result |= DATA_READY;
 
-   return (result);
+      return (result);
+   }
+#if defined (__OCC__) || defined (__TCPIP__)
+   else {
+      if (recv (socket, (char *)&socks, sizeof (socks), MSG_PEEK) == 0)
+         result = 0;
+      else
+         result = config->carrier_mask;
+      if (check_byte_in () >= 0)
+         result |= DATA_READY;
+      return (result);
+   }
+#endif
 }
 
 int MODEM_IN (void)
 {
+   int i;
    ULONG bytesRead;
    UINT data = 0;
 
-   if (hfComHandle == -1)
-      return (-1);
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return (-1);
 
-   UNBUFFER_BYTES ();
+      UNBUFFER_BYTES ();
 
-   if (rpos >= Rbytes)
-      for (;;) {
-         rpos = Rbytes = 0;
+      if (rpos >= Rbytes)
+         for (;;) {
+            rpos = Rbytes = 0;
 
-         if (DevIOCtl (&data, sizeof (UINT), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
-            return (-1);
+            if (DevIOCtl (&data, sizeof (UINT), NULL, 0, ASYNC_GETINQUECOUNT, IOCTL_ASYNC, hfComHandle))
+               return (-1);
 
-         // if there is a byte or more waiting, then read one.
-         if (data > 0) {
-            if (data > RSIZE)
-               data = RSIZE;
-            DosRead (hfComHandle, (PVOID)rbuf, (long)data, &bytesRead);
-            Rbytes += bytesRead;
-            break;
+            // if there is a byte or more waiting, then read one.
+            if (data > 0) {
+               if (data > RSIZE)
+                  data = RSIZE;
+               DosRead (hfComHandle, (PVOID)rbuf, (long)data, &bytesRead);
+               Rbytes += bytesRead;
+               break;
+            }
+            if (!CARRIER)
+               break;
          }
-         if (!CARRIER)
-            break;
+
+      if (rpos < Rbytes)
+         return ((unsigned int)rbuf[rpos++]);
+      else
+         return (-1);
+   }
+#if defined (__OCC__) || defined (__TCPIP__)
+   else {
+      UNBUFFER_BYTES ();
+
+      if (rpos >= Rbytes) {
+         do {
+            rpos = Rbytes = 0;
+
+            i = 0;
+            if (ioctl (socket, FIONREAD, (char *)&i, sizeof (int *)) != 0)
+               return (-1);
+
+            // if there is a byte or more waiting, then read one.
+            if (i > 0)
+               Rbytes += recv (socket, rbuf, sizeof (rbuf), 0);
+         } while (Rbytes > 0 || !CARRIER);
       }
 
-   if (rpos < Rbytes)
-      return ((unsigned int)rbuf[rpos++]);
-   else
-      return (-1);
+      if (rpos < Rbytes)
+         return ((unsigned int)rbuf[rpos++]);
+      else
+         return (-1);
+   }
+#endif
 }
 
 void SET_DTR_OFF (void)
@@ -861,13 +1084,15 @@ void SET_DTR_OFF (void)
    MODEMSTATUS ms;
    UINT data;
 
-   if (hfComHandle == -1)
-      return;
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return;
 
-   ms.fbModemOn = RTS_ON;
-   ms.fbModemOff = DTR_OFF;
+      ms.fbModemOn = RTS_ON;
+      ms.fbModemOff = DTR_OFF;
    
-   DevIOCtl (&data, sizeof(data), &ms, sizeof(ms), ASYNC_SETMODEMCTRL, IOCTL_ASYNC, hfComHandle);
+      DevIOCtl (&data, sizeof(data), &ms, sizeof(ms), ASYNC_SETMODEMCTRL, IOCTL_ASYNC, hfComHandle);
+   }
 }                    
 
 void SET_DTR_ON (void)
@@ -875,13 +1100,15 @@ void SET_DTR_ON (void)
    MODEMSTATUS ms;
    UINT data;
 
-   if (hfComHandle == -1)
-      return;
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return;
 
-   ms.fbModemOn = RTS_ON|DTR_ON;
-   ms.fbModemOff = 255;
+      ms.fbModemOn = RTS_ON|DTR_ON;
+      ms.fbModemOff = 255;
    
-   DevIOCtl (&data, sizeof(data), &ms, sizeof(ms), ASYNC_SETMODEMCTRL, IOCTL_ASYNC, hfComHandle);
+      DevIOCtl (&data, sizeof(data), &ms, sizeof(ms), ASYNC_SETMODEMCTRL, IOCTL_ASYNC, hfComHandle);
+   }
 }                    
 
 unsigned Com_ (char c, ...)
@@ -889,23 +1116,26 @@ unsigned Com_ (char c, ...)
    UINT result = 0;
    UCHAR data = 0;
 
-   if (hfComHandle == -1)
-      return (0);
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return (0);
 
-   switch (c) {
-      case 0x03:
-         DevIOCtl (&data, sizeof (UCHAR), NULL, 0, ASYNC_GETMODEMINPUT, IOCTL_ASYNC, hfComHandle);
-         result = data;
+      switch (c) {
+         case 0x03:
+            DevIOCtl (&data, sizeof (UCHAR), NULL, 0, ASYNC_GETMODEMINPUT, IOCTL_ASYNC, hfComHandle);
+            result = data;
 
-//         if (com_out_empty ())
-         if (!tpos)
-            result |= TX_SHIFT_EMPTY;
+            if (!tpos)
+               result |= TX_SHIFT_EMPTY;
 
-         if (check_byte_in () >= 0)
-            result |= DATA_READY;
+            if (check_byte_in () >= 0)
+               result |= DATA_READY;
 
-         return (result);
+            return (result);
+      }
    }
+   else if (c == 0x03)
+      return (MODEM_STATUS ());
 
    return (0);
 }
@@ -914,12 +1144,14 @@ void XON_ENABLE (void)
 {
    DCBINFO dcbCom;
 
-   if (hfComHandle == -1)
-      return;
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return;
 
-   if (DevIOCtl(&dcbCom,sizeof(DCBINFO),NULL,0,ASYNC_GETDCBINFO, IOCTL_ASYNC, hfComHandle)) {
-      dcbCom.fbFlowReplace |= (MODE_AUTO_TRANSMIT);
-      DevIOCtl (NULL, 0, &dcbCom, sizeof (DCBINFO), ASYNC_SETDCBINFO, IOCTL_ASYNC, hfComHandle);
+      if (DevIOCtl(&dcbCom,sizeof(DCBINFO),NULL,0,ASYNC_GETDCBINFO, IOCTL_ASYNC, hfComHandle)) {
+         dcbCom.fbFlowReplace |= (MODE_AUTO_TRANSMIT);
+         DevIOCtl (NULL, 0, &dcbCom, sizeof (DCBINFO), ASYNC_SETDCBINFO, IOCTL_ASYNC, hfComHandle);
+      }
    }
 }
 
@@ -927,14 +1159,16 @@ void XON_DISABLE (void)
 {
    DCBINFO dcbCom;
 
-   if (hfComHandle == -1)
-      return;
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return;
 
-   if (DevIOCtl(&dcbCom,sizeof(DCBINFO),NULL,0,ASYNC_GETDCBINFO, IOCTL_ASYNC, hfComHandle)) {
-      dcbCom.fbFlowReplace &= ~(MODE_AUTO_TRANSMIT | MODE_AUTO_RECEIVE);
-      DevIOCtl (NULL, 0, &dcbCom, sizeof (DCBINFO), ASYNC_SETDCBINFO, IOCTL_ASYNC, hfComHandle);
+      if (DevIOCtl(&dcbCom,sizeof(DCBINFO),NULL,0,ASYNC_GETDCBINFO, IOCTL_ASYNC, hfComHandle)) {
+         dcbCom.fbFlowReplace &= ~(MODE_AUTO_TRANSMIT | MODE_AUTO_RECEIVE);
+         DevIOCtl (NULL, 0, &dcbCom, sizeof (DCBINFO), ASYNC_SETDCBINFO, IOCTL_ASYNC, hfComHandle);
+      }
+      com_kick ();
    }
-   com_kick ();
 }
 
 void delay (unsigned int t)
@@ -946,21 +1180,23 @@ void delay (unsigned int t)
       DosSleep (10L);
 }
 
-void com_baud (int b)
+void com_baud (long b)
 {
    ULONG dataWords = (unsigned long)b;
    LINECONTROL lc;
 
-   if (hfComHandle == -1)
-      return;
+   if (tcpip == 0) {
+      if (hfComHandle == NULLHANDLE)
+         return;
 
-   DevIOCtl (NULL, 0, &dataWords, sizeof (ULONG), ASYNC_SETBAUDRATE, IOCTL_ASYNC, hfComHandle);
+      DevIOCtl (NULL, 0, &dataWords, sizeof (ULONG), ASYNC_SETBAUDRATE, IOCTL_ASYNC, hfComHandle);
 
-   lc.bDataBits = 8;
-   lc.bStopBits = 0;
-   lc.bParity = 0;
+      lc.bDataBits = 8;
+      lc.bStopBits = 0;
+      lc.bParity = 0;
 
-   DevIOCtl (NULL, 0, &lc, sizeof (LINECONTROL), ASYNC_SETLINECTRL, IOCTL_ASYNC, hfComHandle);
+      DevIOCtl (NULL, 0, &lc, sizeof (LINECONTROL), ASYNC_SETLINECTRL, IOCTL_ASYNC, hfComHandle);
+   }
 }
 
 void set_prior (int pclass)
@@ -1544,16 +1780,6 @@ int MODEM_IN (void)
    return (ch);
 }
 
-void SET_DTR_OFF (void)
-{
-   DROP_dtr;
-}                    
-
-void SET_DTR_ON (void)
-{
-   ASSERT_dtr;
-}                    
-
 unsigned Com_ (char c, ...)
 {
    unsigned f, result;
@@ -1580,21 +1806,11 @@ unsigned Com_ (char c, ...)
    return (0);
 }
 
-void XON_ENABLE (void)
-{
-   xon_enabled = 1;
-}
-
-void XON_DISABLE (void)
-{
-   xon_enabled = 0;
-}
-
-void com_baud (int b)
+void com_baud (long b)
 {
    unsigned baud, data, mode_word, parity, stop;
 
-   baud = b;
+   baud = (unsigned)b;
    data = 8;
    parity = 0;   // E=3, O=1, N=0
    stop = 1;
@@ -1632,7 +1848,7 @@ void com_baud (int b)
 
 #else
 
-void com_baud (int b)
+void com_baud (long b)
 {
    int i;
    union REGS inregs, outregs;
@@ -1674,10 +1890,8 @@ void com_baud (int b)
       case 38400U:
          i = BAUD_38400;
          break;
-      case 57600U:
-         return;
       default:
-         status_line ("!Invalid baud rate");
+         return;
    }
 
    inregs.h.ah = 0x00;

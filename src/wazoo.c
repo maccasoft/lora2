@@ -23,7 +23,6 @@
 #define isITALY        0x4E
 #define MAX_EMSI_ADDR  30
 
-char *index_filerequestproc (char *req_list, char *file, char *their_wildcard, int *recno, int updreq, int *jj);
 void reset_mailon (void);
 void set_mailon (int, int, int, int, char *);
 void request_report (char *, int);
@@ -34,6 +33,7 @@ void import_sequence (void);
 static void mail_history (int, int, int, int, int, int, long, long, long);
 
 extern char remote_system[60], remote_sysop[36], remote_program[60], remote_location[40];
+extern char nomailproc;
 extern struct _alias addrs[MAX_EMSI_ADDR + 1];
 extern long elapsed, timeout;
 
@@ -92,7 +92,7 @@ int originator;
    if (strlen (req) > 78)
       req[78] = '\0';
    wcenters (0, LGREY|_BLACK, req);
-   sprintf (req, "Connected at %u baud with %s", rate, remote_program);
+   sprintf (req, "Connected at %lu baud with %s", rate, remote_program);
    wcenters (1, LGREY|_BLACK, req);
    wcenters (2, LGREY|_BLACK, "AKAs: No aka presented");
 
@@ -312,14 +312,9 @@ endwazoo:
       sysinfo.year.inconnects += t;
    }
 
-   if (got_arcmail) {
+   if (!nomailproc && got_arcmail) {
       if (cur_event > -1 && e_ptrs[cur_event]->errlevel[2])
          aftermail_exit = e_ptrs[cur_event]->errlevel[2];
-
-      if (aftermail_exit) {
-         status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
-         get_down (aftermail_exit, 3);
-      }
 
       if (cur_event > -1 && (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL|ECHO_EXPORT))) {
          if (modem_busy != NULL)
@@ -343,6 +338,11 @@ endwazoo:
          sysinfo.month.echoscan += time (NULL) - t;
          sysinfo.year.echoscan += time (NULL) - t;
       }
+
+      if (aftermail_exit) {
+         status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
+         get_down (aftermail_exit, 3);
+      }
    }
 
    get_down (0, 2);
@@ -353,8 +353,7 @@ endwazoo:
 /*   returns TRUE (1) for good xfer, FALSE (0) for bad                      */
 /*   use instead of n_bundle and n_attach for WaZOO Opera                   */
 /*--------------------------------------------------------------------------*/
-int send_WaZOO(caller)
-int caller;
+int send_WaZOO (int caller)
 {
    FILE *fp;
    char fname[80], s[80], *sptr, *password, *HoldName;
@@ -367,21 +366,23 @@ int caller;
    else
       fsent = 0;
 
-   HoldName = HoldAreaNameMunge(called_zone);
+   HoldName = HoldAreaNameMunge (called_zone);
 
-   *ext_flags  = 'O';
-   for (c = 0; c < NUM_FLAGS; c++) {
-      if (caller && (ext_flags[c] == 'H'))
-         continue;
+   if (!remote_point || called_zone != remote_zone || called_net != remote_net || called_node != remote_node) {
+      *ext_flags  = 'O';
+      for (c = 0; c < NUM_FLAGS; c++) {
+         if (caller && (ext_flags[c] == 'H'))
+            continue;
 
-      sprintf(fname,"%s%04x%04x.%cUT",HoldName,called_net,called_node,ext_flags[c]);
+         sprintf(fname,"%s%04x%04x.%cUT",HoldName,called_net,called_node,ext_flags[c]);
 
-      if (!stat(fname,&buf)) {
-         invent_pkt_name(s);
-         if (!send_Zmodem(fname,s,fsent++,DO_WAZOO))
-            goto bad_send;
-         update_filesio (fsent, freceived);
-         unlink(fname);
+         if (!stat(fname,&buf)) {
+            invent_pkt_name(s);
+            if (!send_Zmodem(fname,s,fsent++,DO_WAZOO))
+               goto bad_send;
+            update_filesio (fsent, freceived);
+            unlink(fname);
+         }
       }
    }
 
@@ -402,98 +403,87 @@ int caller;
       }
    }
 
-   nounlink = 0;
-   *ext_flags  = 'F';
-   for(c=0; c<NUM_FLAGS; c++) {
-      if (caller && (ext_flags[c] == 'H'))
-         continue;
-
-      sprintf(fname,"%s%04x%04x.%cLO",HoldName,called_net,called_node,ext_flags[c]);
-
-      if(!stat(fname,&buf)) {
-         fp = fopen(fname,"rb+");
-         if(fp == NULL)
+   if (!remote_point || called_zone != remote_zone || called_net != remote_net || called_node != remote_node) {
+      nounlink = 0;
+      *ext_flags  = 'F';
+      for(c=0; c<NUM_FLAGS; c++) {
+         if (caller && (ext_flags[c] == 'H'))
             continue;
 
-         current  = 0L;
-         while(!feof(fp)) {
-            s[0] = 0;
-            last_start = current;
-            fgets(s,79,fp);
-            sptr = s;
-            password = NULL;
+         sprintf(fname,"%s%04x%04x.%cLO",HoldName,called_net,called_node,ext_flags[c]);
 
-            for(i=0; sptr[i]; i++)
-               if (sptr[i]=='!')
-                  password = sptr+i+1;
-
-/*
-            if (password) {
-               password = sptr+i+1;
-               for(i=0; password[i]; i++)
-                  if (password[i]<=' ')
-                     password[i]=0;
-               if (strcmp(strupr(password),strupr(remote_password))) {
-                  status_line("!RemotePwdErr %s %s",password,remote_password);
-                  continue;
-               }
-            }
-*/
-
-            for(i=0; sptr[i]; i++)
-               if (sptr[i]<=' ') sptr[i]=0;
-
-            current = ftell(fp);
-
-            if (sptr[0]=='#') {
-               sptr++;
-               i = TRUNC_AFTER;
-            }
-            else if (sptr[0]=='^') {
-               sptr++;
-               i = DELETE_AFTER;
-            }
-            else
-               i = NOTHING_AFTER;
-
-            if (!sptr[0])
+         if(!stat(fname,&buf)) {
+            fp = fopen(fname,"rb+");
+            if(fp == NULL)
                continue;
 
-            if (sptr[0] != '~') {
-               if (stat(sptr,&buf))
+            current  = 0L;
+            while(!feof(fp)) {
+               s[0] = 0;
+               last_start = current;
+               fgets(s,79,fp);
+               sptr = s;
+               password = NULL;
+
+               for(i=0; sptr[i]; i++)
+                  if (sptr[i]=='!')
+                     password = sptr+i+1;
+
+               for(i=0; sptr[i]; i++)
+                  if (sptr[i]<=' ') sptr[i]=0;
+
+               current = ftell(fp);
+
+               if (sptr[0]=='#') {
+                  sptr++;
+                  i = TRUNC_AFTER;
+               }
+               else if (sptr[0]=='^') {
+                  sptr++;
+                  i = DELETE_AFTER;
+               }
+               else
+                  i = NOTHING_AFTER;
+
+               if (!sptr[0])
                   continue;
-               else
-                  if (!buf.st_size)
+
+               if (sptr[0] != '~') {
+                  if (stat(sptr,&buf))
                      continue;
+                  else
+                     if (!buf.st_size)
+                        continue;
 
-               if ((rzcond=send_Zmodem(sptr,NULL,fsent++,DO_WAZOO)) == 0) {
-                  fclose(fp);
-                  goto bad_send;
-               }
-
-               update_filesio (fsent, freceived);
-               if (rzcond != SPEC_COND) {
-                  if (i == DELETE_AFTER)
-                     unlink(sptr);
-                  else if (i == TRUNC_AFTER) {
-                     unlink(sptr);
-                     i = creat(sptr,S_IREAD|S_IWRITE);
-                     close(i);
+                  if ((rzcond=send_Zmodem(sptr,NULL,fsent++,DO_WAZOO)) == 0) {
+                     fclose(fp);
+                     goto bad_send;
                   }
-               }
-               else
-                  nounlink = 1;
 
-               fseek(fp,last_start,SEEK_SET);
-               putc('~',fp);
-               fflush(fp);
-               rewind(fp);
-               fseek(fp,current,SEEK_SET);
+                  update_filesio (fsent, freceived);
+                  if (rzcond != SPEC_COND) {
+                     if (i == DELETE_AFTER)
+                        unlink(sptr);
+                     else if (i == TRUNC_AFTER) {
+                        unlink(sptr);
+                        i = creat(sptr,S_IREAD|S_IWRITE);
+                        close(i);
+                     }
+                  }
+                  else
+                     nounlink = 1;
+
+                  fseek(fp,last_start,SEEK_SET);
+                  putc('~',fp);
+                  fflush(fp);
+                  rewind(fp);
+                  fseek(fp,current,SEEK_SET);
+               }
             }
+            fclose(fp);
+            if (!nounlink || ext_flags[c] != 'H')
+               unlink(fname);
          }
-         fclose(fp);
-         if (!nounlink || ext_flags[c] != 'H')
-            unlink(fname);
       }
    }
 
@@ -522,21 +512,6 @@ int caller;
                for (i = 0; sptr[i]; i++)
                   if (sptr[i] == '!')
                      password = sptr + i + 1;
-
-/*
-               if (password) {
-                  password = sptr + i + 1;
-
-                  for(i=0; password[i]; i++)
-                     if (password[i] <= ' ')
-                        password[i] = 0;
-
-                  if (strcmp (strupr (password), strupr (remote_password))) {
-                     status_line ("!RemotePwdErr %s/%s", password, remote_password);
-                     continue;
-                  }
-               }
-*/
 
                for (i = 0; sptr[i]; i++)
                   if (sptr[i] <= ' ')
@@ -597,23 +572,23 @@ int caller;
       }
    }
 
-   sprintf(fname,request_template,HoldName,called_net,called_node);
+   sprintf (fname, request_template, HoldName, called_net, called_node);
 
-   if (!stat(fname,&buf)) {
-      if(!(remote_capabilities & WZ_FREQ) || (cur_event > -1 && (e_ptrs[cur_event]->behavior & MAT_NOOUTREQ)) )
-         status_line(msgtxt[M_FREQ_DECLINED]);
+   if (!stat (fname, &buf)) {
+      if (!(remote_capabilities & WZ_FREQ) || (cur_event > -1 && (e_ptrs[cur_event]->behavior & MAT_NOOUTREQ)) )
+         status_line (msgtxt[M_FREQ_DECLINED]);
       else {
-         status_line(msgtxt[M_MAKING_FREQ]);
-         if(send_Zmodem(fname,NULL,fsent++,DO_WAZOO)) {
-            unlink(fname);
+         status_line (msgtxt[M_MAKING_FREQ]);
+         if (send_Zmodem (fname, NULL, fsent++, DO_WAZOO)) {
+            unlink (fname);
             update_filesio (fsent, freceived);
             made_request = 1;
          }
       }
    }
 
-   if (!emsi)
-      fsent = respond_to_file_requests(fsent);
+   if (!emsi && !caller)
+      fsent = respond_to_file_requests (fsent);
 
    if (!fsent)
       status_line (msgtxt[M_NOTHING_TO_SEND], remote_zone, remote_net, remote_node, remote_point);
@@ -643,7 +618,7 @@ int fsent;
    int np, nfiles, junk, notf, i;
    char *rqname;
 
-   if (cur_event != -1 && (e_ptrs[cur_event]->behavior & MAT_NOREQ))
+   if (cur_event > -1 && (e_ptrs[cur_event]->behavior & MAT_NOREQ))
       return (fsent);
 
    nfiles = 0;
@@ -674,7 +649,7 @@ int fsent;
             notf = 1;
 
             do {
-               if(nfiles > max_requests && max_requests) {
+               if (nfiles > max_requests && max_requests) {
                   status_line (msgtxt[M_FREQ_LIMIT]);
                   request_report (req, 4);
                   break;
@@ -785,24 +760,41 @@ janus_done:
 void invent_pkt_name(string)
 char *string;
 {
-   struct tm *tp;
-   time_t ltime;
+   static unsigned long last_pkt = 0L;
+   unsigned long pkt;
+   struct dostime_t time;
+   struct dosdate_t date;
 
-   ltime = time (NULL);
-   tp = localtime (&ltime);
-   sprintf (string, "%02i%02i%02i%02i.PKT", tp->tm_mday, tp->tm_hour, tp->tm_min, tp->tm_sec);
+   do {
+      _dos_gettime (&time);
+      _dos_getdate (&date);
+
+      pkt = time.hsecond;
+      pkt += (long)time.second * (long)100;
+      pkt += (long)time.minute * (long)6000;
+      pkt += (long)time.hour * (long)360000;
+      pkt += (long)date.day * (long)24 * (long)360000;
+   } while (pkt == last_pkt);
+
+   sprintf (string, "%08lX.PKT", pkt);
+   last_pkt = pkt;
 }
 
-char *n_frproc(request, recno, updreq)
-char *request;
-int *recno, updreq;
+typedef struct {
+   char name[13];
+   word area;
+   long datpos;
+} FILEIDX;
+
+char *n_frproc (char *request, int *recno, int updreq)
 {
-   int i, j;
-   char s1[80], *sptr, *their_pwd, required_pwd[10], *after_pwd;
-   char our_wildcard[15], their_wildcard[15], magic[15];
    static char file[80];
-   FILE *approved;
+   FILE *approved, *fp;
+   int i, j;
+   char s1[80], *sptr, *their_pwd, required_pwd[32], *after_pwd;
+   char our_wildcard[15], their_wildcard[15], magic[15];
    struct ffblk dta;
+   FILEIDX fidx;
 
    approved = NULL;
    their_pwd = NULL;
@@ -814,44 +806,44 @@ int *recno, updreq;
          request[i] = '\0';
          if (request[i+1]=='!') {
             their_pwd = request+i+2;
-            if(strlen(their_pwd)>6)
-               their_pwd[6] = '\0';
+            if(strlen(their_pwd)>31)
+               their_pwd[31] = '\0';
                strupr(their_pwd);
          }
       }
       else
-         if(request[i]<=' ')
+         if (request[i] <= ' ')
             request[i] = '\0';
    }
 
-   if(!request[0])
-      return(NULL);
+   if (!request[0])
+      return (NULL);
 
-   if(their_pwd)
-      for(i=0;their_pwd[i];i++)
-         if(their_pwd[i] <= ' ')
+   if (their_pwd)
+      for (i = 0; their_pwd[i]; i++)
+         if (their_pwd[i] <= ' ')
             their_pwd[i] = '\0';
 
    i = 0;
    sptr = NULL;
 
-   strupr(request);
-   if(*recno == -1)
-      status_line("*%s request (%s)", updreq?"Update":"File", request);
+   strupr (request);
+   if (*recno == -1)
+      status_line ("*%s request (%s)", updreq ? "Update" : "File", request);
 
-   if(*recno < 0) {
-      if(!strcmp(request,"FILES")) {
-         if(config->files[0])
-            strcpy(file, config->files);
+   if (*recno < 0) {
+      if (!strcmp (request, "FILES")) {
+         if (config->files[0])
+            strcpy (file, config->files);
          else {
             file[0] = '\0';
             sptr = msgtxt[M_NO_AVAIL];
          }
          goto avail;
       }
-      else if(!strcmp(request,"ABOUT")) {
-         if(config->about[0])
-            strcpy(file,config->about);
+      else if (!strcmp (request, "ABOUT")) {
+         if (config->about[0])
+            strcpy (file, config->about);
          else {
             file[0] = '\0';
             sptr = msgtxt[M_NO_ABOUT];
@@ -860,14 +852,14 @@ int *recno, updreq;
       }
    }
 
-   prep_match(request,their_wildcard);
+   prep_match (request, their_wildcard);
 
-   approved = fopen(request_list,"rt");
-   if(approved == NULL)
+   if ((approved = fopen (request_list, "rt")) == NULL)
       goto err;
 
    j = -1;
    magic[0] = '\0';
+
    while (!feof (approved)) {
       if (magic[0]) {
          strcpy (their_wildcard, magic);
@@ -894,86 +886,103 @@ int *recno, updreq;
       if (file[0] == ';')
          continue;
 
-      for(i=0;file[i];i++) {
-         if(file[i]==' ') {
+      for (i = 0; file[i]; i++) {
+         if (file[i] == ' ') {
             file[i] = '\0';
-            if(file[i+1]=='!') {
-               strncpy(required_pwd,&file[i+2],8);
-               if(strlen(required_pwd)>6)
-                  required_pwd[6] = '\0';
+            if (file[i + 1] == '!') {
+               strncpy (required_pwd, &file[i + 2], 31);
+               if (strlen (required_pwd) > 31)
+                  required_pwd[31] = '\0';
 
                after_pwd = &file[i+1];
-               while(*after_pwd && (!isspace(*after_pwd)))
+               while (*after_pwd && (!isspace (*after_pwd)))
                   ++after_pwd;
 
-               if(*after_pwd)
+               if (*after_pwd)
                   ++after_pwd;
 
-               for(i=0;required_pwd[i];i++)
-                  if(required_pwd[i]<=' ')
+               for (i = 0; required_pwd[i]; i++)
+                  if (required_pwd[i] <= ' ')
                      required_pwd[i] = '\0';
-
                   break;
             }
             else
-               after_pwd = &file[i+1];
+               after_pwd = &file[i + 1];
          }
          else
-            if(file[i]<' ')
+            if (file[i] < ' ')
                file[i] = '\0';
       }
 
-      if(!file[0])
+      if (!file[0])
          continue;
 
-      if(file[0] == '@') {
-         if(stricmp(&file[1],request) == 0) {
-            strcpy(magic,their_wildcard);
-            strcpy(file,after_pwd);
-            strcpy(their_wildcard, "????????.???");
+      if (file[0] == '@') {
+         if (stricmp (&file[1], request) == 0) {
+            strcpy (magic, their_wildcard);
+            strcpy (file, after_pwd);
+            strcpy (their_wildcard, "????????.???");
          }
          else
             continue;
       }
-
       else if (file[0] == '$') {
-         if (index_filerequestproc (&file[1], file, their_wildcard, recno, updreq, &j) != NULL) {
-            if(required_pwd[0]) {
-               strupr(required_pwd);
-               if((strcmp(required_pwd,their_pwd)) && (strcmp(required_pwd,remote_password))) {
-                  status_line(msgtxt[M_FREQ_PW_ERR],required_pwd,their_pwd,remote_password);
-                  continue;
+         if ((fp = sh_fopen (&file[1], "rb", SH_DENYNONE)) != NULL) {
+            while (fread (&fidx, sizeof (FILEIDX), 1, fp) == 1) {
+               prep_match (fidx.name, our_wildcard);
+               if (!match (our_wildcard, their_wildcard)) {
+                  if (read_system (fidx.area, 2)) {
+                     if (!sys.prot_req && filepath == config->prot_filepath)
+                        continue;
+                     if (!sys.know_req && filepath == config->know_filepath)
+                        continue;
+                     if (!sys.norm_req && filepath == config->norm_filepath)
+                        continue;
+
+                     sprintf (file, "%s%s", sys.filepath, fidx.name);
+                     if (!dexists (file))
+                        continue;
+
+                     if (required_pwd[0]) {
+                        strupr (required_pwd);
+                        if ((strcmp (required_pwd, their_pwd)) && (strcmp (required_pwd, remote_password)))
+                           status_line (msgtxt[M_FREQ_PW_ERR], required_pwd, their_pwd, remote_password);
+                        else {
+                           if (++j > *recno)
+                              goto gotfile;
+                        }
+                     }
+                     else if (++j > *recno)
+                        goto gotfile;
+                  }
                }
-               else
-                  goto gotfile;
             }
-            else
-               goto gotfile;
+            fclose (fp);
          }
          file[0] = '\0';
       }
 
-      if (file[0] && !findfirst(file,&dta,0)) {
+      if (file[0] && !findfirst (file, &dta, 0)) {
          do {
-            prep_match(dta.ff_name,our_wildcard);
-            if(!match(our_wildcard,their_wildcard)) {
-               for(i=strlen(file);i;i--)
-                  if (file[i]=='\\') {
-                     file[i+1]=0;
+            prep_match (dta.ff_name, our_wildcard);
+            if (!match (our_wildcard, their_wildcard)) {
+               for (i = strlen (file); i; i--)
+                  if (file[i] == '\\') {
+                     file[i + 1] = 0;
                      break;
                   }
-               strcat(file,dta.ff_name);
-               if(required_pwd[0]) {
-                  strupr(required_pwd);
-                  if((strcmp(required_pwd,their_pwd)) && (strcmp(required_pwd,remote_password)))
-                     status_line(msgtxt[M_FREQ_PW_ERR],required_pwd,their_pwd,remote_password);
-                  else
-                     if(++j > *recno)
+               strcat (file, dta.ff_name);
+               if (required_pwd[0]) {
+                  strupr (required_pwd);
+                  if ((strcmp (required_pwd, their_pwd)) && (strcmp (required_pwd, remote_password)))
+                     status_line (msgtxt[M_FREQ_PW_ERR], required_pwd, their_pwd, remote_password);
+                  else {
+                     if (++j > *recno)
                         goto gotfile;
+                  }
                }
-               else
-                  if (++j > *recno)
-                     goto gotfile;
+               else if (++j > *recno)
+                  goto gotfile;
             }
          } while (!findnext (&dta));
       }
@@ -989,7 +998,7 @@ avail:
    strcpy (request, s1);
 
    if (approved) {
-      fclose(approved);
+      fclose (approved);
       approved = NULL;
    }
 
@@ -1004,93 +1013,25 @@ avail:
    }
 
 gotfile:
-   strcpy(request,s1);
+   strcpy (request, s1);
 
    ++(*recno);
    if (approved)
-      fclose(approved);
+      fclose (approved);
 
-   return(&file[0]);
+   return (&file[0]);
 
 err:
-   strcpy(request,s1);
+   strcpy (request, s1);
 
-   if(approved)
-      fclose(approved);
+   if (approved)
+      fclose (approved);
 
    *recno = -1;
-   if(sptr)
-      status_line("!%s Request Err: %s", updreq?"Update":"File", sptr);
+   if (sptr)
+      status_line ("!%s Request Err: %s", updreq ? "Update": "File", sptr);
 
    return (NULL);
-}
-
-int prep_match(template,dep)
-char *template, *dep;
-{
-   register int i,delim;
-   register char *sptr;
-   int start;
-
-   memset (dep, 0, 15);
-   sptr = template;
-
-   for(start=i=0; sptr[i]; i++)
-      if ((sptr[i]=='\\') || (sptr[i]==':'))
-         start = i+1;
-
-   if(start)
-      sptr += start;
-   delim = 8;
-
-   strupr(sptr);
-
-   for(i=0; *sptr && i < 12; sptr++)
-      switch(*sptr) {
-         case '.':
-            if (i>8)
-               return(-1);
-            while(i<8)
-               dep[i++] = ' ';
-            dep[i++] = *sptr;
-            delim = 12;
-            break;
-         case '*':
-            while(i<delim)
-               dep[i++] = '?';
-            break;
-         default:
-            dep[i++] = *sptr;
-            break;
-      }
-
-   while(i<12) {
-      if (i == 8)
-         dep[i++] = '.';
-      else
-         dep[i++] = ' ';
-   }
-   dep[i] = '\0';
-
-   return 0;
-}
-
-int match(s1,s2)
-char *s1, *s2;
-{
-   register char *i,*j;
-
-   i = s1;
-   j = s2;
-
-   while(*i) {
-      if((*j != '?') && (*i != *j))
-         return(1);
-      i++;
-      j++;
-   }
-
-   return 0;
 }
 
 /*
@@ -1258,10 +1199,12 @@ int id;
          if (fp2 != NULL) {
             while (!feof (fp2)) {
                path[0] = 0;
-               if (fgets (path, 255, fp2) == NULL)
+               if (fgets (path, 70, fp2) == NULL)
                   break;
                if (!strnicmp (path, name, strlen (name))) {
-                  path[strlen(path)-1] = 0;
+                  path[strlen (path) - 1] = 0;
+                  if (strlen (&path[13]) > 54)
+                     path[54 + 13] = '\0';
                   sprintf (string, "%-12s %8ld   %s\r\n", name, blk.ff_fsize, &path[13]);
                   break;
                }
@@ -1387,7 +1330,7 @@ void emsi_handshake (originator)
       req[78] = '\0';
    wcenters (0, LGREY|_BLACK, req);
 
-   sprintf (req, "Connected at %u baud with %s", rate, remote_program);
+   sprintf (req, "Connected at %lu baud with %s", rate, remote_program);
    if (strlen (req) > 78)
       req[78] = '\0';
    wcenters (1, LGREY|_BLACK, req);
@@ -1771,14 +1714,9 @@ endwazoo:
       sysinfo.year.inconnects += t;
    }
 
-   if (got_arcmail) {
+   if (!nomailproc && got_arcmail) {
       if (cur_event > -1 && e_ptrs[cur_event]->errlevel[2])
          aftermail_exit = e_ptrs[cur_event]->errlevel[2];
-
-      if (aftermail_exit) {
-         status_line (msgtxt[M_EXIT_AFTER_MAIL], aftermail_exit);
-         get_down (aftermail_exit, 3);
-      }
 
       if (cur_event > -1 && (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL|ECHO_EXPORT))) {
          if (modem_busy != NULL)
@@ -1801,6 +1739,11 @@ endwazoo:
          sysinfo.week.echoscan += time (NULL) - t;
          sysinfo.month.echoscan += time (NULL) - t;
          sysinfo.year.echoscan += time (NULL) - t;
+      }
+
+      if (aftermail_exit) {
+         status_line (msgtxt[M_EXIT_AFTER_MAIL], aftermail_exit);
+         get_down (aftermail_exit, 3);
       }
    }
 

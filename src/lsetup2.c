@@ -230,35 +230,42 @@ void write_areasbbs ()
          continue;
 
       if (sys.passthrough) {
-         fprintf (fp, "##%-28.28s %-22.22s %s", "", sys.echotag, sys.forward1);
+         fprintf (fp, "##%s %s %s", "", sys.echotag, sys.forward1);
          if (sys.forward2[0])
             fprintf (fp, " %s", sys.forward2);
          if (sys.forward3[0])
             fprintf (fp, " %s", sys.forward3);
       }
       else if (sys.quick_board) {
-         fprintf (fp, "%-30d %-22.22s %s", sys.quick_board, sys.echotag, sys.forward1);
+         fprintf (fp, "%d %s %s", sys.quick_board, sys.echotag, sys.forward1);
+         if (sys.forward2[0])
+            fprintf (fp, " %s", sys.forward2);
+         if (sys.forward3[0])
+            fprintf (fp, " %s", sys.forward3);
+      }
+      else if (sys.gold_board) {
+         fprintf (fp, "G%d %s %s", sys.gold_board, sys.echotag, sys.forward1);
          if (sys.forward2[0])
             fprintf (fp, " %s", sys.forward2);
          if (sys.forward3[0])
             fprintf (fp, " %s", sys.forward3);
       }
       else if (sys.pip_board) {
-         fprintf (fp, "!%-29d %-22.22s %s", sys.pip_board, sys.echotag, sys.forward1);
+         fprintf (fp, "!%d %s %s", sys.pip_board, sys.echotag, sys.forward1);
          if (sys.forward2[0])
             fprintf (fp, " %s", sys.forward2);
          if (sys.forward3[0])
             fprintf (fp, " %s", sys.forward3);
       }
       else if (sys.squish) {
-         fprintf (fp, "$%-29.29s %-22.22s %s", sys.msg_path, sys.echotag, sys.forward1);
+         fprintf (fp, "$%s %s %s", sys.msg_path, sys.echotag, sys.forward1);
          if (sys.forward2[0])
             fprintf (fp, " %s", sys.forward2);
          if (sys.forward3[0])
             fprintf (fp, " %s", sys.forward3);
       }
       else {
-         fprintf (fp, "%-30.30s %-22.22s %s", sys.msg_path, sys.echotag, sys.forward1);
+         fprintf (fp, "%s %s %s", sys.msg_path, sys.echotag, sys.forward1);
          if (sys.forward2[0])
             fprintf (fp, " %s", sys.forward2);
          if (sys.forward3[0])
@@ -481,113 +488,119 @@ static int node_sort_func (NODEINFO *a1, NODEINFO *b1)
 
 void manager_nodes ()
 {
-   int fd, fdi, wh, wh1, i = 1, saved, zz, ne, no, po;
-   char string[128], readed, filename[80];
-   long pos;
-   NODEINFO ni, bni;
+	int fd, fdi, wh, wh1, i = 1, saved, zz, ne, no, po;
+	char string[128], readed, filename[80];
+	long pos;
+	NODEINFO ni, bni;
 
-   sprintf (string, "%sNODES.DAT", config.net_info);
-   fd = open (string, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-   if (fd == -1)
-      return;
+	sprintf (string, "%sNODES.DAT", config.net_info);
+	fd = open (string, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+	if (fd == -1)
+		return;
 
-   if (!read (fd, (char *)&ni, sizeof (NODEINFO))) {
-      memset ((char *)&ni, 0, sizeof (NODEINFO));
-      readed = 0;
-   }
-   else
-      readed = 1;
+	if (!read (fd, (char *)&ni, sizeof (NODEINFO))) {
+		memset ((char *)&ni, 0, sizeof (NODEINFO));
+		readed = 0;
+	}
+	else
+		readed = 1;
 
-   gotoxy_ (24, 1);
-   clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New Node  L-List  D-Delete");
-   prints (24, 1, YELLOW|_BLACK, "PgUp/PgDn");
-   prints (24, 26, YELLOW|_BLACK, "E");
-   prints (24, 34, YELLOW|_BLACK, "A");
-   prints (24, 50, YELLOW|_BLACK, "L");
-   prints (24, 58, YELLOW|_BLACK, "D");
+	gotoxy_ (24, 1);
+	clreol_ ();
+	prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New Node  C-Copy  L-List  D-Delete");
+	prints (24, 1, YELLOW|_BLACK, "PgUp/PgDn");
+	prints (24, 26, YELLOW|_BLACK, "E");
+	prints (24, 34, YELLOW|_BLACK, "A");
+	prints (24, 50, YELLOW|_BLACK, "C");
+	prints (24, 58, YELLOW|_BLACK, "L");
+	prints (24, 66, YELLOW|_BLACK, "D");
 
-   wh = wopen (2, 8, 22, 70, 1, LCYAN|_BLACK, CYAN|_BLACK);
-   wactiv (wh);
-   wshadow (DGREY|_BLACK);
-   wtitle (" Nodes ", TRIGHT, YELLOW|_BLUE);
+	wh = wopen (2, 6, 22, 75, 1, LCYAN|_BLACK, CYAN|_BLACK);
+	wactiv (wh);
+	wshadow (DGREY|_BLACK);
+	wtitle (" Nodes ", TRIGHT, YELLOW|_BLUE);
 
-   do {
-      stop_update ();
-      wclear ();
+	do {
+		stop_update ();
+		wclear ();
 
-      wprints ( 1,  1, LGREY|_BLACK," Address       ");
-      wprints ( 2,  1, LGREY|_BLACK," System        ");
-      wprints ( 3,  1, LGREY|_BLACK," Sysop Name    ");
-      wprints ( 4,  1, LGREY|_BLACK," Packer        ");
-      wprints ( 5,  1, LGREY|_BLACK," Session Pw    ");
-      wprints ( 6,  1, LGREY|_BLACK," Packet Pw     ");
-      wprints ( 7,  1, LGREY|_BLACK," Areafix Pw    ");
-      wprints ( 8,  1, LGREY|_BLACK," TIC Pw        ");
-      wprints ( 9,  1, LGREY|_BLACK," Phone         ");
-      wprints (10,  1, LGREY|_BLACK," Dial Prefix   ");
-      wprints (11,  1, LGREY|_BLACK," Capabilities  ");
-      wprints (12,  1, LGREY|_BLACK," Echomail aka  ");
-      wprints (13,  1, LGREY|_BLACK," Areafix Level ");
-      wprints (14,  1, LGREY|_BLACK," ÃÄ A Flag     ");
-      wprints (15,  1, LGREY|_BLACK," ÃÄ B Flag     ");
-      wprints (16,  1, LGREY|_BLACK," ÃÄ C Flag     ");
-      wprints (17,  1, LGREY|_BLACK," ÀÄ D Flag     ");
-      wprints (12, 33, LGREY|_BLACK," TIC aka    ");
-      wprints (13, 33, LGREY|_BLACK," TIC Level  ");
-      wprints (14, 33, LGREY|_BLACK," ÃÄ A Flag  ");
-      wprints (15, 33, LGREY|_BLACK," ÃÄ B Flag  ");
-      wprints (16, 33, LGREY|_BLACK," ÃÄ C Flag  ");
-      wprints (17, 33, LGREY|_BLACK," ÀÄ D Flag  ");
+		wprints ( 1,  1, LGREY|_BLACK," Address         ");
+		wprints ( 2,  1, LGREY|_BLACK," System          ");
+		wprints ( 3,  1, LGREY|_BLACK," Sysop Name      ");
+		wprints ( 4,  1, LGREY|_BLACK," Packer          ");
+		wprints ( 4, 33, LGREY|_BLACK," Mailer aka      ");
+		wprints ( 5,  1, LGREY|_BLACK," Session Pw      ");
+		wprints ( 6,  1, LGREY|_BLACK," Packet Pw (OUT) ");
+		wprints ( 6, 33, LGREY|_BLACK," Packet Pw (IN)  ");
+		wprints ( 7,  1, LGREY|_BLACK," Areafix Pw      ");
+		wprints ( 8,  1, LGREY|_BLACK," TIC Pw          ");
+		wprints ( 9,  1, LGREY|_BLACK," Phone           ");
+		wprints (10,  1, LGREY|_BLACK," Dial Prefix     ");
+		wprints (11,  1, LGREY|_BLACK," Capabilities    ");
+		wprints (12,  1, LGREY|_BLACK," Echomail aka    ");
+		wprints (13,  1, LGREY|_BLACK," Areafix Level   ");
+		wprints (14,  1, LGREY|_BLACK," ÃÄ A Flag       ");
+		wprints (15,  1, LGREY|_BLACK," ÃÄ B Flag       ");
+		wprints (16,  1, LGREY|_BLACK," ÃÄ C Flag       ");
+		wprints (17,  1, LGREY|_BLACK," ÀÄ D Flag       ");
+		wprints (12, 33, LGREY|_BLACK," TIC aka         ");
+		wprints (13, 33, LGREY|_BLACK," TIC Level       ");
+		wprints (14, 33, LGREY|_BLACK," ÃÄ A Flag       ");
+		wprints (15, 33, LGREY|_BLACK," ÃÄ B Flag       ");
+		wprints (16, 33, LGREY|_BLACK," ÃÄ C Flag       ");
+		wprints (17, 33, LGREY|_BLACK," ÀÄ D Flag       ");
 
-      if (readed) {
-         sprintf (string, "%u:%u/%u.%u", ni.zone, ni.net, ni.node, ni.point);
-         wprints (1, 17, CYAN|_BLACK, string);
-         wprints (2, 17, CYAN|_BLACK, ni.system);
-         wprints (3, 17, CYAN|_BLACK, ni.sysop_name);
-         wprints (4, 17, CYAN|_BLACK, config.packers[ni.packer].id);
-         wprints (5, 17, CYAN|_BLACK, ni.pw_session);
-         wprints (6, 17, CYAN|_BLACK, ni.pw_packet);
-         wprints (7, 17, CYAN|_BLACK, ni.pw_areafix);
-         wprints (8, 17, CYAN|_BLACK, ni.pw_tic);
-         wprints (9, 17, CYAN|_BLACK, ni.phone);
-         sprintf (string, "%d", ni.modem_type);
-         wprints (10, 17, CYAN|_BLACK, string);
-         strcpy (string, "----");
-         if (ni.remap4d)
-            string[0] = 'M';
-         if (ni.wazoo)
-            string[1] = 'W';
-         if (ni.emsi)
-            string[2] = 'E';
-         if (ni.janus)
-            string[3] = 'J';
-         wprints (11, 17, CYAN|_BLACK, string);
-         if (ni.aka) {
-            sprintf (string, "%u:%u/%u.%u", config.alias[ni.aka - 1].zone, config.alias[ni.aka - 1].net, config.alias[ni.aka - 1].node, config.alias[ni.aka - 1].point);
-            wprints (12, 17, CYAN|_BLACK, string);
-         }
-         else
-            wprints (12, 17, CYAN|_BLACK, "Default");
-         sprintf (string, "%d", ni.afx_level);
-         wprints (13, 17, CYAN|_BLACK, string);
-         wprints (14, 17, CYAN|_BLACK, get_flagA_text ((ni.afx_flags >> 24) & 0xFF));
-         wprints (15, 17, CYAN|_BLACK, get_flagB_text ((ni.afx_flags >> 16) & 0xFF));
-         wprints (16, 17, CYAN|_BLACK, get_flagC_text ((ni.afx_flags >> 8) & 0xFF));
-         wprints (17, 17, CYAN|_BLACK, get_flagD_text (ni.afx_flags & 0xFF));
-         if (ni.tic_aka) {
-            sprintf (string, "%u:%u/%u.%u", config.alias[ni.tic_aka - 1].zone, config.alias[ni.tic_aka - 1].net, config.alias[ni.tic_aka - 1].node, config.alias[ni.tic_aka - 1].point);
-            wprints (12, 46, CYAN|_BLACK, string);
-         }
-         else
-            wprints (12, 46, CYAN|_BLACK, "Default");
+		if (readed) {
+			sprintf (string, "%u:%u/%u.%u", ni.zone, ni.net, ni.node, ni.point);
+			wprints (1, 19, CYAN|_BLACK, string);
+			wprints (2, 19, CYAN|_BLACK, ni.system);
+			wprints (3, 19, CYAN|_BLACK, ni.sysop_name);
+			wprints (4, 19, CYAN|_BLACK, config.packers[ni.packer].id);
+			sprintf (string, "%u:%u/%u.%u", config.alias[ni.mailer_aka].zone, config.alias[ni.mailer_aka].net, config.alias[ni.mailer_aka].node, config.alias[ni.mailer_aka].point);
+			wprints (4, 51, CYAN|_BLACK, string);
+			wprints (5, 19, CYAN|_BLACK, ni.pw_session);
+			wprints (6, 19, CYAN|_BLACK, ni.pw_packet);
+			wprints (6, 51, CYAN|_BLACK, ni.pw_inbound_packet);
+			wprints (7, 19, CYAN|_BLACK, ni.pw_areafix);
+			wprints (8, 19, CYAN|_BLACK, ni.pw_tic);
+			wprints (9, 19, CYAN|_BLACK, ni.phone);
+			sprintf (string, "%d", ni.modem_type);
+			wprints (10, 19, CYAN|_BLACK, string);
+			strcpy (string, "----");
+			if (ni.remap4d)
+				string[0] = 'M';
+			if (ni.wazoo)
+				string[1] = 'W';
+			if (ni.emsi)
+				string[2] = 'E';
+			if (ni.janus)
+				string[3] = 'J';
+			wprints (11, 19, CYAN|_BLACK, string);
+			if (ni.aka) {
+				sprintf (string, "%u:%u/%u.%u", config.alias[ni.aka - 1].zone, config.alias[ni.aka - 1].net, config.alias[ni.aka - 1].node, config.alias[ni.aka - 1].point);
+				wprints (12, 19, CYAN|_BLACK, string);
+			}
+			else
+				wprints (12, 19, CYAN|_BLACK, "Default");
+			sprintf (string, "%d", ni.afx_level);
+			wprints (13, 19, CYAN|_BLACK, string);
+			wprints (14, 19, CYAN|_BLACK, get_flagA_text ((ni.afx_flags >> 24) & 0xFF));
+			wprints (15, 19, CYAN|_BLACK, get_flagB_text ((ni.afx_flags >> 16) & 0xFF));
+			wprints (16, 19, CYAN|_BLACK, get_flagC_text ((ni.afx_flags >> 8) & 0xFF));
+			wprints (17, 19, CYAN|_BLACK, get_flagD_text (ni.afx_flags & 0xFF));
+			if (ni.tic_aka) {
+				sprintf (string, "%u:%u/%u.%u", config.alias[ni.tic_aka - 1].zone, config.alias[ni.tic_aka - 1].net, config.alias[ni.tic_aka - 1].node, config.alias[ni.tic_aka - 1].point);
+				wprints (12, 51, CYAN|_BLACK, string);
+			}
+			else
+            wprints (12, 51, CYAN|_BLACK, "Default");
          sprintf (string, "%d", ni.tic_level);
-         wprints (13, 46, CYAN|_BLACK, string);
-         wprints (14, 46, CYAN|_BLACK, get_flagA_text ((ni.tic_flags >> 24) & 0xFF));
-         wprints (15, 46, CYAN|_BLACK, get_flagB_text ((ni.tic_flags >> 16) & 0xFF));
-         wprints (16, 46, CYAN|_BLACK, get_flagC_text ((ni.tic_flags >> 8) & 0xFF));
-         wprints (17, 46, CYAN|_BLACK, get_flagD_text (ni.tic_flags & 0xFF));
-      }
+         wprints (13, 51, CYAN|_BLACK, string);
+         wprints (14, 51, CYAN|_BLACK, get_flagA_text ((ni.tic_flags >> 24) & 0xFF));
+         wprints (15, 51, CYAN|_BLACK, get_flagB_text ((ni.tic_flags >> 16) & 0xFF));
+			wprints (16, 51, CYAN|_BLACK, get_flagC_text ((ni.tic_flags >> 8) & 0xFF));
+         wprints (17, 51, CYAN|_BLACK, get_flagD_text (ni.tic_flags & 0xFF));
+		}
 
       start_update ();
       i = getxch ();
@@ -595,196 +608,204 @@ void manager_nodes ()
          i &= 0xFF;
 
       switch (i) {
-         // PgDn
+			// PgDn
          case 0x5100:
             if (readed)
-               read (fd, (char *)&ni, sizeof (NODEINFO));
-            break;
+					read (fd, (char *)&ni, sizeof (NODEINFO));
+				break;
 
-         // PgUp
-         case 0x4900:
-            if (readed) {
-               if (tell (fd) > sizeof (NODEINFO)) {
-                  lseek (fd, -2L * sizeof (NODEINFO), SEEK_CUR);
-                  read (fd, (char *)&ni, sizeof (NODEINFO));
-               }
-            }
-            break;
+			// PgUp
+			case 0x4900:
+				if (readed) {
+					if (tell (fd) > sizeof (NODEINFO)) {
+						lseek (fd, -2L * sizeof (NODEINFO), SEEK_CUR);
+						read (fd, (char *)&ni, sizeof (NODEINFO));
+					}
+				}
+				break;
 
-         // E Edit
-         case 'E':
-         case 'e':
-            if (readed) {
-               zz = ni.zone;
-               ne = ni.net;
-               no = ni.node;
-               po = ni.point;
+			// E Edit
+			case 'E':
+			case 'e':
+				if (readed) {
+					zz = ni.zone;
+					ne = ni.net;
+					no = ni.node;
+					po = ni.point;
 
-               edit_single_node (&ni);
+					edit_single_node (&ni);
 
-               if (zz != ni.zone || ne != ni.net || no != ni.node || po != ni.point) {
-                  pos = tell (fd) - (long)sizeof (NODEINFO);
-                  close (fd);
+					if (zz != ni.zone || ne != ni.net || no != ni.node || po != ni.point) {
+						pos = tell (fd) - (long)sizeof (NODEINFO);
+						close (fd);
 
-                  sprintf (filename, "%sNODES.BAK", config.net_info);
-                  unlink (filename);
-                  sprintf (string, "%sNODES.DAT", config.net_info);
-                  rename (string, filename);
+						sprintf (filename, "%sNODES.BAK", config.net_info);
+						unlink (filename);
+						sprintf (string, "%sNODES.DAT", config.net_info);
+						rename (string, filename);
 
-                  fd = open (filename, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-                  fdi = open (string, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE);
-                  saved = 0;
+						fd = open (filename, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+						fdi = open (string, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE);
+						saved = 0;
 
-                  while (read (fd, (char *)&bni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
-                     if (!saved && node_sort_func (&ni, &bni) < 0) {
-                        pos = tell (fdi);
-                        write (fdi, (char *)&ni, sizeof (NODEINFO));
-                        saved = 1;
-                     }
-                     if ((bni.zone != ni.zone || bni.net != ni.net || bni.node != ni.node || bni.point != ni.point) &&
-                         (bni.zone != zz || bni.net != ne || bni.node != no || bni.point != po))
-                        write (fdi, (char *)&bni, sizeof (NODEINFO));
-                  }
+						while (read (fd, (char *)&bni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
+							if (!saved && node_sort_func (&ni, &bni) < 0) {
+								pos = tell (fdi);
+								write (fdi, (char *)&ni, sizeof (NODEINFO));
+								saved = 1;
+							}
+							if ((bni.zone != ni.zone || bni.net != ni.net || bni.node != ni.node || bni.point != ni.point) &&
+								 (bni.zone != zz || bni.net != ne || bni.node != no || bni.point != po))
+								write (fdi, (char *)&bni, sizeof (NODEINFO));
+						}
 
-                  if (!saved) {
-                     pos = tell (fdi);
-                     write (fdi, (char *)&ni, sizeof (NODEINFO));
-                  }
+						if (!saved) {
+							pos = tell (fdi);
+							write (fdi, (char *)&ni, sizeof (NODEINFO));
+						}
 
-                  close (fd);
-                  close (fdi);
+						close (fd);
+						close (fdi);
 
-                  unlink (filename);
+						unlink (filename);
 
-                  sprintf (string, "%sNODES.DAT", config.net_info);
-                  fd = open (string, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-                  lseek (fd, pos, SEEK_SET);
-                  read (fd, (char *)&ni, sizeof (NODEINFO));
-               }
-               else {
-                  lseek (fd, -1L * sizeof (NODEINFO), SEEK_CUR);
-                  write (fd, (char *)&ni, sizeof (NODEINFO));
-               }
-            }
-            break;
+						sprintf (string, "%sNODES.DAT", config.net_info);
+						fd = open (string, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+						lseek (fd, pos, SEEK_SET);
+						read (fd, (char *)&ni, sizeof (NODEINFO));
+					}
+					else {
+						lseek (fd, -1L * sizeof (NODEINFO), SEEK_CUR);
+						write (fd, (char *)&ni, sizeof (NODEINFO));
+					}
+				}
+				break;
 
-         // L List
-         case 'L':
-         case 'l':
-            if (readed)
-               select_nodes_list (fd, &ni);
-            break;
+			// L List
+			case 'L':
+			case 'l':
+				if (readed)
+					select_nodes_list (fd, &ni);
+				break;
 
-         // A Add
-         case 'A':
-         case 'a':
-            memset ((char *)&ni, 0, sizeof (NODEINFO));
-            ni.remap4d = ni.wazoo = ni.emsi = ni.janus = 1;
+			// A Add & C Copy
+			case 'A':
+			case 'a':
 
-            edit_single_node (&ni);
+				memset ((char *)&ni, 0, sizeof (NODEINFO));
+				ni.remap4d = ni.wazoo = ni.emsi = ni.janus = 1;
 
-            if (ni.zone) {
-               pos = tell (fd) - (long)sizeof (NODEINFO);
-               close (fd);
 
-               sprintf (filename, "%sNODES.BAK", config.net_info);
-               unlink (filename);
-               sprintf (string, "%sNODES.DAT", config.net_info);
-               rename (string, filename);
+			case 'C':
+			case 'c':
 
-               fd = open (filename, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-               fdi = open (string, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE);
-               saved = 0;
+				if ((i=='C'||i=='c')&&!readed) break;
 
-               while (read (fd, (char *)&bni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
-                  if (!saved && node_sort_func (&ni, &bni) < 0) {
-                     pos = tell (fdi);
-                     write (fdi, (char *)&ni, sizeof (NODEINFO));
-                     saved = 1;
-                  }
-                  if (bni.zone != ni.zone || bni.net != ni.net || bni.node != ni.node || bni.point != ni.point)
-                     write (fdi, (char *)&bni, sizeof (NODEINFO));
-               }
+					edit_single_node (&ni);
 
-               if (!saved) {
-                  pos = tell (fdi);
-                  write (fdi, (char *)&ni, sizeof (NODEINFO));
-               }
+				if (ni.zone) {
+					pos = tell (fd) - (long)sizeof (NODEINFO);
+					close (fd);
 
-               close (fd);
-               close (fdi);
+					sprintf (filename, "%sNODES.BAK", config.net_info);
+					unlink (filename);
+					sprintf (string, "%sNODES.DAT", config.net_info);
+					rename (string, filename);
 
-               unlink (filename);
+					fd = open (filename, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+					fdi = open (string, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE);
+					saved = 0;
 
-               sprintf (string, "%sNODES.DAT", config.net_info);
-               fd = open (string, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-               lseek (fd, pos, SEEK_SET);
-               read (fd, (char *)&ni, sizeof (NODEINFO));
-            }
-            break;
+					while (read (fd, (char *)&bni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
+						if (!saved && node_sort_func (&ni, &bni) < 0) {
+							pos = tell (fdi);
+							write (fdi, (char *)&ni, sizeof (NODEINFO));
+							saved = 1;
+						}
+						if (bni.zone != ni.zone || bni.net != ni.net || bni.node != ni.node || bni.point != ni.point)
+							write (fdi, (char *)&bni, sizeof (NODEINFO));
+					}
 
-         // D Delete
-         case 'D':
-         case 'd':
-            wh1 = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
-            wactiv (wh1);
-            wshadow (DGREY|_BLACK);
+					if (!saved) {
+						pos = tell (fdi);
+						write (fdi, (char *)&ni, sizeof (NODEINFO));
+					}
 
-            wcenters (1, BLACK|_LGREY, "Are you sure (Y/n) ?  ");
+					close (fd);
+					close (fdi);
 
-            strcpy (string, "Y");
-            winpbeg (BLACK|_LGREY, BLACK|_LGREY);
-            winpdef (1, 24, string, "?", 0, 2, NULL, 0);
+					unlink (filename);
 
-            i = winpread ();
-            wclose ();
-            hidecur ();
+					sprintf (string, "%sNODES.DAT", config.net_info);
+					fd = open (string, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+					lseek (fd, pos, SEEK_SET);
+					read (fd, (char *)&ni, sizeof (NODEINFO));
+				}
+				break;
 
-            if (i == W_ESCPRESS)
-               break;
 
-            pos = tell (fd) - (long)sizeof (NODEINFO);
-            close (fd);
+			// D Delete
+			case 'D':
+			case 'd':
+				wh1 = wopen (10, 25, 14, 54, 0, BLACK|_LGREY, BLACK|_LGREY);
+				wactiv (wh1);
+				wshadow (DGREY|_BLACK);
 
-            if (toupper (string[0]) == 'Y') {
-               sprintf (filename, "%sNODES.BAK", config.net_info);
-               unlink (filename);
-               sprintf (string, "%sNODES.DAT", config.net_info);
-               rename (string, filename);
+				wcenters (1, BLACK|_LGREY, "Are you sure (Y/n) ?  ");
 
-               fd = open (filename, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-               fdi = open (string, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE);
+				strcpy (string, "Y");
+				winpbeg (BLACK|_LGREY, BLACK|_LGREY);
+				winpdef (1, 24, string, "?", 0, 2, NULL, 0);
 
-               while (read (fd, (char *)&bni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
-                  if (bni.zone != ni.zone || bni.net != ni.net || bni.node != ni.node || bni.point != ni.point)
-                     write (fdi, (char *)&bni, sizeof (NODEINFO));
-               }
+				i = winpread ();
+				wclose ();
+				hidecur ();
 
-               close (fd);
-               close (fdi);
+				if (i == W_ESCPRESS)
+					break;
 
-               unlink (filename);
-            }
+				pos = tell (fd) - (long)sizeof (NODEINFO);
+				close (fd);
 
-            sprintf (string, "%sNODES.DAT", config.net_info);
-            fd = open (string, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-            lseek (fd, pos, SEEK_SET);
-            read (fd, (char *)&ni, sizeof (NODEINFO));
-            break;
+				if (toupper (string[0]) == 'Y') {
+					sprintf (filename, "%sNODES.BAK", config.net_info);
+					unlink (filename);
+					sprintf (string, "%sNODES.DAT", config.net_info);
+					rename (string, filename);
 
-         // ESC Exit
-         case 0x1B:
-            i = -1;
-            break;
-      }
+					fd = open (filename, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+					fdi = open (string, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, S_IREAD|S_IWRITE);
 
-   } while (i != -1);
+					while (read (fd, (char *)&bni, sizeof (NODEINFO)) == sizeof (NODEINFO)) {
+						if (bni.zone != ni.zone || bni.net != ni.net || bni.node != ni.node || bni.point != ni.point)
+							write (fdi, (char *)&bni, sizeof (NODEINFO));
+					}
 
-   close (fd);
+					close (fd);
+					close (fdi);
 
-   wclose ();
-   gotoxy_ (24, 1);
-   clreol_ ();
+					unlink (filename);
+				}
+
+				sprintf (string, "%sNODES.DAT", config.net_info);
+				fd = open (string, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+				lseek (fd, pos, SEEK_SET);
+				read (fd, (char *)&ni, sizeof (NODEINFO));
+				break;
+
+			// ESC Exit
+			case 0x1B:
+				i = -1;
+				break;
+		}
+
+	} while (i != -1);
+
+	close (fd);
+
+	wclose ();
+	gotoxy_ (24, 1);
+	clreol_ ();
 }
 
 static void edit_single_node (nip)
@@ -808,43 +829,48 @@ continue_editing:
       wclear ();
 
       wmenubegc ();
-      wmenuitem ( 1,  1, " Address       ", 0, 1, 0, NULL, 0, 0);
-      wmenuitem ( 2,  1, " System        ", 0, 11, 0, NULL, 0, 0);
-      wmenuitem ( 3,  1, " Sysop Name    ", 0, 10, 0, NULL, 0, 0);
-      wmenuitem ( 4,  1, " Packer        ", 0, 3, 0, NULL, 0, 0);
-      wmenuitem ( 5,  1, " Session Pw    ", 0, 4, 0, NULL, 0, 0);
-      wmenuitem ( 6,  1, " Packet Pw     ", 0, 5, 0, NULL, 0, 0);
-      wmenuitem ( 7,  1, " Areafix Pw    ", 0, 6, 0, NULL, 0, 0);
-      wmenuitem ( 8,  1, " TIC Pw        ", 0, 14, 0, NULL, 0, 0);
-      wmenuitem ( 9,  1, " Phone         ", 0, 8, 0, NULL, 0, 0);
-      wmenuitem (10,  1, " Dial Prefix   ", 0, 9, 0, NULL, 0, 0);
-      wmenuitem (11,  1, " Capabilities  ", 0, 12, 0, NULL, 0, 0);
-      wmenuitem (12,  1, " Echomail aka  ", 0, 13, 0, NULL, 0, 0);
-      wmenuitem (13,  1, " Areafix Level ", 0, 2, 0, NULL, 0, 0);
-      wmenuitem (14,  1, " ÃÄ A Flag     ", 0, 15, 0, NULL, 0, 0);
-      wmenuitem (15,  1, " ÃÄ B Flag     ", 0, 16, 0, NULL, 0, 0);
-      wmenuitem (16,  1, " ÃÄ C Flag     ", 0, 17, 0, NULL, 0, 0);
-      wmenuitem (17,  1, " ÀÄ D Flag     ", 0, 18, 0, NULL, 0, 0);
-      wmenuitem (12, 33, " TIC aka    ", 0, 19, 0, NULL, 0, 0);
-      wmenuitem (13, 33, " TIC Level  ", 0, 20, 0, NULL, 0, 0);
-      wmenuitem (14, 33, " ÃÄ A Flag  ", 0, 21, 0, NULL, 0, 0);
-      wmenuitem (15, 33, " ÃÄ B Flag  ", 0, 22, 0, NULL, 0, 0);
-      wmenuitem (16, 33, " ÃÄ C Flag  ", 0, 23, 0, NULL, 0, 0);
-      wmenuitem (17, 33, " ÀÄ D Flag  ", 0, 24, 0, NULL, 0, 0);
+      wmenuitem ( 1,  1, " Address         ", 0, 1, 0, NULL, 0, 0);
+      wmenuitem ( 2,  1, " System          ", 0, 11, 0, NULL, 0, 0);
+      wmenuitem ( 3,  1, " Sysop Name      ", 0, 10, 0, NULL, 0, 0);
+      wmenuitem ( 4,  1, " Packer          ", 0, 3, 0, NULL, 0, 0);
+      wmenuitem ( 4, 33, " Mailer aka      ", 0, 26, 0, NULL, 0, 0);
+      wmenuitem ( 5,  1, " Session Pw      ", 0, 4, 0, NULL, 0, 0);
+      wmenuitem ( 6,  1, " Packet Pw (OUT) ", 0, 5, 0, NULL, 0, 0);
+      wmenuitem ( 6, 33, " Packet Pw (IN)  ", 0, 25, 0, NULL, 0, 0);
+      wmenuitem ( 7,  1, " Areafix Pw      ", 0, 6, 0, NULL, 0, 0);
+      wmenuitem ( 8,  1, " TIC Pw          ", 0, 14, 0, NULL, 0, 0);
+      wmenuitem ( 9,  1, " Phone           ", 0, 8, 0, NULL, 0, 0);
+      wmenuitem (10,  1, " Dial Prefix     ", 0, 9, 0, NULL, 0, 0);
+      wmenuitem (11,  1, " Capabilities    ", 0, 12, 0, NULL, 0, 0);
+      wmenuitem (12,  1, " Echomail aka    ", 0, 13, 0, NULL, 0, 0);
+      wmenuitem (13,  1, " Areafix Level   ", 0, 2, 0, NULL, 0, 0);
+      wmenuitem (14,  1, " ÃÄ A Flag       ", 0, 15, 0, NULL, 0, 0);
+      wmenuitem (15,  1, " ÃÄ B Flag       ", 0, 16, 0, NULL, 0, 0);
+      wmenuitem (16,  1, " ÃÄ C Flag       ", 0, 17, 0, NULL, 0, 0);
+      wmenuitem (17,  1, " ÀÄ D Flag       ", 0, 18, 0, NULL, 0, 0);
+      wmenuitem (12, 33, " TIC aka         ", 0, 19, 0, NULL, 0, 0);
+      wmenuitem (13, 33, " TIC Level       ", 0, 20, 0, NULL, 0, 0);
+      wmenuitem (14, 33, " ÃÄ A Flag       ", 0, 21, 0, NULL, 0, 0);
+      wmenuitem (15, 33, " ÃÄ B Flag       ", 0, 22, 0, NULL, 0, 0);
+      wmenuitem (16, 33, " ÃÄ C Flag       ", 0, 23, 0, NULL, 0, 0);
+      wmenuitem (17, 33, " ÀÄ D Flag       ", 0, 24, 0, NULL, 0, 0);
       wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
       sprintf (string, "%u:%u/%u.%u", ni.zone, ni.net, ni.node, ni.point);
-      wprints (1, 17, CYAN|_BLACK, string);
-      wprints (2, 17, CYAN|_BLACK, ni.system);
-      wprints (3, 17, CYAN|_BLACK, ni.sysop_name);
-      wprints (4, 17, CYAN|_BLACK, config.packers[ni.packer].id);
-      wprints (5, 17, CYAN|_BLACK, ni.pw_session);
-      wprints (6, 17, CYAN|_BLACK, ni.pw_packet);
-      wprints (7, 17, CYAN|_BLACK, ni.pw_areafix);
-      wprints (8, 17, CYAN|_BLACK, ni.pw_tic);
-      wprints (9, 17, CYAN|_BLACK, ni.phone);
+      wprints (1, 19, CYAN|_BLACK, string);
+      wprints (2, 19, CYAN|_BLACK, ni.system);
+      wprints (3, 19, CYAN|_BLACK, ni.sysop_name);
+      wprints (4, 19, CYAN|_BLACK, config.packers[ni.packer].id);
+      sprintf (string, "%u:%u/%u.%u", config.alias[ni.mailer_aka].zone, config.alias[ni.mailer_aka].net, config.alias[ni.mailer_aka].node, config.alias[ni.mailer_aka].point);
+      wprints (4, 51, CYAN|_BLACK, string);
+      wprints (5, 19, CYAN|_BLACK, ni.pw_session);
+      wprints (6, 19, CYAN|_BLACK, ni.pw_packet);
+      wprints (6, 51, CYAN|_BLACK, ni.pw_inbound_packet);
+      wprints (7, 19, CYAN|_BLACK, ni.pw_areafix);
+      wprints (8, 19, CYAN|_BLACK, ni.pw_tic);
+      wprints (9, 19, CYAN|_BLACK, ni.phone);
       sprintf (string, "%d", ni.modem_type);
-      wprints (10, 17, CYAN|_BLACK, string);
+      wprints (10, 19, CYAN|_BLACK, string);
       strcpy (string, "----");
       if (ni.remap4d)
          string[0] = 'M';
@@ -854,31 +880,31 @@ continue_editing:
          string[2] = 'E';
       if (ni.janus)
          string[3] = 'J';
-      wprints (11, 17, CYAN|_BLACK, string);
+      wprints (11, 19, CYAN|_BLACK, string);
       if (ni.aka) {
          sprintf (string, "%u:%u/%u.%u", config.alias[ni.aka - 1].zone, config.alias[ni.aka - 1].net, config.alias[ni.aka - 1].node, config.alias[ni.aka - 1].point);
-         wprints (12, 17, CYAN|_BLACK, string);
+         wprints (12, 19, CYAN|_BLACK, string);
       }
       else
-         wprints (12, 17, CYAN|_BLACK, "Default");
+         wprints (12, 19, CYAN|_BLACK, "Default");
       sprintf (string, "%d", ni.afx_level);
-      wprints (13, 17, CYAN|_BLACK, string);
-      wprints (14, 17, CYAN|_BLACK, get_flagA_text ((ni.afx_flags >> 24) & 0xFF));
-      wprints (15, 17, CYAN|_BLACK, get_flagB_text ((ni.afx_flags >> 16) & 0xFF));
-      wprints (16, 17, CYAN|_BLACK, get_flagC_text ((ni.afx_flags >> 8) & 0xFF));
-      wprints (17, 17, CYAN|_BLACK, get_flagD_text (ni.afx_flags & 0xFF));
+      wprints (13, 19, CYAN|_BLACK, string);
+      wprints (14, 19, CYAN|_BLACK, get_flagA_text ((ni.afx_flags >> 24) & 0xFF));
+      wprints (15, 19, CYAN|_BLACK, get_flagB_text ((ni.afx_flags >> 16) & 0xFF));
+      wprints (16, 19, CYAN|_BLACK, get_flagC_text ((ni.afx_flags >> 8) & 0xFF));
+      wprints (17, 19, CYAN|_BLACK, get_flagD_text (ni.afx_flags & 0xFF));
       if (ni.tic_aka) {
          sprintf (string, "%u:%u/%u.%u", config.alias[ni.tic_aka - 1].zone, config.alias[ni.tic_aka - 1].net, config.alias[ni.tic_aka - 1].node, config.alias[ni.tic_aka - 1].point);
-         wprints (12, 46, CYAN|_BLACK, string);
+         wprints (12, 51, CYAN|_BLACK, string);
       }
       else
-         wprints (12, 46, CYAN|_BLACK, "Default");
+         wprints (12, 51, CYAN|_BLACK, "Default");
       sprintf (string, "%d", ni.tic_level);
-      wprints (13, 46, CYAN|_BLACK, string);
-      wprints (14, 46, CYAN|_BLACK, get_flagA_text ((ni.tic_flags >> 24) & 0xFF));
-      wprints (15, 46, CYAN|_BLACK, get_flagB_text ((ni.tic_flags >> 16) & 0xFF));
-      wprints (16, 46, CYAN|_BLACK, get_flagC_text ((ni.tic_flags >> 8) & 0xFF));
-      wprints (17, 46, CYAN|_BLACK, get_flagD_text (ni.tic_flags & 0xFF));
+      wprints (13, 51, CYAN|_BLACK, string);
+      wprints (14, 51, CYAN|_BLACK, get_flagA_text ((ni.tic_flags >> 24) & 0xFF));
+      wprints (15, 51, CYAN|_BLACK, get_flagB_text ((ni.tic_flags >> 16) & 0xFF));
+      wprints (16, 51, CYAN|_BLACK, get_flagC_text ((ni.tic_flags >> 8) & 0xFF));
+      wprints (17, 51, CYAN|_BLACK, get_flagD_text (ni.tic_flags & 0xFF));
 
       start_update ();
       i = wmenuget ();
@@ -887,7 +913,7 @@ continue_editing:
          case 1:
             sprintf (string, "%u:%u/%u.%u", ni.zone, ni.net, ni.node, ni.point);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (1, 17, string, "???????????????????", 0, 2, NULL, 0);
+            winpdef (1, 19, string, "???????????????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                parse_netnode (strbtrim (string), (int *)&ni.zone, (int *)&ni.net, (int *)&ni.node, (int *)&ni.point);
             break;
@@ -895,7 +921,7 @@ continue_editing:
          case 2:
             sprintf (string, "%d", ni.afx_level);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (13, 17, string, "???", 0, 2, NULL, 0);
+            winpdef (13, 19, string, "???", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                ni.afx_level = atoi (strbtrim (string));
             break;
@@ -923,7 +949,7 @@ continue_editing:
          case 4:
             strcpy (string, ni.pw_session);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (5, 17, string, "???????????????????", 0, 2, NULL, 0);
+            winpdef (5, 19, string, "???????????????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                strcpy (ni.pw_session, strbtrim (string));
             break;
@@ -931,7 +957,7 @@ continue_editing:
          case 5:
             strcpy (string, ni.pw_packet);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (6, 17, string, "????????", 0, 2, NULL, 0);
+            winpdef (6, 19, string, "????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                strcpy (ni.pw_packet, strbtrim (string));
             break;
@@ -939,7 +965,7 @@ continue_editing:
          case 6:
             strcpy (string, ni.pw_areafix);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (7, 17, string, "???????????????????", 0, 2, NULL, 0);
+            winpdef (7, 19, string, "???????????????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                strcpy (ni.pw_areafix, strbtrim (string));
             break;
@@ -947,7 +973,7 @@ continue_editing:
          case 8:
             strcpy (string, ni.phone);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (9, 17, string, "?????????????????????????????", 0, 2, NULL, 0);
+            winpdef (9, 19, string, "?????????????????????????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                strcpy (ni.phone, strbtrim (string));
             break;
@@ -955,7 +981,7 @@ continue_editing:
          case 9:
             sprintf (string, "%d", ni.modem_type);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (10, 17, string, "?????", 0, 2, NULL, 0);
+            winpdef (10, 19, string, "?????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                ni.modem_type = atoi (strbtrim (string));
             break;
@@ -963,7 +989,7 @@ continue_editing:
          case 10:
             strcpy (string, ni.sysop_name);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (3, 17, string, "???????????????????????????????????", 0, 2, NULL, 0);
+            winpdef (3, 19, string, "???????????????????????????????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                strcpy (ni.sysop_name, strbtrim (string));
             break;
@@ -971,7 +997,7 @@ continue_editing:
          case 11:
             strcpy (string, ni.system);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (2, 17, string, "???????????????????????????????????", 0, 2, NULL, 0);
+            winpdef (2, 19, string, "???????????????????????????????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                strcpy (ni.system, strbtrim (string));
             break;
@@ -1048,7 +1074,7 @@ continue_editing:
          case 14:
             strcpy (string, ni.pw_tic);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (8, 17, string, "???????????????????", 0, 2, NULL, 0);
+            winpdef (8, 19, string, "???????????????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                strcpy (ni.pw_tic, strbtrim (string));
             break;
@@ -1080,10 +1106,10 @@ continue_editing:
                   mx = strlen (string);
             }
             akas[m] = NULL;
-            wh1 = wopen (10, 38, m + 11, mx + 41, 1, LCYAN|_BLACK, LCYAN|_BLACK);
+            wh1 = wopen (10, 48, m + 11, mx + 51, 1, LCYAN|_BLACK, LCYAN|_BLACK);
             wactiv (wh1);
             wtitle (" Aka ", TRIGHT, YELLOW|_BLUE);
-            m = wpickstr (11, 40, m + 10, mx + 40, 5, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY, akas, ni.tic_aka, NULL);
+            m = wpickstr (11, 50, m + 10, mx + 50, 5, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY, akas, ni.tic_aka, NULL);
             if (m != -1)
                ni.tic_aka = m;
             wclose ();
@@ -1094,7 +1120,7 @@ continue_editing:
          case 20:
             sprintf (string, "%d", ni.tic_level);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (13, 46, string, "???", 0, 2, NULL, 0);
+            winpdef (13, 51, string, "???", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                ni.tic_level = atoi (strbtrim (string));
             break;
@@ -1113,6 +1139,35 @@ continue_editing:
 
          case 24:
             ni.tic_flags = window_get_flags (8, 46, 4, ni.tic_flags);
+            break;
+
+         case 25:
+            strcpy (string, ni.pw_inbound_packet);
+            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+            winpdef (6, 51, string, "????????", 0, 2, NULL, 0);
+            if (winpread () != W_ESCPRESS)
+               strcpy (ni.pw_inbound_packet, strbtrim (string));
+            break;
+
+         case 26:
+            mx = 0;
+            for (m = 0; m < MAX_ALIAS && config.alias[m].net; m++) {
+               sprintf (string, " %d:%d/%d.%d ", config.alias[m].zone, config.alias[m].net, config.alias[m].node, config.alias[m].point);
+               akas[m] = (char *)malloc (strlen (string) + 1);
+               strcpy (akas[m], string);
+               if (strlen (string) > mx)
+                  mx = strlen (string);
+            }
+            akas[m] = NULL;
+            wh1 = wopen (10, 48, m + 11, mx + 51, 1, LCYAN|_BLACK, LCYAN|_BLACK);
+            wactiv (wh1);
+            wtitle (" Aka ", TRIGHT, YELLOW|_BLUE);
+            m = wpickstr (11, 50, m + 10, mx + 50, 5, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY, akas, ni.aka, NULL);
+            if (m != -1)
+               ni.mailer_aka = m;
+            wclose ();
+            for (m = 0; m < MAX_ALIAS && config.alias[m].net; m++)
+               free (akas[m]);
             break;
       }
 
@@ -1141,14 +1196,15 @@ continue_editing:
          memcpy ((char *)nip, (char *)&ni, sizeof (NODEINFO));
    }
 
-   gotoxy_ (24, 1);
-   clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New Node  L-List  D-Delete");
-   prints (24, 1, YELLOW|_BLACK, "PgUp/PgDn");
-   prints (24, 26, YELLOW|_BLACK, "E");
-   prints (24, 34, YELLOW|_BLACK, "A");
-   prints (24, 50, YELLOW|_BLACK, "L");
-   prints (24, 58, YELLOW|_BLACK, "D");
+	gotoxy_ (24, 1);
+	clreol_ ();
+	prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New Node  C-Copy  L-List  D-Delete");
+	prints (24, 1, YELLOW|_BLACK, "PgUp/PgDn");
+	prints (24, 26, YELLOW|_BLACK, "E");
+	prints (24, 34, YELLOW|_BLACK, "A");
+	prints (24, 50, YELLOW|_BLACK, "C");
+	prints (24, 58, YELLOW|_BLACK, "L");
+	prints (24, 66, YELLOW|_BLACK, "D");
 }
 
 static void select_nodes_list (fd, oni)

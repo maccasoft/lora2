@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <share.h>
 #include <alloc.h>
+#include <errno.h>
 #include <sys\stat.h>
 
 #include <cxl\cxlstr.h>
@@ -255,35 +256,38 @@ char *fname;
    register char *p;
    register int n;
 
-   if (dexists (fname))
-      {                                          /* If file already exists...      */
+   if (dexists (fname)) {                /* If file already exists...      */
       p = fname;
       while (*p && *p != '.')
-         p++;                                    /* ...find the extension, if
-                                                  * any  */
-      for (n = 0; n < 4; n++)                    /* ...fill it out if
-                                                  * neccessary   */
-         if (!*p)
-            {
+         p++;                            /* ...find the extension, if any  */
+
+      for (n = 0; n < 4; n++) {          /* ...fill it out if neccessary   */
+         if (!*p) {
             *p = suffix[n];
             *(++p) = '\0';
-            }
-         else p++;
+         }
+         else
+            p++;
+      }
 
-      while (dexists (fname))                    /* ...If 'file.ext' exists
-                                                  * suffix++ */
-         {
+      while (dexists (fname)) {          /* ...If 'file.ext' exists suffix++ */
          p = fname + strlen (fname) - 1;
-         for (n = 3; n--;)
-            {
+         for (n = 3; n--;) {
             if (!isdigit (*p))
                *p = '0';
             if (++(*p) <= '9')
                break;
-            else *p-- = '0';
+            else {
+               if (*p < 'A')
+                  *p = 'A';
+               else if (++(*p) <= 'Z')
+                  break;
+               else
+                  *p-- = '0';
             }                                    /* for */
          }                                       /* while */
       }                                          /* if exist */
+   }
 }                                                /* unique_name */
 
 int check_failed (fname, theirname, info, ourname)
@@ -358,6 +362,17 @@ int get_bbs_record (int zone, int net, int node, int point)
    return (i);
 }
 
+int get_bbs_local_record (int zone, int net, int node, int point)
+{
+   int i;
+
+   memset (&nodelist, 0, sizeof (struct _node));
+
+   i = add_local_info (zone, net, node, point);
+
+   return (i);
+}
+
 struct _idx_header {
    char name[14];
    long entry;
@@ -428,7 +443,14 @@ int force;
    nzone = config->alias[0].zone;
    nnet = config->alias[0].net;
 
+   // Verifica che il file node.idx sia accessibile in lettura/scrittura
+   // nel caso non lo sia, signfica che un altro task lo sta usando per
+   // ricompilare la nodelist, per cui esce immediatamente.
    sprintf (filename, "%sNODE.IDX", config->net_info);
+   if ((i = sopen (filename, O_RDWR|O_BINARY|O_CREAT, SH_DENYRW, S_IREAD|S_IWRITE)) == -1 && errno == EACCES)
+      return;
+   close (i);
+
    if (stat (filename, &statidx) == -1)
       build = 1;
 
@@ -443,7 +465,7 @@ int force;
    memset ((char *)&nodelist, 0, sizeof (struct _node));
 
    sprintf (filename, "%sNODE.IDX", config->net_info);
-   if ((fps = fopen (filename, "rb")) != NULL) {
+   if ((fps = sh_fopen (filename, "rb", SH_DENYWR)) != NULL) {
       while (fread ((char *)&header, sizeof (struct _idx_header), 1, fps) == 1) {
          sprintf (filename, "%s%s", config->net_info, header.name);
          if (!stat (filename, &statbuf)) {
@@ -473,7 +495,7 @@ int force;
       totaltime = timerset (0);
 
       sprintf (filename, "%sNODE.IDX", config->net_info);
-      fpd = fopen (filename, "w+b");
+      fpd = sh_fopen (filename, "w+b", SH_DENYRW);
 
       for (cf = 0; cf < 10; cf++) {
          if (config->nl[cf].list_name[0] == '\0')
@@ -604,7 +626,8 @@ int zone, net, node, point;
    memset ((char *)&nodelist, 0, sizeof (struct _node));
 
    sprintf (filename, "%sNODE.IDX", config->net_info);
-   fp = sh_fopen (filename, "rb", SH_DENYWR);
+   if ((fp = sh_fopen (filename, "rb", SH_DENYWR)) == NULL)
+      return (0);
 
    while (fread ((char *)&header, sizeof (struct _idx_header), 1, fp) == 1) {
       for (num = 0L; num < header.entry; num++) {
@@ -623,8 +646,10 @@ int zone, net, node, point;
                sprintf (filename, "%s%s", config->net_info, header.name);
 
             fpn = sh_fopen (filename, "rb", SH_DENYWR);
-            if (fpn == NULL)
+            if (fpn == NULL) {
+               fclose (fp);
                return (0);
+            }
 
             fseek (fpn, entry.offset, SEEK_SET);
 
@@ -731,7 +756,6 @@ int zone, net, node, point;
    char filename[80], deftrasl[60];
    long tempo;
    struct tm *tim;
-
    NODEINFO ni;
    ACCOUNT ai;
 
@@ -991,7 +1015,7 @@ char *name, *diff;
 
    while (fgets(linea, 511, fps) != NULL) {
       while (linea[strlen (linea) -1] == 0x0D || linea[strlen (linea) -1] == 0x0A || linea[strlen (linea) -1] == ' ')
-	 linea[strlen (linea) -1] = '\0';
+         linea[strlen (linea) -1] = '\0';
 
       if (linea[0] == 'A' && isdigit(linea[1])) {
          m = atoi (&linea[1]);
@@ -1016,6 +1040,7 @@ char *name, *diff;
       t = (float)ftell (fps) * (float)100 / (float)filelength (fileno (fps));
       sprintf (linea, "%04.1f%%", t);
       prints (9, 65, YELLOW|_BLACK, linea);
+      time_release ();
    }
 
    fclose (fpd);
@@ -1028,7 +1053,6 @@ char *name, *diff;
    unlink (filename);
 
    nlcomp_system ();
-   elapsed += time (NULL) - tempo;
 
    return (next);
 }
@@ -1305,91 +1329,6 @@ void check_new_netmail (void)
       prints (23, 68, YELLOW|_BLACK|BLINK, "FAX");
    else
       prints (23, 68, YELLOW|_BLACK, "   ");
-}
-
-typedef struct {
-   char name[13];
-   word area;
-   long datpos;
-} FILEIDX;
-
-char *index_filerequestproc (char *req_list, char *file, char *their_wildcard, int *recno, int updreq, int *jj)
-{
-   int j;
-   char our_wildcard[15];
-   FILE *approved;
-   FILEIDX fidx;
-
-   approved = fopen (req_list, "rb");
-   if (approved == NULL)
-      goto err;
-
-   j = *jj;
-   status_line (">DEBUG: FR: [%s]", their_wildcard);
-
-   while (fread (&fidx, sizeof (FILEIDX), 1, approved) == 1) {
-      prep_match (fidx.name, our_wildcard);
-      if (!match (our_wildcard, their_wildcard)) {
-         if (read_system (fidx.area, 2)) {
-            if (!sys.prot_req && filepath == config->prot_filepath) {
-               status_line (">DEBUG: FR:%s %d %08lX (%08lX %08lX %08lX)", fidx.name, fidx.area, filepath, config->prot_filepath, config->norm_filepath, config->know_filepath);
-               continue;
-            }
-            if (!sys.know_req && filepath == config->know_filepath) {
-               status_line (">DEBUG: FR:%s %d %08lX (%08lX %08lX %08lX)", fidx.name, fidx.area, filepath, config->prot_filepath, config->norm_filepath, config->know_filepath);
-               continue;
-            }
-            if (!sys.norm_req && filepath == config->norm_filepath) {
-               status_line (">DEBUG: FR:%s %d %08lX (%08lX %08lX %08lX)", fidx.name, fidx.area, filepath, config->prot_filepath, config->norm_filepath, config->know_filepath);
-               continue;
-            }
-            sprintf (file, "%s%s", sys.filepath, fidx.name);
-            if (dexists (file)) {
-               if (++j > *recno)
-                  goto gotfile;
-            }
-            else
-               status_line (">DEBUG: FR:%s", file);
-         }
-      }
-
-      file[0] = '\0';
-   }
-
-avail:
-   *jj = j;
-   if (approved) {
-      fclose(approved);
-      approved = NULL;
-   }
-
-   if (*recno > -1) {
-      *recno = -1;
-      return (NULL);
-   }
-
-   if (!file[0]) {
-      *recno = -1;
-      return (NULL);
-   }
-
-gotfile:
-//   ++(*recno);
-   *jj = j;
-   if (approved)
-      fclose (approved);
-
-   return (file);
-
-err:
-   *jj = j;
-   if (approved)
-      fclose (approved);
-
-   *recno = -1;
-   status_line ("!%s Request Err: %s", updreq ? "Update" : "File", req_list);
-
-   return (NULL);
 }
 
 int montday[] = { 0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };

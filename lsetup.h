@@ -1,13 +1,13 @@
 #include "defines.h"
 #include "lora.h"
 
-#define CONFIG_VERSION  2
+#define CONFIG_VERSION  3
 
 #define MAXNL 10
 #define MAXPACKER 10
 
 struct _configuration {
-   int  version;
+   short version;
 
    char sys_path[40];
 
@@ -36,25 +36,34 @@ struct _configuration {
 
    char about[40];
    char files[40];
-   int  norm_max_kbytes;
-   int  prot_max_kbytes;
-   int  know_max_kbytes;
-   int  norm_max_requests;
-   int  prot_max_requests;
-   int  know_max_requests;
+   short  norm_max_kbytes;
+   short  prot_max_kbytes;
+   short  know_max_kbytes;
+   short  norm_max_requests;
+   short  prot_max_requests;
+   short  know_max_requests;
    char def_pack;
 
    char enterbbs[70];
    char banner[70];
    char mail_only[70];
 
-   int  com_port;
-   int  speed;
+   short  com_port;
+   short  old_speed;
    char modem_busy[20];
    char dial[20];
    char init[40];
    char term_init[40];
-   char answer[20];
+
+   byte mustbezero;
+
+   byte echomail_exit;
+   byte netmail_exit;
+   byte both_exit;
+
+   long speed;
+
+   byte filler[12];
 
    struct _altern_dial {
       char prefix[20];
@@ -78,7 +87,7 @@ struct _configuration {
    bit  janus       :1;
    bit  terminal    :1;
 
-   bit  fillerbug2  :1;
+   bit  fillerbug   :1;
    bit  no_direct   :1;
    bit  snooping    :1;
    bit  snow_check  :1;
@@ -86,7 +95,7 @@ struct _configuration {
    bit  unpack_know :1;
    bit  unpack_prot :1;
 
-   int  blank_timer;
+   short  blank_timer;
 
    struct _language {
       char txt_path[30];
@@ -105,11 +114,11 @@ struct _configuration {
    char newareas_create[50];
    char newareas_link[50];
 
-   int  line_offset;
-   int  min_calls;
-   int  vote_limit;
-   int  target_up;
-   int  target_down;
+   short  line_offset;
+   short  min_calls;
+   short  vote_limit;
+   short  target_up;
+   short  target_down;
    byte vote_priv;
    byte max_readpriv;
 
@@ -117,8 +126,8 @@ struct _configuration {
 
    byte aftercaller_exit;
    byte aftermail_exit;
-   int  max_connects;
-   int  max_noconnects;
+   short  max_connects;
+   short  max_noconnects;
 
    byte logon_level;
    long logon_flags;
@@ -162,13 +171,13 @@ struct _configuration {
    bit  hotkeys        :2;
    bit  screenclears   :2;
 
-   bit  fillerbug1     :2;
+   bit  autozmodem     :1;
+   bit  avatar         :1;
    bit  moreprompt     :2;
    bit  mailcheck      :2;
    bit  fullscrnedit   :2;
 
-   bit  autozmodem     :1;
-   bit  avatar         :1;
+   bit  fillerbits     :2;
    bit  ask_protocol   :1;
    bit  ask_packer     :1;
    bit  put_uploader   :1;
@@ -176,7 +185,7 @@ struct _configuration {
    bit  use_areasbbs   :1;
    bit  write_areasbbs :1;
 
-   int  rookie_calls;
+   short  rookie_calls;
 
    char pre_import[40];
    char after_import[40];
@@ -196,8 +205,8 @@ struct _configuration {
    bit  ask_alias      :1;
    bit  random_birth   :1;
 
-   int  start_time;
-   int  end_time;
+   short  start_time;
+   short  end_time;
 
    char boxpath[40];
    char dial_suffix[20];
@@ -260,7 +269,7 @@ struct _configuration {
 
    char iemsi_handle[36];
    char iemsi_pwd[20];
-   int  iemsi_infotime;
+   short  iemsi_infotime;
 
    bit  iemsi_on        :1;
    bit  iemsi_hotkeys   :1;
@@ -292,9 +301,9 @@ struct _configuration {
    byte dcd_timeout;
 
    struct {
-      char display[20];
-      int  offset;
-      char ident[20];
+      char  display[20];
+      short offset;
+      char  ident[20];
    } packid[10];
 
    char quote_string[5];
@@ -307,42 +316,65 @@ struct _configuration {
    byte tic_remote_maint;
    byte tic_change_tag;
 
-   int  uucp_point;
+   short uucp_point;
 
    byte  dial_timeout;
    byte  dial_pause;
 
-   bit  newfilescheck  :2;
-   bit  mono_attr      :1;
-   bit  force_intl     :1;
-   bit  inp_dateformat :2;
+   bit   newfilescheck  :2;
+   bit   mono_attr      :1;
+   bit   force_intl     :1;
+   bit   inp_dateformat :2;
+   bit   single_pass    :1;
 
-   int  ul_free_space;
-   char hangup_string[40];
-   char init2[40];
-   char init3[40];
+   short ul_free_space;
+   char  hangup_string[40];
+   char  init2[40];
+   char  init3[40];
 
-   int  page_start[7];
-   int  page_end[7];
+   short page_start[7];
+   short page_end[7];
 
-   char logbuffer;
+   char  logbuffer;
 
-   byte filler[809];
+   char newareas_path[40];
+   char newareas_base;
+
+   char answer[40];
+
+   bit   blanker_type   :3;
+   bit   tcpip          :2;
+   bit   export_internet:1;
+
+   char  internet_gate;
+
+   char  areafix_watch[50];
+   char  tic_watch[50];
+
+   byte  netmail;
+   byte  echomail;
+   byte  internet;
+   byte  net_echo;
+   byte  echo_internet;
+   byte  net_internet;
+   byte  echo_net_internet;
+
+   char  upload_check[50];
 };
 
 typedef struct _nodeinfo {
-   int  zone;
-   int  net;
-   int  node;
-   int  point;
-   int  afx_level;
+   short  zone;
+   short  net;
+   short  node;
+   short  point;
+   short  afx_level;
    char pw_session[20];
    char pw_areafix[20];
    char pw_tic[20];
    char pw_packet[9];
-   int  modem_type;
+   short  modem_type;
    char phone[30];
-   int  packer;
+   short  packer;
    char sysop_name[36];
    char system[36];
    bit  remap4d      :1;
@@ -352,41 +384,53 @@ typedef struct _nodeinfo {
    bit  janus        :1;
    bit  pkt_create   :2;
    char aka;
-   int  tic_level;
+   short tic_level;
    long afx_flags;
    long tic_flags;
    char tic_aka;
-   char filler[58];
+   long baudrate;
+   char pw_inbound_packet[9];
+   char mailer_aka;
+   char filler[44];
 } NODEINFO;
+
+typedef struct _node2name {
+	char name[36];
+	short zone;
+	short net;
+	short node;
+	short point;
+} NODE2NAME;
+
 
 #define MAXCOST 20
 
 typedef struct _translation {
-   char location[30];
-   char search[20];
-   char traslate[60];
-   struct _cost {
-      int days;
-      int start;
-      int stop;
-      int cost_first;
-      int time_first;
-      int cost;
-      int time;
-      bit crash    :1;
-      bit direct   :1;
-      bit normal   :1;
-   } cost[MAXCOST];
+	char location[30];
+	char search[20];
+	char traslate[60];
+	struct _cost {
+		short days;
+		short start;
+		short stop;
+		short cost_first;
+		short time_first;
+		short cost;
+		short time;
+		bit   crash    :1;
+		bit   direct   :1;
+		bit   normal   :1;
+	} cost[MAXCOST];
 } ACCOUNT;
 
 typedef struct {
-   char  name[30];
-   char  hotkey;
+	char  name[30];
+	char  hotkey;
 
-   bit   active          :1;
-   bit   batch           :1;
-   bit   disable_fossil  :1;
-   bit   change_to_dl    :1;
+	bit   active          :1;
+	bit   batch           :1;
+	bit   disable_fossil  :1;
+	bit   change_to_dl    :1;
 
    char  dl_command[80];
    char  ul_command[80];

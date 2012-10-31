@@ -60,7 +60,7 @@ the authors of these changes).
 */
 
 
-typedef unsigned int uint;
+typedef unsigned short uint;
 
 
 typedef struct /* structure of the message headers in MPKTxxxx.PIP files */
@@ -151,7 +151,7 @@ typedef struct /* structure of each record in DESTPTR.PIP */
 
 
 typedef struct {
-                 unsigned int
+                 unsigned short
                       orig_node,               /* originating node */
                       dest_node,               /* destination node */
                       year,                    /* 1990 - nnnn */
@@ -168,14 +168,14 @@ typedef struct {
                       product,                 /* product code */
                       rev_lev,                 /* revision level */
                       password[8];
-                 unsigned int
+                 unsigned short
                       qm_orig_zone,            /* QMail orig.zone */
                       qm_dest_zone,            /* QMail dest.zone */
                       wm_orig_point,           /* Wmail orig.point */
                       wm_dest_point;           /* Wmail dest.point */
                  unsigned char
                       TRASH[4];                /* junk[4] */
-                 unsigned int
+                 unsigned short
                       orig_zone,               /* originating zone */
                       dest_zone,               /* destination zone */
                       orig_point,              /* originating point */
@@ -203,7 +203,7 @@ typedef struct /* structure of each record in ROUTE.PIP */
                {
                  unsigned char mode; /* see table below */
                  uint zone,net,node,point;
-                 unsigned int via; /* pointer to a friend node */
+                 unsigned short via; /* pointer to a friend node */
                } ROUTE;
 /* mode can be one of following values:
 0: route all exported matrix via the specified friend

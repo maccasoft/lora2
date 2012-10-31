@@ -462,7 +462,7 @@ continue_editing:
          wprints (16, 14, CYAN|_BLACK, string);
          sprintf (string, "%u", nusr.f_account);
          wprints (16, 39, CYAN|_BLACK, string);
-         sprintf (string, "%u", nusr.baud_rate);
+         sprintf (string, "%lu", nusr.baud_rate);
          wprints (17, 14, CYAN|_BLACK, string);
          sprintf (string, "%u", nusr.dnldl);
          wprints (17, 39, CYAN|_BLACK, string);
@@ -485,6 +485,7 @@ continue_editing:
                strcpy (nusr.name, strbtrim (string));
                strcode (nusr.pwd, nusr.name);
                nusr.id = crc_name (nusr.name);
+               nusr.alias_id = crc_name (nusr.handle);
             }
             break;
 
@@ -908,11 +909,11 @@ continue_editing:
             break;
 
          case 75:
-            sprintf (string, "%u", nusr.baud_rate);
+            sprintf (string, "%lu", nusr.baud_rate);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
             winpdef (17, 14, string, "?????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
-               nusr.baud_rate = atoi (string);
+               nusr.baud_rate = atol (string);
             break;
 
          case 76:
@@ -1196,7 +1197,7 @@ void manager_users (void)
             wprints (16, 14, CYAN|_BLACK, string);
             sprintf (string, "%u", usr.f_account);
             wprints (16, 39, CYAN|_BLACK, string);
-            sprintf (string, "%u", usr.baud_rate);
+            sprintf (string, "%lu", usr.baud_rate);
             wprints (17, 14, CYAN|_BLACK, string);
             sprintf (string, "%u", usr.dnldl);
             wprints (17, 39, CYAN|_BLACK, string);
@@ -1233,6 +1234,7 @@ void manager_users (void)
             lseek (fd, -1L * sizeof (struct _usr), SEEK_CUR);
             write (fd, (char *)&usr, sizeof (struct _usr));
             usridx.id = usr.id;
+            usridx.alias_id = usr.alias_id;
             lseek (fdidx, -1L * sizeof (struct _usridx), SEEK_CUR);
             write (fdidx, &usridx, sizeof (struct _usridx));
             break;
@@ -1258,6 +1260,7 @@ void manager_users (void)
                lseek (fd, 0L, SEEK_END);
                write (fd, (char *)&usr, sizeof (struct _usr));
                usridx.id = usr.id;
+               usridx.alias_id = usr.alias_id;
                lseek (fdidx, 0L, SEEK_END);
                write (fdidx, &usridx, sizeof (struct _usridx));
             }

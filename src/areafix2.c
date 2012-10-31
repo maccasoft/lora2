@@ -424,16 +424,14 @@ void scan_all_tic (FILE *fp, int add_area, int zo, int ne, int no, int po)
                forward[n_forw].node = forward[n_forw - 1].node;
                forward[n_forw].point = forward[n_forw - 1].point;
             }
-            if (*p == '<') {
-               forward[n_forw].send = 1;
-               p++;
-            }
-            if (*p == '>') {
-               forward[n_forw].receive = 1;
-               p++;
-            }
-            if (*p == '!') {
-               forward[n_forw].passive = 1;
+            forward[n_forw].receive = forward[n_forw].send = forward[n_forw].passive = 0;
+            while (*p == '<' || *p == '>' || *p == '!') {
+               if (*p == '>')
+                  forward[n_forw].receive = 1;
+               if (*p == '<')
+                  forward[n_forw].send = 1;
+               if (*p == '!')
+                  forward[n_forw].passive = 1;
                p++;
             }
             parse_netnode2 (p, &forward[n_forw].zone, &forward[n_forw].net, &forward[n_forw].node, &forward[n_forw].point);
@@ -448,16 +446,14 @@ void scan_all_tic (FILE *fp, int add_area, int zo, int ne, int no, int po)
                forward[n_forw].node = forward[n_forw - 1].node;
                forward[n_forw].point = forward[n_forw - 1].point;
             }
-            if (*p == '<') {
-               forward[n_forw].send = 1;
-               p++;
-            }
-            if (*p == '>') {
-               forward[n_forw].receive = 1;
-               p++;
-            }
-            if (*p == '!') {
-               forward[n_forw].passive = 1;
+            forward[n_forw].receive = forward[n_forw].send = forward[n_forw].passive = 0;
+            while (*p == '<' || *p == '>' || *p == '!') {
+               if (*p == '>')
+                  forward[n_forw].receive = 1;
+               if (*p == '<')
+                  forward[n_forw].send = 1;
+               if (*p == '!')
+                  forward[n_forw].passive = 1;
                p++;
             }
             parse_netnode2 (p, &forward[n_forw].zone, &forward[n_forw].net, &forward[n_forw].node, &forward[n_forw].point);
@@ -472,16 +468,14 @@ void scan_all_tic (FILE *fp, int add_area, int zo, int ne, int no, int po)
                forward[n_forw].node = forward[n_forw - 1].node;
                forward[n_forw].point = forward[n_forw - 1].point;
             }
-            if (*p == '<') {
-               forward[n_forw].send = 1;
-               p++;
-            }
-            if (*p == '>') {
-               forward[n_forw].receive = 1;
-               p++;
-            }
-            if (*p == '!') {
-               forward[n_forw].passive = 1;
+            forward[n_forw].receive = forward[n_forw].send = forward[n_forw].passive = 0;
+            while (*p == '<' || *p == '>' || *p == '!') {
+               if (*p == '>')
+                  forward[n_forw].receive = 1;
+               if (*p == '<')
+                  forward[n_forw].send = 1;
+               if (*p == '!')
+                  forward[n_forw].passive = 1;
                p++;
             }
             parse_netnode2 (p, &forward[n_forw].zone, &forward[n_forw].net, &forward[n_forw].node, &forward[n_forw].point);
@@ -876,7 +870,7 @@ int zo, ne, no, po;
 char *subj;
 {
    FILE *fp, *fph;
-   int fd, i, level = -1;
+   int fd, i, level = -1, use_aka = 0;
    char linea[80], filename[80], *p, doquery = 0, *o, postmsg = 0;
    long npos;
    NODEINFO ni;
@@ -903,6 +897,9 @@ char *subj;
          level = ni.tic_level;
          areafix_level = level;
          areafix_flags = ni.tic_flags;
+         use_aka = ni.tic_aka;
+         if (use_aka > 0)
+            use_aka--;
          break;
       }
 
@@ -924,6 +921,9 @@ char *subj;
                level = ni.afx_level;
                areafix_level = level;
                areafix_flags = ni.afx_flags;
+               use_aka = ni.tic_aka;
+               if (use_aka > 0)
+                  use_aka--;
                break;
             }
       }
@@ -942,16 +942,18 @@ char *subj;
    msg.dest = no;
    msg_tzone = zo;
    msg_tpoint = po;
-   msg_fzone = config->alias[0].zone;
-   if (config->alias[0].point && config->alias[0].fakenet) {
-      msg.orig = config->alias[0].point;
-      msg.orig_net = config->alias[0].fakenet;
+   if (use_aka)
+      use_aka--;
+   msg_fzone = config->alias[use_aka].zone;
+   if (config->alias[use_aka].point && config->alias[use_aka].fakenet) {
+      msg.orig = config->alias[use_aka].point;
+      msg.orig_net = config->alias[use_aka].fakenet;
       msg_fpoint = 0;
    }
    else {
-      msg.orig = config->alias[0].node;
-      msg.orig_net = config->alias[0].net;
-      msg_fpoint = config->alias[0].point;
+      msg.orig = config->alias[use_aka].node;
+      msg.orig_net = config->alias[use_aka].net;
+      msg_fpoint = config->alias[use_aka].point;
    }
    memcpy ((char *)&tmsg, (char *)&msg, sizeof (struct _msg));
 
@@ -962,14 +964,14 @@ char *subj;
          status_line ("!TIC password not found for %d:%d/%d.%d", zo, ne, no, po);
 
       sprintf (filename, "ECHOR%d.TMP", config->line_offset);
-      fp = mopen (filename, "wt");
+      fp = mopen (filename, "w+t");
 
       if (msg_tzone != msg_fzone || config->force_intl)
          mprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
       if (msg_tpoint)
          mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
       mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-      mprintf(fp,msgtxt[M_MSGID], config->alias[0].zone, config->alias[0].net, config->alias[0].node, config->alias[0].point, time(NULL));
+      mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
 
       mprintf (fp, "\r\nNode %d:%d/%d.%d isn't authorized to use raid at %d:%d/%d.%d\r\n\r\n", zo, ne, no, po, msg_fzone, msg.orig_net, msg.orig, msg_fpoint);
 
@@ -991,14 +993,14 @@ char *subj;
    get_bbs_record (zo, ne, no, po);
 
    sprintf (filename, "ECHOR%d.TMP", config->line_offset);
-   fp = mopen (filename, "wt");
+   fp = mopen (filename, "w+t");
 
    if (msg_tzone != msg_fzone || config->force_intl)
       mprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
    if (msg_tpoint)
       mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
    mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-   mprintf(fp,msgtxt[M_MSGID], config->alias[0].zone, config->alias[0].net, config->alias[0].node, config->alias[0].point, time(NULL));
+   mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
 
    mprintf (fp, "Following is a summary from %d:%d/%d.%d of changes in TIC topology:\r\n\r\n", msg_fzone, msg.orig_net, msg.orig, msg_fpoint);
 
@@ -1156,14 +1158,14 @@ char *subj;
 
       if (!stricmp (linea, "%LIST")) {
          sprintf (filename, "ECHOR%d.TMP", config->line_offset);
-         fp = mopen (filename, "wt");
+         fp = mopen (filename, "w+t");
 
          if (msg_tzone != msg_fzone || config->force_intl)
             mprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
          if (msg_tpoint)
             mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
          mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-         mprintf(fp,msgtxt[M_MSGID], config->alias[0].zone, config->alias[0].net, config->alias[0].node, config->alias[0].point, time(NULL));
+         mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
 
          generate_tic_status (fp, zo, ne, no, po, 1);
 
@@ -1176,14 +1178,14 @@ char *subj;
       }
       else if (!stricmp (linea, "%QUERY")) {
          sprintf (filename, "ECHOR%d.TMP", config->line_offset);
-         fp = mopen (filename, "wt");
+         fp = mopen (filename, "w+t");
 
          if (msg_tzone != msg_fzone || config->force_intl)
             mprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
          if (msg_tpoint)
             mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
          mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-         mprintf(fp,msgtxt[M_MSGID], config->alias[0].zone, config->alias[0].net, config->alias[0].node, config->alias[0].point, time(NULL));
+         mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
 
          generate_tic_status (fp, zo, ne, no, po, 2);
 
@@ -1196,14 +1198,14 @@ char *subj;
       }
       else if (!stricmp (linea, "%UNLINKED")) {
          sprintf (filename, "ECHOR%d.TMP", config->line_offset);
-         fp = mopen (filename, "wt");
+         fp = mopen (filename, "w+t");
 
          if (msg_tzone != msg_fzone || config->force_intl)
             mprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
          if (msg_tpoint)
             mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
          mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-         mprintf(fp,msgtxt[M_MSGID], config->alias[0].zone, config->alias[0].net, config->alias[0].node, config->alias[0].point, time(NULL));
+         mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
 
          generate_tic_status (fp, zo, ne, no, po, 3);
 
@@ -1216,14 +1218,14 @@ char *subj;
       }
       else if (!stricmp (linea, "%HELP")) {
          sprintf (filename, "ECHOR%d.TMP", config->line_offset);
-         fp = mopen (filename, "wt");
+         fp = mopen (filename, "w+t");
 
          if (msg_tzone != msg_fzone || config->force_intl)
             mprintf(fp,msgtxt[M_INTL], msg_tzone, msg.dest_net, msg.dest, msg_fzone, msg.orig_net, msg.orig);
          if (msg_tpoint)
             mprintf(fp,"\001TOPT %d\r\n", msg_tpoint);
          mprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-         mprintf(fp,msgtxt[M_MSGID], config->alias[0].zone, config->alias[0].net, config->alias[0].node, config->alias[0].point, time(NULL));
+         mprintf(fp,msgtxt[M_MSGID], config->alias[use_aka].zone, config->alias[use_aka].net, config->alias[use_aka].node, config->alias[use_aka].point, time(NULL));
 
          fph = fopen (config->tic_help, "rb");
          if (fph == NULL)

@@ -21,6 +21,7 @@
 #include "zmodem.h"
 
 extern long elapsed, timeout;
+extern char nomailproc;
 
 char *n_frproc(char *, int *, int);
 int n_getpassword(int, int, int, int);
@@ -107,7 +108,7 @@ int wz;
       if (strlen (req) > 78)
          req[78] = '\0';
       wcenters (0, LGREY|_BLACK, req);
-      sprintf (req, "Connected at %u baud", rate);
+      sprintf (req, "Connected at %lu baud", rate);
       wcenters (1, LGREY|_BLACK, req);
       wcenters (2, LGREY|_BLACK, "AKAs: No aka presented");
 
@@ -229,14 +230,9 @@ get_out:
       sysinfo.month.cost += olc;
       sysinfo.year.cost += olc;
 
-      if (got_arcmail) {
+      if (!nomailproc && got_arcmail) {
          if (cur_event > -1 && e_ptrs[cur_event]->errlevel[2])
             aftermail_exit = e_ptrs[cur_event]->errlevel[2];
-
-         if (aftermail_exit) {
-            status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
-            get_down (aftermail_exit, 3);
-         }
 
          if (cur_event > -1 && (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL|ECHO_EXPORT))) {
             if (modem_busy != NULL)
@@ -259,6 +255,11 @@ get_out:
             sysinfo.week.echoscan += time (NULL) - t;
             sysinfo.month.echoscan += time (NULL) - t;
             sysinfo.year.echoscan += time (NULL) - t;
+         }
+
+         if (aftermail_exit) {
+            status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
+            get_down (aftermail_exit, 3);
          }
       }
 
@@ -297,7 +298,7 @@ int wz;
       printc (12, 79, LGREY|_BLACK, '´');
       whline (8, 0, 80, 0, LGREY|_BLACK);
 
-      sprintf (req, "Connected at %u baud", rate);
+      sprintf (req, "Connected at %lu baud", rate);
       wcenters (1, LGREY|_BLACK, req);
 
       wprints (5, 2, LCYAN|_BLACK, "Files");
@@ -461,14 +462,9 @@ int wz;
       sysinfo.month.inconnects += t;
       sysinfo.year.inconnects += t;
 
-      if (got_arcmail) {
+      if (!nomailproc && got_arcmail) {
          if (cur_event > -1 && e_ptrs[cur_event]->errlevel[2])
             aftermail_exit = e_ptrs[cur_event]->errlevel[2];
-
-         if (aftermail_exit) {
-            status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
-            get_down (aftermail_exit, 3);
-         }
 
          if (cur_event > -1 && (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL|ECHO_EXPORT))) {
             if (modem_busy != NULL)
@@ -491,6 +487,11 @@ int wz;
             sysinfo.week.echoscan += time (NULL) - t;
             sysinfo.month.echoscan += time (NULL) - t;
             sysinfo.year.echoscan += time (NULL) - t;
+         }
+
+         if (aftermail_exit) {
+            status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
+            get_down (aftermail_exit, 3);
          }
       }
 
@@ -630,7 +631,7 @@ static int FTSC_sendmail ()
       }
    }
 
-   net_problems = send (fname, 'B');
+   net_problems = fsend (fname, 'B');
    if ((net_problems == TSYNC) || (net_problems == 0)) {
       if (c == NUM_FLAGS)
          unlink (fname);
@@ -716,7 +717,7 @@ static int FTSC_sendmail ()
                else if (j == 2)
                   p = 'F';
 
-               if (!send (sptr, p)) {
+               if (!fsend (sptr, p)) {
                   fclose(fp);
                   net_problems   = 1;
                   return FALSE;
@@ -816,7 +817,7 @@ static int FTSC_sendmail ()
                   else if (j == 2)
                      p = 'F';
 
-                  if (!send (sptr, p)) {
+                  if (!fsend (sptr, p)) {
                      fclose(fp);
                      net_problems   = 1;
                      return FALSE;
@@ -963,7 +964,7 @@ static int FTSC_recvmail ()
          wcenters (2, LGREY|_BLACK, "AKAs: No aka presented");
          status_line("%s: %s (%u:%u/%u)",msgtxt[M_REMOTE_SYSTEM],msgtxt[M_UNKNOWN_MAILER],remote_zone,remote_net,remote_node);
       }
-      sprintf (req, "Connected at %u baud with %s", rate, prodcode[pkthdr.product]);
+      sprintf (req, "Connected at %lu baud with %s", rate, prodcode[pkthdr.product]);
       wcenters (1, LGREY|_BLACK, req);
       if (remote_password[0] && stricmp (remote_password, pkthdr.password)) {
          status_line ("!Password Error: expected '%s' got '%s'",remote_password, pkthdr.password);
@@ -1163,7 +1164,7 @@ static int SEA_recvreq ()
                                 if ((w_event == 32000)) { /* || (nfiles > n_requests)) {*/
 					status_line ("!File Request denied");
 					SENDBYTE (ACK);
-					send (NULL, 'S');
+                    fsend (NULL, 'S');
 					recno = -1;
 				}
 				else {
@@ -1184,7 +1185,7 @@ static int SEA_recvreq ()
 							p = 'F';
 
 						if (retval == 1) {
-							send (reqs, p);
+                            fsend (reqs, p);
 							++nfiles;
 							++nfiles1;
 						}
@@ -1200,7 +1201,7 @@ static int SEA_recvreq ()
 				}
 
 				if (retval != 1)
-					send (NULL, 'S');
+                    fsend (NULL, 'S');
 				status_line (":%d matching files sent", nfiles1);
 			}
 			t1 = timerset (2000);

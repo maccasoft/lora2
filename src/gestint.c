@@ -4,7 +4,7 @@
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
 
-static int vwh = -1, restnodirect;
+static int vwh = -1;
 
 void setup_video_interrupt (title)
 char *title;
@@ -21,6 +21,8 @@ char *title;
 }
 
 #ifndef __OS2__
+static int restnodirect;
+
 static void interrupt newint10 ();
 static void interrupt newint10_2 ();
 

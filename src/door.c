@@ -10,12 +10,9 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/stat.h>
+
 #ifdef __OS2__
 #define INCL_DOS
-#define INCL_DOSDEVICES
-#define INCL_DOSDEVIOCTL
-#define INCL_DOSSEMAPHORES
-#define INCL_NOPM
 #include <os2.h>
 #endif
 
@@ -42,8 +39,7 @@ extern HFILE hfComHandle;
 
 void update_status_line (void);
 void open_logfile (void);
-
-static void general_door (char *, int);
+void general_door (char *, int);
 
 int spawn_program (int swapout, char *outstring)
 {
@@ -171,18 +167,20 @@ char *s;
    general_door (s, 1);
 }
 
-static void general_door(s, flag)
+void general_door(s, flag)
 char *s;
 int flag;
 {
    int i, m, oldtime, noreread, retval, oldcume, *varr;
-   char ext[200], buffer[50], swapping, tmp[36];
+   char ext[200], buffer[50], swapping, tmp[36], workdir[80];
    char noinfo;
    long t, freeze_time;
    struct _usr tmpusr;
 
    if (!flag)
       status_line(":External %s", s);
+
+   getcwd (workdir, 79);
 
    noinfo = 0;
    freeze = 0;
@@ -231,7 +229,7 @@ int flag;
             }
             break;
          case 'B':
-            sprintf(buffer,"%u", local_mode ? 0 : rate);
+            sprintf(buffer,"%lu", local_mode ? 0L : rate);
             strcat(ext, buffer);
             m += strlen(buffer);
             break;
@@ -258,14 +256,8 @@ int flag;
             m += strlen(buffer);
             break;
          case 'H':
-#ifdef __OS2__
-            sprintf (buffer, "%ld", hfComHandle);
-            strcat (ext, buffer);
-            m += strlen (buffer);
-#else
             if (!local_mode)
                MDM_DISABLE();
-#endif
             break;
          case 'L':
             strcpy(tmp, usr.name);
@@ -300,6 +292,12 @@ int flag;
             strcat(ext, buffer);
             m += strlen(buffer);
             break;
+         case 'U':
+            sprintf (buffer, "%s%08lx", config->boxpath, usr.id);
+            if (buffer[1] == ':')
+               setdisk (toupper (buffer[0]) - 'A');
+            chdir (buffer);
+            break;
          case 'W':
             FOSSIL_WATCHDOG (1);
             break;
@@ -319,8 +317,8 @@ int flag;
    memcpy ((char *)&tmpusr, (char *)&usr, sizeof(struct _usr));
    oldcume = tmpusr.time;
    tmpusr.time += (int)((time(&t) - start_time) / 60);
-   tmpusr.baud_rate = local_mode ? 0 : rate;
-   lorainfo.baud = local_mode ? 0 : rate;
+   tmpusr.baud_rate = local_mode ? 0 : (unsigned int)(rate / 100L);
+   lorainfo.baud = local_mode ? 0 : (unsigned int)(rate / 100L);
    lorainfo.port = com_port + 1;
    oldtime = lorainfo.time = time_remain ();
    strcpy (lorainfo.log, log_name);
@@ -347,8 +345,8 @@ int flag;
  
    if (!noinfo) {
       i = cshopen (buffer, O_WRONLY|O_BINARY|O_TRUNC|O_CREAT, S_IREAD|S_IWRITE);
-      write (i, (char *)&tmpusr, sizeof(struct _usr));
-      write (i, (char *)&lorainfo, sizeof(struct _lorainfo));
+      write (i, (char *)&tmpusr, sizeof (struct _usr));
+      write (i, (char *)&lorainfo, sizeof (struct _lorainfo));
       close (i);
    }
 
@@ -359,16 +357,14 @@ int flag;
       status_line(":External %s", ext);
 
    varr = ssave ();
-   cclrscrn(LGREY|_BLACK);
-   showcur();
+   cclrscrn (LGREY|_BLACK);
+   showcur ();
    fclose (logf);
-
-   getcwd (buffer, 49);
 
    retval = spawn_program (swapping, ext);
 
-   setdisk (buffer[0] - 'A');
-   chdir (buffer);
+   setdisk (workdir[0] - 'A');
+   chdir (workdir);
 
    if (!local_mode) {
 #ifndef __OS2__
@@ -457,9 +453,13 @@ char *s, mecca_resp, *readln;
       }
 
       switch (s[++i]) {
-         case '!':
-            strcat(ext, "\n");
+         case '%':
+            strcat (ext, "%");
             m += strlen(buffer);
+            break;
+         case '!':
+            strcat (ext, "\n");
+            m += strlen (buffer);
             break;
          case 'A':
             strcpy(tmp, usr.name);
@@ -468,14 +468,16 @@ char *s, mecca_resp, *readln;
             m += strlen(buffer);
             break;
          case 'b':
-            sprintf(buffer,"%u", local_mode ? 0 : rate);
+            sprintf(buffer,"%lu", local_mode ? 0L : rate);
             strcat(ext, buffer);
             m += strlen(buffer);
             break;
          case 'B':
             strcpy(tmp, usr.name);
-            get_fancy_string(tmp, buffer);
-            get_fancy_string(tmp, buffer);
+            if (get_fancy_string(tmp, buffer) == NULL)
+               break;
+            if (get_fancy_string(tmp, buffer) == NULL)
+               break;
             strcat(ext, strupr(buffer));
             m += strlen(buffer);
             break;
@@ -576,7 +578,7 @@ char *s, mecca_resp, *readln;
             break;
          case 'L':
             if (!local_mode)
-               sprintf(buffer, "-p%d -b%u", com_port+1, rate);
+               sprintf(buffer, "-p%d -b%lu", com_port+1, rate);
             else
                strcpy(buffer,"-k");
             strcat(ext, buffer);
@@ -586,14 +588,13 @@ char *s, mecca_resp, *readln;
             strcat(ext, sys.msg_path);
             m += strlen(sys.msg_path);
             break;
-         case 'r':
          case 'n':
-            strcat(ext, usr.name);
-            m += strlen(usr.name);
+            strcat (ext, usr.name);
+            m += strlen (usr.name);
             break;
          case 'N':
-            strcat(ext, system_name);
-            m += strlen(system_name);
+            strcat (ext, system_name);
+            m += strlen (system_name);
             break;
          case 'p':
 #ifdef __OS2__
@@ -601,13 +602,13 @@ char *s, mecca_resp, *readln;
 #else
             sprintf (buffer, "%d", com_port);
 #endif
-            strcat(ext, buffer);
-            m += strlen(buffer);
+            strcat (ext, buffer);
+            m += strlen (buffer);
             break;
          case 'P':
-            sprintf(buffer,"%d", local_mode ? 0 : com_port+1);
-            strcat(ext, buffer);
-            m += strlen(buffer);
+            sprintf (buffer, "%d", local_mode ? 0 : com_port + 1);
+            strcat (ext, buffer);
+            m += strlen (buffer);
             break;
          case 'q':
             strcat(ext, sys.msg_path);
@@ -620,9 +621,14 @@ char *s, mecca_resp, *readln;
             m += strlen(sys.filepath)-1;
             break;
          case 'R':
-            strcat(ext, cmd_string);
-            m += strlen(buffer);
+            strcat (ext, cmd_string);
+            m += strlen (cmd_string);
             cmd_string[0] = '\0';
+            break;
+         case 'r':
+            sprintf (buffer, "%s%08lx", config->boxpath, usr.id);
+            strcat (ext, buffer);
+            m += strlen (buffer);
             break;
          case 's':
             strcpy(tmp, sysop);
@@ -747,7 +753,7 @@ void external_bbs (char *s)
 
       switch (s[++i]) {
          case 'B':
-            sprintf (buffer,"%u", local_mode ? 0 : rate);
+            sprintf (buffer,"%lu", local_mode ? 0L : rate);
             strcat (ext, buffer);
             m += strlen (buffer);
             break;
@@ -820,21 +826,23 @@ void external_bbs (char *s)
 
 void update_status_line ()
 {
-        if (function_active == 1)
-                f1_status ();
-        else if (function_active == 2)
-                f3_status ();
-        else if (function_active == 3)
-                f3_status ();
-        else if (function_active == 4)
-                f4_status ();
-        else if (function_active == 5);
-        else if (function_active == 6);
-        else if (function_active == 7);
-        else if (function_active == 8);
-        else if (function_active == 9)
-                f9_status ();
+   if (function_active == 1)
+      f1_status ();
+   else if (function_active == 2)
+      f3_status ();
+   else if (function_active == 3)
+      f3_status ();
+   else if (function_active == 4)
+      f4_status ();
+   else if (function_active == 5);
+   else if (function_active == 6);
+   else if (function_active == 7);
+   else if (function_active == 8);
+   else if (function_active == 9)
+      f9_status ();
 }
+
+#define MAX_LOCKS   200
 
 typedef struct {
    int Zone;
@@ -844,21 +852,19 @@ typedef struct {
    char had_to_punt;
 } ADDR;
 
-int flag_file (function, zone, net, node, point, do_stat)
-int function, zone, net, node, point, do_stat;
+int flag_file (int function, int zone, int net, int node, int point, int do_stat)
 {
+   static ADDR *last_set = NULL;
+   static int numlocks = 0;
    FILE *fptr;
    int i;
-   char *HoldName;
-   char flagname[128];
-   char tmpname[128];
-   char BSYname[15];
-
-   static ADDR last_set[30];
-   static int numlocks = 0;
+   char *HoldName, flagname[128], tmpname[128], BSYname[15];
 
    if (!line_offset || !config->multitask)
       return (FALSE);
+
+   if (last_set == NULL)
+      last_set = (ADDR *)malloc (sizeof (ADDR) * MAX_LOCKS);
 
    HoldName = HoldAreaNameMunge (zone);
 
@@ -867,121 +873,116 @@ int function, zone, net, node, point, do_stat;
          numlocks = 0;
          last_set[numlocks].Zone = -1;
          last_set[numlocks].had_to_punt = 0;
+         break;
 
       case CLEAR_SESSION_FLAG:
-         /* At the end of a session, delete the task file */
+         // Per prima cosa libera tutti i flag creati, in modo da assicurarsi
+         // di non lasciare roba bloccata in giro.
+         if (numlocks != 0) {
+            for (i = 0; i < numlocks; i++) {
+               HoldName = HoldAreaNameMunge (last_set[i].Zone);
+               if (last_set[i].Point != 0) {
+                  sprintf (flagname, "%s%04x%04x.PNT\\", HoldName, last_set[i].Net, last_set[i].Node);
+                  sprintf (BSYname, "%08x.BSY", last_set[i].Point);
+               }
+               else {
+                  strcpy (flagname, HoldName);
+                  sprintf (BSYname, "%04x%04x.BSY", last_set[i].Net, last_set[i].Node);
+               }
+
+               if (last_set[i].had_to_punt)
+                  strcpy (flagname, config->flag_dir);
+               strcat (flagname, BSYname);
+
+               last_set[i].had_to_punt = 0;
+               last_set[i].Zone = -1;
+
+               if (!unlink (flagname)) {
+                  if (do_stat && config->doflagfile)
+                     status_line (msgtxt[M_CLEARED_FLAGFILE], flagname);
+                }
+            }
+
+            numlocks = 0;
+         }
+
+         // Cancella il flag di sessione relativo a questo task.
          if (config->flag_dir[0]) {
-            (void) sprintf (flagname, "%sTask.%02x", config->flag_dir, line_offset);
-            (void) unlink (flagname);
+            sprintf (flagname, "%sTask.%02x", config->flag_dir, line_offset);
+            unlink (flagname);
          }
          return (FALSE);
 
       case SET_SESSION_FLAG:
-         /* At the start of a session, set up the task number */
          if (config->flag_dir[0]) {
-            (void) sprintf (flagname, "%sTask.%02x", config->flag_dir, line_offset);
+            sprintf (flagname, "%sTask.%02x", config->flag_dir, line_offset);
             fptr = fopen (flagname, "wb");
-            (void) fclose (fptr);
+            fclose (fptr);
          }
          return (FALSE);
 
       case TEST_AND_SET:
-
-      /*
-       * First see if we already HAVE this lock! If so, return now.
-       *
-       */
-
          for (i = 0; i < numlocks; i++) {
             if (last_set[i].Zone == zone && last_set[i].Net == net && last_set[i].Node == node && last_set[i].Point == point)
                return (FALSE);
          }
 
-      /*
-       * Next determine the directory in which we will create the flagfile.
-       * Also, the name of the file.
-       *
-       */
-
-         if (point != 0)
-            {
-            (void) sprintf (flagname, "%s%04x%04x.PNT\\", HoldName, net, node);
-            (void) sprintf (BSYname, "%08x.BSY", point);
-            }
-         else
-            {
-            (void) strcpy (flagname, HoldName);
-            (void) sprintf (BSYname, "%04x%04x.BSY", net, node);
-            }
-      /*
-       * File opens are destructive by nature. Therefore use a file name
-       * that's unique to us. Create it in the chosen target. If we can't
-       * do that, try to use the flag directory.
-       *
-       */
+         if (point != 0) {
+            sprintf (flagname, "%s%04x%04x.PNT\\", HoldName, net, node);
+            sprintf (BSYname, "%08x.BSY", point);
+         }
+         else {
+            strcpy (flagname, HoldName);
+            sprintf (BSYname, "%04x%04x.BSY", net, node);
+         }
 
          last_set[numlocks].had_to_punt = 0;
-         (void) sprintf (tmpname, "%sLORABSY.%02x",flagname,line_offset);
+         sprintf (tmpname, "%sLORABSY.%02x", flagname, line_offset);
          fptr = fopen (tmpname, "wb");
+
          if ((fptr == NULL) && (config->flag_dir[0])) {
             last_set[numlocks].had_to_punt = 1;
-            (void) strcpy (flagname, config->flag_dir);
-            (void) sprintf (tmpname, "%sLORABSY.%02x",flagname,line_offset);
+            strcpy (flagname, config->flag_dir);
+            sprintf (tmpname, "%sLORABSY.%02x", flagname, line_offset);
             fptr = fopen (tmpname, "wb");
          }         
-      /*
-       * Now we've done all we can. The file is either open in the
-       * appropriate outbound or it's in the flag directory.
-       * If neither option worked out, go away. There's nothing to do.
-       *
-       */
 
          if (fptr == NULL) {
             if (do_stat && config->doflagfile)
-               status_line (msgtxt[M_FAILED_CREATE_FLAG],tmpname);
+               status_line (msgtxt[M_FAILED_CREATE_FLAG], tmpname);
+
             last_set[numlocks].Zone = -1;
             return (TRUE);
          }
-         (void) fclose (fptr);
 
-      /*
-       * Now the test&set. Attempt to rename the file to a value specific
-       * to the remote node's address. If we succeed, we have the lock.
-       * If we do not, delete the temp file.
-       *
-       */
-         (void) strcat (flagname, BSYname);   /* Add the .BSY file name */
+         fclose (fptr);
+
+         strcat (flagname, BSYname);
+
          if (!rename (tmpname, flagname)) {
             if (do_stat && config->doflagfile)
-               status_line (msgtxt[M_CREATED_FLAGFILE],flagname);
+               status_line (msgtxt[M_CREATED_FLAGFILE], flagname);
+
             last_set[numlocks].Zone = zone;
             last_set[numlocks].Net = net;
             last_set[numlocks].Node = node;
             last_set[numlocks].Point = point;
             numlocks++;
+
             return (FALSE);
          }
 
          if (do_stat && config->doflagfile)
             status_line (msgtxt[M_THIS_ADDRESS_LOCKED], zone, net, node, point);
-         (void) unlink (tmpname);
+
+         unlink (tmpname);
          last_set[numlocks].Zone = -1;
+
          return (TRUE);
 
       case CLEAR_FLAG:
-
-      /*
-       * Make sure we need to clear something.
-       * Zone should be something other than -1 if that's the case.
-       *
-       */
          if (numlocks == 0)
             return (TRUE);
-
-      /*
-       * Next compare what we want to clear with what we think we have.
-       *
-       */
 
          for (i = 0; i < numlocks; i++) {
             if (last_set[i].Zone == zone && last_set[i].Net == net && last_set[i].Node == node && last_set[i].Point == point)
@@ -992,79 +993,53 @@ int function, zone, net, node, point, do_stat;
                status_line (msgtxt[M_BAD_CLEAR_FLAGFILE], zone, net, node, point);
             return (TRUE);
          }             
-     /*
-      * We match. Recalculate the directory. Yeah, that's redundant
-      * code, but it saves static space.
-      *
-      */
-      if (point != 0)
-         {
-         (void) sprintf (flagname, "%s%04x%04x.PNT\\", HoldName, net, node);
-         (void) sprintf (BSYname, "%08x.BSY", point);
+
+         if (point != 0) {
+            sprintf (flagname, "%s%04x%04x.PNT\\", HoldName, net, node);
+            sprintf (BSYname, "%08x.BSY", point);
          }
-      else
-         {
-         (void) strcpy (flagname, HoldName);
-         (void) sprintf (BSYname, "%04x%04x.BSY", net, node);
+         else {
+            strcpy (flagname, HoldName);
+            sprintf (BSYname, "%04x%04x.BSY", net, node);
          }
 
          if (last_set[i].had_to_punt)
-            (void) strcpy (flagname, config->flag_dir);
-         (void) strcat (flagname, BSYname);
+            strcpy (flagname, config->flag_dir);
+         strcat (flagname, BSYname);
 
          last_set[i].had_to_punt = 0;
          last_set[i].Zone = -1;
+
          if (!unlink (flagname)) {
             if (do_stat && config->doflagfile)
                status_line (msgtxt[M_CLEARED_FLAGFILE], flagname);
             return (TRUE);
          }
 
-//         if (do_stat && config->doflagfile)
-//            status_line (msgtxt[M_FAILED_CLEAR_FLAG],flagname);
          return (FALSE);
 
       case TEST_FLAG:
-
-      /*
-       * First see if we already HAVE this lock! If so, return now.
-       *
-       */
-
          for (i = 0; i < numlocks; i++) {
             if (last_set[i].Zone == zone && last_set[i].Net == net && last_set[i].Node == node && last_set[i].Point == point)
                return (FALSE);
          }
 
-      /*
-       * Next determine the directory in which we will create the flagfile.
-       * Also, the name of the file.
-       *
-       */
+         if (point != 0) {
+            sprintf (flagname, "%s%04x%04x.PNT\\", HoldName, net, node);
+            sprintf (BSYname, "%08x.BSY", point);
+         }
+         else {
+            strcpy (flagname, HoldName);
+            sprintf (BSYname, "%04x%04x.BSY", net, node);
+         }
 
-         if (point != 0)
-            {
-            (void) sprintf (flagname, "%s%04x%04x.PNT\\", HoldName, net, node);
-            (void) sprintf (BSYname, "%08x.BSY", point);
-            }
-         else
-            {
-            (void) strcpy (flagname, HoldName);
-            (void) sprintf (BSYname, "%04x%04x.BSY", net, node);
-            }
-
-      /*
-       * Check for the *.BSY file.
-       *
-       */
-
-         (void) strcat (flagname, BSYname);
+         strcat (flagname, BSYname);
 
          fptr = fopen (flagname, "rb");
          if (fptr == NULL)
             return (FALSE);
-
          fclose (fptr);
+
          return (TRUE);
 
       default:

@@ -1,7 +1,7 @@
-typedef unsigned int bit;
-typedef unsigned int word;
-typedef unsigned char byte;
-typedef long dword;
+typedef unsigned int   bit;
+typedef unsigned short word;
+typedef unsigned char  byte;
+typedef long           dword;
 
 
 #ifndef __DOS_H
@@ -20,12 +20,12 @@ struct date {
 #endif
 
 struct _stamp {
-   unsigned int date;
-   unsigned int time;
+   unsigned short date;
+   unsigned short time;
 };
 
 struct _votes {
-   int  minvote;
+   short  minvote;
    byte priv;
 };
 
@@ -38,19 +38,19 @@ struct _votes {
 #define TIMEDOUT        -51
 
 struct _call_list {
-   int   zone;
-   int   node;
-   int   net;
-   int   point;
-   int   type;
-   long  size;
-   int   call_nc;
-   byte  call_wc;
-   int   flags;
-   int   n_mail;
-   int   n_data;
-   long  b_mail;
-   long  b_data;
+   short  zone;
+   short  node;
+   short  net;
+   short  point;
+   short  type;
+   long size;
+   short  call_nc;
+   byte call_wc;
+   short  flags;
+   short  n_mail;
+   short  n_data;
+   long b_mail;
+   long b_data;
    unsigned short ftime;
    unsigned short fdate;
 };
@@ -62,10 +62,10 @@ struct  _node {
    char password[20];
    char rate;
    char modem;
-   int  cost_first;
-   int  time_first;
-   int  cost;
-   int  time;
+   short  cost_first;
+   short  time_first;
+   short  cost;
+   short  time;
    char pw_areafix[20];
    char pw_tic[20];
    char sysop[36];
@@ -74,7 +74,7 @@ struct  _node {
 
 struct _lastread {
    word area;
-   int msg_num;
+   short msg_num;
 };
 
 #define MAXLREAD   50
@@ -84,6 +84,7 @@ struct _lastread {
 
 struct _usridx {
    long id;
+   long alias_id;
 };
 
 struct _usr {
@@ -121,10 +122,10 @@ struct _usr {
    byte  priv;
    long  flags;
    char  ldate[20];
-   int   time;
+   short   time;
    dword upld;
    dword dnld;
-   int   dnldl;
+   short   dnldl;
    word  n_upld;
    word  n_dnld;
    word  files;
@@ -141,10 +142,10 @@ struct _usr {
    byte  len;
    byte  width;
    long  id;
-   int   msgposted;
+   short   msgposted;
    char  comment[80];
    byte  help;
-   word  baud_rate;
+   word  old_baud_rate;
    byte  counter[MAXCOUNTER];
    word  chat_minutes;
 
@@ -161,22 +162,28 @@ struct _usr {
    char  archiver;
 
    struct _ovr_class_rec {
-      int  max_time;
-      int  max_call;
-      int  max_dl;
+      short  max_time;
+      short  max_call;
+      short  max_dl;
       word ratio;
       word min_baud;
       word min_file_baud;
       word start_ratio;
    } ovr_class;
 
-   int   msg_sig;
+   short   msg_sig;
    word  account;
    word  f_account;
-   int   votes;
-   int   file_sig;
+   short   votes;
+   short   file_sig;
 
-   char  extradata[290];
+   long  baud_rate;
+
+   bit   dhotkey    :1;
+
+   long  alias_id;
+
+   char  extradata[281];
 };
 
 #define SIZEOF_MSGAREA    512
@@ -193,7 +200,7 @@ struct _sys_idx {
 
 struct _sys {
    char msg_name[70];
-   int  msg_num;
+   short  msg_num;
    char msg_path[40];
    char origin[56];
    bit  echomail  :1;
@@ -209,58 +216,60 @@ struct _sys {
    word pip_board;
    byte quick_board;
    byte msg_priv;
-   long msg_flags;
-   byte write_priv;
-   long write_flags;
-   byte use_alias;
-   int  max_msgs;
-   int  max_age;
-   int  age_rcvd;
-   char forward1[80];
-   char forward2[80];
-   char forward3[80];
-   bit  msg_restricted :1;
-   bit  passthrough    :1;
-   bit  internet_mail  :1;
-   byte areafix;
-   char qwk_name[14];
-   long afx_flags;
-   word goldboard;
-   char filler1[27];
+	long msg_flags;
+	byte write_priv;
+	long write_flags;
+	byte use_alias;
+	short  max_msgs;
+	short  max_age;
+	short  age_rcvd;
+	char forward1[80];
+	char forward2[80];
+	char forward3[80];
+	bit  msg_restricted :1;
+	bit  passthrough    :1;
+	bit  internet_mail  :1;
+	byte areafix;
+	char qwk_name[14];
+	long afx_flags;
+	word gold_board;
+	bit  sendonly 		  :1;
+	bit  receiveonly	  :1;
+	char filler1[26];
 
-   char file_name[70];
-   int  file_num;
-   char uppath[40];
-   char filepath[40];
-   char filelist[50];
-   bit  freearea  :1;
-   bit  norm_req  :1;
-   bit  know_req  :1;
-   bit  prot_req  :1;
-   bit  nonews    :1;
-   bit  no_global_search :1;
-   bit  no_filedate :1;
-   bit  file_restricted :1;
-   word file_sig;
-   byte file_priv;
-   long file_flags;
-   byte download_priv;
-   long download_flags;
-   byte upload_priv;
-   long upload_flags;
-   byte list_priv;
-   long list_flags;
-   char filler2[10];
-   char short_name[13];
-   char filler3[8];
-   char tic_tag[32];
-   char tic_forward1[80];
-   char tic_forward2[80];
-   char tic_forward3[80];
-   byte tic_level;
-   long tic_flags;
-   bit  cdrom     :1;
-   char filler4[106];
+	char file_name[70];
+	short  file_num;
+	char uppath[40];
+	char filepath[40];
+	char filelist[50];
+	bit  freearea  :1;
+	bit  norm_req  :1;
+	bit  know_req  :1;
+	bit  prot_req  :1;
+	bit  nonews    :1;
+	bit  no_global_search :1;
+	bit  no_filedate :1;
+	bit  file_restricted :1;
+	word file_sig;
+	byte file_priv;
+	long file_flags;
+	byte download_priv;
+	long download_flags;
+	byte upload_priv;
+	long upload_flags;
+	byte list_priv;
+	long list_flags;
+	char filler2[10];
+	char short_name[13];
+	char filler3[8];
+	char tic_tag[32];
+	char tic_forward1[80];
+	char tic_forward2[80];
+	char tic_forward3[80];
+	byte tic_level;
+	long tic_flags;
+	bit  cdrom     :1;
+	char filler4[106];
 };
 
 #define  TWIT        0x10
@@ -289,16 +298,16 @@ struct _msg {
    char subj[72];
    char date[20];
    word times;
-   int  dest;
-   int  orig;
-   int  cost;
-   int  orig_net;
-   int  dest_net;
+   short  dest;
+   short  orig;
+   short  cost;
+   short  orig_net;
+   short  dest_net;
    struct _stamp date_written;
    struct _stamp date_arrived;
-   int  reply;
+   short  reply;
    word attr;
-   int  up;
+   short  up;
 };
 
 struct _daystat {
@@ -350,32 +359,37 @@ struct _sysinfo {
 };
 
 struct _linestat {
-   int  line;
+   short  line;
    char startdate[10];
    word busyperhour[24];
    word busyperday[7];
 };
 
-#define BROWSING     1
-#define UPLDNLD      2
-#define READWRITE    3
-#define DOOR         4
-#define CHATTING     5
-#define QUESTIONAIRE 6
+#define NOCHANGE        0
+#define WFC             1
+#define LOGIN           2
+#define BROWSING        3
+#define UPLDNLD         4
+#define READWRITE       5
+#define DOOR            6
+#define CHATTING        7
+#define QUESTIONAIRE    8
+#define QWKDOOR         9
 
 struct _useron {
-   char name[36];
-   int  line;
-   word baud;
-   char city[26];
-   bit  donotdisturb: 1;
-   bit  priv_chat   : 1;
-   int  status;
-   int  cb_channel;
+   char   name[36];
+   short  line;
+   long   baud;
+   char   city[26];
+   bit    donotdisturb: 1;
+   bit    priv_chat   : 1;
+   short  line_status;
+   short  cb_channel;
+   char   status[32];
 };
 
 struct _lastcall {
-   int  line;
+   short  line;
    char name[36];
    char city[26];
    word baud;
@@ -386,14 +400,14 @@ struct _lastcall {
 };
 
 struct class_rec {
-   int  priv;
-   int  max_time;
-   int  max_call;
-   int  max_dl;
-   int  dl_300;
-   int  dl_1200;
-   int  dl_2400;
-   int  dl_9600;
+   short  priv;
+   short  max_time;
+   short  max_call;
+   short  max_dl;
+   short  dl_300;
+   short  dl_1200;
+   short  dl_2400;
+   short  dl_9600;
    word ratio;
    word min_baud;
    word min_file_baud;
@@ -401,7 +415,7 @@ struct class_rec {
 };
 
 struct parse_list {
-   int p_length;
+   short p_length;
    char *p_string;
 };
 
@@ -410,7 +424,7 @@ struct _cmd {
    char  name[80];
    byte  priv;
    long  flags;
-   int   flag_type;
+   short   flag_type;
    bit   automatic  :1;
    bit   nocls      :1;
    bit   first_time :1;
@@ -422,10 +436,10 @@ struct _cmd {
 };
 
 struct _alias {
-   int  zone;
-   int  net;
-   int  node;
-   int  point;
+   short  zone;
+   short  net;
+   short  node;
+   short  point;
    word fakenet;
    char *domain;
 };
@@ -462,18 +476,18 @@ struct zero_block {
 
 struct _pkthdr
 {
-   int orig_node;          /* originating node               */
-   int dest_node;          /* destination node               */
-   int year;               /* 0..99  when packet was created */
-   int month;              /* 0..11  when packet was created */
-   int day;                /* 1..31  when packet was created */
-   int hour;               /* 0..23  when packet was created */
-   int minute;             /* 0..59  when packet was created */
-   int second;             /* 0..59  when packet was created */
-   int rate;               /* destination's baud rate        */
-   int ver;                /* packet version                 */
-   int orig_net;           /* originating network number     */
-   int dest_net;           /* destination network number     */
+   short orig_node;          /* originating node               */
+   short dest_node;          /* destination node               */
+   short year;               /* 0..99  when packet was created */
+   short month;              /* 0..11  when packet was created */
+   short day;                /* 1..31  when packet was created */
+   short hour;               /* 0..23  when packet was created */
+   short minute;             /* 0..59  when packet was created */
+   short second;             /* 0..59  when packet was created */
+   short rate;               /* destination's baud rate        */
+   short ver;                /* packet version                 */
+   short orig_net;           /* originating network number     */
+   short dest_net;           /* destination network number     */
    char product;           /* product type                   */
    char serial;            /* serial number (some systems)   */
 
@@ -483,8 +497,8 @@ struct _pkthdr
    /* ------------------------------ */
 
    byte password[8];       /* session/pickup password        */
-   int  orig_zone;         /* originating zone               */
-   int  dest_zone;         /* Destination zone               */
+   short  orig_zone;         /* originating zone               */
+   short  dest_zone;         /* Destination zone               */
    byte B_fill2[16];
    long B_fill3;
 };
@@ -507,8 +521,8 @@ struct   _Hello {
    word my_point;
    char my_password[8];
    byte reserved2[4];
-   int  n_mail;            /* Used only by LoraBBS >= 2.20 */
-   int  n_data;            /* Used only by LoraBBS >= 2.20 */
+   short  n_mail;            /* Used only by LoraBBS >= 2.20 */
+   short  n_data;            /* Used only by LoraBBS >= 2.20 */
    word capabilities;
    long tranx;             /* Used only by LoraBBS >= 2.10 */
    long b_mail;            /* Used only by LoraBBS >= 2.20 */
@@ -516,8 +530,8 @@ struct   _Hello {
 };
 
 struct _ndi {
-   int   node;
-   int   net;
+   short   node;
+   short   net;
 };
 
 struct _msg_list {
@@ -534,22 +548,22 @@ struct _mail {
 
 struct _lorainfo
 {
-   word baud;
-   int  port;
-   int  time;
+   long baud;
+   short  port;
+   short  time;
    char log[40];
    char system[80];
    char sysop[36];
    word task;
-   word max_baud;
+   long max_baud;
    long posuser;
    word yelling;
    word downloadlimit;
-   int  max_time;
-   int  max_call;
+   short  max_time;
+   short  max_call;
    word ratio;
-   word min_baud;
-   word min_file_baud;
+   long min_baud;
+   long min_file_baud;
    bit  wants_chat  :1;
    bit  mnp_connect :1;
    bit  keylock     :1;
@@ -604,18 +618,18 @@ struct QWKmsghd {               /* Messages.dat header */
 
 struct _pkthdr2
 {
-   int orig_node;          /* originating node               */
-   int dest_node;          /* destination node               */
-   int year;               /* 0..99  when packet was created */
-   int month;              /* 0..11  when packet was created */
-   int day;                /* 1..31  when packet was created */
-   int hour;               /* 0..23  when packet was created */
-   int minute;             /* 0..59  when packet was created */
-   int second;             /* 0..59  when packet was created */
-   int rate;               /* destination's baud rate        */
-   int ver;                /* packet version                 */
-   int orig_net;           /* originating network number     */
-   int dest_net;           /* destination network number     */
+   short orig_node;          /* originating node               */
+   short dest_node;          /* destination node               */
+   short year;               /* 0..99  when packet was created */
+   short month;              /* 0..11  when packet was created */
+   short day;                /* 1..31  when packet was created */
+   short hour;               /* 0..23  when packet was created */
+   short minute;             /* 0..59  when packet was created */
+   short second;             /* 0..59  when packet was created */
+   short rate;               /* destination's baud rate        */
+   short ver;                /* packet version                 */
+   short orig_net;           /* originating network number     */
+   short dest_net;           /* destination network number     */
    byte product;           /* product type                   */
    char serial;            /* serial number (some systems)   */
 
@@ -625,46 +639,50 @@ struct _pkthdr2
    /* ------------------------------ */
 
    byte password[8];       /* session/pickup password        */
-   int  orig_zone;         /* originating zone               */
-   int  dest_zone;         /* Destination zone               */
-   int  auxnet;
+   short  orig_zone;         /* originating zone               */
+   short  dest_zone;         /* Destination zone               */
+   short  auxnet;
    word cwvalidation;
    byte producth;
    byte revision;
    word capability;
-   int  orig_zone2;        /* originating zone               */
-   int  dest_zone2;        /* Destination zone               */
-   int  orig_point;        /* originating zone               */
-   int  dest_point;        /* Destination zone               */
+   short  orig_zone2;        /* originating zone               */
+   short  dest_zone2;        /* Destination zone               */
+   short  orig_point;        /* originating zone               */
+   short  dest_point;        /* Destination zone               */
    long B_fill3;
 };
 
 struct _fwrd {
-   int  zone;
-   int  net;
-   int  node;
-   int  point;
-   bit  export: 1;
-   bit  reset:  1;
-   int  fd;
-   char aka;
+   short  zone;
+   short  net;
+   short  node;
+   short  point;
+   bit    export: 1;
+   bit    reset: 1;
+   bit    sendonly: 1;
+   bit    receiveonly: 1;
+   bit    passive: 1;
+   bit    private: 1;
+   short  fd;
+   char   aka;
 };
 
 struct _msghdr2 {
-   int ver;
-   int orig_node;
-   int dest_node;
-   int orig_net;
-   int dest_net;
-   int attrib;
-   int cost;
+   short ver;
+   short orig_node;
+   short dest_node;
+   short orig_net;
+   short dest_net;
+   short attrib;
+   short cost;
 };
 
 struct _akainfo {
-   int  zone;
-   int  net;
-   int  node;
-   int  point;
+   short  zone;
+   short  net;
+   short  node;
+   short  point;
    char aka;
 };
 

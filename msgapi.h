@@ -40,14 +40,16 @@
 
 #define MSGAPI
 
-#if defined(OS_2)
+#ifdef __OS2__
   #ifndef EXPENTRY
     #define EXPENTRY pascal far _loadds
   #endif
     
   #define OS2LOADDS _loadds
 #else
-  #define EXPENTRY pascal
+  #ifndef EXPENTRY
+    #define EXPENTRY pascal
+  #endif
   #define OS2LOADDS
 #endif
 

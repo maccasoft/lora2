@@ -56,7 +56,7 @@ void modem_hardware ()
 
       sprintf (string, "%d", config.com_port + 1);
       wprints (1, 21, CYAN|_BLACK, string);
-      sprintf (string, "%u", (unsigned int)(config.speed & 0xFFFFU));
+      sprintf (string, "%lu", config.speed);
       wprints (2, 21, CYAN|_BLACK, string);
       wprints (3, 21, CYAN|_BLACK, config.lock_baud ? "Yes" : "No");
       wprints (4, 21, CYAN|_BLACK, config.terminal ? "Yes" : "No");
@@ -85,30 +85,36 @@ void modem_hardware ()
             break;
 
          case 2:
-            switch ((unsigned short)config.speed) {
-               case 300:
-                  config.speed = 1200;
+            switch (config.speed) {
+               case 300L:
+                  config.speed = 1200L;
                   break;
-               case 1200:
-                  config.speed = 2400;
+               case 1200L:
+                  config.speed = 2400L;
                   break;
-               case 2400:
-                  config.speed = 4800;
+               case 2400L:
+                  config.speed = 4800L;
                   break;
-               case 4800:
-                  config.speed = 9600;
+               case 4800L:
+                  config.speed = 9600L;
                   break;
-               case 9600:
-                  config.speed = 19200;
+               case 9600L:
+                  config.speed = 19200L;
                   break;
-               case 19200:
-                  config.speed = (unsigned short)38400U;
+               case 19200L:
+                  config.speed = 38400L;
                   break;
-               case (unsigned short)38400U:
-                  config.speed = (unsigned short)57600U;
+               case 38400L:
+                  config.speed = 57600L;
                   break;
-               case (unsigned short)57600U:
-                  config.speed = 300;
+               case 57600L:
+                  config.speed = 115200L;
+                  break;
+               case 115200L:
+                  config.speed = 300L;
+                  break;
+               default:
+                  config.speed = 300L;
                   break;
             }
             break;
@@ -178,7 +184,7 @@ void modem_answer_control ()
    int wh, i = 1;
    char string[128], *p;
 
-   wh = wopen (5, 20, 13, 61, 3, LCYAN|_BLACK, CYAN|_BLACK);
+   wh = wopen (5, 10, 13, 71, 3, LCYAN|_BLACK, CYAN|_BLACK);
    wactiv (wh);
    wshadow (DGREY|_BLACK);
    wtitle (" Answer control ", TRIGHT, YELLOW|_BLUE);
@@ -214,7 +220,7 @@ void modem_answer_control ()
          case 2:
             strcpy (string, config.answer);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (2, 19, string, "???????????????????", 0, 2, NULL, 0);
+            winpdef (2, 19, string, "???????????????????????????????????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                strcpy (config.answer, strbtrim (string));
             break;
@@ -1012,6 +1018,9 @@ void areafix_linehelp (void)
       case 11:
          str = "Level to allow the users to make Areafix's requests as another node.";
          break;
+      case 15:
+         str = "Names to check for the Areafix processor, separate with spaces.";
+         break;
    }
 
    clear_window ();
@@ -1023,7 +1032,7 @@ void mailer_areafix ()
    int wh, i = 1;
    char string[128];
 
-   wh = wopen (5, 3, 20, 76, 3, LCYAN|_BLACK, CYAN|_BLACK);
+   wh = wopen (3, 3, 21, 76, 3, LCYAN|_BLACK, CYAN|_BLACK);
    wactiv (wh);
    wshadow (DGREY|_BLACK);
    wtitle (" Areafix ", TRIGHT, YELLOW|_BLUE);
@@ -1057,6 +1066,12 @@ void mailer_areafix ()
       wmenuiba (areafix_linehelp, clear_window);
       wmenuitem (12,  1, " Check zones       ", 0, 12, 0, NULL, 0, 0);
       wmenuiba (areafix_linehelp, clear_window);
+      wmenuitem (13,  1, " New areas base    ", 0, 13, 0, NULL, 0, 0);
+      wmenuiba (areafix_linehelp, clear_window);
+      wmenuitem (14,  1, " юд New areas path ", 0, 14, 0, NULL, 0, 0);
+      wmenuiba (areafix_linehelp, clear_window);
+      wmenuitem (15,  1, " Names to check    ", 0, 15, 0, NULL, 0, 0);
+      wmenuiba (areafix_linehelp, clear_window);
       wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
       wprints (1, 21, CYAN|_BLACK, config.areafix ? "Yes" : "No");
@@ -1073,6 +1088,21 @@ void mailer_areafix ()
       sprintf (string, "%d", config.afx_remote_maint);
       wprints (11, 21, CYAN|_BLACK, string);
       wprints (12, 21, CYAN|_BLACK, config.check_echo_zone ? "Yes" : "No");
+
+      if (config.newareas_base == 0)
+         wprints (13, 21, CYAN|_BLACK, "Fido *.MSG");
+      else if (config.newareas_base == 1)
+         wprints (13, 21, CYAN|_BLACK, "QuickBBS");
+      else if (config.newareas_base == 2)
+         wprints (13, 21, CYAN|_BLACK, "GoldBase");
+      else if (config.newareas_base == 3)
+         wprints (13, 21, CYAN|_BLACK, "Squish");
+      else if (config.newareas_base == 4)
+         wprints (13, 21, CYAN|_BLACK, "Pip-base");
+      else if (config.newareas_base == 5)
+         wprints (13, 21, CYAN|_BLACK, "Passthrough");
+      wprints (14, 21, CYAN|_BLACK, config.newareas_path);
+      wprints (15, 21, CYAN|_BLACK, config.areafix_watch);
 
       start_update ();
       i = wmenuget ();
@@ -1153,6 +1183,31 @@ void mailer_areafix ()
             if (winpread () != W_ESCPRESS)
                config.afx_remote_maint = atoi (string) % 256;
             break;
+
+         case 13:
+            if (config.newareas_base++ == 5)
+               config.newareas_base = 0;
+            break;
+
+         case 14:
+            strcpy (string, config.newareas_path);
+            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+            winpdef (14, 21, string, "??????????????????????????????????????", 0, 2, NULL, 0);
+            if (winpread () != W_ESCPRESS) {
+               strcpy (config.newareas_path, strbtrim (string));
+               if (config.newareas_path[0] && config.newareas_path[strlen (config.newareas_path) - 1] != '\\')
+                  strcat (config.newareas_path, "\\");
+               create_path (config.newareas_path);
+            }
+            break;
+
+         case 15:
+            strcpy (string, config.areafix_watch);
+            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+            winpdef (15, 21, string, "?????????????????????????????????????????????????", 0, 2, NULL, 0);
+            if (winpread () != W_ESCPRESS)
+               strcpy (config.areafix_watch, strbtrim (string));
+            break;
       }
 
       hidecur ();
@@ -1167,7 +1222,7 @@ void mailer_tic ()
    int wh, i = 1;
    char string[128];
 
-   wh = wopen (6, 3, 17, 76, 3, LCYAN|_BLACK, CYAN|_BLACK);
+   wh = wopen (6, 3, 18, 76, 3, LCYAN|_BLACK, CYAN|_BLACK);
    wactiv (wh);
    wshadow (DGREY|_BLACK);
    wtitle (" TIC ", TRIGHT, YELLOW|_BLUE);
@@ -1185,6 +1240,7 @@ void mailer_tic ()
       wmenuitem ( 6,  1, " Change TAG level  ", 0,  6, 0, NULL, 0, 0);
       wmenuitem ( 7,  1, " Remote maint.     ", 0,  7, 0, NULL, 0, 0);
       wmenuitem ( 8,  1, " Check zones       ", 0,  8, 0, NULL, 0, 0);
+      wmenuitem ( 9,  1, " Names to check    ", 0,  9, 0, NULL, 0, 0);
       wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
       wprints (1, 21, CYAN|_BLACK, config.tic_active ? "Yes" : "No");
@@ -1197,6 +1253,7 @@ void mailer_tic ()
       sprintf (string, "%d", config.tic_remote_maint);
       wprints (7, 21, CYAN|_BLACK, string);
       wprints (8, 21, CYAN|_BLACK, config.tic_check_zone ? "Yes" : "No");
+      wprints (9, 21, CYAN|_BLACK, config.tic_watch);
 
       start_update ();
       i = wmenuget ();
@@ -1256,6 +1313,14 @@ void mailer_tic ()
 
          case 8:
             config.tic_check_zone ^= 1;
+            break;
+
+         case 9:
+            strcpy (string, config.tic_watch);
+            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
+            winpdef (9, 21, string, "?????????????????????????????????????????????????", 0, 2, NULL, 0);
+            if (winpread () != W_ESCPRESS)
+               strcpy (config.tic_watch, strbtrim (string));
             break;
       }
 
@@ -1479,12 +1544,13 @@ void bbs_files ()
 
    gotoxy_ (24, 1);
    clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New Area  L-List  D-Delete");
+   prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New Area  C-Copy  L-List  D-Delete");
    prints (24, 1, YELLOW|_BLACK, "PgUp/PgDn");
    prints (24, 26, YELLOW|_BLACK, "E");
    prints (24, 34, YELLOW|_BLACK, "A");
-   prints (24, 50, YELLOW|_BLACK, "L");
-   prints (24, 58, YELLOW|_BLACK, "D");
+   prints (24, 50, YELLOW|_BLACK, "C");
+   prints (24, 58, YELLOW|_BLACK, "L");
+   prints (24, 66, YELLOW|_BLACK, "D");
 
    wh = wopen (1, 2, 22, 76, 1, LCYAN|_BLACK, CYAN|_BLACK);
    wactiv (wh);
@@ -1533,7 +1599,7 @@ void bbs_files ()
 
       wprints (1, 41, CYAN|_BLACK, sys.short_name);
 
-      sys.file_name[52] = '\0';
+      sys.file_name[55] = '\0';
       wprints (2, 16, CYAN|_BLACK, sys.file_name);
 
       wprints (3, 16, CYAN|_BLACK, sys.filepath);
@@ -1724,8 +1790,17 @@ void bbs_files ()
          // A Add
          case 'A':
          case 'a':
+            memcpy ((char *)&bsys, (char *)&sys, sizeof (struct _sys));
             memset ((char *)&sys, 0, sizeof (struct _sys));
             sys.file_priv = sys.download_priv = sys.upload_priv = TWIT;
+
+         // Copy
+         case 'C':
+         case 'c':
+            if (i == 'C' || i == 'c')
+               memcpy ((char *)&bsys, (char *)&sys, sizeof (struct _sys));
+
+            sys.file_num = 0;
             file_edit_single_area (&sys);
 
             if (sys.file_num && strcmp (sys.file_name, "")) {
@@ -1803,6 +1878,8 @@ void bbs_files ()
 
                wclose ();
             }
+            else
+               memcpy ((char *)&sys, (char *)&bsys, sizeof (struct _sys));
             break;
 
          // D Delete
@@ -1961,7 +2038,7 @@ continue_editing:
 
       wprints (1, 41, CYAN|_BLACK, nsys.short_name);
 
-      nsys.file_name[52] = '\0';
+      nsys.file_name[55] = '\0';
       wprints (2, 16, CYAN|_BLACK, nsys.file_name);
 
       wprints (3, 16, CYAN|_BLACK, nsys.filepath);
@@ -2031,15 +2108,15 @@ continue_editing:
          case 1:
             sprintf (string, "%d", nsys.file_num);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (1, 16, string, "???", 0, 2, NULL, 0);
+            winpdef (1, 16, string, "?????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                nsys.file_num = atoi (strbtrim (string));
-	    break;
+            break;
 
          case 2:
             strcpy (string, nsys.file_name);
             winpbeg (BLUE|_GREEN, BLUE|_GREEN);
-            winpdef (2, 16, string, "????????????????????????????????????????????????????", 0, 2, NULL, 0);
+            winpdef (2, 16, string, "???????????????????????????????????????????????????????", 0, 2, NULL, 0);
             if (winpread () != W_ESCPRESS)
                strcpy (nsys.file_name, strbtrim (string));
             break;
@@ -2299,12 +2376,13 @@ continue_editing:
 
    gotoxy_ (24, 1);
    clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New Area  L-List  D-Delete");
+   prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New Area  C-Copy  L-List  D-Delete");
    prints (24, 1, YELLOW|_BLACK, "PgUp/PgDn");
    prints (24, 26, YELLOW|_BLACK, "E");
    prints (24, 34, YELLOW|_BLACK, "A");
-   prints (24, 50, YELLOW|_BLACK, "L");
-   prints (24, 58, YELLOW|_BLACK, "D");
+   prints (24, 50, YELLOW|_BLACK, "C");
+   prints (24, 58, YELLOW|_BLACK, "L");
+   prints (24, 66, YELLOW|_BLACK, "D");
 }
 
 static void file_select_area_list (fd, osys)
@@ -2368,11 +2446,12 @@ struct _sys *osys;
 
    gotoxy_ (24, 1);
    clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New Area  L-List  D-Delete");
+   prints (24, 1, LGREY|_BLACK, "PgUp/PgDn-Next/Previous  E-Edit  A-Add New Area  C-Copy  L-List  D-Delete");
    prints (24, 1, YELLOW|_BLACK, "PgUp/PgDn");
    prints (24, 26, YELLOW|_BLACK, "E");
    prints (24, 34, YELLOW|_BLACK, "A");
-   prints (24, 50, YELLOW|_BLACK, "L");
-   prints (24, 58, YELLOW|_BLACK, "D");
+   prints (24, 50, YELLOW|_BLACK, "C");
+   prints (24, 58, YELLOW|_BLACK, "L");
+   prints (24, 66, YELLOW|_BLACK, "D");
 }
 

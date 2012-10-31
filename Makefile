@@ -3,15 +3,15 @@
 OBJ = OBJ
 SRC = SRC
 UTI = $(SRC)\UTIL
-TCLIB = C:\BORLANDC\LIB
+TCLIB = D:\BORLANDC\LIB
 CXLIB = $(TCLIB)\CXL
 
 #		*Translator Definitions*
-CC = bcc +TURBOC.CFG -c
+CC = bcc +TURBOC.CFG -c -v -y
 TASM = tasm /MX /ZD
 TLINK = tlink /x
-LIBPATH = C:\BORLANDC\LIB
-INCLUDEPATH = C:\BORLANDC\INCLUDE
+LIBPATH = D:\BORLANDC\LIB
+INCLUDEPATH = D:\BORLANDC\INCLUDE
 
 
 #		*Implicit Rules*
@@ -66,6 +66,7 @@ EXE_dependencies =  \
   $(OBJ)\cmdfile.obj \
   $(OBJ)\colors.obj \
   $(OBJ)\config.obj \
+  $(OBJ)\cpu.obj \
   $(OBJ)\data.obj \
   $(OBJ)\door.obj \
   $(OBJ)\editor.obj \
@@ -198,6 +199,7 @@ lora.ovl: turboc.cfg $(EXE_dependencies)
     $(OBJ)\chat.obj+
     $(OBJ)\cmdfile.obj+
     $(OBJ)\config.obj+
+    $(OBJ)\cpu.obj+
     $(OBJ)\data.obj+
     $(OBJ)\door.obj +
     $(OBJ)\editor.obj+
@@ -432,6 +434,9 @@ $(OBJ)\colors.obj: $(SRC)\colors.c
 
 $(OBJ)\config.obj: $(SRC)\config.c
         $(CC) -n$(OBJ) $(SRC)\config.c
+
+$(OBJ)\cpu.obj: $(SRC)\cpu.c
+        $(CC) -n$(OBJ) $(SRC)\cpu.c
 
 $(OBJ)\data.obj: $(SRC)\data.c
         $(CC) -n$(OBJ) $(SRC)\data.c

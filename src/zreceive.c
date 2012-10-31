@@ -890,7 +890,7 @@ static int RZ_GetHeader ()
             return ZSKIP;
             }
          i = strlen (Filename) - 1;
-         if ((!overwrite) || (is_arcmail (Filename, i)))
+         if (!overwrite || is_arcmail (Filename, i) || is_mailpkt (Filename, i))
             {
             unique_name (Filename);
             }

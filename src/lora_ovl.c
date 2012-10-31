@@ -38,7 +38,7 @@ void time_usage (void);
 void activity_chart (void);
 long random_time (int x);
 
-extern int blank_timer;
+extern int blank_timer, freeze;
 extern char *config_file, *mday[], *wtext[];
 
 extern int blanked, outinfo, to_row;
@@ -58,10 +58,12 @@ long fmem;
 
    function_active = 99;
    oc = caller;
-   caller = 0;
+//   caller = 0;
    read_sched();
    set_event ();
+
    time_release ();
+
    show_statistics (fmem);
 
    activation_key ();
@@ -71,11 +73,13 @@ long fmem;
       status_line ("!completely without a license key!");
    }
 
-   read_sysinfo();
-   if (locked && password != NULL && registered)
-      prints (23, 5, YELLOW|_BLACK, "Keyboard locked - Enter password to unlock");
-   else
-      prints (23, 16, YELLOW|_BLACK, "Press ESC for menu");
+   read_sysinfo ();
+   if (local_mode != 2) {
+      if (locked && password != NULL && registered)
+         prints (23, 16, YELLOW|_BLACK, "Keyboard locked");
+      else
+         prints (23, 17, YELLOW|_BLACK, "Press ESC for menu");
+   }
 
    t = time (NULL);
 
@@ -263,8 +267,8 @@ long fmem;
       com_baud (rate);
    }
 
-   get_last_caller();
-   system_crash();
+   get_last_caller ();
+   system_crash ();
    caller = oc;
 }
 
@@ -357,6 +361,7 @@ void shell_to_config ()
    open_logfile ();
 
    hidecur ();
+   freeze = 1;
    events = 0L;
    to = 0L;
    config_file = pc;
@@ -474,7 +479,8 @@ void shell_to_dos ()
 
    open_logfile ();
 
-   hidecur();
+   hidecur ();
+   freeze = 1;
    status_line(msgtxt[M_BINKLEY_BACK]);
 
    if (caller)
@@ -506,38 +512,40 @@ static void keyboard_loop (void)
       clocks = timerset (97);
 
       if (caller) {
-         hidecur();
-         i = whandle();
-         wactiv(status);
+         if (local_mode != 2) {
+            hidecur();
+            i = whandle();
+            wactiv(status);
 
-         gettime((struct time *)&timep);
-         sprintf(cmdname, "%02d%c%02d", timep.ti_hour % 24, interpoint, timep.ti_min % 60);
-         wprints(0,73,BLACK|_LGREY,cmdname);
-         interpoint = (interpoint == ':') ? ' ' : ':';
+            gettime((struct time *)&timep);
+            sprintf(cmdname, "%02d%c%02d", timep.ti_hour % 24, interpoint, timep.ti_min % 60);
+            wprints(0,73,BLACK|_LGREY,cmdname);
+            interpoint = (interpoint == ':') ? ' ' : ':';
 
-         if (function_active == 1) {
-            sc = time_remain ();
-            sprintf(cmdname, "%d mins ", sc);
-            wprints(1,26,BLACK|_LGREY,cmdname);
-         }
-         else if ( function_active == 4 ) {
-            sc = time_to_next (0);
-            if (old_event != cur_event && !blanked) {
-               wgotoxy(1,1);
-               wdupc(' ', 34);
-               old_event = cur_event;
+            if (function_active == 1) {
+               sc = time_remain ();
+               sprintf(cmdname, "%d mins ", sc);
+               wprints(1,26,BLACK|_LGREY,cmdname);
+            }
+            else if ( function_active == 4 ) {
+               sc = time_to_next (0);
+               if (old_event != cur_event && !blanked) {
+                  wgotoxy(1,1);
+                  wdupc(' ', 34);
+                  old_event = cur_event;
+               }
+
+               if ( next_event >= 0 ) {
+                  sprintf(cmdname, msgtxt[M_NEXT_EVENT], next_event + 1, sc / 60, sc % 60);
+                  wprints(1,1,BLACK|_LGREY,cmdname);
+               }
+               else
+                  wprints(1,1,BLACK|_LGREY,msgtxt[M_NONE_EVENTS]);
             }
 
-            if ( next_event >= 0 ) {
-               sprintf(cmdname, msgtxt[M_NEXT_EVENT], next_event + 1, sc / 60, sc % 60);
-               wprints(1,1,BLACK|_LGREY,cmdname);
-            }
-            else
-               wprints(1,1,BLACK|_LGREY,msgtxt[M_NONE_EVENTS]);
+            wactiv(i);
+            showcur();
          }
-
-         wactiv(i);
-         showcur();
       }
       else {
          if (!blanked) {

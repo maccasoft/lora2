@@ -7,13 +7,11 @@
 #include <conio.h>
 #include <io.h>
 #include <dos.h>
+#include <fcntl.h>
+#include <sys\stat.h>
 
 #ifdef __OS2__
 #define INCL_DOS
-#define INCL_DOSDEVICES
-#define INCL_DOSDEVIOCTL
-#define INCL_DOSSEMAPHORES
-#define INCL_NOPMAPI
 #include <os2.h>
 #endif
 
@@ -32,13 +30,12 @@
 extern HFILE hfComHandle;
 #endif
 
-int spawn_program (int swapout, char *outstring);
-
-extern int blank_timer;
+extern int blank_timer, socket;
+extern short tcpip;
 extern long exectime;
 
-char *config_file = "CONFIG.DAT";
-char **dos_argv;
+int spawn_program (int swapout, char *outstring);
+char *config_file = "CONFIG.DAT", **dos_argv, nopoll = 0, nomailproc = 0, nonetmail = 0;
 
 static MDM_TRNS *mm_head;
 
@@ -91,6 +88,10 @@ try_setup:
       terminal = config->terminal;
       if (config->modem_busy[0])
          modem_busy = config->modem_busy;
+      if (config->mustbezero) {
+         strcpy (config->answer, (char *)&config->mustbezero);
+         memset (&config->mustbezero, 0, 20);
+      }
       if (config->answer[0])
          answer = config->answer;
       init = config->init;
@@ -129,6 +130,8 @@ try_setup:
       if (config->mono_attr)
          setvparam (VP_MONO);
 
+      if (!config->speed)
+         config->speed = config->old_speed;
       if (!speed)
          speed = rate = config->speed;
       if (com_port == -1)
@@ -174,8 +177,10 @@ void init_system()
    modem_busy = NULL;
    hslink_exe = puma_exe = NULL;
    mm_head = NULL;
+   msg_list = NULL;
 
    blank_timer = 0;
+   tcpip = 0;
 
    vote_priv = up_priv = down_priv = 0;
 
@@ -183,7 +188,7 @@ void init_system()
    CurrentReqLim = max_call = speed_graphics = max_requests = 0;
    registered = line_offset = no_logins = next_call = 0;
    norm_max_requests = prot_max_requests = know_max_requests = 0;
-   allowed = assumed = rate = speed = remote_capabilities = 0;
+   allowed = assumed = remote_capabilities = 0;
    target_up = target_down = 0;
    remote_zone = remote_net = remote_node = remote_point = 0;
    com_port = -1;
@@ -193,6 +198,8 @@ void init_system()
    did_nak = netmail = who_is_he = overwrite = allow_reply = 0;
    frontdoor = local_mode = user_status = caller = 0;
    snooping = 1;
+
+   rate = speed = 0L;
 
    max_readpriv = ASSTSYSOP;
    sq_ptr = NULL;
@@ -205,7 +212,7 @@ void init_system()
    }
 
 #ifdef __OS2__
-   hfComHandle = -1;
+   hfComHandle = NULLHANDLE;
 #endif
 }
 
@@ -270,24 +277,68 @@ int p;
    return(-1);
 }
 
+void detect_line_number (void)
+{
+   int fd;
+   char filename[80];
+   struct _useron useron;
+
+   sprintf (filename, USERON_NAME, config->sys_path);
+   if ((fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) != -1) {
+      while (read (fd, (char *)&useron, sizeof (struct _useron)) == sizeof (struct _useron)) {
+         if (useron.line == line_offset) {
+            line_offset++;
+            lseek (fd, 0L, SEEK_SET);
+         }
+      }
+      close (fd);
+   }
+}
+
 void parse_command_line(argc, argv)
 int argc;
 char **argv;
 {
-   int i, xms, ems, errors;
+#ifndef __OS2__
+   int i, xms = 1, ems = 1, errors;
+#else
+   int i, errors;
+#endif
 
    errors = 0;
-   xms = ems = 1;
    dos_argv = argv;
+   nopoll = nomailproc = 0;
 
    for (i = 1; i < argc; i++) {
       if (argv[i][0] != '-' && argv[i][0] != '/')
          continue;
 
+#ifndef __OS2__
       if (!stricmp (argv[i], "-NOXMS"))
          xms = 0;
       else if (!stricmp (argv[i], "-NOEMS"))
          ems = 0;
+      if (!stricmp (argv[i], "-NP"))
+#else
+      else if (!stricmp (argv[i], "-NP"))
+#endif         
+         nopoll = 1;
+      else if (!stricmp (argv[i], "-NM"))
+         nomailproc = 1;
+      else if (!stricmp (argv[i], "-XN"))
+         nonetmail = 1;
+#ifdef __OS2__
+#if defined (__OCC__) || defined (__TCPIP__)
+      else if (!stricmp (argv[i], "-TCPIP")) {
+         socket = atoi (argv[++i]);
+         tcpip = 1;
+         caller = 1;
+         snooping = 1;
+         dos_argv = NULL;
+         continue;
+      }
+#endif
+#endif
 
       switch (toupper (argv[i][1])) {
          case 'B':
@@ -317,7 +368,13 @@ char **argv;
             break;
 
          case 'L':
-            local_mode = 1;
+            if (toupper (argv[i][2]) == 'F') {
+               local_mode = 2;
+               caller = 1;
+               snooping = 1;
+            }
+            else
+               local_mode = 1;
             dos_argv = NULL;
             break;
 
@@ -328,8 +385,15 @@ char **argv;
             break;
 
          case 'N':
-            if (toupper (argv[i][2]) != 'B')
+            if (isdigit (argv[i][2]))
                line_offset = atoi (&argv[i][2]);
+            else if (toupper (argv[i][2]) == 'A') {
+               if (isdigit (argv[i][3]))
+                  line_offset = atoi (&argv[i][3]);
+               else
+                  line_offset = 1;
+               detect_line_number ();
+            }
             break;
 
          case 'O':
@@ -338,7 +402,8 @@ char **argv;
             break;
 
          case 'T':
-            allowed = atoi(&argv[i][2]);
+            if (isdigit (argv[i][2]))
+               allowed = atoi (&argv[i][2]);
             break;
 
          case 'P':
@@ -542,8 +607,7 @@ long get_flags (char *p)
 
 extern int ox, oy, wh1;
 
-void get_down (errlev, flag)
-int errlev, flag;
+void get_down (int errlev, int flag)
 {
    char filename[80];
 
@@ -560,15 +624,14 @@ int errlev, flag;
    unlink (filename);
    sprintf (filename, "REP%d.TXT", line_offset);
    unlink (filename);
-
-   if (flag);
+   update_user ();
 
    if (!frontdoor) {
       status_line(":End");
       fprintf(logf, "\n");
    }
 
-   fclose(logf);
+   fclose (logf);
 
    if (errlev || dos_argv == NULL) {
       if (!local_mode) {

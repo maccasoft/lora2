@@ -11,6 +11,7 @@
 
 #include <cxl\cxlwin.h>
 #include <cxl\cxlvid.h>
+#include <cxl\cxlstr.h>
 
 #include "lsetup.h"
 #include "sched.h"
@@ -21,8 +22,10 @@
 #define Z_32UpdateCRC(c,crc) (cr3tab[((int) crc ^ c) & 0xff] ^ ((crc >> 8) & 0x00FFFFFFL))
 
 struct _aidx {
-   char areatag[32];
+//   char areatag[32];
+   unsigned long areatag;
    byte board;
+   word gold_board;
 };
 
 extern struct _aidx *aidx;
@@ -38,9 +41,10 @@ void mprintf (FILE *fp, char *format, ...);
 long mseek (FILE *fp, long position, int offset);
 int mputs (char *s, FILE *fp);
 int mread (char *s, int n, int e, FILE *fp);
+void put_tearline (FILE *fpd);
 
 void build_aidx (void);
-int quick_rescan_echomail (int board, int zone, int net, int node, int point);
+int quick_rescan_echomail (int board, int zone, int net, int node, int point, int goldboard);
 void pip_rescan_echomail (int board, char *tag, int zone, int net, int node, int point);
 void fido_rescan_echomail (char *tag, int zone, int net, int node, int point);
 void squish_rescan_echomail (char *tag, int zone, int net, int node, int point);
@@ -84,14 +88,15 @@ static long xtol (char *p)
    return (r);
 }
 
-#define MAX_BUFFERING 2048
+#define MAX_BUFFERING       2048
+#define MAX_DESCRIPTION     512
 
 void import_tic_files ()
 {
-   FILE *fp, *fpcfg, *fpd;
+   FILE *fp, *fpcfg, *fpd, *fps;
    int i, zo, ne, no, po, fzo, fne, fno, fpo, fds, fdd, d;
-   int wh, ozo, one, ono, opo, nrec, nsent, n_forw, nf;
-   char *inpath, filename[80], linea[MAX_BUFFERING], area[20], descr[512], name[14], *p;
+   int wh, ozo, one, ono, opo, nrec, nsent, n_forw, nf, godelete;
+   char *inpath, filename[80], *linea, area[20], *descr, name[14], *p;
    char pw[32], dpath[80], dpw[32], found, fi, repl[14], seen;
    char path;
    long crc, pos, crcf;
@@ -115,6 +120,8 @@ void import_tic_files ()
 
    fi = 0;
    nrec = nsent = 0;
+   linea = (char *)malloc (MAX_BUFFERING + 1);
+   descr = (char *)malloc (MAX_DESCRIPTION + 1);
 
    local_status ("TIC");
    wfill (7, 53, 11, 78, ' ', LCYAN|_BLACK);
@@ -179,14 +186,14 @@ void import_tic_files ()
          fzo = fne = fno = fpo = 0;
          ozo = one = ono = opo = 0;
 
-         while (fgets (linea, 1020, fp) != NULL) {
+         while (fgets (linea, MAX_BUFFERING - 2, fp) != NULL) {
             while (strlen (linea) > 0 && (linea[strlen (linea) - 1] == 0x0D || linea[strlen (linea) - 1] == 0x0A))
                linea[strlen (linea) - 1] = '\0';
 
             if (!strnicmp (linea, "Desc ", 5)) {
                p = &linea[5];
-               if (strlen (p) > 511)
-                  p[511] = '\0';
+               if (strlen (p) > MAX_DESCRIPTION)
+                  p[MAX_DESCRIPTION] = '\0';
                strcpy (descr, p);
                continue;
             }
@@ -233,8 +240,10 @@ void import_tic_files ()
                strcpy (repl, p);
             }
             else if (!stricmp (p, "CRC")) {
-               p = strtok (NULL, " ");
-               crc = xtol (p);
+               if ((p = strtok (NULL, " ")) != NULL)
+                  crc = xtol (p);
+               else
+                  crc = 0L;
             }
             else if (!stricmp (p, "Pw")) {
                if ((p = strtok (NULL, " ")) != NULL) {
@@ -249,9 +258,7 @@ void import_tic_files ()
 
          sprintf (filename, "%s%s", inpath, name);
          fds = open (filename, O_RDONLY|O_BINARY);
-         if (fds != -1) {
-            pos = filelength (fds);
-
+         if (fds != -1 && (pos = filelength (fds)) > 0L) {
             crcf = 0xFFFFFFFFL;
 
             do {
@@ -263,7 +270,7 @@ void import_tic_files ()
 
             crcf = ~crcf;
 
-            if (crcf != crc) {
+            if (crc != 0L && crcf != crc) {
                fclose (fp);
                status_line ("!%s bad CRC! (%08lX / %08lX)", name, crcf, crc);
                rename_bad_tics (inpath, blk.ff_name);
@@ -272,7 +279,10 @@ void import_tic_files ()
          }
          else {
             fclose (fp);
-            status_line ("!%s not found in inbound area", name);
+            if (fds == -1)
+               status_line ("!%s not found in inbound area", name);
+            else
+               status_line ("!%s zero byte size", name);
             rename_bad_tics (inpath, blk.ff_name);
             continue;
          }
@@ -475,6 +485,32 @@ void import_tic_files ()
                      status_line ("*%s doesn't exist", filename);
                   else
                      status_line ("*Replaces: %s", repl);
+
+                  sprintf (filename, "%sFILES.BBS", sys.filepath);
+                  sprintf (linea, "%sFILES.BBS", sys.filepath);
+
+                  rename (filename, linea);
+                  godelete = 0;
+
+                  fpd = fopen (filename, "wt");
+                  fps = fopen (linea, "rt");
+
+                  while (fgets (linea, MAX_BUFFERING - 2, fps) != NULL) {
+                     if (godelete) {
+                        if (linea[1] == '>')
+                           continue;
+                        else
+                           godelete = 0;
+                     }
+                     if (!strncmp (linea, repl, strlen (repl))) {
+                        godelete = 1;
+                        continue;
+                     }
+                     fputs (linea, fpd);
+                  }
+
+                  fclose (fps);
+                  fclose (fpd);
                }
 
                status_line (" Moving %s%s to %s%s", inpath, name, dpath, name);
@@ -630,7 +666,7 @@ void import_tic_files ()
                               fprintf (fpd, "From %d:%d/%d\r\n", config->alias[i].zone, config->alias[i].net, config->alias[i].node);
                            }
                            else if (!strnicmp (linea, "Created by ", 11))
-                              fprintf (fpd, "Created by %s (C) Copyright Marco Maccaferri - 1989-94\r\n", VERSION);
+                              fprintf (fpd, "Created by %s (C) Copyright Marco Maccaferri - 1989-95\r\n", VERSION);
                            else if (!strnicmp (linea, "Pw ", 3))
                               fprintf (fpd, "Pw %s\r\n", strupr (dpw));
                            else
@@ -707,6 +743,9 @@ void import_tic_files ()
    fclose (fpcfg);
    wr->srow--;
    wclose ();
+
+   free (descr);
+   free (linea);
 
    if (!fi)
       status_line (" No inbound TIC's to process");
@@ -799,7 +838,7 @@ void rescan_areas (void)
          continue;
       if (type == 'S' || type == 'M')
          strcpy (sys.msg_path, p);
-      else if (type == 'Q' || type == 'P')
+      else if (type == 'Q' || type == 'P' || type == 'G')
          board = atoi (p);
 
       if ((tag = strtok (NULL, " ")) == NULL)
@@ -833,7 +872,9 @@ void rescan_areas (void)
          adjtime = 1;
 
       if (type == 'Q')
-         quick_rescan_echomail (board, zo, ne, no, po);
+         quick_rescan_echomail (board, zo, ne, no, po, 0);
+      else if (type == 'G')
+         quick_rescan_echomail (board, zo, ne, no, po, 1);
       else if (type == 'S') {
          sys.squish = 1;
          squish_scan_message_base (0, sys.msg_path, 0);
@@ -841,6 +882,10 @@ void rescan_areas (void)
             while (MsgLock (sq_ptr) == -1)
                ;
             squish_rescan_echomail (sys.echotag, zo, ne, no, po);
+
+            MsgUnlock (sq_ptr);
+            MsgCloseArea (sq_ptr);
+            sq_ptr = NULL;
          }
       }
       else if (type == 'M') {
@@ -904,7 +949,10 @@ struct _msgzone {
 void track_inbound_messages (FILE *fpd, struct _msg *msgt, int fzone)
 {
    if (!(msgt->attr & MSGLOCAL)) {
+      if (fzone == 0)
+         fzone = config->alias[0].zone;
       if (!get_bbs_record (fzone, msgt->orig_net, msgt->orig, 0)) {
+         status_line ("!Unlisted node: %d:%d/%d", fzone, msgt->orig_net, msgt->orig);
          mprintf (fpd, "==========================================================================\r\n");
          mprintf (fpd, "WARNING [%s]: The originating address on this message was\r\n", VERSION);
          mprintf (fpd, "=not= listed in the NodeList at %d:%d/%d.  Please ensure that you do\r\n", config->alias[0].zone, config->alias[0].net, config->alias[0].node);
@@ -949,6 +997,8 @@ int track_outbound_messages (FILE *fpd, struct _msg *msgt, int fzone, int fpoint
 
    memset (&tmsg, 0, sizeof (struct _msg));
    sprintf (filename, "%s%d.MSG", sys.msg_path, ++last_msg);
+
+   status_line ("!Destination node %d:%d/%d unlisted", tzone, msgt->dest_net, msgt->dest);
 
    fp = fopen (filename, "wb");
    if (fp == NULL)
@@ -1029,5 +1079,63 @@ int track_outbound_messages (FILE *fpd, struct _msg *msgt, int fzone, int fpoint
    fclose (fp);
 
    return (0);
+}
+
+int check_board_not_used (char goldbase, FILE *fp)
+{
+   int fd, board = 1;
+   char filename[128], *location;
+   struct _sys tsys;
+
+   sprintf (filename, SYSMSG_PATH, config->sys_path);
+   if ((fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE)) == -1)
+      return (0);
+
+   if (fp != NULL) {
+      rewind (fp);
+
+      while (fgets (filename, 120, fp) != NULL) {
+         if (filename[0] == ';')
+            continue;
+         while (filename[strlen (filename) - 1] == 0x0D || filename[strlen (filename) - 1] == 0x0A || filename[strlen (filename) - 1] == ' ')
+            filename[strlen (filename) - 1] = '\0';
+
+         if ((location = strtok (filename, " ")) == NULL)
+            continue;
+         location = strbtrim (location);
+
+         if (goldbase) {
+            if (toupper (location[0]) == 'G' && isdigit (location[1])) {
+               if (atoi (++location) >= board)
+                  board = atoi (location) + 1;
+            }
+         }
+         else {
+            if (isdigit (*location)) {
+               if (atoi (location) >= board)
+                  board = atoi (location) + 1;
+            }
+         }
+      }
+   }
+
+   while (read (fd, &tsys, SIZEOF_MSGAREA) == SIZEOF_MSGAREA) {
+      if (goldbase) {
+         if (tsys.gold_board == board) {
+            board++;
+            lseek (fd, 0L, SEEK_SET);
+         }
+      }
+      else {
+         if (tsys.quick_board == board) {
+            board++;
+            lseek (fd, 0L, SEEK_SET);
+         }
+      }
+   }
+
+   close (fd);
+
+   return (board);
 }
 

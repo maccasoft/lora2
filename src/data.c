@@ -68,107 +68,94 @@ int out_count = 0;
 int old_fossil = 1;
 char ctrlc_ctr;
 
-        word speed;
-        byte answer_flag;
-        byte lock_baud;
-        byte terminal, emulator;
-        byte got_arcmail;
-        byte caller = 0;
-        byte nopause = 0;
-        byte recv_ackless = 0;
-        byte send_ackless = 0;
-        byte sliding;
-        byte small_window = 0;
-        byte ackless_ok;
-        byte no_overdrive = 0;
-        byte do_chksum;
-        byte may_be_seadog;
-        byte did_nak;
-        byte netmail;
-        byte who_is_he;
-        byte overwrite;
-        byte allow_reply;
-        byte snooping;
-        word rate;
-	char *init;
-	char *dial;
-	struct _usr usr;
-        struct _sys sys;
-	FILE *logf;
-	long start_time;
-	int  allowed;
-        byte usr_class;
+byte answer_flag;
+byte lock_baud;
+byte terminal, emulator;
+byte got_arcmail;
+byte caller = 0;
+byte nopause = 0;
+byte recv_ackless = 0;
+byte send_ackless = 0;
+byte sliding;
+byte small_window = 0;
+byte ackless_ok;
+byte no_overdrive = 0;
+byte do_chksum;
+byte may_be_seadog;
+byte did_nak;
+byte netmail;
+byte who_is_he;
+byte overwrite;
+byte allow_reply;
+byte snooping;
+long rate, speed;
+char *init;
+char *dial;
+struct _usr usr;
+struct _sys sys;
+FILE *logf;
+long start_time;
+int  allowed;
+byte usr_class;
 
-	char Rxhdr[4];
-	char Txhdr[4];
-	long Rxpos;
-	int Txfcs32;
-	int Crc32t;
-	int Crc32;
-	int Znulls;
-	int Rxtimeout;
-	int Rxframeind;
-	byte *Filename;
-	word z_size;
-	byte Resume_WaZOO;
-	byte Resume_name[13];
-	byte Resume_info[48];
-	byte Abortlog_name[PATHLEN];
-	byte lastsent;
-        byte *Secbuf;
-        byte *Txbuf;
-	long file_length;
-	word remote_capabilities;
-	int fsent;
-        char remote_password[30];
-	struct _node nodelist;
+char Rxhdr[4];
+char Txhdr[4];
+long Rxpos;
+int Txfcs32;
+int Crc32t;
+int Crc32;
+int Znulls;
+int Rxtimeout;
+int Rxframeind;
+byte *Filename;
+word z_size;
+byte Resume_WaZOO;
+byte Resume_name[13];
+byte Resume_info[48];
+byte Abortlog_name[PATHLEN];
+byte lastsent;
+byte *Secbuf;
+byte *Txbuf;
+long file_length;
+word remote_capabilities;
+int fsent;
+char remote_password[30];
+struct _node nodelist;
+int num_msg;
+int first_msg;
+int last_msg;
+int lastread;
+struct _msg msg;
+int msg_tzone, msg_tpoint, msg_fzone, msg_fpoint;
+char *messaggio[MAX_MSGLINE];
+int errs, real_errs;
+word block_number, base_block;
+int block_size, fsize1, fsize2, first_block;
+char final_name[50], *_fpath;
 
-        int num_msg;
-        int first_msg;
-        int last_msg;
-        int lastread;
-        struct _msg msg;
-        int msg_tzone;
-        int msg_tpoint;
-        int msg_fzone;
-        int msg_fpoint;
-        char *messaggio[MAX_MSGLINE];
-        int errs;
-        int real_errs;
-        word block_number;
-        word base_block;
-        int block_size;
-        int fsize1;
-        int fsize2;
-        int first_block;
-	char final_name[50];
-	char *_fpath;
-
-        struct _msg_list far msg_list[MAX_PRIV_MAIL];
-        int max_priv_mail;
-        int last_mail;
+struct _msg_list *msg_list;
+int max_priv_mail, last_mail;
 
 char *mesi[12];
 
-
 char *mtext [] = {
-                  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
 
 struct parse_list levels[] = {
-	TWIT, "Twit",
-	DISGRACE, "Disgrace",
-	LIMITED, "Limited",
-	NORMAL, "Normal",
-	WORTHY, "Worthy",
-	PRIVIL, "Privel",
-	FAVORED, "Favored",
-	EXTRA, "Extra",
-	CLERK, "Clerk",
-        ASSTSYSOP, "Asst. Sysop",
-	SYSOP, "Sysop",
-	HIDDEN, "Hidden"
+   TWIT, "Twit",
+   DISGRACE, "Disgrace",
+   LIMITED, "Limited",
+   NORMAL, "Normal",
+   WORTHY, "Worthy",
+   PRIVIL, "Privel",
+   FAVORED, "Favored",
+   EXTRA, "Extra",
+   CLERK, "Clerk",
+   ASSTSYSOP, "Asst. Sysop",
+   SYSOP, "Sysop",
+   HIDDEN, "Hidden"
 };
 
 char *wtext [] = {
@@ -266,251 +253,243 @@ unsigned short far crctab[256] = {
 	0x6e17, 0x7e36, 0x4e55, 0x5e74, 0x2e93, 0x3eb2, 0x0ed1, 0x1ef0
 };
 
-int no_resync = 0;
-int no_sealink = 0;
 
 char hex[] = "0123456789abcdef";
 
 EVENT *e_ptrs[64];
-int requests_ok = 1;
-int num_events = 0;
-int cur_event = -1;
-int next_event = 0;
-int got_sched = 0;
-int noforce = 0;
-int max_connects = 3;
-int max_noconnects = 10000;
-int matrix_mask = 0;
-int no_requests = 0;
+int requests_ok = 1, num_events = 0, cur_event = -1, next_event = 0;
+int got_sched = 0, noforce = 0, max_connects = 3;
+int max_noconnects = 10000, matrix_mask = 0, no_requests = 0;
+int no_resync = 0, no_sealink = 0;
 
-char far *prodcode[] = {
-        "Fido",
-        "Rover",
-        "SEAdog",
-        "",
-        "Slick/150",
-        "Opus",
-        "Dutchie",
-        "",
-        "Tabby",
-        "Hoster",
-        "Wolf/68k",
-        "QMM",
-        "FrontDoor",
-        "",
-        "",
-        "",
-        "",
-        "MailMan",
-        "OOPS",
-        "GS-Point",
-        "BGMail",
-        "CrossBow",
-        "",
-        "",
-        "",
-        "BinkScan",
-        "D'Bridge",
-        "BinkleyTerm",
-        "Yankee",
-        "FGet/FSend",
-        "Daisy,Apple ][",
-        "Polar Bear",
-        "The-Box",
-        "STARgate/2",
-        "TMail",
-        "TCOMMail",
-        "Bananna",
-        "RBBSMail",
-        "Apple-Netmail",
-        "Chameleon",
-        "Majik Board",
-        "QMail",
-        "Point And Click",
-        "Aurora Three Bundler",
-        "FourDog",
-        "MSG-PACK",
-        "AMAX",
-        "Domain Communication System",
-        "LesRobot",
-        "Rose",
-        "Paragon",
-        "BinkleyTerm",
-        "StarNet",
-        "ZzyZx",
-        "QEcho",
-        "BOOM",
-        "PBBS",
-        "TrapDoor",
-        "Welmat",
-        "NetGate",
-        "Odie",
-        "Quick Gimme",
-        "dbLink",
-        "TosScan",
-        "Beagle",
-        "Igor",
-        "TIMS",
-        "Isis",
-        "AirMail",
-        "XRS",
-        "Juliet Mail System",
-        "Jabberwocky",
-        "XST,MS-DOS",
-        "MailStorm",
-        "BIX-Mail",
-        "IMAIL",
-        "FTNGate",
-        "RealMail",
-        "LoraBBS",
-        "TDCS",
-        "InterMail",
-        "RFD",
-        "Yuppie!",
-        "EMMA",
-        "QBoxMail",
-        "Number 4",
-        "Number 5",
-        "GSBBS",
-        "Merlin",
-        "TPCS",
-        "Raid",
-        "Outpost",
-        "Nizze",
-        "Armadillo",
-        "rfmail",
-        "Msgtoss",
-        "InfoTex",
-        "GEcho",
-        "CDEhost",
-        "Pktize",
-        "PC-RAIN",
-        "Truffle",
-        "Foozle",
-        "White Pointer",
-        "GateWorks",
-        "Portal of Power",
-        "MacWoof",
-        "Mosaic",
-        "TPBEcho",
-        "HandyMail",
-        "EchoSmith",
-        "FileHost",
-        "SFScan",
-        "Benjamin",
-        "RiBBS",
-        "MP",
-        "Ping",
-        "Door2Europe",
-        "SWIFT",
-        "WMAIL",
-        "RATS",
-        "Harry the Dirty Dog",
-        "Maximus-CBCS",
-        "SwifEcho",
-        "GCChost",
-        "RPX-Mail",
-        "Tosser",
-        "TCL",
-        "MsgTrack",
-        "FMail",
-        "Scantoss",
-        "Point Manager",
-        "Dropped",
-        "Simplex",
-        "UMTP",
-        "Indaba",
-        "Echomail Engine",
-        "DragonMail",
-        "Prox",
-        "Tick",
-        "RA-Echo",
-        "TrapToss",
-        "Babel",
-        "UMS",
-        "RWMail",
-        "WildMail",
-        "AlMAIL",
-        "XCS",
-        "Fone-Link",
-        "Dogfight",
-        "Ascan",
-        "FastMail",
-        "DoorMan",
-        "PhaedoZap",
-        "SCREAM",
-        "MoonMail",
-        "Backdoor",
-        "MailLink",
-        "Mail Manager",
-        "Black Star",
-        "Bermuda",
-        "PT",
-        "UltiMail",
-        "GMD",
-        "FreeMail",
-        "Meliora",
-        "Foodo",
-        "MSBBS",
-        "Boston BBS",
-        "XenoMail",
-        "XenoLink",
-        "ObjectMatrix",
-        "Milquetoast",
-        "PipBase",
-        "EzyMail",
-        "FastEcho",
-        "IOS",
-        "Communique",
-        "PointMail",
-        "Harvey's Robot",
-        "2daPoint",
-        "CommLink",
-        "fronttoss",
-        "SysopPoint",
-        "PTMAIL",
-        "AECHO",
-        "DLGMail",
-        "GatePrep",
-        "Spoint",
-        "TurboMail",
-        "FXMAIL",
-        "NextBBS",
-        "EchoToss",
-        "SilverBox",
-        "MBMail",
-        "SkyFreq",
-        "ProMailer",
-        "Mega Mail",
-        "YaBom",
-        "TachEcho",
-        "XAP",
-        "EZMAIL",
-        "Arc-Binkley",
-        "Roser",
-        "UU2",
-        "NMS",
-        "BBCSCAN",
-        "XBBS",
-        "LoTek Vzrul",
-        "Private Point Project",
-        "NoSnail",
-        "SmlNet",
-        "STIR",
-        "RiscBBS",
-        "Hercules",
-        "AMPRGATE",
-        "BinkEMSI",
-        "EditMsg",
-        "Roof",
-        "QwkPkt",
-        "MARISCAN",
-        "NewsFlash",
-        "Paradise",
-        "DogMatic-ACB",
-        "T-Mail",
-        "JetMail",
-        "MainDoor"
+char *prodcode[] = {
+   "Fido",
+   "Rover",
+   "SEAdog",
+   "",
+   "Slick/150",
+   "Opus",
+   "Dutchie",
+   "",
+   "Tabby",
+   "Hoster",
+   "Wolf/68k",
+   "QMM",
+   "FrontDoor",
+   "",
+   "",
+   "",
+   "",
+   "MailMan",
+   "OOPS",
+   "GS-Point",
+   "BGMail",
+   "CrossBow",
+   "",
+   "",
+   "",
+   "BinkScan",
+   "D'Bridge",
+   "BinkleyTerm",
+   "Yankee",
+   "FGet/FSend",
+   "Daisy,Apple ][",
+   "Polar Bear",
+   "The-Box",
+   "STARgate/2",
+   "TMail",
+   "TCOMMail",
+   "Bananna",
+   "RBBSMail",
+   "Apple-Netmail",
+   "Chameleon",
+   "Majik Board",
+   "QMail",
+   "Point And Click",
+   "Aurora Three Bundler",
+   "FourDog",
+   "MSG-PACK",
+   "AMAX",
+   "Domain Communication System",
+   "LesRobot",
+   "Rose",
+   "Paragon",
+   "BinkleyTerm",
+   "StarNet",
+   "ZzyZx",
+   "QEcho",
+   "BOOM",
+   "PBBS",
+   "TrapDoor",
+   "Welmat",
+   "NetGate",
+   "Odie",
+   "Quick Gimme",
+   "dbLink",
+   "TosScan",
+   "Beagle",
+   "Igor",
+   "TIMS",
+   "Isis",
+   "AirMail",
+   "XRS",
+   "Juliet Mail System",
+   "Jabberwocky",
+   "XST",
+   "MailStorm",
+   "BIX-Mail",
+   "IMAIL",
+   "FTNGate",
+   "RealMail",
+   "LoraBBS",
+   "TDCS",
+   "InterMail",
+   "RFD",
+   "Yuppie!",
+   "EMMA",
+   "QBoxMail",
+   "Number 4",
+   "Number 5",
+   "GSBBS",
+   "Merlin",
+   "TPCS",
+   "Raid",
+   "Outpost",
+   "Nizze",
+   "Armadillo",
+   "rfmail",
+   "Msgtoss",
+   "InfoTex",
+   "GEcho",
+   "CDEhost",
+   "Pktize",
+   "PC-RAIN",
+   "Truffle",
+   "Foozle",
+   "White Pointer",
+   "GateWorks",
+   "Portal of Power",
+   "MacWoof",
+   "Mosaic",
+   "TPBEcho",
+   "HandyMail",
+   "EchoSmith",
+   "FileHost",
+   "SFScan",
+   "Benjamin",
+   "RiBBS",
+   "MP",
+   "Ping",
+   "Door2Europe",
+   "SWIFT",
+   "WMAIL",
+   "RATS",
+   "Harry the Dirty Dog",
+   "Maximus-CBCS",
+   "SwifEcho",
+   "GCChost",
+   "RPX-Mail",
+   "Tosser",
+   "TCL",
+   "MsgTrack",
+   "FMail",
+   "Scantoss",
+   "Point Manager",
+   "Dropped",
+   "Simplex",
+   "UMTP",
+   "Indaba",
+   "Echomail Engine",
+   "DragonMail",
+   "Prox",
+   "Tick",
+   "RA-Echo",
+   "TrapToss",
+   "Babel",
+   "UMS",
+   "RWMail",
+   "WildMail",
+   "AlMAIL",
+   "XCS",
+   "Fone-Link",
+   "Dogfight",
+   "Ascan",
+   "FastMail",
+   "DoorMan",
+   "PhaedoZap",
+   "SCREAM",
+   "MoonMail",
+   "Backdoor",
+   "MailLink",
+   "Mail Manager",
+   "Black Star",
+   "Bermuda",
+   "PT",
+   "UltiMail",
+   "GMD",
+   "FreeMail",
+   "Meliora",
+   "Foodo",
+   "MSBBS",
+   "Boston BBS",
+   "XenoMail",
+   "XenoLink",
+   "ObjectMatrix",
+   "Milquetoast",
+   "PipBase",
+   "EzyMail",
+   "FastEcho",
+   "IOS",
+   "Communique",
+   "PointMail",
+   "Harvey's Robot",
+   "2daPoint",
+   "CommLink",
+   "fronttoss",
+   "SysopPoint",
+   "PTMAIL",
+   "AECHO",
+   "DLGMail",
+   "GatePrep",
+   "Spoint",
+   "TurboMail",
+   "FXMAIL",
+   "NextBBS",
+   "EchoToss",
+   "SilverBox",
+   "MBMail",
+   "SkyFreq",
+   "ProMailer",
+   "Mega Mail",
+   "YaBom",
+   "TachEcho",
+   "XAP",
+   "EZMAIL",
+   "Arc-Binkley",
+   "Roser",
+   "UU2",
+   "NMS",
+   "BBCSCAN",
+   "XBBS",
+   "LoTek Vzrul",
+   "Private Point Project",
+   "NoSnail",
+   "SmlNet",
+   "STIR",
+   "RiscBBS",
+   "Hercules",
+   "AMPRGATE",
+   "BinkEMSI",
+   "EditMsg",
+   "Roof",
+   "QwkPkt",
+   "MARISCAN",
+   "NewsFlash",
+   "Paradise",
+   "DogMatic-ACB",
+   "T-Mail",
+   "JetMail",
+   "MainDoor"
 };
 
 char *msgtxt[] = {
@@ -593,7 +572,7 @@ char *msgtxt[] = {
 /*-_TYPE_EXIT              */        "\nLoraBBS DOS Shell - Type EXIT To Return - Free RAM %ld\n",
 /*-_BINKLEY_BACK           */        ":LoraBBS Reactivated",
 /*M_NONE_EVENTS            */        "Scheduler empty",
-/*-_READY_CONNECT          */        "+Connect %u%s%s",
+/*-_READY_CONNECT          */        "+Connect %lu%s%s",
 /*-_DIALING_NUMBER         */        ":Dialing %s",
 /*-_INSUFFICIENT_DATA      */        ":Write message #%d",
 /*M_END_OF_ATTEMPT         */        "+End of connection attempt",

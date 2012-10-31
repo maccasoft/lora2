@@ -19,7 +19,11 @@
 #include "prototyp.h"
 
 extern int maxakainfo, msg_parent, msg_child;
+extern char *internet_to;
 extern struct _akainfo *akainfo;
+
+extern struct _node2name *nametable; // Gestione nomi per aree PRIVATE
+extern int nodes_num;
 
 int track_outbound_messages (FILE *fpd, struct _msg *msgt, int fzone, int fpoint, int tzone, int tpoint);
 int check_hold (int zone, int net, int node, int point);
@@ -62,7 +66,7 @@ char upd;
             *p = '\0';
 
          i = atoi(blk.ff_name);
-         if (last < i || !last)
+			if (last < i || !last)
             last = i;
          if (first > i || !first)
             first = i;
@@ -103,6 +107,9 @@ char upd;
       else
          lastread = 0;
    }
+
+   if (lastread < 0)
+      lastread = 0;
 }
 
 #ifndef POINT
@@ -110,6 +117,11 @@ void read_forward(start,pause)
 int start,pause;
 {
    int i;
+
+   if (msg_list != NULL) {
+      free (msg_list);
+      msg_list = NULL;
+   }
 
    if (start < 0)
       start = 0;
@@ -121,29 +133,29 @@ int start,pause;
       return;
    }
 
-   if (sys.quick_board)
-      while (!quick_read_message(start,pause)) {
+   if (sys.quick_board || sys.gold_board)
+      while (!quick_read_message(start,pause,0)) {
          if (start < last_msg)
             start++;
          else
             break;
       }
    else if (sys.pip_board)
-      while (!pip_msg_read(sys.pip_board, start, 0, pause)) {
+      while (!pip_msg_read(sys.pip_board, start, 0, pause,0)) {
          if (start < last_msg)
             start++;
          else
             break;
       }
    else if (sys.squish)
-      while (!squish_read_message (start, pause)) {
+      while (!squish_read_message (start, pause,0)) {
          if (start < last_msg)
             start++;
          else
             break;
       }
-   else {
-      while (!read_message(start,pause)) {
+	else {
+      while (!read_message(start,pause,0)) {
          if (start < last_msg)
             start++;
          else
@@ -189,6 +201,11 @@ int start;
 {
    int i;
 
+   if (msg_list != NULL) {
+      free (msg_list);
+      msg_list = NULL;
+   }
+
    if (start > first_msg)
       start--;
    else {
@@ -196,29 +213,29 @@ int start;
       return;
    }
 
-   if (sys.quick_board)
-      while (!quick_read_message(start,0)) {
+   if (sys.quick_board || sys.gold_board)
+      while (!quick_read_message(start,0,0)) {
          if (start < last_msg)
             start++;
          else
             break;
       }
    else if (sys.pip_board)
-      while (!pip_msg_read(sys.pip_board, start, 0, 0)) {
+      while (!pip_msg_read(sys.pip_board, start, 0, 0,0)) {
          if (start < last_msg)
             start++;
          else
             break;
       }
    else if (sys.squish)
-      while (!squish_read_message (start, 0)) {
+      while (!squish_read_message (start, 0,0)) {
          if (start < last_msg)
             start++;
          else
             break;
       }
    else {
-      while (!read_message(start,0)) {
+      while (!read_message(start,0,0)) {
          if (start > 1)
             start--;
          else
@@ -246,26 +263,31 @@ void read_parent (void)
 {
    int i, start = msg_parent;
 
+   if (msg_list != NULL) {
+      free (msg_list);
+      msg_list = NULL;
+   }
+
    if (start < 1 || start > last_msg) {
       m_print(bbstxt[B_NO_MORE_MESSAGE]);
       return;
    }
 
-   if (sys.quick_board) {
+   if (sys.quick_board || sys.gold_board) {
       start--;
-      if (!quick_read_message (start, 0))
+      if (!quick_read_message (start, 0, 0))
          start = lastread;
    }
    else if (sys.pip_board) {
-      if (!pip_msg_read(sys.pip_board, start, 0, 0))
+      if (!pip_msg_read(sys.pip_board, start, 0, 0, 0))
          start = lastread;
    }
    else if (sys.squish) {
-      if (!squish_read_message (start, 0))
+      if (!squish_read_message (start, 0, 0))
          start = lastread;
    }
-   else {
-      if (!read_message (start, 0))
+	else {
+      if (!read_message (start, 0, 0))
          start = lastread;
    }
 
@@ -289,26 +311,31 @@ void read_reply (void)
 {
    int i, start = msg_child;
 
+   if (msg_list != NULL) {
+      free (msg_list);
+      msg_list = NULL;
+   }
+
    if (start < 1 || start > last_msg) {
       m_print(bbstxt[B_NO_MORE_MESSAGE]);
       return;
    }
 
-   if (sys.quick_board) {
+   if (sys.quick_board || sys.gold_board) {
       start--;
-      if (!quick_read_message (start, 0))
+      if (!quick_read_message (start, 0, 0))
          start = lastread;
    }
    else if (sys.pip_board) {
-      if (!pip_msg_read(sys.pip_board, start, 0, 0))
+      if (!pip_msg_read(sys.pip_board, start, 0, 0, 0))
          start = lastread;
    }
-   else if (sys.squish) {
-      if (!squish_read_message (start, 0))
+	else if (sys.squish) {
+      if (!squish_read_message (start, 0, 0))
          start = lastread;
    }
    else {
-      if (!read_message (start, 0))
+      if (!read_message (start, 0, 0))
          start = lastread;
    }
 
@@ -334,8 +361,8 @@ void msg_kill()
    char stringa[10];
 
    if (!num_msg) {
-      if (sys.quick_board)
-         quick_scan_message_base (sys.quick_board, usr.msg, 1);
+      if (sys.quick_board || sys.gold_board)
+         quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
       else if (sys.pip_board)
          pip_scan_message_base (usr.msg, 1);
       else if (sys.squish)
@@ -347,7 +374,7 @@ void msg_kill()
    for (;;) {
       if (!get_command_word (stringa, 4)) {
          m_print (bbstxt[B_MSG_DELETE]);
-         chars_input(stringa, 4, INPUT_FIELD);
+			chars_input(stringa, 4, INPUT_FIELD);
       }
 
       if (!stringa[0])
@@ -357,7 +384,9 @@ void msg_kill()
 
       if (i >= first_msg && i <= last_msg) {
          if (sys.quick_board)
-            m = quick_kill_message (i);
+            m = quick_kill_message (i, 0);
+         else if (sys.gold_board)
+            m = quick_kill_message (i, 1);
          else if (sys.pip_board)
             m = pip_kill_message (i);
          else if (sys.squish)
@@ -375,14 +404,16 @@ void msg_kill()
       }
    }
 
-   if (sys.quick_board)
-      quick_scan_message_base (sys.quick_board, usr.msg, 1);
+/*
+   if (sys.quick_board || sys.gold_board)
+      quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
    else if (sys.pip_board)
       pip_scan_message_base (usr.msg, 1);
    else if (sys.squish)
       squish_scan_message_base (usr.msg, sys.msg_path, 1);
    else
-      scan_message_base(usr.msg, 1);
+      scan_message_base (usr.msg, 1);
+*/
 }
 
 int kill_message(msg_num)
@@ -400,7 +431,7 @@ int msg_num;
    read (fd, (char *)&msgt, sizeof(struct _msg));
    close (fd);
 
-   if (!stricmp (msgt.from, usr.name) || !stricmp (msgt.to, usr.name) || usr.priv == SYSOP) {
+   if (!stricmp (msgt.from, usr.name) || !stricmp (msgt.to, usr.name) || !stricmp (msgt.from, usr.handle) || !stricmp (msgt.to, usr.handle) || usr.priv == SYSOP) {
       unlink (buff);
       return (1);
    }
@@ -409,252 +440,263 @@ int msg_num;
 }
 
 
-int read_message(msg_num, flag)
-int msg_num, flag;
+int read_message(msg_num, flag, fakenum)
+int msg_num, flag, fakenum;
 {
-	FILE *fp;
-        int i, z, m, line, colf=0, shead;
-	char c, buff[80], wrp[80], *p;
-	long fpos;
-	struct _msg msgt;
+   FILE *fp;
+   int i, z, m, line, colf=0, shead;
+   char c, buff[150], wrp[150], *p, okludge;
+   long fpos;
+   struct _msg msgt;
 
-        if (usr.full_read && !flag)
-                return(full_read_message(msg_num));
+   if (usr.full_read && !flag)
+      return(full_read_message(msg_num,fakenum));
 
-        line = 1;
-        shead = 0;
-        msg_fzone = msg_tzone = config->alias[0].zone;
-        msg_fpoint = msg_tpoint = 0;
+   okludge = 0;
+   line = 1;
+   shead = 0;
+   msg_fzone = msg_tzone = config->alias[0].zone;
+   msg_fpoint = msg_tpoint = 0;
 
-        sprintf(buff,"%s%d.MSG",sys.msg_path,msg_num);
-        i = sh_open (buff, SH_DENYWR, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
-        if (i == -1)
-                return(0);
+   sprintf(buff,"%s%d.MSG",sys.msg_path,msg_num);
+   i = sh_open (buff, SH_DENYWR, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+   if (i == -1)
+      return(0);
 
-        fp = fdopen (i, "r+b");
-        if(fp == NULL)
-		return(0);
+   fp = fdopen (i, "r+b");
+   if(fp == NULL)
+      return(0);
 
-        fread((char *)&msgt,sizeof(struct _msg),1,fp);
+   fread((char *)&msgt,sizeof(struct _msg),1,fp);
 
-        if (!stricmp(msgt.from,"ARCmail") && !stricmp(msgt.to,"Sysop")) {
-                fclose(fp);
-                return(0);
-        }
+   if (!stricmp(msgt.from,"ARCmail") && !stricmp(msgt.to,"Sysop")) {
+      fclose(fp);
+      return(0);
+   }
 
-	if(msgt.attr & MSGPRIVATE) {
-                if(msg_num == 1 && sys.echomail) {
-			fclose(fp);
-			return(0);
-		}
+   if(msgt.attr & MSGPRIVATE) {
+      if(msg_num == 1 && sys.echomail) {
+         fclose(fp);
+         return(0);
+      }
 
-                if(stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && usr.priv != SYSOP) {
-			fclose(fp);
-			return(0);
-		}
+      if (stricmp (msgt.from, usr.name) && stricmp (msgt.to, usr.name) && stricmp (msgt.from, usr.handle) && stricmp (msgt.to, usr.handle) && usr.priv != SYSOP) {
+         fclose (fp);
+         return (0);
+      }
+   }
+
+   if (!flag)
+      cls();
+
+   memcpy((char *)&msg,(char *)&msgt,sizeof(struct _msg));
+   msg_parent = msg.reply;
+   msg_child = msg.up;
+
+   if(flag)
+      m_print(bbstxt[B_TWO_CR]);
+
+   change_attr (WHITE|_BLACK);
+   m_print (" * %s\n", sys.msg_name);
+
+   change_attr(CYAN|_BLACK);
+
+   allow_reply = 1;
+   i=0;
+   fpos = filelength(fileno(fp));
+
+   while (ftell (fp) < fpos) {
+		c = fgetc (fp);
+
+      if ((byte)c == 0x8D || c == 0x0A || c == '\0')
+         continue;
+
+      buff[i++] = c;
+
+      if (c == 0x0D) {
+         buff[i - 1] = '\0';
+
+         if (buff[0] == 0x01 && !okludge) {
+            if (!strncmp (&buff[1], "INTL", 4) && !shead)
+               sscanf (&buff[6], "%d:%d/%d %d:%d/%d", &msg_tzone, &i, &i, &msg_fzone, &i, &i);
+            if (!strncmp(&buff[1], "TOPT", 4) && !shead)
+               sscanf (&buff[6], "%d", &msg_tpoint);
+            if (!strncmp (&buff[1], "FMPT", 4) && !shead)
+               sscanf (&buff[6], "%d", &msg_fpoint);
+            i = 0;
+            continue;
+         }
+         else if (!shead) {
+            if (sys.internet_mail && !strnicmp (buff, "To:", 3)) {
+               strtok (buff, ":");
+               if ((p = strtok (NULL, ": ")) != NULL) {
+                  if (strlen (p) > 35)
+                     p[35] = '\0';
+                  strcpy (msgt.to, p);
+               }
+               line = msg_attrib (&msgt, msg_num, line, 0);
+               m_print(bbstxt[B_ONE_CR]);
+               shead = 1;
+               i = 0;
+               continue;
+            }
+            line = msg_attrib (&msgt, fakenum ? fakenum : msg_num, line, 0);
+            m_print(bbstxt[B_ONE_CR]);
+            shead = 1;
+            okludge = 1;
+            fseek (fp, (long)sizeof (struct _msg), SEEK_SET);
+            i = 0;
+            continue;
+         }
+
+         if (!usr.kludge && (!strncmp (buff, "SEEN-BY", 7) || buff[0] == 0x01)) {
+				i = 0;
+            continue;
+         }
+
+         if (buff[0] == 0x01) {
+            m_print ("%s\n", &buff[1]);
+            change_attr (LGREY|BLACK);
+         }
+         else if (!strncmp (buff, "SEEN-BY", 7)) {
+            m_print ("%s\n", buff);
+            change_attr (LGREY|BLACK);
+         }
+         else {
+            p = &buff[0];
+
+            if(((strchr(buff,'>') - p) < 6) && (strchr(buff,'>'))) {
+               if(!colf) {
+                  change_attr(LGREY|BLACK);
+                  colf=1;
+               }
+            }
+            else {
+               if(colf) {
+                  change_attr(CYAN|BLACK);
+                  colf=0;
+               }
+            }
+
+            if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff," * Origin: ",11))
+               m_print("%s\n",buff);
+            else
+               m_print("%s\n",buff);
+
+            if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
+               gather_origin_netnode (buff);
+         }
+
+         i=0;
+
+         if(flag == 1)
+            line=1;
+
+         if(!(++line < (usr.len-1)) && usr.more) {
+            line = 1;
+				if(!continua()) {
+               flag=1;
+               break;
+            }
+         }
+      }
+      else {
+         if(i<(usr.width-1))
+            continue;
+
+         buff[i]='\0';
+         while(i>0 && buff[i] != ' ')
+            i--;
+
+         m=0;
+
+         if(i != 0) {
+            for(z=i+1; buff[z]; z++)
+               wrp[m++]=buff[z];
+         }
+
+         buff[i]='\0';
+         wrp[m]='\0';
+
+         if (!shead) {
+            line = msg_attrib(&msgt,fakenum ? fakenum : msg_num,line,0);
+            m_print(bbstxt[B_ONE_CR]);
+            shead = 1;
+            okludge = 1;
+            fseek (fp, (long)sizeof (struct _msg), SEEK_SET);
+            i = 0;
+            continue;
+         }
+
+         if (((strchr(buff,'>') - buff) < 6) && (strchr(buff,'>'))) {
+            if(!colf) {
+               change_attr(LGREY|_BLACK);
+               colf=1;
+            }
+         }
+         else {
+            if(colf) {
+               change_attr(CYAN|_BLACK);
+               colf=0;
+				}
+         }
+
+         if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
+            m_print("%s\n",buff);
+         else
+            m_print("%s\n",buff);
+
+         if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
+            gather_origin_netnode (buff);
+
+         if(flag == 1)
+            line=1;
+
+         if(!(++line < (usr.len-1)) && usr.more) {
+            line = 1;
+            if(!continua()) {
+               flag=1;
+               break;
+            }
+         }
+
+         strcpy(buff,wrp);
+         i=strlen(wrp);
+      }
+   }
+
+   if ((!stricmp (msgt.to, usr.name) || !stricmp (msgt.to, usr.handle)) && !(msgt.attr & MSGREAD)) {
+      msgt.attr |= MSGREAD;
+      rewind(fp);
+      fwrite((char *)&msgt,sizeof(struct _msg),1,fp);
+   }
+
+   fclose(fp);
+
+   if (!shead) {
+      line = msg_attrib(&msgt,msg_num,line,0);
+      m_print(bbstxt[B_ONE_CR]);
+      shead = 1;
+   }
+
+   if (line > 1 && !flag && usr.more) {
+      press_enter ();
+      line = 1;
 	}
 
-        if (!flag)
-                cls();
-
-        memcpy((char *)&msg,(char *)&msgt,sizeof(struct _msg));
-        msg_parent = msg.reply;
-        msg_child = msg.up;
-
-	if(flag)
-                m_print(bbstxt[B_TWO_CR]);
-
-        change_attr(CYAN|_BLACK);
-
-        allow_reply = 1;
-        i=0;
-	fpos = filelength(fileno(fp));
-
-	while(ftell(fp) < fpos) {
-		c = fgetc(fp);
-
-		if((byte)c == 0x8D || c == 0x0A || c == '\0')
-			continue;
-
-		buff[i++]=c;
-
-		if(c == 0x0D) {
-			buff[i-1]='\0';
-
-                        if(buff[0] == 0x01) {
-                                if (!strncmp(&buff[1],"INTL",4) && !shead)
-                                        sscanf(&buff[6],"%d:%d/%d %d:%d/%d",&msg_tzone,&i,&i,&msg_fzone,&i,&i);
-                                if (!strncmp(&buff[1],"TOPT",4) && !shead)
-                                        sscanf(&buff[6],"%d",&msg_tpoint);
-                                if (!strncmp(&buff[1],"FMPT",4) && !shead)
-                                        sscanf(&buff[6],"%d",&msg_fpoint);
-                                i=0;
-				continue;
-			}
-                        else if (!shead) {
-                                if (sys.internet_mail && !strnicmp (buff, "To:", 3)) {
-                                   strtok (buff, ":");
-                                   if ((p = strtok (NULL, ": ")) != NULL) {
-                                      if (strlen (p) > 35)
-                                         p[35] = '\0';
-                                      strcpy (msgt.to, p);
-                                   }
-                                   line = msg_attrib (&msgt, msg_num, line, 0);
-                                   m_print(bbstxt[B_ONE_CR]);
-                                   shead = 1;
-                                   i = 0;
-                                   continue;
-                                }
-                                line = msg_attrib (&msgt, msg_num, line, 0);
-                                m_print(bbstxt[B_ONE_CR]);
-                                shead = 1;
-                        }
-
-                        if (!strncmp (buff, "SEEN-BY", 7)) {
-				i=0;
-				continue;
-			}
-
-			if(buff[0] == 0x01) {
-                                change_attr(YELLOW|_BLUE);
-                                m_print("%s\n",&buff[1]);
-                                change_attr(LGREY|BLACK);
-			}
-			else {
-				p = &buff[0];
-
-				if(((strchr(buff,'>') - p) < 6) && (strchr(buff,'>'))) {
-					if(!colf) {
-                                                change_attr(LGREY|BLACK);
-						colf=1;
-					}
-				}
-				else {
-					if(colf) {
-                                                change_attr(CYAN|BLACK);
-						colf=0;
-					}
-				}
-
-                                if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff," * Origin: ",11))
-                                        m_print("%s\n",buff);
-                                else
-                                        m_print("%s\n",buff);
-
-                                if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
-                                        gather_origin_netnode (buff);
-                        }
-
-			i=0;
-
-			if(flag == 1)
-				line=1;
-
-                        if(!(++line < (usr.len-1)) && usr.more)
-                        {
-                                line = 1;
-                                if(!continua())
-                                {
-					flag=1;
-					break;
-				}
-			}
-		}
-		else {
-                        if(i<(usr.width-2))
-				continue;
-
-			buff[i]='\0';
-			while(i>0 && buff[i] != ' ')
-				i--;
-
-			m=0;
-
-			if(i != 0)
-                                for(z=i+1; buff[z]; z++) {
-					wrp[m++]=buff[z];
-				}
-
-                        buff[i]='\0';
-                        wrp[m]='\0';
-
-                        if (!shead) {
-                                line = msg_attrib(&msgt,msg_num,line,0);
-                                m_print(bbstxt[B_ONE_CR]);
-                                shead = 1;
-                        }
-
-                        if (((strchr(buff,'>') - buff) < 6) && (strchr(buff,'>'))) {
-				if(!colf) {
-                                        change_attr(LGREY|_BLACK);
-					colf=1;
-				}
-			}
-			else {
-				if(colf) {
-                                        change_attr(CYAN|_BLACK);
-					colf=0;
-				}
-			}
-
-                        if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
-                                m_print("%s\n",buff);
-			else
-                                m_print("%s\n",buff);
-
-                        if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
-                                gather_origin_netnode (buff);
-
-			if(flag == 1)
-				line=1;
-
-                        if(!(++line < (usr.len-1)) && usr.more)
-                        {
-                                line = 1;
-                                if(!continua())
-                                {
-					flag=1;
-					break;
-				}
-			}
-
-			strcpy(buff,wrp);
-			i=strlen(wrp);
-		}
-	}
-
-        if(stricmp(msgt.to,usr.name) == 0 && !(msgt.attr & MSGREAD))
-        {
-                msgt.attr |= MSGREAD;
-		rewind(fp);
-                fwrite((char *)&msgt,sizeof(struct _msg),1,fp);
-	}
-
-	fclose(fp);
-
-        if (!shead) {
-                line = msg_attrib(&msgt,msg_num,line,0);
-                m_print(bbstxt[B_ONE_CR]);
-                shead = 1;
-        }
-
-        if(line > 1 && !flag && usr.more) {
-                press_enter();
-		line=1;
-	}
-
-	return(1);
+   return (1);
 }
 
-int full_read_message(msg_num)
-int msg_num;
+int full_read_message(msg_num,fakenum)
+int msg_num, fakenum;
 {
         FILE *fp;
         int i, z, m, line, colf=0, shead;
-        char c, buff[80], wrp[80], *p;
+        char c, buff[150], wrp[150], *p, okludge;
         long fpos;
         struct _msg msgt;
 
+        okludge = 0;
         line = 2;
         shead = 0;
         msg_fzone = msg_tzone = config->alias[0].zone;
@@ -682,9 +724,9 @@ int msg_num;
                         return(0);
                 }
 
-                if(stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && usr.priv != SYSOP) {
+                if(stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && stricmp(msgt.from,usr.handle) && stricmp(msgt.to,usr.handle) && usr.priv != SYSOP) {
                         fclose(fp);
-                        return(0);
+								return(0);
                 }
         }
 
@@ -713,7 +755,7 @@ int msg_num;
                 if(c == 0x0D) {
                         buff[i-1]='\0';
 
-                        if(buff[0] == 0x01) {
+                        if (buff[0] == 0x01 && !okludge) {
                                 if (!strncmp(&buff[1],"INTL",4) && !shead)
                                         sscanf(&buff[6],"%d:%d/%d %d:%d/%d",&msg_tzone,&i,&i,&msg_fzone,&i,&i);
                                 if (!strncmp(&buff[1],"TOPT",4) && !shead)
@@ -728,7 +770,7 @@ int msg_num;
                                    strtok (buff, ":");
                                    if ((p = strtok (NULL, ": ")) != NULL) {
                                       if (strlen (p) > 35)
-                                         p[35] = '\0';
+													  p[35] = '\0';
                                       strcpy (msgt.to, p);
                                    }
                                    line = msg_attrib(&msgt,msg_num,line,0);
@@ -740,24 +782,30 @@ int msg_num;
                                    i = 0;
                                    continue;
                                 }
-                                line = msg_attrib(&msgt,msg_num,line,0);
+                                line = msg_attrib(&msgt,fakenum ? fakenum : msg_num,line,0);
                                 change_attr(LGREY|_BLUE);
                                 del_line();
                                 change_attr(CYAN|_BLACK);
                                 m_print(bbstxt[B_ONE_CR]);
                                 shead = 1;
+                                okludge = 1;
+                                fseek (fp, (long)sizeof (struct _msg), SEEK_SET);
+                                i = 0;
+                                continue;
                         }
 
-                        if (!strncmp (buff, "SEEN-BY", 7)) {
+                        if (!usr.kludge && (!strncmp (buff, "SEEN-BY", 7) || buff[0] == 0x01)) {
                            i = 0;
                            continue;
                         }
 
                         if (buff[0] == 0x01) {
-                                change_attr(YELLOW|_BLUE);
-                                del_line();
-                                m_print("%s\n",&buff[1]);
+                                m_print("%s\n",&buff[1]);
                                 change_attr(CYAN|BLACK);
+                        }
+                        else if (!strncmp (buff, "SEEN-BY", 7)) {
+                                m_print ("%s\n", buff);
+                                change_attr (LGREY|BLACK);
                         }
                         else {
                                 p = &buff[0];
@@ -766,7 +814,7 @@ int msg_num;
                                         if(!colf) {
                                                 change_attr(LGREY|BLACK);
                                                 colf=1;
-                                        }
+													 }
                                 }
                                 else {
                                         if(colf) {
@@ -786,15 +834,12 @@ int msg_num;
 
                         i=0;
 
-                        if(!(++line < (usr.len-1)) && usr.more)
-                        {
-                                if(!continua())
-                                {
+                        if(!(++line < (usr.len-1)) && usr.more) {
+                                if(!continua()) {
                                         line = 1;
                                         break;
                                 }
-                                else
-                                {
+                                else {
                                         while (line > 5) {
                                                 cpos(line--, 1);
                                                 del_line();
@@ -803,7 +848,7 @@ int msg_num;
                         }
                 }
                 else {
-                        if(i<(usr.width-2))
+                        if(i<(usr.width-1))
                                 continue;
 
                         buff[i]='\0';
@@ -813,19 +858,23 @@ int msg_num;
                         m=0;
 
                         if(i != 0)
-                                for(z=i+1;buff[z];z++)
+										  for(z=i+1;buff[z];z++)
                                         wrp[m++]=buff[z];
 
                         buff[i]='\0';
                         wrp[m]='\0';
 
                         if (!shead) {
-                                line = msg_attrib(&msgt,msg_num,line,0);
+                                line = msg_attrib(&msgt,fakenum ? fakenum : msg_num,line,0);
                                 change_attr(LGREY|_BLUE);
                                 del_line();
                                 change_attr(CYAN|_BLACK);
                                 m_print(bbstxt[B_ONE_CR]);
                                 shead = 1;
+                                okludge = 1;
+                                fseek (fp, (long)sizeof (struct _msg), SEEK_SET);
+                                i = 0;
+                                continue;
                         }
 
                         if (((strchr(buff,'>') - buff) < 6) && (strchr(buff,'>'))) {
@@ -853,7 +902,7 @@ int msg_num;
                         {
                                 if(!continua())
                                 {
-                                        line = 1;
+													 line = 1;
                                         break;
                                 }
                                 else
@@ -870,7 +919,7 @@ int msg_num;
                 }
         }
 
-        if(stricmp(msgt.to,usr.name) == 0 && !(msgt.attr & MSGREAD)) {
+        if((!stricmp(msgt.to,usr.name) || !stricmp(msgt.to,usr.handle)) && !(msgt.attr & MSGREAD)) {
                 msgt.attr |= MSGREAD;
                 rewind(fp);
                 fwrite((char *)&msgt,sizeof(struct _msg),1,fp);
@@ -896,7 +945,7 @@ int msg_attrib(msg_ptr,s,line,f)
 struct _msg *msg_ptr;
 int s, line, f;
 {
-   char stringa[60];
+   char stringa[60], *pto;
 
    adjust_date(msg_ptr);
 
@@ -941,20 +990,28 @@ int s, line, f;
       if(msg_ptr->attr & MSGURQ)
          m_print(bbstxt[B_MSGURQ]);
    }
-   m_print(bbstxt[B_ONE_CR]);
+	m_print(bbstxt[B_ONE_CR]);
    if ((line=more_question(line)) == 0)
       return(0);
 
    if(!f) {
+      if (!stricmp (msg_ptr->to, "@ALL"))
+         pto = usr.name;
+      else
+         pto = msg_ptr->to;
+
       m_print(bbstxt[B_TO]);
       if(sys.netmail || sys.internet_mail) {
          if (!msg_tzone)
             msg_tzone = config->alias[0].zone;
-         sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",msg_ptr->to,msg_tzone,msg_ptr->dest_net,msg_ptr->dest,msg_tpoint);
+         if (sys.internet_mail && internet_to != NULL)
+            sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",internet_to,msg_tzone,msg_ptr->dest_net,msg_ptr->dest,msg_tpoint);
+         else
+            sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",pto,msg_tzone,msg_ptr->dest_net,msg_ptr->dest,msg_tpoint);
          m_print("%36s  ",stringa);
       }
       else
-         m_print("%-36s  ",msg_ptr->to,msg_ptr->dest_net,msg_ptr->dest);
+         m_print("%-36s  ",pto,msg_ptr->dest_net,msg_ptr->dest);
 
       change_attr(WHITE|_BLACK);
       if (s)
@@ -1148,8 +1205,12 @@ void list_headers (verbose)
    }
 
    if (sys.quick_board) {
-      quick_list_headers (m, sys.quick_board, verbose);
+      quick_list_headers (m, sys.quick_board, verbose, 0);
       return;
+   }
+   else if (sys.gold_board) {
+      quick_list_headers (m, sys.gold_board, verbose, 1);
+		return;
    }
    else if (sys.pip_board) {
       pip_list_headers (m, sys.pip_board, verbose);
@@ -1169,7 +1230,7 @@ void list_headers (verbose)
       read(fd,(char *)&msgt,sizeof(struct _msg));
       close(fd);
 
-      if((msgt.attr & MSGPRIVATE) && stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && usr.priv < SYSOP)
+      if((msgt.attr & MSGPRIVATE) && stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && stricmp(msgt.from,usr.handle) && stricmp(msgt.to,usr.handle) && usr.priv < SYSOP)
          continue;
 
       memcpy ((char *)&mz, (char *)&msgt.date_written, sizeof (struct _msgzone));
@@ -1213,35 +1274,44 @@ void list_headers (verbose)
       press_enter ();
 }
 
-void message_inquire()
+void message_inquire ()
 {
    int fd, i, line=4;
    char stringa[30], filename[80], *p;
    struct _msg msgt, backup;
 
-   if (!get_command_word (stringa, 4)) {
-      m_print(bbstxt[B_MSG_TEXT]);
+   if (msg_list != NULL) {
+      free (msg_list);
+      msg_list = NULL;
+   }
 
-      input(stringa,29);
-      if(!strlen(stringa))
+   if (!get_command_word (stringa, 4)) {
+      m_print (bbstxt[B_MSG_TEXT]);
+
+      input (stringa,29);
+      if (!strlen (stringa))
          return;
    }
 
    if (!num_msg) {
-      if (sys.quick_board)
-         quick_scan_message_base (sys.quick_board, usr.msg, 1);
+      if (sys.quick_board || sys.gold_board)
+         quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
       else if (sys.pip_board)
          pip_scan_message_base (usr.msg, 1);
-      else if (sys.squish)
+		else if (sys.squish)
          squish_scan_message_base (usr.msg, sys.msg_path, 1);
       else
          scan_message_base(usr.msg, 1);
    }
 
-   m_print (bbstxt[B_MSG_SEARCHING],strupr(stringa));
+   m_print (bbstxt[B_MSG_SEARCHING], strupr (stringa));
 
    if (sys.quick_board) {
-      quick_message_inquire (stringa, sys.quick_board);
+      quick_message_inquire (stringa, sys.quick_board, 0);
+      return;
+   }
+   else if (sys.gold_board) {
+      quick_message_inquire (stringa, sys.gold_board, 1);
       return;
    }
    else if (sys.pip_board) {
@@ -1252,56 +1322,58 @@ void message_inquire()
       return;
    }
 
-   for(i = first_msg; i <= last_msg; i++) {
-      sprintf(filename,"%s%d.MSG",sys.msg_path,i);
+   for (i = first_msg; i <= last_msg; i++) {
+      sprintf (filename, "%s%d.MSG", sys.msg_path, i);
 
-      fd=shopen(filename,O_RDONLY|O_BINARY);
-      if(fd == -1)
-              continue;
-      read(fd,(char *)&msgt,sizeof(struct _msg));
+      fd = shopen (filename,O_RDONLY|O_BINARY);
+      if (fd == -1)
+         continue;
+      read (fd, (char *)&msgt, sizeof (struct _msg));
 
       if (msgt.attr & MSGPRIVATE)
-         if (stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && usr.priv < SYSOP) {
-            close(fd);
+         if (stricmp (msgt.from, usr.name) && stricmp (msgt.to, usr.name) && stricmp (msgt.from, usr.handle) && stricmp (msgt.to, usr.handle) && usr.priv < SYSOP) {
+            close (fd);
             continue;
          }
 
-      p = (char *)malloc((unsigned int)filelength(fd)-sizeof(struct _msg)+1);
+      p = (char *)malloc ((unsigned int)filelength (fd) - sizeof (struct _msg) + 1);
       if (p != NULL) {
-         read(fd,p,(unsigned int)filelength(fd)-sizeof(struct _msg));
-         p[(unsigned int)filelength(fd)-sizeof(struct _msg)] = '\0';
+         read (fd, p, (unsigned int)filelength (fd) - sizeof (struct _msg));
+         p[(unsigned int)filelength (fd) - sizeof (struct _msg)] = '\0';
       }
       else
-         p = NULL;
+			p = NULL;
 
-      close(fd);
+      close (fd);
 
       memcpy ((char *)&backup, (char *)&msgt, sizeof (struct _msg));
-      strupr(msgt.to);
-      strupr(msgt.from);
-      strupr(msgt.subj);
-      strupr(p);
+      strupr (msgt.to);
+      strupr (msgt.from);
+      strupr (msgt.subj);
 
-      if ((strstr(msgt.to,stringa) != NULL) || (strstr(msgt.from,stringa) != NULL) ||
-          (strstr(msgt.subj,stringa) != NULL) || (strstr(p,stringa) != NULL)) {
+      if (p != NULL)
+         strupr (p);
+
+      if ((strstr (msgt.to, stringa) != NULL) || (strstr (msgt.from, stringa) != NULL) ||
+          (strstr (msgt.subj, stringa) != NULL) || (strstr (p, stringa) != NULL)) {
          memcpy ((char *)&msgt, (char *)&backup, sizeof (struct _msg));
-         if ((line = msg_attrib(&msgt,i,line,0)) == 0)
+         if ((line = msg_attrib (&msgt, i, line, 0)) == 0)
             break;
 
-         m_print(bbstxt[B_ONE_CR]);
+         m_print (bbstxt[B_ONE_CR]);
 
-         if (!(line=more_question(line)) || !CARRIER && !RECVD_BREAK())
+         if (!(line = more_question (line)) || !CARRIER && !RECVD_BREAK ())
             break;
 
-         time_release();
+         time_release ();
       }
 
       if (p != NULL)
-         free(p);
+         free (p);
    }
 
    if (line && CARRIER)
-      press_enter();
+      press_enter ();
 }
 
 void xport_message ()
@@ -1338,59 +1410,319 @@ void xport_message ()
 
    m_print (bbstxt[B_XPRT_DONE]);
 }
+
+int select_area_list (int flag, int sig)
+{
+   int fd, fdi, i, pari, area, linea, nsys, nm;
+   char stringa[80], filename[50], dir[80], first;
+   struct _sys tsys;
+   struct _sys_idx sysidx[10];
+
+   m_print ("\nPlease enter the area number to forward the message to.\n");
+   memset (&tsys, 0, sizeof (struct _sys));
+
+   first = 1;
+
+   if (sig == -1) {
+      read_system_file ("MGROUP");
+
+      do {
+         m_print (bbstxt[B_GROUP_LIST]);
+         chars_input (stringa, 4, INPUT_FIELD);
+         if (!CARRIER || (sig = atoi (stringa)) == 0)
+				return (0);
+      } while (sig < 0);
+
+      usr.msg_sig = sig;
+   }
+
+   sprintf(filename,"%sSYSMSG.DAT", config->sys_path);
+   fd = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD);
+   if (fd == -1)
+      return (0);
+
+   sprintf(filename,"%sSYSMSG.IDX", config->sys_path);
+   fdi = sh_open (filename, SH_DENYNONE, O_RDONLY|O_BINARY, S_IREAD);
+   if (fdi == -1) {
+      close (fd);
+      return (0);
+   }
+
+   area = usr.msg;
+
+   do {
+      if (!get_command_word (stringa, 12)) {
+         m_print ("\nForward area: [Area #, '?'=list, <enter>=Quit]: ");
+         input (stringa, 12);
+         if (!CARRIER || time_remain() <= 0) {
+            close (fdi);
+            close (fd);
+            return (0);
+         }
+      }
+
+      if (!stringa[0] && first) {
+         first = 0;
+         stringa[0] = area_change_key[2];
+      }
+
+      if (stringa[0] == area_change_key[2] || (!stringa[0] && !area)) {
+         cls();
+         m_print(bbstxt[B_AREAS_TITLE], bbstxt[B_MESSAGE]);
+
+         first = 0;
+         pari = 0;
+         linea = 4;
+         nm = 0;
+			lseek(fdi, 0L, SEEK_SET);
+
+         do {
+            if (!CARRIER || time_remain() <= 0) {
+               close (fdi);
+               close (fd);
+               return (0);
+            }
+
+            nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+            nsys /= sizeof (struct _sys_idx);
+
+            for (i=0; i < nsys; i++, nm++) {
+               if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+                  continue;
+
+               if (sig) {
+                  if (sysidx[i].sig != sig)
+                     continue;
+               }
+
+               if (read_system_file ("MSGAREA"))
+                  break;
+
+               lseek(fd, (long)nm * SIZEOF_MSGAREA, SEEK_SET);
+               read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA);
+
+               if (sig || tsys.msg_restricted) {
+                  if (tsys.msg_sig != sig)
+                     continue;
+               }
+
+               if (flag == 1) {
+                  strcpy (dir, tsys.msg_name);
+                  dir[31] = '\0';
+
+                  sprintf (stringa, "%3d ... %-31s ", sysidx[i].area, dir);
+
+                  if (pari) {
+                     m_print ("%s\n", strtrim (stringa));
+                     pari = 0;
+                     if (!(linea = more_question(linea)))
+                        break;
+                  }
+						else {
+                     m_print (stringa);
+                     pari = 1;
+                  }
+               }
+               else if (flag == 2) {
+                  m_print("%3d ... %s\n", sysidx[i].area, tsys.msg_name);
+                  if (!(linea = more_question(linea)))
+                     break;
+               }
+               else if (flag == 3) {
+                  m_print("%3d ... %-12s %s\n", sysidx[i].area, sysidx[i].key, tsys.msg_name);
+                  if (!(linea = more_question(linea)))
+                     break;
+               }
+               else if (flag == 4) {
+                  if (!sysidx[i].key[0])
+                     sprintf (sysidx[i].key, "%d", sysidx[i].area);
+                  m_print("%-12s ... %s\n", sysidx[i].key, tsys.msg_name);
+                  if (!(linea = more_question(linea)))
+                     break;
+               }
+            }
+         } while (linea && nsys == 10);
+
+         if (pari)
+            m_print(bbstxt[B_ONE_CR]);
+         area = -1;
+      }
+      else if (strlen (stringa) < 1) {
+         close (fdi);
+         close (fd);
+         return (0);
+      }
+      else {
+         lseek (fdi, 0L, SEEK_SET);
+         area = atoi (stringa);
+         if (area < 1) {
+            area = -1;
+            do {
+               nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+               nsys /= sizeof (struct _sys_idx);
+
+               for(i=0;i<nsys;i++) {
+						if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+                     continue;
+                  if (sig) {
+                     if (sysidx[i].sig != sig)
+                        continue;
+                  }
+                  if (!stricmp(strbtrim (stringa), strbtrim (sysidx[i].key))) {
+                     area = sysidx[i].area;
+                     break;
+                  }
+               }
+            } while (i == nsys && nsys == 10);
+         }
+         else {
+            do {
+               nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+               nsys /= sizeof (struct _sys_idx);
+
+               for(i=0;i<nsys;i++) {
+                  if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+                     continue;
+                  if (sig) {
+                     if (sysidx[i].sig != sig)
+                        continue;
+                  }
+                  if (sysidx[i].area == area)
+                     break;
+               }
+            } while (i == nsys && nsys == 10);
+
+            if (i == nsys)
+               area = -1;
+         }
+      }
+   } while (area == -1 || !read_system2 (area, 1, &tsys));
+
+   close (fdi);
+   close (fd);
+
+   return (area);
+}
+
+void forward_message_area (int sig, int flag)
+{
+	char filename[30];
+   int msgnum, area;
+   struct _sys tsys, bsys;
+
+   sprintf (filename, "%d", lastread);
+   m_print ("\nMessage number to forward: ");
+   chars_input (filename, 5, INPUT_FIELD|INPUT_UPDATE);
+   if (!strlen (filename) || !CARRIER)
+      return;
+
+   msgnum = atoi (filename);
+   if (!msgnum || msgnum < 1 || msgnum > last_msg)
+      return;
+
+   sprintf (filename, "%sFWD%d.TMP", config->flag_dir, line_offset);
+   if (sys.quick_board)
+      quick_write_message_text (msgnum, APPEND_TEXT|INCLUDE_HEADER, filename, NULL);
+   else if (sys.pip_board)
+      pip_write_message_text (msgnum, APPEND_TEXT|INCLUDE_HEADER, filename, NULL);
+   else if (sys.squish)
+      squish_write_message_text (msgnum, APPEND_TEXT|INCLUDE_HEADER, filename, NULL);
+   else
+      write_message_text (msgnum, APPEND_TEXT|INCLUDE_HEADER, filename, NULL);
+
+   area = select_area_list (flag, sig);
+   if (area == 0 || !read_system2 (area, 1, &tsys) || !CARRIER) {
+      unlink (filename);
+      return;
+   }
+
+   memcpy (&bsys, &sys, SIZEOF_MSGAREA);
+   memcpy (&sys, &tsys, SIZEOF_MSGAREA);
+
+   if (sys.msg_num != bsys.msg_num) {
+      if (sys.quick_board || sys.gold_board)
+         quick_scan_message_base (sys.quick_board, sys.gold_board, sys.msg_num, 1);
+      else if (sys.pip_board)
+         pip_scan_message_base (sys.msg_num, 1);
+      else if (sys.squish)
+         squish_scan_message_base (sys.msg_num, sys.msg_path, 1);
+      else
+        scan_message_base (sys.msg_num, 1);
+   }
+
+	memset (&msg, 0, sizeof (struct _msg));
+
+   if (get_message_data (0, NULL) == 1) {
+      if (sys.quick_board || sys.gold_board)
+         quick_save_message (filename);
+      else if (sys.pip_board)
+         pip_save_message (filename);
+      else if (sys.squish)
+         squish_save_message (filename);
+      else
+         save_message (filename);
+
+      usr.msgposted++;
+   }
+
+   if (sys.msg_num != bsys.msg_num) {
+      memcpy (&sys, &bsys, SIZEOF_MSGAREA);
+      usr.msg = sys.msg_num;
+   }
+
+   if (sys.quick_board || sys.gold_board)
+      quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
+   else if (sys.pip_board)
+      pip_scan_message_base (usr.msg, 1);
+   else if (sys.squish)
+      squish_scan_message_base (usr.msg, sys.msg_path, 1);
+   else
+     scan_message_base(usr.msg, 1);
+
+   unlink (filename);
+}
 #endif
 
-int fido_export_mail (maxnodes, forward)
-int maxnodes;
-struct _fwrd *forward;
+int fido_export_mail (int maxnodes, struct _fwrd *forward)
 {
    FILE *fpd, *fp;
    int i, pp, z, ne, no, n_seen, cnet, cnode, mi, msgnum, m, sent, ai;
-   char buff[80], wrp[80], c, *p, buffer[2050], need_origin, need_seen;
+   char buff[80], wrp[80], c, *p, buffer[2050], need_origin, need_seen, *flag;
    long fpos;
    struct _msghdr2 mhdr;
    struct _fwrd *seen;
 
    seen = (struct _fwrd *)malloc ((MAX_EXPORT_SEEN + 1) * sizeof (struct _fwrd));
    if (seen == NULL)
-      return (maxnodes);
+		return (maxnodes);
 
-   fpd = fopen ("MSGTMP.EXP", "rb+");
-   if (fpd == NULL) {
-      fpd = fopen ("MSGTMP.EXP", "wb");
-      fclose (fpd);
-   }
-   else
-      fclose (fpd);
-   fpd = mopen ("MSGTMP.EXP", "r+b");
+	fpd = fopen ("MSGTMP.EXP", "rb+");
+	if (fpd == NULL) {
+		fpd = fopen ("MSGTMP.EXP", "wb");
+		fclose (fpd);
+	}
+	else
+		fclose (fpd);
+	fpd = mopen ("MSGTMP.EXP", "r+b");
 
-//   setvbuf (fpd, NULL, _IOFBF, 8192);
+	for (i = 0; i < maxnodes; i++)
+		forward[i].reset = forward[i].export = 0;
 
-   for (i = 0; i < maxnodes; i++)
-      forward[i].reset = forward[i].export = 0;
-
-   if (!sys.use_alias) {
-      z = config->alias[sys.use_alias].zone;
-      parse_netnode2 (sys.forward1, &z, &ne, &no, &pp);
-      if (z != config->alias[sys.use_alias].zone) {
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
-            if (z == config->alias[i].zone)
-               break;
-         if (i < MAX_ALIAS && config->alias[i].net)
-            sys.use_alias = i;
-      }
-   }
-
-   z = config->alias[sys.use_alias].zone;
-   ne = config->alias[sys.use_alias].net;
-   no = config->alias[sys.use_alias].node;
-   pp = 0;
+	z = config->alias[sys.use_alias].zone;
+	ne = config->alias[sys.use_alias].net;
+	no = config->alias[sys.use_alias].node;
+	pp = 0;
 
    p = strtok (sys.forward1, " ");
    if (p != NULL)
       do {
+         flag = p;
+         while (*p == '<' || *p == '>' || *p == '!' || *p == 'P' || *p == 'p')
+            p++;
          parse_netnode2 (p, &z, &ne, &no, &pp);
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
+         for (i = 0; i < MAX_ALIAS; i++) {
+            if (config->alias[i].net == 0)
+               continue;
             if (config->alias[i].zone == z && config->alias[i].net == ne && config->alias[i].node == no && config->alias[i].point == pp)
                break;
             if (config->alias[i].point && config->alias[i].fakenet) {
@@ -1403,27 +1735,28 @@ struct _fwrd *forward;
          if ((i = is_here (z, ne, no, pp, forward, maxnodes)) != -1)
             forward[i].reset = forward[i].export = 1;
          else {
+            i = maxnodes;
             forward[maxnodes].zone = z;
             forward[maxnodes].net = ne;
-            forward[maxnodes].node = no;
+				forward[maxnodes].node = no;
             forward[maxnodes].point = pp;
             forward[maxnodes].export = 1;
             forward[maxnodes].reset = 1;
             maxnodes++;
          }
+         forward[i].receiveonly = forward[i].sendonly = forward[i].passive = forward[i].private = 0;
+         while (*flag == '<' || *flag == '>' || *flag =='!'||*flag=='p'||*flag=='P') {
+            if (*flag == '>')
+               forward[i].receiveonly = 1;
+            if (*flag == '<')
+               forward[i].sendonly = 1;
+            if (*flag == '!')
+               forward[i].passive = 1;
+            if (*flag == 'P' || *flag=='p')
+               forward[i].private =1;
+            flag++;
+			}
       } while ((p = strtok (NULL, " ")) != NULL);
-
-   if (!sys.use_alias) {
-      z = config->alias[sys.use_alias].zone;
-      parse_netnode2 (sys.forward2, &z, &ne, &no, &pp);
-      if (z != config->alias[sys.use_alias].zone) {
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
-            if (z == config->alias[i].zone)
-               break;
-         if (i < MAX_ALIAS && config->alias[i].net)
-            sys.use_alias = i;
-      }
-   }
 
    z = config->alias[sys.use_alias].zone;
    ne = config->alias[sys.use_alias].net;
@@ -1433,8 +1766,13 @@ struct _fwrd *forward;
    p = strtok (sys.forward2, " ");
    if (p != NULL)
       do {
+         flag = p;
+         while (*p == '<' || *p == '>' || *p == '!' || *p == 'P' || *p == 'p')
+            p++;
          parse_netnode2 (p, &z, &ne, &no, &pp);
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
+         for (i = 0; i < MAX_ALIAS; i++) {
+            if (config->alias[i].net == 0)
+               continue;
             if (config->alias[i].zone == z && config->alias[i].net == ne && config->alias[i].node == no && config->alias[i].point == pp)
                break;
             if (config->alias[i].point && config->alias[i].fakenet) {
@@ -1447,6 +1785,7 @@ struct _fwrd *forward;
          if ((i = is_here (z, ne, no, pp, forward, maxnodes)) != -1)
             forward[i].reset = forward[i].export = 1;
          else {
+            i = maxnodes;
             forward[maxnodes].zone = z;
             forward[maxnodes].net = ne;
             forward[maxnodes].node = no;
@@ -1455,19 +1794,19 @@ struct _fwrd *forward;
             forward[maxnodes].reset = 1;
             maxnodes++;
          }
+         forward[i].receiveonly = forward[i].sendonly = forward[i].passive = forward[i].private = 0;
+         while (*flag == '<' || *flag == '>' || *flag =='!'||*flag=='p'||*flag=='P') {
+            if (*flag == '>')
+               forward[i].receiveonly = 1;
+            if (*flag == '<')
+					forward[i].sendonly = 1;
+            if (*flag == '!')
+               forward[i].passive = 1;
+            if (*flag == 'P' || *flag=='p')
+               forward[i].private =1;
+            flag++;
+         }
       } while ((p = strtok (NULL, " ")) != NULL);
-
-   if (!sys.use_alias) {
-      z = config->alias[sys.use_alias].zone;
-      parse_netnode2 (sys.forward3, &z, &ne, &no, &pp);
-      if (z != config->alias[sys.use_alias].zone) {
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
-            if (z == config->alias[i].zone)
-               break;
-         if (i < MAX_ALIAS && config->alias[i].net)
-            sys.use_alias = i;
-      }
-   }
 
    z = config->alias[sys.use_alias].zone;
    ne = config->alias[sys.use_alias].net;
@@ -1477,8 +1816,13 @@ struct _fwrd *forward;
    p = strtok (sys.forward3, " ");
    if (p != NULL)
       do {
+         flag = p;
+         while (*p == '<' || *p == '>' || *p == '!' || *p == 'P' || *p == 'p')
+            p++;
          parse_netnode2 (p, &z, &ne, &no, &pp);
-         for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++) {
+         for (i = 0; i < MAX_ALIAS; i++) {
+            if (config->alias[i].net == 0)
+               continue;
             if (config->alias[i].zone == z && config->alias[i].net == ne && config->alias[i].node == no && config->alias[i].point == pp)
                break;
             if (config->alias[i].point && config->alias[i].fakenet) {
@@ -1491,6 +1835,7 @@ struct _fwrd *forward;
          if ((i = is_here (z, ne, no, pp, forward, maxnodes)) != -1)
             forward[i].reset = forward[i].export = 1;
          else {
+            i = maxnodes;
             forward[maxnodes].zone = z;
             forward[maxnodes].net = ne;
             forward[maxnodes].node = no;
@@ -1498,6 +1843,18 @@ struct _fwrd *forward;
             forward[maxnodes].export = 1;
             forward[maxnodes].reset = 1;
             maxnodes++;
+			}
+         forward[i].receiveonly = forward[i].sendonly = forward[i].passive = forward[i].private = 0;
+         while (*flag == '<' || *flag == '>' || *flag =='!'||*flag=='p'||*flag=='P') {
+            if (*flag == '>')
+               forward[i].receiveonly = 1;
+            if (*flag == '<')
+               forward[i].sendonly = 1;
+            if (*flag == '!')
+               forward[i].passive = 1;
+            if (*flag == 'P' || *flag=='p')
+               forward[i].private =1;
+            flag++;
          }
       } while ((p = strtok (NULL, " ")) != NULL);
 
@@ -1530,7 +1887,7 @@ struct _fwrd *forward;
       sprintf (wrp, "%d / %d", msgnum, last_msg);
       prints (7, 65, YELLOW|_BLACK, wrp);
 
-      if ( !(msgnum % 20))
+		if ( !(msgnum % 20))
          time_release ();
 
       sprintf (buff, "%s%d.MSG", sys.msg_path, msgnum);
@@ -1538,23 +1895,43 @@ struct _fwrd *forward;
       if (i == -1)
          continue;
 
-      fp = fdopen (i, "r+b");
-      if (fp == NULL)
-         continue;
+		fp = fdopen (i, "r+b");
+		if (fp == NULL)
+			continue;
 
-      for (i = 0; i < maxnodes; i++)
-         if (forward[i].reset)
-            forward[i].export = 1;
+		for (i = 0; i < maxnodes; i++)
+			if (forward[i].reset)
+				forward[i].export = 1;
 
-      fread((char *)&msg,sizeof(struct _msg),1,fp);
+		fread((char *)&msg,sizeof(struct _msg),1,fp);
 
-      if (sys.echomail && (msg.attr & MSGSENT)) {
-//         msg.attr &= ~MSGSENT;
-//         fseek (fp, 0L, SEEK_SET);
-//         fwrite((char *)&msg,sizeof(struct _msg),1,fp);
-         fclose (fp);
-         continue;
-      }
+		if (sys.echomail && (msg.attr & MSGSENT)) {
+			fclose (fp);
+			continue;
+		}
+			for (i=0;i<maxnodes;i++) {
+			if (forward[i].passive||forward[i].sendonly) forward[i].export=0;
+			if (forward[i].private) {
+
+				int ii;
+
+				forward[i].export=0;
+				if (!nametable) continue;
+
+				for(ii=0;ii<nodes_num;ii++) {
+					if (forward[i].zone==nametable[ii].zone&&
+						 forward[i].net==nametable[ii].net&&
+						 forward[i].node==nametable[ii].node&&
+						 forward[i].point==nametable[ii].point&&
+						 !stricmp(msg.to,nametable[ii].name)) {
+							 forward[i].export=1;
+							 break;
+					}
+				}
+			}
+
+
+		}
 
       sprintf (wrp, "%5d  %-22.22s Fido         ", msgnum, sys.echotag);
       wputs (wrp);
@@ -1562,7 +1939,6 @@ struct _fwrd *forward;
       need_seen = need_origin = 1;
 
       mseek (fpd, 0L, SEEK_SET);
-//      chsize (fileno (fpd), 0L);
       mprintf (fpd, "AREA:%s\r\n", sys.echotag);
 
       mi = i = 0;
@@ -1590,6 +1966,11 @@ struct _fwrd *forward;
             buff[mi - 1]='\0';
             if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
                need_origin = 0;
+
+            if (!strcmp (buff, "NOECHO")) {
+               msg.attr |= MSGSENT;
+               break;
+            }
 
             if (!strncmp (buff, "SEEN-BY: ", 9)) {
                if (need_origin) {
@@ -1719,17 +2100,25 @@ struct _fwrd *forward;
             mi = 0;
          }
          else {
-            if(mi < 78)
+            if (mi < 78)
                continue;
 
-            if (!strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
+            if (!strncmp (buff, msgtxt[M_ORIGIN_LINE], 11))
                need_origin = 0;
 
-            buff[mi]='\0';
-            mprintf(fpd,"%s",buff);
-            mi=0;
+            buff[mi] = '\0';
+            mprintf (fpd, "%s", buff);
+            mi = 0;
             buff[mi] = '\0';
          }
+      }
+
+      if (msg.attr & MSGSENT) {
+         fseek (fp, 0L, SEEK_SET);
+         msg.attr |= MSGSENT;
+         fwrite ((char *)&msg, sizeof(struct _msg), 1, fp);
+         fclose (fp);
+         continue;
       }
 
       fseek (fp, 0L, SEEK_SET);
@@ -1810,8 +2199,6 @@ struct _fwrd *forward;
          if (config->alias[sys.use_alias].point && config->alias[sys.use_alias].fakenet)
             mprintf (fpd, "\001PATH: %d/%d\r\n", config->alias[sys.use_alias].fakenet, config->alias[sys.use_alias].point);
          else if (!config->alias[sys.use_alias].point)
-//            mprintf (fpd, "\001PATH: %d/%d.%d\r\n", config->alias[sys.use_alias].net, config->alias[sys.use_alias].node, config->alias[sys.use_alias].point);
-//         else
             mprintf (fpd, "\001PATH: %d/%d\r\n", config->alias[sys.use_alias].net, config->alias[sys.use_alias].node);
       }
 
@@ -1823,7 +2210,7 @@ struct _fwrd *forward;
          mhdr.attrib |= MSGPRIVATE;
 
       for (i = 0; i < maxnodes; i++) {
-         if (!forward[i].export)
+         if (!forward[i].export || forward[i].passive || forward[i].sendonly)
             continue;
 
          ai = sys.use_alias;
@@ -1937,6 +2324,8 @@ void fido_rescan_echomail (char *tag, int zone, int net, int node, int point)
       close (fd);
    }
 
+   strcpy (buff, tag);
+   memset ((char *)&sys, 0, sizeof (struct _sys));
    strcpy (sys.echotag, tag);
 
    seen = (struct _fwrd *)malloc ((MAX_EXPORT_SEEN + 1) * sizeof (struct _fwrd));
@@ -1951,12 +2340,6 @@ void fido_rescan_echomail (char *tag, int zone, int net, int node, int point)
    else
       fclose (fpd);
    fpd = mopen ("MSGTMP.EXP", "r+b");
-
-   for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
-      if (zone == config->alias[i].zone)
-         break;
-   if (i < MAX_ALIAS && config->alias[i].net)
-      sys.use_alias = i;
 
    first_msg = 1;
    if (first_msg > last_msg)
@@ -2282,7 +2665,43 @@ void move_to_bad_message (char *netdir, int msgnum)
    sprintf (newname, "%s%d.MSG", config->bad_msgs, ++last);
    sprintf (filename, "%s%d.MSG", netdir, msgnum);
 
+   status_line (":Moved to bad message #%d", last);
+
    rename (filename, newname);
+}
+
+int check_afix (char *to)
+{
+   char *p, buffer[80];
+
+   strcpy (buffer, config->areafix_watch);
+   if ((p = strtok (buffer, " ")) == NULL)
+      return (stricmp (to, "Areafix"));
+   else {
+      do {
+         if (!stricmp (to, p))
+            return (0);
+      } while ((p = strtok (NULL, " ")) != NULL);
+   }
+
+   return (-1);
+}
+
+int check_tic (char *to)
+{
+   char *p, buffer[80];
+
+   strcpy (buffer, config->tic_watch);
+   if ((p = strtok (buffer, " ")) == NULL)
+      return (stricmp (to, "Raid"));
+   else {
+      do {
+         if (!stricmp (to, p))
+            return (0);
+      } while ((p = strtok (NULL, " ")) != NULL);
+   }
+
+   return (-1);
 }
 
 #define XATTR_IMM  0x01
@@ -2292,7 +2711,7 @@ void move_to_bad_message (char *netdir, int msgnum)
 #define XATTR_KFS  0x10
 #define XATTR_ZON  0x20
 
-int fido_export_netmail ()
+int fido_export_netmail (void)
 {
    FILE *fpd, *fp;
    int i, z, mi, msgnum, sent, fd, dne, dno, xattr;
@@ -2306,9 +2725,6 @@ int fido_export_netmail ()
    struct time timep;
    NODEINFO ni;
 
-   memset ((char *)&sys, 0, sizeof (struct _sys));
-   sys.netmail = 1;
-   strcpy (sys.msg_path, netmail_dir);
    scan_message_base (0, 0);
 
    status_line ("#Packing from %s (%d msgs)", sys.msg_path, last_msg);
@@ -2322,7 +2738,6 @@ int fido_export_netmail ()
    else
       fclose (fpd);
    fpd = mopen ("MSGTMP.EXP", "r+b");
-//   setvbuf (fpd, NULL, _IOFBF, 8192);
 
    prints (7, 65, YELLOW|_BLACK, "              ");
    prints (8, 65, YELLOW|_BLACK, "              ");
@@ -2337,7 +2752,7 @@ int fido_export_netmail ()
          time_release ();
       }
 
-      sprintf (buff, "%s%d.MSG", netmail_dir, msgnum);
+      sprintf (buff, "%s%d.MSG", sys.msg_path, msgnum);
       i = sh_open (buff, SH_DENYNONE, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
       if (i == -1)
          continue;
@@ -2346,7 +2761,7 @@ int fido_export_netmail ()
       if (fp == NULL)
          continue;
 
-      fread((char *)&msg,sizeof(struct _msg),1,fp);
+      fread ((char *)&msg, sizeof (struct _msg), 1, fp);
 
       if (msg.attr & MSGSENT) {
          fclose (fp);
@@ -2381,7 +2796,6 @@ int fido_export_netmail ()
       memcpy ((char *)&omsg, (char *)&msg, sizeof (struct _msg));
 
       mseek (fpd, 0L, SEEK_SET);
-//      chsize (fileno (fpd), 0L);
 
       msg_fzone = msg_tzone = 0;
       msg_fpoint = msg_tpoint = 0;
@@ -2391,7 +2805,6 @@ int fido_export_netmail ()
       intl_found = 0;
 
       fpos = filelength(fileno(fp));
-//      setvbuf (fp, NULL, _IOFBF, 2048);
 
       while (ftell (fp) < fpos) {
          c = fgetc(fp);
@@ -2434,19 +2847,20 @@ int fido_export_netmail ()
                else if (!strncmp(&buff[1],"FMPT",4))
                   sscanf(&buff[6],"%d",&msg_fpoint);
 
+               else if (!strncmp (&buff[1], "REALNAME:", 9))
+                  strcpy (msg.from, &buff[11]);
+
                else
                   mprintf (fpd, "%s\r\n", buff);
 
                if (!strncmp(&buff[1],"MSGID",5)) {
-                  parse_netnode (&buff[7], &msg_fzone, &i, &i, &i);
-                  if (msg_tzone == 0)
-                     msg_tzone = msg_fzone;
+                  if (msg_fzone == 0)
+                     parse_netnode (&buff[7], &msg_fzone, &i, &i, &i);
                }
 
                if (!strncmp(&buff[1],"REPLY",5)) {
-                  parse_netnode (&buff[7], &msg_tzone, &i, &i, &i);
-                  if (msg_fzone == 0)
-                     msg_fzone = msg_tzone;
+                  if (msg_tzone == 0)
+                     parse_netnode (&buff[7], &msg_tzone, &i, &i, &i);
                }
 
                if (!strncmp (&buff[1], "FLAGS", 5)) {
@@ -2473,10 +2887,8 @@ int fido_export_netmail ()
 
             if (countlimit) {
                countlimit--;
-               if (!countlimit) {
+               if (!countlimit)
                   msg.attr |= MSGSENT;
-//                  break;
-               }
             }
          }
          else {
@@ -2490,13 +2902,16 @@ int fido_export_netmail ()
 
             if (countlimit) {
                countlimit--;
-               if (!countlimit) {
+               if (!countlimit)
                   msg.attr |= MSGSENT;
-//                  break;
-               }
             }
          }
       }
+
+      if (msg_fzone == 0)
+         msg_fzone = msg_tzone;
+      if (msg_tzone == 0)
+         msg_tzone = msg_fzone;
 
       if (config->msgtrack)
          if (!track_outbound_messages (fpd, &msg, msg_fzone, msg_fpoint, msg_tzone, msg_tpoint)) {
@@ -2506,14 +2921,14 @@ int fido_export_netmail ()
 
             fclose (fp);
 
-            move_to_bad_message (netmail_dir, msgnum);
+            move_to_bad_message (sys.msg_path, msgnum);
             continue;
          }
 
       if (msg_tpoint && check_hold (msg_tzone, msg.dest_net, msg.dest, msg_tpoint))
          msg.attr |= MSGHOLD;
 
-      if (ourpoint && stricmp (msg.to, "Areafix") && stricmp (msg.to, "Raid")) {
+      if (ourpoint && check_afix (msg.to) && check_tic (msg.to)) {
          sprintf (buff, "%sNODES.DAT", config->net_info);
          fd = open (buff, O_RDONLY|O_BINARY);
          if (fd != -1) {
@@ -2566,7 +2981,7 @@ int fido_export_netmail ()
       else if (!msg_tzone && !msg_fzone)
          msg_tzone = msg_fzone = config->alias[0].zone;
 
-      if (ourpoint && registered == 1 && !stricmp (msg.to, "Areafix") && !(msg.attr & MSGREAD) && config->areafix) {
+      if (ourpoint && registered == 1 && !check_afix (msg.to) && !(msg.attr & MSGREAD) && config->areafix) {
          msg.attr |= MSGSENT|MSGREAD;
          fseek (fp, 0L, SEEK_SET);
          fwrite((char *)&msg,sizeof(struct _msg),1,fp);
@@ -2583,7 +2998,7 @@ int fido_export_netmail ()
          fpd = mopen ("MSGTMP.EXP", "r+b");
          continue;
       }
-      else if (ourpoint && registered == 1 && !stricmp (msg.to, "Raid") && !(msg.attr & MSGREAD) && config->tic_active) {
+      else if (ourpoint && registered == 1 && !check_tic (msg.to) && !(msg.attr & MSGREAD) && config->tic_active) {
          msg.attr |= MSGSENT|MSGREAD;
          fseek (fp, 0L, SEEK_SET);
          fwrite((char *)&msg,sizeof(struct _msg),1,fp);
@@ -2617,11 +3032,14 @@ int fido_export_netmail ()
 
       fclose (fp);
 
-      sprintf (wrp, "%5d  %-22.22s Fido         ", msgnum, "Netmail");
+      if (sys.netmail)
+         sprintf (wrp, "%5d  %-22.22s Fido         ", msgnum, "Netmail");
+      else
+         sprintf (wrp, "%5d  %-22.22s Fido         ", msgnum, "Internet");
       wputs (wrp);
 
       if ((msg.attr & MSGKILL) && !config->keeptransit) {
-         sprintf (buff, "%s%d.MSG", netmail_dir, msgnum);
+         sprintf (buff, "%s%d.MSG", sys.msg_path, msgnum);
          unlink (buff);
       }
 
@@ -2655,20 +3073,29 @@ int fido_export_netmail ()
 
       p = HoldAreaNameMungeCreate (msg_tzone);
       if (ourpoint)
-         sprintf (buff, "%s%04x%04x.PNT\\%08X.%cUT", p, msg.dest_net, msg.dest, msg_tpoint, 'X');
+         sprintf (buff, "%s%04x%04x.PNT\\%08X.XPR", p, msg.dest_net, msg.dest, msg_tpoint);
       else if (msg_tpoint && (msg.attr & MSGHOLD))
          sprintf (buff, "%s%04x%04x.PNT\\%08X.%cUT", p, msg.dest_net, msg.dest, msg_tpoint, 'H');
       else {
          if (xattr & XATTR_DIR)
             sprintf (buff, "%s%04x%04x.%cUT", p, msg.dest_net, msg.dest, 'D');
-         else
-            sprintf (buff, "%s%04x%04x.%cUT", p, msg.dest_net, msg.dest, (msg.attr & MSGCRASH) ? 'C' : ((msg.attr & MSGHOLD) ? 'H' : 'X'));
+         else {
+            if (msg.attr & MSGCRASH)
+               sprintf (buff, "%s%04x%04x.%cUT", p, msg.dest_net, msg.dest, 'C');
+            else if (msg.attr & MSGHOLD)
+               sprintf (buff, "%s%04x%04x.%cUT", p, msg.dest_net, msg.dest, 'H');
+            else
+               sprintf (buff, "%s%04x%04x.XPR", p, msg.dest_net, msg.dest);
+         }
       }
       mi = sh_open (buff, SH_DENYWR, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
       if (mi == -1 && msg_tpoint && ((msg.attr & MSGHOLD) || ourpoint)) {
          sprintf (buff, "%s%04x%04x.PNT", p, msg.dest_net, msg.dest);
          mkdir (buff);
-         sprintf (buff, "%s%04x%04x.PNT\\%08X.%cUT", p, msg.dest_net, msg.dest, msg_tpoint, (msg.attr & MSGCRASH) ? 'C' : ((msg.attr & MSGHOLD) ? 'H' : 'X'));
+         if (msg.attr & MSGHOLD)
+            sprintf (buff, "%s%04x%04x.PNT\\%08X.%cUT", p, msg.dest_net, msg.dest, msg_tpoint, 'H');
+         else
+            sprintf (buff, "%s%04x%04x.PNT\\%08X.XPR", p, msg.dest_net, msg.dest, msg_tpoint);
          mi = sh_open (buff, SH_DENYWR, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
       }
       if (filelength (mi) > (long)sizeof (struct _pkthdr2))
@@ -2681,20 +3108,24 @@ int fido_export_netmail ()
          pkthdr.capability = 1;
          pkthdr.cwvalidation = 256;
 
-         for (i=0; i < MAX_ALIAS; i++)
-            if (msg_fzone && config->alias[i].zone == msg_fzone)
-               break;
-         if (i == MAX_ALIAS)
-            z = 0;
+         if (sys.msg_num == 0) {
+            for (i=0; i < MAX_ALIAS; i++)
+               if (msg_fzone && config->alias[i].zone == msg_fzone)
+                  break;
+            if (i == MAX_ALIAS)
+               z = 0;
+            else
+               z = i;
+
+            for (i = 0; i < MAX_ALIAS; i++)
+               if ( config->alias[i].point && config->alias[i].net == msg.orig_net && config->alias[i].node == msg.orig && (!msg_fzone || config->alias[i].zone == msg_fzone) )
+                  break;
+
+            if (i < MAX_ALIAS)
+               z = i;
+         }
          else
-            z = i;
-
-         for (i = 0; i < MAX_ALIAS; i++)
-            if ( config->alias[i].point && config->alias[i].net == msg.orig_net && config->alias[i].node == msg.orig && (!msg_fzone || config->alias[i].zone == msg_fzone) )
-               break;
-
-         if (i < MAX_ALIAS)
-            z = i;
+            z = sys.use_alias;
 
          pkthdr.orig_node = config->alias[z].node;
          pkthdr.orig_net = config->alias[z].net;

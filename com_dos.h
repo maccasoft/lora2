@@ -21,7 +21,6 @@ int      READBYTE ();
                            /* Service 3: GET STATUS                         */
                            /*-----------------------------------------------*/
 /*#define MODEM_STATUS()     (Com_(0x03))*/
-//#define CARRIER            (local_mode || (Com_(0x03)&0x80))
 #define CARRIER            com_online()
 #define CHAR_AVAIL()       (MODEM_STATUS()&DATA_READY)
 #define OUT_EMPTY()        (Com_(0x03)&TX_SHIFT_EMPTY)
@@ -39,7 +38,10 @@ int      READBYTE ();
                            /*-----------------------------------------------*/
                            /* Service 6: SET DTR                            */
                            /*-----------------------------------------------*/
-#ifndef __NOFOSSIL__
+#ifdef __OS2__
+void SET_DTR_OFF (void);
+void SET_DTR_ON (void);
+#else
 #define SET_DTR_OFF()      ((void) Com_(0x06,0))
 #define SET_DTR_ON()       ((void) Com_(0x06,1))
 #endif
@@ -89,12 +91,17 @@ int      READBYTE ();
                            /*-----------------------------------------------*/
                            /* Service f: SET/GET FLOW CONTROL STATUS        */
                            /*-----------------------------------------------*/
-#ifndef __NOFOSSIL__
+#ifdef __OS2__
+void XON_ENABLE (void);
+void XON_DISABLE (void);
+#define IN_XON_ENABLE()    XON_ENABLE()
+#define IN_XON_DISABLE()   XON_DISABLE()
+#else
 #define XON_ENABLE()       ((void) Com_(0x0f,handshake_mask))
 #define XON_DISABLE()      ((void) Com_(0x0f,(handshake_mask&(~USE_XON))))
-#endif
 #define IN_XON_ENABLE()    ((void) Com_(0x0f,handshake_mask|OTHER_XON))
 #define IN_XON_DISABLE()   ((void) Com_(0x0f,(handshake_mask&(~OTHER_XON))))
+#endif
 
                            /*-----------------------------------------------*/
                            /* Service 10: SET/GET CTL-BREAK CONTROLS        */

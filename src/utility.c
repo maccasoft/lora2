@@ -296,27 +296,10 @@ reenter:
       memset (&call_list[i], 0, sizeof (struct _call_list));
       max_call = i + 1;
    }
-//   call_list[i].zone = zo;
-//   call_list[i].net  = ne;
-//   call_list[i].node = no;
-//   call_list[i].point = po;
-//   call_list[i].b_data += size;
-//   call_list[i].n_data += nfiles;
-//   if (!po)
-//      get_bad_call (zo, ne, no, 0, i);
-   build_node_queue (zo, ne, no, 0, i);
+
+   build_node_queue (zo, ne, no, po, i);
    sort_call_list ();
    
-   if (toupper (selpri[0]) == 'I')
-      for (i = 0; i < max_call; i++) {
-         if (call_list[i].type & MAIL_WILLGO) {
-            if (call_list[i].zone == zo && call_list[i].net == ne && call_list[i].node == no && call_list[i].point == 0)
-               continue;
-            delete_immediate (call_list[i].zone, call_list[i].net, call_list[i].node, call_list[i].point);
-            call_list[i].type &= ~MAIL_WILLGO;
-         }
-      }
-
    for (i = 0; i < max_call; i++) {
       if (call_list[i].zone == zo && call_list[i].net == ne && call_list[i].node == no && call_list[i].point == po)
          break;
@@ -326,13 +309,6 @@ reenter:
       call_list[i].type |= MAIL_WILLGO;
       next_call = i;
    }
-
-//   if (pri == 'C')
-//      call_list[i].type |= MAIL_CRASH;
-//   else if (pri == 'F')
-//      call_list[i].type |= MAIL_NORMAL;
-//   else if (pri == 'D')
-//      call_list[i].type |= MAIL_DIRECT;
 
    wclose ();
 
@@ -434,16 +410,6 @@ void manual_poll ()
    build_node_queue (zo, ne, no, 0, i);
    sort_call_list ();
    
-   if (toupper (selpri[0]) == 'I')
-      for (i = 0; i < max_call; i++) {
-         if (call_list[i].type & MAIL_WILLGO) {
-            if (call_list[i].zone == zo && call_list[i].net == ne && call_list[i].node == no && call_list[i].point == 0)
-               continue;
-            delete_immediate (call_list[i].zone, call_list[i].net, call_list[i].node, call_list[i].point);
-            call_list[i].type &= ~MAIL_WILLGO;
-         }
-      }
-
    for (i = 0; i < max_call; i++) {
       if (call_list[i].zone == zo && call_list[i].net == ne && call_list[i].node == no && call_list[i].point == 0)
          break;
@@ -582,23 +548,10 @@ void file_request ()
       memset (&call_list[i], 0, sizeof (struct _call_list));
       max_call = i + 1;
    }
-//   call_list[i].zone = zo;
-//   call_list[i].net  = ne;
-//   call_list[i].node = no;
-//   get_bad_call (zo, ne, no, 0, i);
+
    build_node_queue (zo, ne, no, 0, i);
    sort_call_list ();
    
-   if (toupper (selpri[0]) == 'I')
-      for (i = 0; i < max_call; i++) {
-         if (call_list[i].type & MAIL_WILLGO) {
-            if (call_list[i].zone == zo && call_list[i].net == ne && call_list[i].node == no && call_list[i].point == 0)
-               continue;
-            delete_immediate (call_list[i].zone, call_list[i].net, call_list[i].node, call_list[i].point);
-            call_list[i].type &= ~MAIL_WILLGO;
-         }
-      }
-
    for (i = 0; i < max_call; i++) {
       if (call_list[i].zone == zo && call_list[i].net == ne && call_list[i].node == no && call_list[i].point == 0)
          break;
@@ -608,13 +561,6 @@ void file_request ()
       call_list[i].type |= MAIL_WILLGO;
       next_call = i;
    }
-
-//   if (pri == 'C')
-//      call_list[i].type |= MAIL_CRASH;
-//   else if (pri == 'N')
-//      call_list[i].type |= MAIL_NORMAL;
-//   else if (pri == 'D')
-//      call_list[i].type |= MAIL_DIRECT;
 
    wclose ();
 
@@ -1289,6 +1235,7 @@ void new_echomail_link ()
       p = strtok (a, " ");
       a = strtok (NULL, "");
    } while (p != NULL);
+
    mprintf (fp, "\r\n", p);
    mprintf (fp, "------------------------------------------------\r\n");
 
@@ -1460,6 +1407,7 @@ void new_tic_link ()
       p = strtok (a, " ");
       a = strtok (NULL, "");
    } while (p != NULL);
+
    mprintf (fp, "\r\n", p);
    mprintf (fp, "------------------------------------------------\r\n");
 
@@ -1567,6 +1515,8 @@ void rescan_echomail_link ()
             if (tsys.echomail && !stricmp (tsys.echotag, p)) {
                if (tsys.quick_board)
                   fprintf (fp, "%d:%d/%d.%d %c %d %s\n", zo, ne, no, po, 'Q', tsys.quick_board, tsys.echotag);
+               else if (tsys.gold_board)
+                  fprintf (fp, "%d:%d/%d.%d %c %d %s\n", zo, ne, no, po, 'G', tsys.gold_board, tsys.echotag);
                else if (tsys.pip_board)
                   fprintf (fp, "%d:%d/%d.%d %c %d %s\n", zo, ne, no, po, 'P', tsys.pip_board, tsys.echotag);
                else if (tsys.squish)
@@ -1611,6 +1561,9 @@ void edit_outbound_info ()
    }
    else
       mc = mnc = 32767;
+
+   outinfo = 0;
+   display_outbound_info (outinfo);
 
 rescan:
    string[51] = '\0';
@@ -1743,7 +1696,7 @@ rescan:
       if (i != -1) {
          last = i;
 
-         wh = wopen (7, 23, 19, 57, 3, RED|_BLACK, LCYAN|_BLACK);
+         wh = wopen (7, 22, 19, 58, 3, RED|_BLACK, LCYAN|_BLACK);
          wactiv (wh);
          wtitle ("OUTBOUND", TLEFT, LCYAN|_BLACK);
          wshadow (DGREY|_BLACK);
@@ -1752,13 +1705,13 @@ rescan:
          wcenters (1, LCYAN|_BLACK, string);
 
          wmenubegc ();
-         wmenuitem ( 3,  6, " Reset call counters ", 0, 2, 0, NULL, 0, 0);
-         wmenuitem ( 4,  6, " Hold mail           ", 0, 3, 0, NULL, 0, 0);
-         wmenuitem ( 5,  6, " Crash mail          ", 0, 4, 0, NULL, 0, 0);
-         wmenuitem ( 6,  6, " Direct mail         ", 0, 5, 0, NULL, 0, 0);
-         wmenuitem ( 7,  6, " Normal mail         ", 0, 6, 0, NULL, 0, 0);
-         wmenuitem ( 8,  6, " Immediate mail      ", 0, 7, 0, NULL, 0, 0);
-         wmenuitem ( 9,  6, " Erase entry         ", 0, 1, 0, NULL, 0, 0);
+         wmenuitem ( 3,  6, " Reset call counters   ", 0, 2, 0, NULL, 0, 0);
+         wmenuitem ( 4,  6, " Hold mail             ", 0, 3, 0, NULL, 0, 0);
+         wmenuitem ( 5,  6, " Crash mail            ", 0, 4, 0, NULL, 0, 0);
+         wmenuitem ( 6,  6, " Direct mail           ", 0, 5, 0, NULL, 0, 0);
+         wmenuitem ( 7,  6, " Normal mail           ", 0, 6, 0, NULL, 0, 0);
+         wmenuitem ( 8,  6, " Toggle immediate flag ", 0, 7, 0, NULL, 0, 0);
+         wmenuitem ( 9,  6, " Erase entry           ", 0, 1, 0, NULL, 0, 0);
          wmenuend (2, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
          ch = wmenuget ();
@@ -1816,13 +1769,13 @@ rescan:
                break;
 
             case 7:
-               change_type (call_list[i].zone, call_list[i].net, call_list[i].node, call_list[i].point, 'H', 'F');
-               change_type (call_list[i].zone, call_list[i].net, call_list[i].node, call_list[i].point, 'D', 'F');
-               change_type (call_list[i].zone, call_list[i].net, call_list[i].node, call_list[i].point, 'C', 'F');
-               if (!(call_list[i].type & MAIL_WILLGO))
+               if (!(call_list[i].type & MAIL_WILLGO)) {
                   make_immediate (call_list[i].zone, call_list[i].net, call_list[i].node, call_list[i].point);
-               call_list[i].type = MAIL_WILLGO|MAIL_NORMAL;
-               next_call = i;
+                  next_call = i;
+               }
+               else
+                  delete_immediate (call_list[i].zone, call_list[i].net, call_list[i].node, call_list[i].point);
+               call_list[i].type ^= MAIL_WILLGO;
                break;
 
             case 3:
@@ -1877,6 +1830,8 @@ rescan:
          }
 
          wclose ();
+         write_call_queue ();
+         display_outbound_info (outinfo);
          goto rescan;
       }
    }
@@ -1950,6 +1905,8 @@ void import_newareas (char *newareas)
 
             if (!strcmp (location, "##"))
                sys.passthrough = 1;
+            else if (toupper (*location) == 'G')
+               sys.gold_board = atoi (++location);
             else if (atoi (location))
                sys.quick_board = atoi (location);
             else if (*location == '$') {
@@ -1982,6 +1939,7 @@ void import_newareas (char *newareas)
          sys.max_msgs = 200;
          sys.max_age = 14;
          sys.areafix = 255;
+
          zo = config->alias[0].zone;
          parse_netnode (sys.forward1, &zo, &ne, &no, &po);
          for (i = 0; i < MAX_ALIAS && config->alias[i].net; i++)
@@ -1992,10 +1950,10 @@ void import_newareas (char *newareas)
 
          sys.echomail = 1;
 
-         if (location[0] == '#') {
+         if (!strcmp (location, "##"))
             sys.passthrough = 1;
-            sys.echomail = 0;
-         }
+         else if (toupper (*location) == 'G')
+            sys.gold_board = atoi (++location);
          else if (atoi (location))
             sys.quick_board = atoi (location);
          else if (*location == '$') {

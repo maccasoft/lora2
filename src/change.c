@@ -76,7 +76,7 @@ void ibmset_change()
 void color_change()
 {
         if(rate < speed_graphics || (!usr.ansi && !usr.avatar))
-		return;
+        return;
         if(usr.color)
                 change_attr(LGREY|_BLACK);
         usr.color^=1;
@@ -124,14 +124,14 @@ void ansi_change()
 
 void avatar_change()
 {
-        if(usr.avatar)
+        if(usr.avatar)                  
                 change_attr(LGREY|_BLACK);
         usr.avatar^=1;
 
         if(!usr.avatar) {
                 usr.use_lore = 1;
                 usr.color = 0;
-	}
+	}                           
         else {
                 usr.ansi = 0;
                 usr.color = 1;
@@ -153,26 +153,32 @@ void avatar_change()
 
 void formfeed_change()
 {
-   usr.formfeed^=1;
+   usr.formfeed ^= 1;
 }
 
-void scanmail_change()
+void kludge_change (void)
 {
-   usr.scanmail^=1;
+   usr.kludge ^= 1;
 }
 
-void fullscreen_change()
+void scanmail_change (void)
 {
-        if(!usr.ansi && !usr.avatar)
-		return;
+   usr.scanmail ^= 1;
+}
 
-        usr.use_lore^=1;
+void fullscreen_change (void)
+{
+   if (!usr.ansi && !usr.avatar)
+      return;
 
-        if (usr.use_lore)
-                m_print(bbstxt[B_FULL_NOT_USED]);
-        else
-                m_print(bbstxt[B_FULL_USED]);
-        press_enter ();
+   usr.use_lore ^= 1;
+
+   if (usr.use_lore)
+      m_print (bbstxt[B_FULL_NOT_USED]);
+   else
+      m_print (bbstxt[B_FULL_USED]);
+
+   press_enter ();
 }
 
 void tabs_change()
@@ -195,7 +201,7 @@ void screen_change()
 {
    int col;
    char stringa[6];
-
+                  
    do {
       m_print(bbstxt[B_LINE_CHANGE]);
       sprintf (stringa, "%d", usr.len);
@@ -228,15 +234,50 @@ void nulls_change()
 
 void handle_change()
 {
-   char stringa[40];
+   int fd=0;
+   char stringa[40], filename[80];
+   long crc, ici;
+   struct _usridx usridx;
 
    read_system_file ("ALIASASK");
+   
 
    strcpy (stringa, usr.handle);
    m_print(bbstxt[B_ALIAS_CHANGE]);
    chars_input (stringa, 35, INPUT_FANCY|INPUT_UPDATE|INPUT_FIELD);
 
-   strcpy(usr.handle,fancy_str(stringa));
+   if (stringa[0] && stricmp (stringa, usr.name)) {
+      crc = crc_name (stringa);
+      
+      sprintf (filename, "%s.IDX", config->user_file);
+      fd = open (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+      while (read (fd, &usridx, sizeof (struct _usridx)) == sizeof (struct _usridx)) {
+         if (usridx.id == crc || usridx.alias_id == crc) {
+            status_line (":Invalid alias '%s'", stringa);
+            stringa[0] = '\0';
+            break;
+         }
+      }
+      close (fd);
+
+   }
+
+   if (stringa[0]){
+      strcpy (usr.handle, fancy_str (stringa));
+      usr.alias_id = crc;
+      sprintf (filename, "%s.IDX", config->user_file);
+      fd = open (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+      while (read (fd, &usridx, sizeof (struct _usridx)) == sizeof (struct _usridx)) {
+         ici=tell(fd);
+         if (usridx.id == usr.id) {
+	    lseek(fd,(ici-(sizeof(struct _usridx))),SEEK_SET);
+            usridx.alias_id = crc;
+            write (fd, (char *)&usridx, sizeof (struct _usridx));                     
+            break;
+         }        
+      }
+      close (fd);
+   }      
 }
 
 void voice_phone_change()
@@ -383,13 +424,13 @@ int select_language ()
    char c, stringa[4], strcom[25];
 
    if (!config->language[1].descr[0])
-      return (0);
-
+         return (0);
+         
    i = 0;
    strcom[0] = '\0';
 
    m_print(bbstxt[B_LANGUAGE_AVAIL]);
-
+   
    for (i = 0; i < MAX_LANG; i++) {
       if (!config->language[i].descr[0])
          continue;
@@ -534,7 +575,7 @@ void ask_birthdate ()
       m_print (bbstxt[B_BIRTHDATE], bbstxt[B_DATEFORMAT + config->inp_dateformat]);
       chars_input (stringa, 8, INPUT_FIELD|INPUT_UPDATE);
       if (!CARRIER)
-         return;
+      return;
       c = i = k = 0;
       p = strtok (stringa, "-./ ");
       if (p != NULL)

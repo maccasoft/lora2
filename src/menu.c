@@ -27,13 +27,17 @@ void tag_files (int);
 void ask_birthdate (void);
 void list_tagged_files (int remove);
 int naplps_read_file (char *name);
+void kludge_change (void);
+int bluewave_pack_tagged_areas (void);
+void offline_pack_tagged_areas (int bw);
+void forward_message_area (int sig, int flag);
 
 #define MENU_LENGTH  14
 #define MENU_STACK   10
 #define MAX_ITEMS   100
 
 extern int msg_parent, msg_child;
-extern char stop_hotkey, num_hotkey;
+extern char stop_hotkey, num_hotkey, no_precheck;
 
 static int i;
 static char mnu_name[MENU_LENGTH], *st, max_menu, active, old_activ;
@@ -204,7 +208,7 @@ char *start;
          if (cmd[m].flag_type == _MSG_INDIVIDUAL || cmd[m].flag_type == _MAIL_INDIVIDUAL)
             num_hotkey = 1;
 
-         if(cmd[m].flag_type == _F_DNLD || cmd[m].flag_type == _F_GLOBAL_DNLD) {
+         if ((cmd[m].flag_type == _F_DNLD || cmd[m].flag_type == _F_GLOBAL_DNLD) && stristr (cmd[m].argument, "/F=") == NULL) {
             if (usr.priv < sys.download_priv || sys.download_priv == HIDDEN)
                continue;
             if((usr.flags & sys.download_flags) != sys.download_flags)
@@ -341,7 +345,7 @@ char *start;
          if (!user_age_ok (cmd[i].argument))
             continue;
 
-         if(cmd[i].flag_type == _F_DNLD || cmd[m].flag_type == _F_GLOBAL_DNLD) {
+         if ((cmd[i].flag_type == _F_DNLD || cmd[m].flag_type == _F_GLOBAL_DNLD) && stristr (cmd[i].argument, "/F=") == NULL) {
             if (usr.priv < sys.download_priv || sys.download_priv == HIDDEN)
                continue;
             if((usr.flags & sys.download_flags) != sys.download_flags)
@@ -416,7 +420,7 @@ int process_menu_option (int flag_type, char *argument)
 {
    static int s, v, gg, lo;
    int xp;
-   char *p = NULL, buf[80];
+   char *p = NULL, buf[128];
 
    switch (flag_type) {
       case _MESSAGE:
@@ -438,8 +442,8 @@ int process_menu_option (int flag_type, char *argument)
          }
          else
             status_line(msgtxt[M_BBS_EXIT], usr.msg, sys.msg_name);
-         if (sys.quick_board)
-            quick_scan_message_base (sys.quick_board, usr.msg, 1);
+         if (sys.quick_board || sys.gold_board)
+            quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
          else if (sys.pip_board)
             pip_scan_message_base (usr.msg, 1);
          else if (sys.squish)
@@ -481,11 +485,11 @@ int process_menu_option (int flag_type, char *argument)
       case _SHOW:
          if (stristr (argument, "/NS") == NULL)
             cls ();
-         if (stristr (argument, "/P") == NULL)
+         if (stristr (argument, "/R") == NULL)
             read_file (argument);
          else
             naplps_read_file (argument);
-         if (stristr (argument, "/R") != NULL)
+         if (stristr (argument, "/P") != NULL)
             press_enter ();
          break;
       case _YELL:
@@ -586,8 +590,8 @@ int process_menu_option (int flag_type, char *argument)
                s = read_system(usr.files, active);
          } while (!s);
          if (active == 1) {
-            if (sys.quick_board)
-               quick_scan_message_base (sys.quick_board, usr.msg, 1);
+            if (sys.quick_board || sys.gold_board)
+               quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
             else if (sys.pip_board)
                pip_scan_message_base (usr.msg, 1);
             else if (sys.squish)
@@ -606,8 +610,8 @@ int process_menu_option (int flag_type, char *argument)
          if ((p=strstr(argument, "/M")) != NULL) {
             active = 1;
             if (p[2] == '=')
-               usr.msg = atoi(p + 3);
-            if (!read_system(usr.msg, active)) {
+               usr.msg = atoi (p + 3);
+            if (!read_system (usr.msg, active)) {
                if (strstr (argument, "/2") != NULL)
                   display_area_list(active, 1, xp);
                else if (strstr (argument, "/3") != NULL)
@@ -619,8 +623,8 @@ int process_menu_option (int flag_type, char *argument)
             }
             else
                status_line(msgtxt[M_BBS_EXIT], usr.msg, sys.msg_name);
-            if (sys.quick_board)
-               quick_scan_message_base (sys.quick_board, usr.msg, 1);
+            if (sys.quick_board || sys.gold_board)
+               quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
             else if (sys.pip_board)
                pip_scan_message_base (usr.msg, 1);
             else if (sys.squish)
@@ -735,19 +739,19 @@ int process_menu_option (int flag_type, char *argument)
          fullscreen_change();
          break;
       case _SET_CITY:
-         city_change();
+         city_change ();
          break;
       case _SET_SCANMAIL:
          scanmail_change ();
          break;
       case _SET_AVATAR:
-         avatar_change();
+         avatar_change ();
          break;
       case _SET_ANSI:
-         ansi_change();
+         ansi_change ();
          break;
       case _SET_COLOR:
-         color_change();
+         color_change ();
          break;
       case _MSG_EDIT_NEW:
          s = active;
@@ -755,11 +759,11 @@ int process_menu_option (int flag_type, char *argument)
          lo = 0;
          if (strstr (argument, "/L"))
             lo = 1;
-         set_useron_record(READWRITE, 0, 0);
-         if ((gg=get_message_data(0, argument)) == 1) {
+         set_useron_record (READWRITE, 0, 0);
+         if ((gg = get_message_data (0, argument)) == 1) {
             if (usr.use_lore) {
-               line_editor(0);
-               gosub_menu(argument);
+               line_editor (0);
+               gosub_menu (argument);
             }
             else {
                if (external_editor (0))
@@ -783,9 +787,9 @@ int process_menu_option (int flag_type, char *argument)
 
          s = active;
          active = 1;
-         set_useron_record(READWRITE, 0, 0);
+         set_useron_record (READWRITE, 0, 0);
 
-         if ((gg=get_message_data(lastread, argument)) == 1) {
+         if ((gg = get_message_data (lastread, argument)) == 1) {
             if (usr.use_lore) {
                line_editor(0);
                gosub_menu (argument);
@@ -797,7 +801,7 @@ int process_menu_option (int flag_type, char *argument)
          }
          else {
             if (gg == 0)
-               m_print(bbstxt[B_LORE_MSG3]);
+               m_print (bbstxt[B_LORE_MSG3]);
 
             active = s;
          }
@@ -876,8 +880,8 @@ int process_menu_option (int flag_type, char *argument)
                s = read_system(usr.files, active);
          } while (!s);
          if (active == 1) {
-            if (sys.quick_board)
-               quick_scan_message_base (sys.quick_board, usr.msg, 1);
+            if (sys.quick_board || sys.gold_board)
+               quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
             else if (sys.pip_board)
                pip_scan_message_base (usr.msg, 1);
             else if (sys.squish)
@@ -935,8 +939,8 @@ int process_menu_option (int flag_type, char *argument)
                display_area_list(active, 1, xp);
             else
                status_line(msgtxt[M_BBS_EXIT], usr.msg, sys.msg_name);
-            if (sys.quick_board)
-               quick_scan_message_base (sys.quick_board, usr.msg, 1);
+            if (sys.quick_board || sys.gold_board)
+               quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
             else if (sys.pip_board)
                pip_scan_message_base (usr.msg, 1);
             else if (sys.squish)
@@ -982,14 +986,13 @@ int process_menu_option (int flag_type, char *argument)
 
          return_menu();
 
-         if (active == 4)
-         {
+         if (active == 4) {
             active = v;
 
             if (active == 1) {
                read_system(usr.msg, active);
-               if (sys.quick_board)
-                  quick_scan_message_base (sys.quick_board, usr.msg, 1);
+               if (sys.quick_board || sys.gold_board)
+                  quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
                else if (sys.pip_board)
                   pip_scan_message_base (usr.msg, 1);
                else if (sys.squish)
@@ -1013,11 +1016,28 @@ int process_menu_option (int flag_type, char *argument)
             locate_files (0);
          break;
       case _F_UPLD:
-         set_useron_record(UPLDNLD, 0, 0);
-         if (strlen(argument))
-            upload_file(argument,0);
+         set_useron_record (UPLDNLD, 0, 0);
+
+         strcpy (buf, argument);
+         strupr (buf);
+
+         // Se e' presente il /C effettua prima il controllo sui file
+         // mandati, altrimenti lo esegue dopo.
+         if (strstr (buf, "/C") == NULL && strstr (buf, "/c") == NULL)
+            no_precheck = 1;
          else
-            upload_file(sys.uppath,0);
+            no_precheck = 0;
+
+         // /F= definisce il nome del file da mandare (o la directory in cui
+         // far finire gli upload.
+         if ((p = strstr (buf, "/F=")) != NULL) {
+            p = strtok (&p[3], " ");
+            upload_file (p, 0);
+         }
+         else
+            upload_file (sys.uppath, 0);
+
+         no_precheck = 0;
          break;
       case _SET_SIGN:
          signature_change();
@@ -1076,8 +1096,8 @@ int process_menu_option (int flag_type, char *argument)
                s = read_system(usr.files, active);
          } while (!s);
          if (active == 1) {
-            if (sys.quick_board)
-               quick_scan_message_base (sys.quick_board, usr.msg, 1);
+            if (sys.quick_board || sys.gold_board)
+               quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
             else if (sys.pip_board)
                pip_scan_message_base (usr.msg, 1);
             else if (sys.squish)
@@ -1138,7 +1158,7 @@ int process_menu_option (int flag_type, char *argument)
          if (stristr (argument, "/NS") == NULL)
             cls ();
          read_system_file (argument);
-         if (stristr (argument, "/R") != NULL)
+         if (stristr (argument, "/P") != NULL)
             press_enter ();
          break;
       case _LASTCALLERS:
@@ -1183,7 +1203,7 @@ int process_menu_option (int flag_type, char *argument)
             tag_area_list (2, xp);
          break;
       case _ASCII_DOWNLOAD:
-         pack_tagged_areas ();
+         offline_pack_tagged_areas (0);
          break;
       case _RESUME_DOWNLOAD:
          resume_transmission ();
@@ -1268,8 +1288,8 @@ int process_menu_option (int flag_type, char *argument)
             break;
          xp = get_sig (argument);
          display_new_area_list (xp);
-         if (sys.quick_board)
-            quick_scan_message_base (sys.quick_board, usr.msg, 1);
+         if (sys.quick_board || sys.gold_board)
+             quick_scan_message_base (sys.quick_board, sys.gold_board, usr.msg, 1);
          else if (sys.pip_board)
             pip_scan_message_base (usr.msg, 1);
          else if (sys.squish)
@@ -1326,6 +1346,23 @@ int process_menu_option (int flag_type, char *argument)
             list_tagged_files (1);
          else
             list_tagged_files (0);
+         break;
+      case 130:
+         kludge_change ();
+         break;
+      case 131:
+         offline_pack_tagged_areas (1);
+         break;
+      case _MSG_FORWARD:
+         xp = get_sig (argument);
+         if (strstr (argument, "/2") != NULL)
+            forward_message_area (xp, 1);
+         else if (strstr (argument, "/3") != NULL)
+            forward_message_area (xp, 3);
+         else if (strstr (argument, "/4") != NULL)
+            forward_message_area (xp, 4);
+         else
+            forward_message_area (xp, 2);
          break;
    }
    return (0);
@@ -1420,12 +1457,12 @@ int item;
          p++;
          switch(*p) {
             case '"':
-               if (usr.archiver == bbstxt[B_ZIP][0])
-                  sprintf (buffer, "%s", &bbstxt[B_ZIP][1]);
-               else if (usr.archiver == bbstxt[B_ARJ][0])
-                  sprintf (buffer, "%s", &bbstxt[B_ARJ][1]);
-               else if (usr.archiver == bbstxt[B_LHA][0])
-                  sprintf (buffer, "%s", &bbstxt[B_LHA][1]);
+               for (i = 0; i < 10; i++) {
+                  if (config->packid[i].display[0] == usr.archiver)
+                     break;
+               }
+               if (i < 10)
+                  sprintf (buffer, "%s", &config->packid[i].display[1]);
                else
                   sprintf (buffer, "%s", &bbstxt[B_NONE][1]);
                strcat (ext, buffer);
@@ -1822,7 +1859,7 @@ int item;
                m += strlen(buffer);
                break;
             case 'R':
-               sprintf (buffer, "%u", local_mode ? 0 : rate);
+               sprintf (buffer, "%lu", local_mode ? 0L : rate);
                strcat(ext, buffer);
                m += strlen(buffer);
                break;
@@ -2058,33 +2095,36 @@ char *args;
    char *p, op;
    int gg, val;
 
-   if ((p=strstr(args, "/C")) == NULL)
+   if ((p = strstr (args, "/C")) == NULL)
       return (1);
 
+   if (!isdigit (p[2]))
+      return (1);
    if (sscanf ( (p + 2), "%d%c%d", &gg, &op, &val) < 3)
-      return (0);
+      return (1);
 
    if (gg < 0 || gg >= MAXCOUNTER)
       return (0);
 
-   switch (op)
-   {
-   case '=':
-      if (usr.counter[gg] == val)
+   switch (op) {
+      case '=':
+         if (usr.counter[gg] == val)
+            return (1);
+         break;
+      case '<':
+         if (usr.counter[gg] < val)
+            return (1);
+         break;
+      case '>':
+         if (usr.counter[gg] > val)
+            return (1);
+         break;
+      case '!':
+         if (usr.counter[gg] != val)
+            return (1);
+         break;
+      default:
          return (1);
-      break;
-   case '<':
-      if (usr.counter[gg] < val)
-         return (1);
-      break;
-   case '>':
-      if (usr.counter[gg] > val)
-         return (1);
-      break;
-   case '!':
-      if (usr.counter[gg] != val)
-         return (1);
-      break;
    }
 
    return (0);

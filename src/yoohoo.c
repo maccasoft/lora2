@@ -46,6 +46,7 @@ int n_password(char *, char *);
 int send_WaZOO(int);
 int get_emsi_field (char *);
 void m_print2(char *format, ...);
+int get_bbs_local_record (int zone, int net, int node, int point);
 
 static int n_password2(char *, char *);
 
@@ -76,18 +77,18 @@ int Sender;
 
    if (remote_point && remote_zone == config->alias[assumed].zone && remote_net == config->alias[assumed].net && remote_node == config->alias[assumed].node) {
       remote_password[0] = '\0';
-      if (get_bbs_record (config->alias[assumed].zone, config->alias[assumed].fakenet, remote_point, 0)) {
+      if (get_bbs_local_record (config->alias[assumed].zone, config->alias[assumed].fakenet, remote_point, 0)) {
          if (nodelist.password[0] != '\0')
             strcpy (remote_password, nodelist.password);
       }
-      else if (get_bbs_record (remote_zone, remote_net, remote_node, remote_point)) {
+      else if (get_bbs_local_record (remote_zone, remote_net, remote_node, remote_point)) {
          if (nodelist.password[0] != '\0')
             strcpy (remote_password, nodelist.password);
       }
       strncpy(Hello.my_password,remote_password,8);
    }
    else {
-      if (get_bbs_record (remote_zone, remote_net, remote_node, remote_point)) {
+      if (get_bbs_local_record (remote_zone, remote_net, remote_node, remote_point)) {
          if (nodelist.password[0] != '\0')
             strcpy (remote_password, nodelist.password);
          else
@@ -195,41 +196,33 @@ xmit_packet:
 
    response_timer = timerset (4000);
 
-   while (!timeup(response_timer) && CARRIER)
-      {
-      if (!CHAR_AVAIL ())
-         {
-         if (local_kbd == 0x1B)
-            {
+   while (!timeup (response_timer) && CARRIER) {
+      if (!CHAR_AVAIL ()) {
+         if (local_kbd == 0x1B) {
             SET_DTR_OFF ();
             sptr  = msgtxt[M_KBD_MSG];
             goto no_response;
-            }
+         }
          time_release ();
          continue;
-         }       
+      }
 
-      switch (i = TIMED_READ (0))
-         {
+      switch (i = TIMED_READ (0)) {
          case ACK:
             return (1);
 
          case '?':
          case ENQ:
-            if (++num_errs == 10)
-                {
-                sptr = msgtxt[M_FUBAR_MSG];
-                goto no_response;
-                }
+            if (++num_errs == 10) {
+               sptr = msgtxt[M_FUBAR_MSG];
+               goto no_response;
+            }
             goto xmit_packet;
 
          default:
-            if (i > 0)                   /* Could just be line noise */
-               {
-               }
             break;
-         }
       }
+   }
 
 no_response:
 
@@ -452,8 +445,10 @@ process_hello:
    got_maildata = 0;
 
    if (Hello.product == isLORA) {
-      if (Hello.tranx)
+      if (Hello.tranx) {
+         Hello.tranx -= timezone;
          status_line(":Tranx: %08lX / %08lX", time (NULL), Hello.tranx);
+      }
       else
          status_line (":No transaction number presented");
 
@@ -563,24 +558,21 @@ int zone, net, nodo, point;
 {
    remote_password[0] = '\0';
 
-   if (!get_bbs_record (zone, net, nodo, point)) {
-      if (config->norm_filepath[0])
-         filepath = config->norm_filepath;
-      if (config->norm_okfile[0])
-         request_list = config->norm_okfile;
-      max_requests = config->norm_max_requests;
-      max_kbytes = config->norm_max_kbytes;
+   if (!get_bbs_local_record (zone, net, nodo, point))
       return (0);
-   }
    else {
-      if (config->know_filepath[0])
-         filepath = config->know_filepath;
-      if (config->know_okfile[0])
-         request_list = config->know_okfile;
-      max_requests = config->know_max_requests;
-      max_kbytes = config->know_max_kbytes;
+      if (filepath == config->norm_filepath) {
+         if (config->know_filepath[0])
+            filepath = config->know_filepath;
+         if (config->know_okfile[0])
+            request_list = config->know_okfile;
+         max_requests = config->know_max_requests;
+         max_kbytes = config->know_max_kbytes;
+      }
 
       strcpy (remote_password, nodelist.password);
+      if (remote_password[0] == '\0')
+         return (0);
    }
 
    return (1);
@@ -651,11 +643,35 @@ int width;
 {
    int i, m, c;
 
-   c = TIMED_READ (10);
-   if (c != '*' || !CARRIER) {
+   while ((c = TIMED_READ (10)) == '*' && CARRIER)
+      ;
+
+   if (c != 'E' || !CARRIER) {
       s[0] = '\0';
       return;
    }
+   if ((c = TIMED_READ (10)) != 'M' || !CARRIER) {
+      s[0] = '\0';
+      return;
+   }
+   if ((c = TIMED_READ (10)) != 'S' || !CARRIER) {
+      s[0] = '\0';
+      return;
+   }
+   if ((c = TIMED_READ (10)) != 'I' || !CARRIER) {
+      s[0] = '\0';
+      return;
+   }
+   if ((c = TIMED_READ (10)) != '_' || !CARRIER) {
+      s[0] = '\0';
+      return;
+   }
+
+
+//   if (c != '*' || !CARRIER) {
+//      s[0] = '\0';
+//      return;
+//   }
 
 //   while ((c = PEEKBYTE ()) == '*' && CARRIER)
 //      TIMED_READ (1);
@@ -666,7 +682,20 @@ int width;
 //      return;
 //   }
 
-   strcpy (s, "**");
+   strcpy (s, "**EMSI_");
+
+   for (i = strlen (s); i < width; i++) {
+      if ((c = TIMED_READ (10)) == -1 || !CARRIER) {
+         s[0] = '\0';
+         return;
+      }
+      if (c == 0x0D)
+         break;
+      s[i] = c;
+   }
+   s[i] = '\0';
+
+/*
    m = 2;
    for (i = 0; i < 12; i++) {
       c = TIMED_READ (10);
@@ -689,6 +718,7 @@ int width;
       }
    }
    s[m] = '\0';
+*/
 }
 
 
@@ -762,18 +792,18 @@ int originator;
 
    if (remote_point && remote_zone == config->alias[assumed].zone && remote_net == config->alias[assumed].net && remote_node == config->alias[assumed].node) {
       remote_password[0] = '\0';
-      if (get_bbs_record (config->alias[assumed].zone, config->alias[assumed].fakenet, remote_point, 0)) {
+      if (get_bbs_local_record (config->alias[assumed].zone, config->alias[assumed].fakenet, remote_point, 0)) {
          if (nodelist.password[0] != '\0')
             strcpy (remote_password, nodelist.password);
       }
-      else if (get_bbs_record (remote_zone, remote_net, remote_node, remote_point)) {
+      else if (get_bbs_local_record (remote_zone, remote_net, remote_node, remote_point)) {
          if (nodelist.password[0] != '\0')
             strcpy (remote_password, nodelist.password);
       }
       strcpy(addr,remote_password);
    }
    else {
-      if (get_bbs_record (remote_zone, remote_net, remote_node, remote_point)) {
+      if (get_bbs_local_record (remote_zone, remote_net, remote_node, remote_point)) {
          if (nodelist.password[0] != '\0')
             strcpy (remote_password, nodelist.password);
          else
@@ -931,7 +961,6 @@ int originator;
 
          if (PEEKBYTE() == '*') {
             get_emsi_id (addr, 14);
-//            status_line (">DEBUG: get_emsi_id (send) = '%s'", addr);
             if (!strnicmp (addr, "**EMSI_REQ", 10) || !strnicmp (addr, "*EMSI_REQ", 9))
                continue;
             if (!strnicmp (addr, "**EMSI_DAT", 10) || !strnicmp (addr, "*EMSI_DAT", 9)) {
@@ -1002,7 +1031,6 @@ resend:
 
       if (PEEKBYTE () == '*') {
          get_emsi_id (string, 10);
-//         status_line (">DEBUG: get_emsi_id (get) = '%s'", string);
          if (!strncmp (string, "**EMSI_DAT", 10) || !strncmp (string, "*EMSI_DAT", 9))
             break;
          if (!strncmp (string, "**EMSI_HBT", 10) || !strncmp (string, "**EMSI_ACK", 10))
@@ -1132,6 +1160,7 @@ resend:
             if (!get_emsi_field (string))
                goto resend;
             sscanf (&string[1], "%8lX", &tranx);
+            tranx -= timezone;
          }
          else if (!strcmp (string, "MTX#")) {
             if (!get_emsi_field (string))

@@ -18,10 +18,11 @@
 #include "prototyp.h"
 #include "zmodem.h"
 
+extern short tcpip;
 extern int iemsi;
 extern char usr_rip;
 
-#define MAX_INDEX    500
+#define MAX_INDEX    200
 
 void f1_special_status(char *, char *, char *);
 int get_user_age (void);
@@ -30,11 +31,13 @@ void ask_birthdate (void);
 void ask_default_protocol (void);
 void ask_default_archiver (void);
 int iemsi_login (void);
+void update_sysinfo_calls (void);
+char *tcpip_name (char *);
 
 static int is_trashpwd (char *);
 static int is_trashcan (char *);
 
-int login_user()
+int login_user (void)
 {
    int fd, fflag, posit, m, original_time, i, xmq;
    char stringa[36], filename[80], c, mayberip;
@@ -47,6 +50,7 @@ int login_user()
    memset((char *)&lorainfo,0,sizeof(struct _lorainfo));
 
    start_time = time(NULL);
+   set_useron_record (LOGIN, 0, 0);
 
    xmq = allowed;
    if (!allowed)
@@ -126,7 +130,7 @@ int login_user()
       }
    }
 
-   read_system_file("LOGO");
+   read_system_file ("LOGO");
 
    if (iemsi) {
       posit = iemsi_login ();
@@ -140,6 +144,7 @@ new_login:
    stringa[0] = 0;
 
    m_print ("\n%s%s login.\n", VERSION, registered ? "" : NOREG);
+   CLEAR_INBOUND ();
 
    if (!usr.name[0])
       do {
@@ -147,7 +152,7 @@ new_login:
          chars_input (stringa, 35, INPUT_FANCY|INPUT_FIELD);
          if (!CARRIER || time_remain () <= 0)
             return (0);
-      } while (strlen(stringa) < 5);
+      } while (strlen(stringa) < 3);
    else {
       m_print (bbstxt[B_FULLNAME]);
       m_print ("%-35.35s\n", usr.name);
@@ -186,6 +191,27 @@ new_login:
       if (!fflag)
          posit += m;
    } while (m == MAX_INDEX && !fflag);
+
+   if (!fflag) {
+      lseek (fd, 0L, SEEK_SET);
+      posit = 0;
+
+      do {
+         i = read(fd,(char *)&usridx,sizeof(struct _usridx) * MAX_INDEX);
+         m = i / sizeof (struct _usridx);
+
+         for (i=0; i < m; i++)
+            if (usridx[i].alias_id == crc) {
+               m = 0;
+               posit += i;
+               fflag = 1;
+               break;
+            }
+
+         if (!fflag)
+            posit += m;
+      } while (m == MAX_INDEX && !fflag);
+   }
 
    close (fd);
 
@@ -290,20 +316,26 @@ new_login:
    }
 
 loginok:
-   set_useron_record(0, 0, 0);
-   data(stringa);
-   if(strncmp(stringa,usr.ldate,9)) {
+   // Se data di oggi e' diversa da quella dell'ultimo collegamento, azzera
+   // tutti i parametri dei limiti giornalieri.
+   data (stringa);
+   if (strncmp (stringa, usr.ldate, 9)) {
       usr.time = 0;
       usr.dnldl = 0;
       usr.chat_minutes = 0;
    }
+
+#if defined (__OCC__) || defined (__TCPIP__)
+   if (tcpip)
+      strcpy (usr.comment, tcpip_name (usr.comment));
+#endif
 
    if (!usr.priv) {
       read_system_file ("LOCKOUT");
       return (0);
    }
 
-   usr_class = get_class(usr.priv);
+   usr_class = get_class (usr.priv);
 
    if (usr.ovr_class.max_time)
       config->class[usr_class].max_time = usr.ovr_class.max_time;
@@ -313,28 +345,30 @@ loginok:
       config->class[usr_class].max_dl = usr.ovr_class.max_dl;
    else {
       switch (rate) {
-      case 300:
-         if (config->class[usr_class].dl_300)
-            config->class[usr_class].max_dl = config->class[usr_class].dl_300;
-         break;
-      case 1200:
-         if (config->class[usr_class].dl_1200)
-            config->class[usr_class].max_dl = config->class[usr_class].dl_1200;
-         break;
-      case 2400:
-      case 4800:
-      case 7200:
-         if (config->class[usr_class].dl_2400)
-            config->class[usr_class].max_dl = config->class[usr_class].dl_2400;
-         break;
-      case 9600:
-      case 12000:
-      case 14400:
-         if (config->class[usr_class].dl_9600)
-            config->class[usr_class].max_dl = config->class[usr_class].dl_9600;
-         break;
+         case 300:
+            if (config->class[usr_class].dl_300)
+               config->class[usr_class].max_dl = config->class[usr_class].dl_300;
+            break;
+
+         case 1200:
+            if (config->class[usr_class].dl_1200)
+               config->class[usr_class].max_dl = config->class[usr_class].dl_1200;
+            break;
+
+         case 2400:
+         case 4800:
+         case 7200:
+            if (config->class[usr_class].dl_2400)
+               config->class[usr_class].max_dl = config->class[usr_class].dl_2400;
+            break;
+
+         default:
+            if (config->class[usr_class].dl_9600)
+               config->class[usr_class].max_dl = config->class[usr_class].dl_9600;
+            break;
       }
    }
+
    if (usr.ovr_class.ratio)
       config->class[usr_class].ratio = usr.ovr_class.ratio;
    if (usr.ovr_class.min_baud)
@@ -349,28 +383,23 @@ loginok:
       original_time = config->class[usr_class].max_time - usr.time;
 
    if (usr.times)
-      status_line(msgtxt[M_USER_LAST_TIME], usr.ldate);
+      status_line (msgtxt[M_USER_LAST_TIME], usr.ldate);
 
-   if(strncmp(stringa,usr.ldate,9))
-           status_line(msgtxt[M_TIMEDL_ZEROED]);
+   if (strncmp (stringa, usr.ldate, 9))
+      status_line (msgtxt[M_TIMEDL_ZEROED]);
 
-   f1_status();
-
-   sysinfo.total_calls++;
-   sysinfo.today.humancalls++;
-   sysinfo.week.humancalls++;
-   sysinfo.month.humancalls++;
-   sysinfo.year.humancalls++;
+   f1_status ();
+   update_sysinfo_calls ();
    status_line (":System call #%ld", sysinfo.total_calls);
 
    strcpy (lorainfo.logindate, stringa);
    usr.times++;
 
-   if(original_time <= 0) {
-      read_system_file("DAYLIMIT");
-      FLUSH_OUTPUT();
-      modem_hangup();
-      return(0);
+   if (original_time <= 0) {
+      read_system_file ("DAYLIMIT");
+      FLUSH_OUTPUT ();
+      modem_hangup ();
+      return (0);
    }
 
    allowed = xmq ? xmq : time_to_next (1);
@@ -380,7 +409,7 @@ loginok:
    else
       read_system_file ("TIMEWARN");
 
-   status_line(msgtxt[M_GIVEN_LEVEL], time_remain (), get_priv_text (usr.priv));
+   status_line (msgtxt[M_GIVEN_LEVEL], time_remain (), get_priv_text (usr.priv));
 
    if (config->min_login_level && usr.priv < config->min_login_level) {
       status_line ("!Level too low to login");
@@ -424,54 +453,50 @@ loginok:
 
    usr.baud_rate = local_mode ? 0 : rate;
 
-   sprintf (filename, "%s.BBS", config->user_file);
+   if (!CARRIER)
+      return (0);
 
+   sprintf (filename, "%s.BBS", config->user_file);
    fd = sh_open (filename, SH_DENYWR, O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
    lseek (fd, (long)posit * sizeof (struct _usr), SEEK_SET);
-   write(fd,(char *)&usr,sizeof(struct _usr));
-   close(fd);
+   write (fd, (char *)&usr, sizeof (struct _usr));
+   close (fd);
 
    lorainfo.posuser = posit;
 
    if (rate && rate < config->class[usr_class].min_baud) {
-      read_system_file("TOOSLOW");
-      FLUSH_OUTPUT();
-      modem_hangup();
+      read_system_file ("TOOSLOW");
+      FLUSH_OUTPUT ();
+      modem_hangup ();
       return (0);
    }
 
-   read_system_file("WELCOME");
+   read_system_file ("WELCOME");
    if (!CARRIER)
       return (0);
 
    read_hourly_files ();
    read_comment ();
 
-   data(stringa);
-   if (!strncmp(stringa,usr.birthdate,6))
-      read_system_file("BIRTHDAY");
+   data (stringa);
+   if (!strncmp (stringa, usr.birthdate, 6))
+      read_system_file ("BIRTHDAY");
 
    if (usr.times > 1) {
       if (usr.times < config->rookie_calls)
-         read_system_file("ROOKIE");
+         read_system_file ("ROOKIE");
 
-      sprintf(filename,"%s%d",config->sys_path,posit);
-      if(dexists(filename))
-         read_file(filename);
+      sprintf (filename, "%s%d", config->sys_path, posit);
+      if (dexists (filename))
+         read_file (filename);
    }
    else
-      read_system_file("NEWUSER2");
+      read_system_file ("NEWUSER2");
 
-//   ballot_votes ();
-
-   if (!CARRIER)
-      return (0);
-
-   return (1);
+   return ((!CARRIER) ? 0 : 1);
 }
 
-int new_user(buff)
-char *buff;
+int new_user (char *buff)
 {
    int c, fd;
    char stringa[40], filename[80];
@@ -497,10 +522,10 @@ char *buff;
    else
       text_path = config->language[0].txt_path;
 
-   read_system_file("APPLIC");
+   read_system_file ("APPLIC");
 
-   strcpy(tusr.name, buff);
-   strcpy(tusr.handle, buff);
+   strcpy (tusr.name, buff);
+   strcpy (tusr.handle, buff);
 
    if (rate && rate >= speed_graphics) {
       if (config->ansigraphics == 2) {
@@ -765,8 +790,10 @@ char *buff;
    strcpy (usr.lastpwdchange, stringa);
 
    usridx.id = crc_name (tusr.name);
+   usridx.alias_id = crc_name (tusr.handle);
    tusr.id = usridx.id;
-   memcpy((char *)&usr, (char *)&tusr, sizeof(struct _usr));
+   tusr.alias_id = usridx.alias_id;
+   memcpy ((char *)&usr, (char *)&tusr, sizeof(struct _usr));
 
    sprintf (filename, "%s.IDX", config->user_file);
    fd = open (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
@@ -876,6 +903,22 @@ int iemsi_login (void)
          }
    } while (m == MAX_INDEX && !fflag);
 
+   if (!fflag) {
+      lseek (fd, 0L, SEEK_SET);
+      posit = 0;
+
+      do {
+         i = read(fd,(char *)&usridx,sizeof(struct _usridx) * MAX_INDEX);
+         m = i / sizeof (struct _usridx);
+
+         for (i = 0; i < m; i++, posit++)
+            if (usridx[i].alias_id == crc) {
+               fflag = 1;
+               break;
+            }
+      } while (m == MAX_INDEX && !fflag);
+   }
+
    close (fd);
 
    if (!fflag) {
@@ -935,7 +978,9 @@ int iemsi_login (void)
          usr.havebox = 1;
 
       uidx.id = crc_name (usr.name);
+      uidx.alias_id = crc_name (usr.handle);
       usr.id = uidx.id;
+      usr.alias_id = uidx.alias_id;
 
       sprintf (filename, "%s.IDX", config->user_file);
       fd = sh_open (filename, SH_DENYWR, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);

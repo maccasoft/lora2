@@ -468,7 +468,7 @@ _msdos_pause endp
         public  _os2_pause
 _os2_pause proc far
         xor     dx,dx     ; Number of milliseconds in DX:AX. A value of 0
-        mov     ax,5      ; means that the current timeslice is released.
+        mov     ax,1      ; means that the current timeslice is released.
         hlt               ; Call OS/2 DosSleep() indirectly
         db      35h,0CAh  ; Signature to differentiate between a normal
                           ; HLT-instruction and the call to DosSleep().

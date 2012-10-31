@@ -85,7 +85,6 @@ extern int max_noconnects;
 extern int matrix_mask;
 extern int no_requests;
 
-extern  word speed;
 extern  byte answer_flag;
 extern  byte lock_baud;
 extern  byte terminal, emulator;
@@ -106,7 +105,7 @@ extern  byte who_is_he;
 extern  byte overwrite;
 extern  byte allow_reply;
 extern  byte snooping;
-extern  word rate;
+extern  long rate, speed;
 extern  char *init;
 extern  char *dial;
 extern  struct _usr usr;
@@ -161,7 +160,7 @@ extern  int first_block;
 extern  char final_name[50];
 extern  char *_fpath;
 
-extern  struct _msg_list far msg_list[MAX_PRIV_MAIL];
+extern  struct _msg_list *msg_list;
 extern  int max_priv_mail;
 extern  int last_mail;
 

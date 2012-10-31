@@ -8,6 +8,7 @@
 #include <ctype.h>
 #include <process.h>
 #include <time.h>
+#include <conio.h>
 #include <sys\stat.h>
 
 #include <cxl\cxlvid.h>
@@ -28,10 +29,6 @@
 void open_logfile (void);
 void import_newareas (char *newareas);
 int spawn_program (int swapout, char *outstring);
-void squish_rescan_echomail (char *tag, int zone, int net, int node, int point);
-int quick_rescan_echomail (int board, int zone, int net, int node, int point);
-void fido_rescan_echomail (char *tag, int zone, int net, int node, int point);
-void pip_rescan_echomail (int board, char *tag, int zone, int net, int node, int point);
 FILE *mopen (char *filename, char *mode);
 int mclose (FILE *fp);
 int mputs (char *s, FILE *fp);
@@ -40,6 +37,9 @@ long mseek (FILE *fp, long position, int offset);
 int mread (char *s, int n, int e, FILE *fp);
 void build_aidx (void);
 void track_inbound_messages (FILE *fpd, struct _msg *msgt, int fzone);
+int check_board_not_used (char goldbase, FILE *fp);
+int open_packet (int zone, int net, int node, int point, int ai);
+unsigned long get_buffer_crc (void *buffer, int length);
 
 struct _pkthdr22
 {
@@ -68,7 +68,11 @@ struct _fwd_alias {
    short node;
    short point;
    bit   export;
-};
+   bit   receive;
+};       
+/*
+   > - Nodo a sola ricezione (il nodo non puo' spedire messaggi echo)
+*/
 
 #define MAXDUPES      1000
 #define MAX_SEEN      512
@@ -90,12 +94,15 @@ struct _dupeindex {
 };
 
 struct _aidx {
-   char areatag[32];
+//   char areatag[32];
+   unsigned long areatag;
    byte board;
+   word gold_board;
 };
 
-extern char *suffixes[];
+extern char *suffixes[], nomailproc;
 extern struct _msginfo msginfo;
+extern struct _gold_msginfo gmsginfo;
 
 extern int maxakainfo;
 extern struct _akainfo *akainfo;
@@ -108,13 +115,13 @@ char *packet_fgets (char *, int, FILE *fp);
 
 int maxaidx;
 static FILE *f1, *f2, *f3, *f4, *f5, *fpareas;
-struct _dupecheck *dupecheck;
+struct _dupecheck *dupecheck = NULL;
 struct _aidx *aidx;
 static int ndupes, nbad, pkt_zone, pkt_net, pkt_node, pkt_point, nmy;
 static int totalpackets, totalnetmail, totalechomail, fdsys;
 
 static int verify_password (char *pwd, int zone, int net, int node, int point);
-static void rename_bad_packet (char *, char *);
+static void rename_bad_packet (char *, char *, char *);
 static int process_type2_packet (FILE *, struct _pkthdr2 *, char *);
 static int process_type2plus_packet (FILE *, struct _pkthdr2 *, char *);
 static int process_type22_packet (FILE *, struct _pkthdr22 *, struct ffblk *);
@@ -157,6 +164,9 @@ void mail_batch (char *what)
 
 void import_sequence (void)
 {
+   if (nomailproc)
+      return;
+
    if (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL|ECHO_RESERVED4))
       mail_batch (config->pre_import);
 
@@ -175,12 +185,11 @@ void import_sequence (void)
    directory di inbound appropriate, a seconda dei settaggi dell'evento
    corrente.
 ---------------------------------------------------------------------------*/
-
-void import_mail ()
+void import_mail (void)
 {
    FILE *fp;
-   int wh, *varr, i, d;
-   char filename[80], pktname[14], curdir[52], *dir;
+   int wh, i, d;
+   char filename[80], pktname[14], *dir, newname[14];
    unsigned int pktdate, pkttime;
    struct ffblk blk;
    struct _pkthdr2 pkthdr;
@@ -322,16 +331,17 @@ void import_mail ()
          time_release ();
 
          sprintf (filename, "%s%s", dir, blk.ff_name);
+         rename_bad_packet (filename, dir, newname);
+
+         sprintf (filename, "%s%s", dir, newname);
          fp = sh_fopen (filename, "rb", SH_DENYRW);
          if (fp == NULL)
             continue;
          setvbuf (fp, NULL, _IOFBF, 2048);
          fread ((char *)&pkthdr, sizeof (struct _pkthdr2), 1, fp);
 
-         if (pkthdr.ver != PKTVER) {
+         if (pkthdr.ver != PKTVER)
             fclose (fp);
-            rename_bad_packet (filename, dir);
-         }
          else {
             if (pkthdr.rate == 2)
                i = process_type22_packet (fp, (struct _pkthdr22 *)&pkthdr, &blk);
@@ -346,10 +356,8 @@ void import_mail ()
 
             fclose (fp);
 
-            if (i == 2)
-               rename_bad_packet (filename, dir);
-            else if (i == 0) {
-               status_line ("!Error processing: %s", filename);
+            if (i == 0) {
+               status_line ("!Error processing: %s%s", dir, blk.ff_name);
                break;
             }
          }
@@ -369,6 +377,7 @@ void import_mail ()
    wclose ();
 
    free (dupecheck);
+   dupecheck = NULL;
    unlink ("MSGTMP.IMP");
 
    if (!totalpackets)
@@ -411,8 +420,8 @@ void import_mail ()
 /*---------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------*/
-static void rename_bad_packet (name, dir)
-char *name, *dir;
+static void rename_bad_packet (name, dir, newname)
+char *name, *dir, *newname;
 {
    int i = -1;
    char filename[128], *p;
@@ -431,6 +440,9 @@ char *name, *dir;
    i++;
    sprintf (filename, "%sBAD_PKT.%03d", dir, i);
    rename (name, filename);
+
+   if (newname != NULL)
+      sprintf (newname, "BAD_PKT.%03d", i);
 }
 
 static int verify_password (pwd, zone, net, node, point)
@@ -456,11 +468,11 @@ int zone, net, node, point;
       close (fd);
    }
 
-   if (!found || !ni.pw_packet[0])
+   if (!found || (!ni.pw_packet[0] && !ni.pw_inbound_packet[0]))
       return (1);
 
    memset (fp, 0, 10);
-   strcpy (fp, ni.pw_packet);
+   strcpy (fp, ni.pw_inbound_packet[0] ? ni.pw_inbound_packet : ni.pw_packet);
 
    return (!strncmp (strupr (pwd), strupr (fp), 8));
 }
@@ -604,13 +616,11 @@ static int sort_func (const void *a1, const void *b1)
 /*---------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------*/
-static int process_packet (fp, pkthdr)
-FILE *fp;
-struct _pkthdr2 *pkthdr;
+static int process_packet (FILE *fp, struct _pkthdr2 *pkthdr)
 {
    FILE *fpd;
    int cpoint, cnet, cnode, m, i, n_path, n_forw, nmsg, npkt, n_seen;
-   char linea[100], last_path[100], addr[40], *p, dupe, bad, tmpforw[80];
+   char linea[128], last_path[128], addr[128], *p, dupe, bad, tmpforw[128];
    char havepath, pathreached, seenreached, intl, empty, shead;
    long crc;
    struct _msghdr2 msghdr;
@@ -645,17 +655,22 @@ struct _pkthdr2 *pkthdr;
       fclose (fpd);
    fpd = mopen ("MSGTMP.IMP", "rb+");
 
-//   setvbuf (fpd, NULL, _IOFBF, 8192);
-
    npkt = nmsg = 0;
    wclear ();
 
-   while (fread ((char *)&msghdr, sizeof (struct _msghdr2), 1, fp) != 0) {
+   for (;;) {
+      if (fread ((char *)&msghdr, sizeof (struct _msghdr2), 1, fp) != 1)
+         break;
+
       if (msghdr.ver == 0)
          break;
 
-      if (msghdr.ver != PKTVER)
-         get_to_null (fp, linea, 20);
+      if (msghdr.ver != PKTVER) {
+         while ((i = fgetc (fp)) != EOF) {
+            if ((i & 0xFF) == '\0')
+               break;
+         }
+      }
       else {
          bad = dupe = 0;
          empty = 1;
@@ -676,7 +691,8 @@ struct _pkthdr2 *pkthdr;
          memset ((char *)&msg.date, 0, 20);
          strcpy (msg.date, get_to_null (fp, linea, 20));
          if (isalpha (msg.date[0]) && msg.date[0] != ' ') {
-            strcpy (msg.date, &msg.date[4]);
+            strncpy (msg.date, &msg.date[4], 10);
+            strcpy (&msg.date[10], &msg.date[13]);
             strcat (msg.date, ":00");
          }
          memset ((char *)&msg.to, 0, 36);
@@ -694,7 +710,9 @@ struct _pkthdr2 *pkthdr;
          crc = compute_crc (msg.from, crc);
          crc = compute_crc (msg.subj, crc);
 
-         packet_fgets (linea, 79, fp);
+         packet_fgets (linea, 120, fp);
+         linea[120] = '\0';
+
          if (!strncmp (linea, "AREA:", 5)) {
             sys.netmail = 0;
             sys.echomail = 1;
@@ -726,6 +744,7 @@ struct _pkthdr2 *pkthdr;
                   forward[n_forw].net = config->alias[sys.use_alias].net;
                   forward[n_forw].node = config->alias[sys.use_alias].node;
                   forward[n_forw].point = config->alias[sys.use_alias].point;
+                  forward[n_forw].receive=0;
 
                   strcpy (tmpforw, sys.forward1);
                   p = strtok (tmpforw, " ");
@@ -736,6 +755,11 @@ struct _pkthdr2 *pkthdr;
                            forward[n_forw].net = forward[n_forw - 1].net;
                            forward[n_forw].node = forward[n_forw - 1].node;
                            forward[n_forw].point = forward[n_forw - 1].point;
+                        }
+                        forward[n_forw].receive=0;
+                        if(strstr(p,">")) {
+                           forward[n_forw].receive=1;
+                           p++;
                         }
                         parse_netnode2 (p, (int *)&forward[n_forw].zone, (int *)&forward[n_forw].net, (int *)&forward[n_forw].node, (int *)&forward[n_forw].point);
                         n_forw++;
@@ -750,6 +774,11 @@ struct _pkthdr2 *pkthdr;
                            forward[n_forw].node = forward[n_forw - 1].node;
                            forward[n_forw].point = forward[n_forw - 1].point;
                         }
+                        forward[n_forw].receive=0;
+                        if(*p=='>') {
+                           forward[n_forw].receive=1;
+                           p++;
+                        }
                         parse_netnode2 (p, (int *)&forward[n_forw].zone, (int *)&forward[n_forw].net, (int *)&forward[n_forw].node, (int *)&forward[n_forw].point);
                         n_forw++;
                      } while ((p = strtok (NULL, " ")) != NULL);
@@ -763,6 +792,11 @@ struct _pkthdr2 *pkthdr;
                            forward[n_forw].node = forward[n_forw - 1].node;
                            forward[n_forw].point = forward[n_forw - 1].point;
                         }
+                        forward[n_forw].receive=0;
+                        if(strstr(p,">")) {
+                           forward[n_forw].receive=1;
+                           p++;
+                        }
                         parse_netnode2 (p, (int *)&forward[n_forw].zone, (int *)&forward[n_forw].net, (int *)&forward[n_forw].node, (int *)&forward[n_forw].point);
                         n_forw++;
                      } while ((p = strtok (NULL, " ")) != NULL);
@@ -774,12 +808,20 @@ struct _pkthdr2 *pkthdr;
                   if (forward[i].zone == msg_fzone && forward[i].net == msghdr.orig_net && forward[i].node == msghdr.orig_node && forward[i].point == msg_fpoint)
                      break;
                }
+               
 
                if (i == n_forw && config->secure) {
                   sprintf (addr, "%-12.12s ", "(Bad origin)");
                   wputs (addr);
                   bad = 1;
                }
+               
+               if (i != n_forw && forward[i].receive) {
+                  sprintf (addr, "%-12.12s ", "(Bad: R/O  )");
+                  wputs (addr);
+                  bad = 1;
+               }
+               
             }
 
             if (!bad) {
@@ -889,6 +931,10 @@ struct _pkthdr2 *pkthdr;
                sprintf (addr, "QuickBBS     %5d", last_msg + 1);
                wputs (addr);
             }
+            else if (sys.gold_board) {
+               sprintf (addr, "GoldBase     %5d", last_msg + 1);
+               wputs (addr);
+            }
             else if (sys.pip_board) {
                sprintf (addr, "Pip-Base     %5d", last_msg + 1);
                wputs (addr);
@@ -916,10 +962,10 @@ struct _pkthdr2 *pkthdr;
          seenreached = 0;
          intl = shead = 0;
 
-         while (packet_fgets (linea, 94, fp) != NULL) {
+         while (packet_fgets (linea, 120, fp) != NULL) {
             if (linea[0] == '\0')
                break;
-            linea[94] = '\0';
+            linea[120] = '\0';
 
             if (empty && linea[0] != '\r' && linea[0] != '\n') {
                if (linea[0] != 0x01 && strncmp (linea, "SEEN-BY: ", 9))
@@ -952,7 +998,7 @@ struct _pkthdr2 *pkthdr;
                pathreached = 1;
                seenreached = 1;
 
-               if (!sys.passthrough && !last_path[0]) {
+               if (!sys.passthrough && !last_path[0] && !config->single_pass) {
                   strcpy (last_path, linea);
 
                   if (config->alias[sys.use_alias].point && config->alias[sys.use_alias].fakenet) {
@@ -1085,7 +1131,7 @@ struct _pkthdr2 *pkthdr;
             }
          }
 
-         if (!sys.netmail && !sys.passthrough) {
+         if (!sys.netmail && !sys.passthrough && !config->single_pass) {
             if (havepath && !pathreached) {
                if (config->alias[sys.use_alias].point && config->alias[sys.use_alias].fakenet) {
                   seen[n_seen].zone = config->alias[sys.use_alias].zone;
@@ -1201,7 +1247,7 @@ struct _pkthdr2 *pkthdr;
             mprintf (fpd, "%s\r\n", linea);
          }
 
-         if (!sys.passthrough)
+         if (!sys.passthrough && !config->single_pass)
             mseek (fpd, 0L, SEEK_SET);
 
          if (sys.echomail && n_forw == 1)
@@ -1248,17 +1294,25 @@ struct _pkthdr2 *pkthdr;
                if (!sys.netmail)
                   npkt++;
 
-               if (sys.quick_board)
-                  i = quick_save_message2 (fpd, f1, f2, f3, f4, f5);
+               i = 1;
+               if (config->single_pass) {
+                  i = passthrough_save_message (fpd, seen, n_seen, path, n_path);
+                  mseek (fpd, 0L, SEEK_SET);
+               }
 
-               else if (sys.pip_board)
-                  i = pip_save_message2 (fpd, f1, f2, f3);
+               if (i) {
+                  if (sys.quick_board || sys.gold_board)
+                     i = quick_save_message2 (fpd, f1, f2, f3, f4);
 
-               else if (sys.squish)
-                  i = squish_save_message2 (fpd);
+                  else if (sys.pip_board)
+                     i = pip_save_message2 (fpd, f1, f2, f3);
 
-               else
-                  i = fido_save_message2 (fpd, NULL);
+                  else if (sys.squish)
+                     i = squish_save_message2 (fpd);
+
+                  else
+                     i = fido_save_message2 (fpd, NULL);
+               }
 
                if (sys.netmail)
                   totalnetmail++;
@@ -1289,8 +1343,8 @@ struct _pkthdr2 *pkthdr;
             time_release ();
 
          totalmsg++;
-         sprintf (addr, "%d (%.1f/s) ", totalmsg, (float)totalmsg / ((float)(timerset (0) - totaltime) / 100));
-         prints (11, 65, YELLOW|_BLACK, addr);
+         sprintf (linea, "%d (%.1f/s) ", totalmsg, (float)totalmsg / ((float)(timerset (0) - totaltime) / 100));
+         prints (11, 65, YELLOW|_BLACK, linea);
       }
    }
 
@@ -1313,7 +1367,10 @@ struct _pkthdr2 *pkthdr;
       fclose (f4);
    if (f5 != NULL) {
       fseek (f5, 0L, SEEK_SET);
-      fwrite((char *)&msginfo,sizeof(struct _msginfo),1,f5);
+      if (sys.gold_board)
+         fwrite ((char *)&gmsginfo, sizeof (struct _gold_msginfo), 1, f5);
+      else
+         fwrite ((char *)&msginfo, sizeof (struct _msginfo), 1, f5);
       fclose (f5);
    }
    f1 = f2 = f3 = f4 = f5 = NULL;
@@ -1336,7 +1393,6 @@ int max;
 {
    int i, c;
 
-//   max--;
    i = 0;
 
    do {
@@ -1365,16 +1421,14 @@ char *area;
 
    if (sys.quick_board)
       ptype = 1;
+   else if (sys.gold_board)
+      ptype = 3;
    else if (sys.pip_board)
       ptype = 2;
    else if (!sys.passthrough)
       ptype = 0;
-
-   if (sq_ptr != NULL) {
-      MsgUnlock (sq_ptr);
-      MsgCloseArea (sq_ptr);
-      sq_ptr = NULL;
-   }
+   else
+      ptype = -1;
 
    if (sys.echomail) {
       if (fpareas != NULL) {
@@ -1418,12 +1472,14 @@ char *area;
                   sys.passthrough = 1;
                else if (atoi (location))
                   sys.quick_board = atoi (location);
+               else if (toupper (location[0]) == 'G' && atoi (&location[1]))
+                  sys.gold_board = atoi (&location[1]);
                else if (*location == '$') {
                   strcpy (sys.msg_path, ++location);
                   sys.squish = 1;
                }
                else if (*location == '!')
-                  sys.pip_board = atoi(++location);
+                  sys.pip_board = atoi (++location);
                else
                   strcpy (sys.msg_path, location);
 
@@ -1435,13 +1491,13 @@ char *area;
 
       if (!found) {
          for (i = 0; i < maxaidx; i++) {
-            if (!stricmp (aidx[i].areatag, area))
+            if (aidx[i].areatag == get_buffer_crc (area, strlen (area)))
                break;
          }
 
          if (i < maxaidx) {
             lseek (fdsys, (long)i * SIZEOF_MSGAREA, SEEK_SET);
-            read(fdsys, (char *)&tsys.msg_name, SIZEOF_MSGAREA);
+            read (fdsys, (char *)&tsys.msg_name, SIZEOF_MSGAREA);
             found = 1;
          }
 
@@ -1474,16 +1530,68 @@ char *area;
                strcpy (tsys.msg_name, area);
                strcat (tsys.msg_name, " (New area)");
 
-               i = 0;
-               do {
-                  i++;
-                  sprintf (filename, "NEWAREA.%03d", i);
-               } while (mkdir (filename) == -1);
+               strcpy (filename, tsys.echotag);
+               strsrep (filename, ".", "_");
+               if (strlen (filename) > 8)
+                  filename[8] = '\0';
 
-               getcwd (tsys.msg_path, 25);
-               strcat (tsys.msg_path, "\\");
-               strcat (tsys.msg_path, filename);
-               strcat (tsys.msg_path, "\\");
+               strcpy (linea, config->newareas_path);
+               strcat (linea, filename);
+
+               if (config->newareas_base == 0) {
+                  if (mkdir (linea) == -1) {
+                     strcpy (filename, tsys.echotag);
+                     strsrep (filename, ".", "_");
+                     if (strlen (filename) > 8) {
+                        filename[8] = '.';
+                        filename[12] = '\0';
+                     }
+                     else
+                        strcat (filename, ".000");
+
+                     strcpy (linea, config->newareas_path);
+                     strcat (linea, filename);
+
+                     if (mkdir (linea) == -1) {
+                        linea[strlen (linea) - 1] = 47;
+                        do {
+                           linea[strlen (linea) - 1]++;
+                        } while (mkdir (linea) == -1);
+                     }
+                  }
+
+                  strcat (linea, "\\");
+                  strcpy (tsys.msg_path, linea);
+               }
+               else if (config->newareas_base == 1)
+                  tsys.quick_board = check_board_not_used (0, fpareas);
+               else if (config->newareas_base == 2)
+                  tsys.gold_board = check_board_not_used (1, fpareas);
+               else if (config->newareas_base == 3) {
+                  tsys.squish = 1;
+
+                  strcpy (filename, linea);
+                  strcat (filename, ".SQD");
+
+                  if (dexists (filename)) {
+                     linea[strlen (linea) - 1] = 47;
+                     do {
+                        linea[strlen (linea) - 1]++;
+                        strcpy (filename, linea);
+                        strcat (filename, ".SQD");
+                     } while (dexists (filename));
+                  }
+
+                  strcpy (tsys.msg_path, linea);
+               }
+               else if (config->newareas_base == 4) {
+                  tsys.pip_board = 0;
+                  do {
+                     sprintf (filename, "%sMPKT%04x.PIP", config->pip_msgpath, ++tsys.pip_board);
+                  } while (dexists (filename));
+               }
+               else if (config->newareas_base == 5)
+                  tsys.passthrough = 1;
 
                tsys.echomail = 1;
                sprintf (tsys.forward1, "%d:%d/%d ", msg_fzone, msg.orig_net, msg.orig);
@@ -1501,7 +1609,20 @@ char *area;
                if (fp != NULL) {
                   if (fpareas == NULL)
                      fprintf (fp, ";\n");
-                  fprintf (fp, "%-30s %-30s %s\n", tsys.msg_path, tsys.echotag, tsys.forward1);
+
+                  if (tsys.passthrough)
+                     fprintf (fp, "##%-28.28s %-22.22s %s\n", "", tsys.echotag, tsys.forward1);
+                  else if (tsys.quick_board)
+                     fprintf (fp, "%-30d %-22.22s %s\n", tsys.quick_board, tsys.echotag, tsys.forward1);
+                  else if (tsys.gold_board)
+                     fprintf (fp, "G%-29d %-22.22s %s\n", tsys.gold_board, tsys.echotag, tsys.forward1);
+                  else if (tsys.pip_board)
+                     fprintf (fp, "!%-29d %-22.22s %s\n", tsys.pip_board, tsys.echotag, tsys.forward1);
+                  else if (tsys.squish)
+                     fprintf (fp, "$%-29.29s %-22.22s %s\n", tsys.msg_path, tsys.echotag, tsys.forward1);
+                  else
+                     fprintf (fp, "%-30.30s %-22.22s %s\n", tsys.msg_path, tsys.echotag, tsys.forward1);
+
                   fclose (fp);
                }
 
@@ -1511,7 +1632,8 @@ char *area;
                   fpareas = fopen ("NEWAREAS.BBS", "rt");
             }
             else {
-               memset (&sys, 0, SIZEOF_MSGAREA);
+               strcpy (sys.echotag, area);
+               sys.echomail = 1;
                return (0);
             }
          }
@@ -1523,10 +1645,25 @@ char *area;
    if (!sys.passthrough) {
       if (sys.quick_board) {
          if (ptype != 1) {
-            if (ptype == 2) {
+            if (ptype == 3) {
+               fseek (f5, 0L, SEEK_SET);
+               fwrite ((char *)&gmsginfo, sizeof (struct _gold_msginfo), 1, f5);
                fclose (f1);
                fclose (f2);
                fclose (f3);
+               fclose (f4);
+               fclose (f5);
+            }
+            else if (ptype == 2) {
+               fclose (f1);
+               fclose (f2);
+               fclose (f3);
+            }
+
+            if (sq_ptr != NULL) {
+               MsgUnlock (sq_ptr);
+               MsgCloseArea (sq_ptr);
+               sq_ptr = NULL;
             }
             sprintf (filename, "%sMSGINFO.BBS", fido_msgpath);
             if ((i = sh_open (filename, SH_DENYWR, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE)) == -1) {
@@ -1554,16 +1691,71 @@ char *area;
             setvbuf (f4, NULL, _IOFBF, 2048);
          }
       }
+      else if (sys.gold_board) {
+         if (ptype != 3) {
+            if (ptype == 1) {
+               fseek (f5, 0L, SEEK_SET);
+               fwrite ((char *)&msginfo, sizeof (struct _msginfo), 1, f5);
+               fclose (f1);
+               fclose (f2);
+               fclose (f3);
+               fclose (f4);
+               fclose (f5);
+            }
+            else if (ptype == 2) {
+               fclose (f1);
+               fclose (f2);
+               fclose (f3);
+            }
+
+            if (sq_ptr != NULL) {
+               MsgUnlock (sq_ptr);
+               MsgCloseArea (sq_ptr);
+               sq_ptr = NULL;
+            }
+            sprintf (filename, "%sMSGINFO.DAT", fido_msgpath);
+            if ((i = sh_open (filename, SH_DENYWR, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE)) == -1) {
+               status_line ("!%s message base is busy. Waiting", "GoldBase");
+               while ((i = sh_open (filename, SH_DENYWR, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE)) == -1)
+                  ;
+            }
+            f5 = fdopen (i, "r+b");
+            fread ((char *)&gmsginfo, sizeof (struct _gold_msginfo), 1, f5);
+            last_msg = msginfo.totalonboard[sys.gold_board - 1];
+            sprintf (filename, "%sMSGIDX.DAT", fido_msgpath);
+
+            f1 = fopen (filename, "ab");
+            fseek (f1, 0L, SEEK_END);
+            sprintf (filename, "%sMSGTOIDX.DAT", fido_msgpath);
+
+            f2 = fopen (filename, "ab");
+            fseek (f2, 0L, SEEK_END);
+            setvbuf (f2, NULL, _IOFBF, 2048);
+            sprintf (filename, "%sMSGTXT.DAT", fido_msgpath);
+
+            f3 = fopen (filename, "ab");
+            fseek (f3, 0L, SEEK_END);
+            setvbuf (f3, NULL, _IOFBF, 2048);
+            sprintf (filename, "%sMSGHDR.DAT", fido_msgpath);
+
+            f4 = fopen (filename, "ab");
+            fseek (f4, 0L, SEEK_END);
+            setvbuf (f4, NULL, _IOFBF, 2048);
+         }
+      }
       else if (sys.pip_board) {
-         if (ptype == 1) {
+         if (ptype == 1 || ptype == 3) {
             fseek (f5, 0L, SEEK_SET);
-            fwrite((char *)&msginfo,sizeof(struct _msginfo),1,f5);
-            fclose (f1);
-            fclose (f2);
-            fclose (f3);
-            fclose (f4);
-            fclose (f5);
-            f1 = f2 = f3 = f4 = f5 = NULL;
+            if (ptype == 3)
+               fwrite ((char *)&gmsginfo, sizeof (struct _gold_msginfo), 1, f5);
+            else
+               fwrite ((char *)&msginfo, sizeof (struct _msginfo), 1, f5);
+         }
+
+         if (sq_ptr != NULL) {
+            MsgUnlock (sq_ptr);
+            MsgCloseArea (sq_ptr);
+            sq_ptr = NULL;
          }
 
          if (f1 != NULL)
@@ -1579,27 +1771,30 @@ char *area;
 
          pip_scan_message_base (0, 0);
 
-         sprintf(filename,"%sMPTR%04x.PIP", pip_msgpath, sys.pip_board);
+         sprintf (filename,"%sMPTR%04x.PIP", pip_msgpath, sys.pip_board);
          while ((i = sh_open (filename, SH_DENYWR, O_CREAT|O_RDWR|O_BINARY, S_IREAD|S_IWRITE)) == -1)
             ;
          f1 = fdopen (i, "rb+");
-         sprintf(filename,"%sMPKT%04x.PIP", pip_msgpath, sys.pip_board);
-         f2=fopen(filename,"rb+");
+         sprintf (filename, "%sMPKT%04x.PIP", pip_msgpath, sys.pip_board);
+         f2=fopen (filename, "rb+");
          if (f2==NULL) {
-            f2=fopen(filename,"wb");
-            fputc(0,f2);
-            fputc(0,f2);
+            f2=fopen (filename, "wb");
+            fputc (0, f2);
+            fputc (0, f2);
             fclose (f2);
-            f2=fopen(filename,"rb+");
+            f2=fopen (filename, "rb+");
          }
          sprintf (filename, "%sDESTPTR.PIP", pip_msgpath);
          f3 = fopen (filename, "ab");
          f4 = f5 = NULL;
       }
       else if (sys.squish) {
-         if (ptype == 1) {
+         if (ptype == 1 || ptype == 3) {
             fseek (f5, 0L, SEEK_SET);
-            fwrite((char *)&msginfo,sizeof(struct _msginfo),1,f5);
+            if (ptype == 3)
+               fwrite ((char *)&gmsginfo, sizeof (struct _gold_msginfo), 1, f5);
+            else
+               fwrite ((char *)&msginfo, sizeof (struct _msginfo), 1, f5);
          }
 
          if (f1 != NULL)
@@ -1620,9 +1815,9 @@ char *area;
          }
          while ((sq_ptr = MsgOpenArea (sys.msg_path, MSGAREA_CRIFNEC, MSGTYPE_SQUISH)) == NULL)
             ;
-         if (MsgLock (sq_ptr) == -1) {
+         if (MsgLock (sq_ptr) == -1 && msgapierr != MERR_NOMEM) {
             status_line ("!%s message base is busy. Waiting", "Squish");
-            while (MsgLock (sq_ptr) == -1)
+            while (MsgLock (sq_ptr) == -1 && msgapierr != MERR_NOMEM)
                ;
          }
          num_msg = (int)MsgGetNumMsg (sq_ptr);
@@ -1633,9 +1828,18 @@ char *area;
          last_msg = num_msg;
       }
       else {
-         if (ptype == 1) {
+         if (ptype == 1 || ptype == 3) {
             fseek (f5, 0L, SEEK_SET);
-            fwrite((char *)&msginfo,sizeof(struct _msginfo),1,f5);
+            if (ptype == 3)
+               fwrite ((char *)&gmsginfo, sizeof (struct _gold_msginfo), 1, f5);
+            else
+               fwrite ((char *)&msginfo, sizeof (struct _msginfo), 1, f5);
+         }
+
+         if (sq_ptr != NULL) {
+            MsgUnlock (sq_ptr);
+            MsgCloseArea (sq_ptr);
+            sq_ptr = NULL;
          }
 
          if (f1 != NULL)
@@ -1652,53 +1856,83 @@ char *area;
          scan_message_base (0, 0);
       }
    }
+   else {
+      if (ptype == 1 || ptype == 3) {
+         fseek (f5, 0L, SEEK_SET);
+         if (ptype == 3)
+            fwrite ((char *)&gmsginfo, sizeof (struct _gold_msginfo), 1, f5);
+         else
+            fwrite ((char *)&msginfo, sizeof (struct _msginfo), 1, f5);
+      }
+
+      if (sq_ptr != NULL) {
+         MsgUnlock (sq_ptr);
+         MsgCloseArea (sq_ptr);
+         sq_ptr = NULL;
+      }
+
+      if (f1 != NULL)
+         fclose (f1);
+      if (f2 != NULL)
+         fclose (f2);
+      if (f3 != NULL)
+         fclose (f3);
+      if (f4 != NULL)
+         fclose (f4);
+      if (f5 != NULL)
+         fclose (f5);
+      f1 = f2 = f3 = f4 = f5 = NULL;
+   }
 
    found = 0;
 
-   sprintf (filename, "%sDUPES.IDX", config->sys_path);
-   while ((fd = sh_open (filename, SH_DENYWR, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE)) == -1)
-      ;
-   do {
-      po = read (fd, (char *)&dupeindex, sizeof(struct _dupeindex) * MAX_DUPEINDEX);
-      po /= sizeof (struct _dupeindex);
-      for (i = 0; i < po; i++) {
-         if (!stricmp (area, dupeindex[i].areatag)) {
-            dupecheck->area_pos = dupeindex[i].area_pos;
-            found = 1;
-            break;
+   if (dupecheck != NULL) {
+      sprintf (filename, "%sDUPES.IDX", config->sys_path);
+      while ((fd = sh_open (filename, SH_DENYWR, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE)) == -1)
+         ;
+
+      do {
+         po = read (fd, (char *)&dupeindex, sizeof (struct _dupeindex) * MAX_DUPEINDEX);
+         po /= sizeof (struct _dupeindex);
+         for (i = 0; i < po; i++) {
+            if (!stricmp (area, dupeindex[i].areatag)) {
+               dupecheck->area_pos = dupeindex[i].area_pos;
+               found = 1;
+               break;
+            }
          }
-      }
-   } while (!found && po == MAX_DUPEINDEX);
+      } while (!found && po == MAX_DUPEINDEX);
 
-   close (fd);
-
-   sprintf (filename, "%sDUPES.DAT", config->sys_path);
-   while ((fd = sh_open (filename, SH_DENYWR, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE)) == -1)
-      ;
-   if (found) {
-      lseek (fd, dupecheck->area_pos, SEEK_SET);
-      read (fd, (char *)dupecheck, sizeof (struct _dupecheck));
-      dupecheck->area_pos = dupeindex[i].area_pos;
-   }
-   else {
-      lseek (fd, 0L, SEEK_END);
-      memset ((char *)dupecheck, 0, sizeof (struct _dupecheck));
-      dupecheck->area_pos = tell (fd);
-      strcpy (dupecheck->areatag, area);
-      write (fd, (char *)dupecheck, sizeof (struct _dupecheck));
       close (fd);
 
-      sprintf (filename, "%sDUPES.IDX", config->sys_path);
-      while ((fd = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE)) == -1)
+      sprintf (filename, "%sDUPES.DAT", config->sys_path);
+      while ((fd = sh_open (filename, SH_DENYWR, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE)) == -1)
          ;
-      memset ((char *)&dupeindex[0], 0, sizeof (struct _dupeindex));
-      dupeindex[0].area_pos = dupecheck->area_pos;
-      strcpy (dupeindex[0].areatag, area);
-      lseek (fd, 0L, SEEK_END);
-      write (fd, (char *)&dupeindex[0], sizeof(struct _dupeindex));
-   }
+      if (found) {
+         lseek (fd, dupecheck->area_pos, SEEK_SET);
+         read (fd, (char *)dupecheck, sizeof (struct _dupecheck));
+         dupecheck->area_pos = dupeindex[i].area_pos;
+      }
+      else {
+         lseek (fd, 0L, SEEK_END);
+         memset ((char *)dupecheck, 0, sizeof (struct _dupecheck));
+         dupecheck->area_pos = tell (fd);
+         strcpy (dupecheck->areatag, area);
+         write (fd, (char *)dupecheck, sizeof (struct _dupecheck));
+         close (fd);
 
-   close (fd);
+         sprintf (filename, "%sDUPES.IDX", config->sys_path);
+         while ((fd = sh_open (filename, SH_DENYRW, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE)) == -1)
+            ;
+         memset ((char *)&dupeindex[0], 0, sizeof (struct _dupeindex));
+         dupeindex[0].area_pos = dupecheck->area_pos;
+         strcpy (dupeindex[0].areatag, area);
+         lseek (fd, 0L, SEEK_END);
+         write (fd, (char *)&dupeindex[0], sizeof(struct _dupeindex));
+      }
+
+      close (fd);
+   }
 
    return (1);
 }
@@ -1922,9 +2156,6 @@ int n_path;
    int mi, i, z, ne, no, pp, ai, m, cnet, cnode;
    char *p, buffer[2050], buff[80], tmpforw[80], wrp[80], addr[30];
    struct _msghdr2 mhdr;
-   struct _pkthdr2 pkthdr;
-   struct date datep;
-   struct time timep;
 
    mhdr.ver = PKTVER;
    mhdr.cost = 0;
@@ -2169,60 +2400,8 @@ int n_path;
 
       mhdr.dest_net = seen[i].net;
       mhdr.dest_node = seen[i].node;
-      p = HoldAreaNameMungeCreate (seen[i].zone);
-      if (seen[i].point)
-         sprintf (buff, "%s%04x%04x.PNT\\%08X.XUT", p, seen[i].net, seen[i].node, seen[i].point);
-      else
-         sprintf (buff, "%s%04x%04x.XUT", p, seen[i].net, seen[i].node);
-      mi = open (buff, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-      if (mi == -1 && seen[i].point) {
-         sprintf (buff, "%s%04x%04x.PNT", p, seen[i].net, seen[i].node);
-         mkdir (buff);
-         sprintf (buff, "%s%04x%04x.PNT\\%08X.XUT", p, seen[i].net, seen[i].node, seen[i].point);
-         mi = open (buff, O_RDWR|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
-      }
-      if (filelength (mi) > 0L)
-         lseek(mi,filelength(mi)-2,SEEK_SET);
-      else {
-         memset ((char *)&pkthdr, 0, sizeof (struct _pkthdr2));
-         pkthdr.ver = PKTVER;
-         pkthdr.product = 0x4E;
-         pkthdr.serial = 2 * 16 + 30;
-         pkthdr.capability = 1;
-         pkthdr.cwvalidation = 256;
-         if (config->alias[ai].point && config->alias[ai].fakenet) {
-            pkthdr.orig_node = config->alias[ai].point;
-            pkthdr.orig_net = config->alias[ai].fakenet;
-            pkthdr.orig_point = 0;
-         }
-         else {
-            pkthdr.orig_node = config->alias[ai].node;
-            pkthdr.orig_net = config->alias[ai].net;
-            pkthdr.orig_point = config->alias[ai].point;
-         }
-         pkthdr.orig_zone = config->alias[ai].zone;
-         pkthdr.orig_zone2 = config->alias[ai].zone;
 
-         pkthdr.dest_point = seen[i].point;
-         pkthdr.dest_node = seen[i].node;
-         pkthdr.dest_net = seen[i].net;
-         pkthdr.dest_zone = seen[i].zone;
-         pkthdr.dest_zone2 = seen[i].zone;
-
-         gettime (&timep);
-         getdate (&datep);
-
-         pkthdr.hour = timep.ti_hour;
-         pkthdr.minute = timep.ti_min;
-         pkthdr.second = timep.ti_sec;
-         pkthdr.year = datep.da_year;
-         pkthdr.month = datep.da_mon - 1;
-         pkthdr.day = datep.da_day;
-
-         add_packet_pw (&pkthdr);
-         write (mi, (char *)&pkthdr, sizeof (struct _pkthdr2));
-      }
-
+      mi = open_packet (seen[i].zone, seen[i].net, seen[i].node, seen[i].point, ai);
       write (mi, (char *)&mhdr, sizeof (struct _msghdr2));
 
       write (mi, msg.date, strlen (msg.date) + 1);
@@ -2254,8 +2433,8 @@ static void unpack_arcmail (dir)
 char *dir;
 {
    int retval, isvideo, id, f, *varr, m, i;
-   char filename[80], outstring[128], extr[80], swapout, *p, r;
-   unsigned char headstr[30];
+   char filename[80], outstring[128], extr[80], swapout, *p;
+   unsigned char headstr[30], r;
    struct ffblk blk;
 
    local_status ("Unpack");
@@ -2290,7 +2469,7 @@ char *dir;
       id = -1;
 
       for (i = 0; i < 10; i++) {
-         if (config->packid[i].offset >= 0)
+         if (config->packid[i].offset >= 0L)
             lseek (f, config->packid[i].offset, SEEK_SET);
          else
             lseek (f, config->packid[i].offset, SEEK_END);
@@ -2307,20 +2486,22 @@ char *dir;
             r = 0;
             if (isdigit (*p)) {
                r *= 16L;
-               r += *p++ - '0';
+               r += *p - '0';
             }
             else if (isxdigit (*p)) {
                r *= 16L;
-               r += *p++ - 55;
+               r += *p - 55;
             }
+            p++;
             if (isdigit (*p)) {
                r *= 16L;
-               r += *p++ - '0';
+               r += *p - '0';
             }
             else if (isxdigit (*p)) {
                r *= 16L;
-               r += *p++ - 55;
+               r += *p - 55;
             }
+            p++;
             if (r != headstr[m++]) {
                id = -1;
                break;
