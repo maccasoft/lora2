@@ -2,6 +2,7 @@
 #include <conio.h>
 #include <ctype.h>
 #include <string.h>
+#include <dir.h>
 
 #include <cxl\cxlwin.h>
 
@@ -224,31 +225,43 @@ int width, flag;
 
 static int read_online_message()
 {
-        int rc;
-        char filename[80], old_status;
+   int rc, i, m;
+   char filename[80], old_status;
+   struct ffblk blk;
 
-        if (!timeup(online_msg)) {
-                time_release();
-                return (0);
-        }
+   if (!timeup(online_msg)) {
+      time_release();
+      return (0);
+   }
 
-        sprintf(filename, ONLINE_MSGNAME, ipc_path, line_offset);
-        if (dexists(filename) && user_status == BROWSING) {
-                old_status = user_status;
-                user_status = 0;
+   sprintf (filename, "%sLEXIT*.*", sys_path);
+   if (!findfirst (filename, &blk, 0))
+      do {
+         sscanf (blk.ff_name, "LEXIT%d.%d", &i, &m);
+         if (i == line_offset || i == 0) {
+            unlink (blk.ff_name);
+            terminating_call ();
+            get_down (m, 3);
+         }
+      } while (!findnext (&blk));
 
-                read_file(filename);
-                unlink(filename);
+   sprintf(filename, ONLINE_MSGNAME, ipc_path, line_offset);
+   if (dexists(filename) && user_status == BROWSING) {
+      old_status = user_status;
+      user_status = 0;
 
-                user_status = old_status;
-                rc = 1;
-        }
-        else
-                rc = 0;
+      read_file(filename);
+      unlink(filename);
 
-        online_msg = timerset(200);
-        time_release ();
+      user_status = old_status;
+      rc = 1;
+   }
+   else
+      rc = 0;
 
-        return (rc);
+   online_msg = timerset(200);
+   time_release ();
+
+   return (rc);
 }
 

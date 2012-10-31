@@ -53,7 +53,7 @@ void main()
         char strings[5][36], sysop[36];
         dword crc;
 
-        printf("\nLoraBBS 2.10 - Registration Key Generator\n");
+        printf("\nLoraBBS 2.20 - Registration Key Generator\n");
         printf("CopyRight (c) 1991-92 by Marco Maccaferri. All Rights Reserved\n\n");
 
 	printf("SysOp Name: ");
@@ -66,7 +66,7 @@ void main()
                 strcat(sysop, strings[n++]);
 	}
 
-	printf("Maximum Number of Lines: ");
+        printf("Maximum Number of Lines: ");
         scanf("%d", &maxlines);
 
 	printf("Are you sure (Y/N)? ");
@@ -74,7 +74,9 @@ void main()
 	if (toupper(strings[0][0]) == 'N')
 		exit (1);
 
-        if (maxlines <= 2)
+        if (maxlines == 0)
+                crc = 0x6FE41197L;
+        else if (maxlines <= 2)
                 crc = 0x7FE50189L;
         else if (maxlines <= 3)
                 crc = 0x74E40291L;
@@ -87,7 +89,7 @@ void main()
                 crc = UpdateCRC (sysop[i], crc);
 
         fp = fopen("LORAKEY.TXT","wt");
-        fprintf(fp, "   This is your registration key for LoraBBS Version 2.10:\n\n");
+        fprintf(fp, "   This is your registration key for Lora Version 2.20:\n\n");
         fprintf(fp, "                        %lu\n\n", crc);
         fprintf(fp, "   Please, check out the following data prior to install the key in your\n");
         fprintf(fp, "system configuration file:\n");

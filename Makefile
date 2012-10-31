@@ -25,7 +25,7 @@ TLINK = tlink /P-/x
 
 #		*List Macros*
 
-all: lora loracomp lorakey tym2lora usered lmsg ltop luser
+all: lora loracomp lorakey tym2lora usered lmsg ltop luser lnetmgr
 
 lora:      lora.exe
 loracomp:  loracomp.exe
@@ -35,15 +35,21 @@ usered:    usered.exe
 lmsg:      lmsg.exe
 ltop:      ltop.exe
 luser:     luser.exe
+lnetmgr:   lnetmgr.exe
+
+
+EXE_NET_dependencies = \
+  $(OBJ)\bink_asm.obj \
+  $(OBJ)\dostime.obj \
+  $(OBJ)\lnetmgr.obj
 
 
 EXE_dependencies =  \
-  $(CXLIB)\cxltcm.lib \
-  squish-m.lib \
+  $(CXLIB)\cxltcl.lib \
+  squish-l.lib \
   $(OBJ)\bink_asm.obj \
   $(OBJ)\checkpath.obj \
   $(OBJ)\com_asm.obj \
-  $(OBJ)\dostime.obj \
   $(OBJ)\spawn.obj \
   $(OBJ)\change.obj \
   $(OBJ)\chat.obj \
@@ -59,6 +65,7 @@ EXE_dependencies =  \
   $(OBJ)\files2.obj \
   $(OBJ)\ftsc.obj \
   $(OBJ)\general.obj \
+  $(OBJ)\import.obj \
   $(OBJ)\input.obj \
   $(OBJ)\janus.obj \
   $(OBJ)\langload.obj \
@@ -123,13 +130,28 @@ EXE_LUSER_dependencies = \
 
 #               *Explicit Rules*
 
+lnetmgr.exe: turboc.cfg $(EXE_NET_dependencies)
+  $(TLINK) @&&|
+$(TCLIB)\c0m.obj+
+$(OBJ)\bink_asm.obj+
+$(OBJ)\dostime.obj+
+$(OBJ)\lnetmgr.obj
+lnetmgr,
+$(CXLIB)\cxltcm.lib+
+$(TCLIB)\emu.lib+
+$(TCLIB)\mathm.lib+
+$(TCLIB)\cm.lib+
+
+|
+
+
+
 lora.exe: turboc.cfg $(EXE_dependencies)
   $(TLINK) /o @&&|
-/o- $(TCLIB)\c0m.obj+
+/o- $(TCLIB)\c0l.obj+
     $(OBJ)\bink_asm.obj+
     $(OBJ)\checkpath.obj+
     $(OBJ)\com_asm.obj+
-    $(OBJ)\dostime.obj+
     $(OBJ)\spawn.obj+
     $(OBJ)\colors.obj+
     $(OBJ)\data.obj+
@@ -152,6 +174,7 @@ lora.exe: turboc.cfg $(EXE_dependencies)
     $(OBJ)\files2.obj+
     $(OBJ)\ftsc.obj+
     $(OBJ)\general.obj+
+    $(OBJ)\import.obj+
     $(OBJ)\input.obj+
     $(OBJ)\janus.obj+
     $(OBJ)\langload.obj+
@@ -176,25 +199,25 @@ lora.exe: turboc.cfg $(EXE_dependencies)
 lora,
 $(TCLIB)\overlay.lib+
 $(TCLIB)\emu.lib+
-$(TCLIB)\mathm.lib+
-$(TCLIB)\cm.lib+
-$(CXLIB)\cxltcm.lib+
-squish-m.lib
+$(TCLIB)\mathl.lib+
+$(TCLIB)\cl.lib+
+$(CXLIB)\cxltcl.lib+
+squish-l.lib
 |
 
 
 loracomp.exe: turboc.cfg $(EXE_COMP_dependencies)
   $(TLINK) @&&|
-$(TCLIB)\c0m.obj+
+$(TCLIB)\c0l.obj+
 $(OBJ)\loracomp.obj+
 $(OBJ)\loralng.obj+
 $(OBJ)\get_lang.obj+
 $(OBJ)\put_lang.obj
 loracomp,
-$(CXLIB)\cxltcm.lib+
+$(CXLIB)\cxltcl.lib+
 $(TCLIB)\emu.lib+
-$(TCLIB)\mathm.lib+
-$(TCLIB)\cm.lib+
+$(TCLIB)\mathl.lib+
+$(TCLIB)\cl.lib+
 
 |
 
@@ -283,161 +306,164 @@ $(TCLIB)\cs.lib+
 #               *Individual File Dependencies*
 
 $(OBJ)\bink_asm.obj: $(SRC)\bink_asm.asm
-        $(TASM) $(SRC)\bink_asm.asm, $(OBJ)\bink_asm
+        $(TASM) /DMODL=LARGE $(SRC)\bink_asm.asm, $(OBJ)\bink_asm
 
 $(OBJ)\checkpath.obj: $(SRC)\checkpath.asm
-        $(TASM) /DMODL=medium $(SRC)\checkpath.asm, $(OBJ)\checkpath
+        $(TASM) /DMODL=LARGE $(SRC)\checkpath.asm, $(OBJ)\checkpath
 
 $(OBJ)\com_asm.obj: $(SRC)\com_asm.asm
-        $(TASM) $(SRC)\com_asm.asm, $(OBJ)\com_asm
+        $(TASM) /DMODL=LARGE $(SRC)\com_asm.asm, $(OBJ)\com_asm
 
 $(OBJ)\dostime.obj: $(SRC)\dostime.asm
-        $(TASM) $(SRC)\dostime.asm, $(OBJ)\dostime
+        $(TASM) /DMODL=LARGE $(SRC)\dostime.asm, $(OBJ)\dostime
 
 $(OBJ)\spawn.obj: $(SRC)\spawn.asm
-        $(TASM) /DMODL=medium $(SRC)\spawn.asm, $(OBJ)\spawn
+        $(TASM) /DMODL=LARGE $(SRC)\spawn.asm, $(OBJ)\spawn
 
 $(OBJ)\change.obj: $(SRC)\change.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\change.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\change.c
 
 $(OBJ)\chat.obj: $(SRC)\chat.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\chat.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\chat.c
 
 $(OBJ)\cmdfile.obj: $(SRC)\cmdfile.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\cmdfile.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\cmdfile.c
 
 $(OBJ)\colors.obj: $(SRC)\colors.c
-        $(CC) -n$(OBJ) -mm -c $(SRC)\colors.c
+        $(CC) -Y -n$(OBJ) -ml -c $(SRC)\colors.c
 
 $(OBJ)\config.obj: $(SRC)\config.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\config.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\config.c
 
 $(OBJ)\data.obj: $(SRC)\data.c
-        $(CC) -n$(OBJ) -mm -c $(SRC)\data.c
+        $(CC) -Y -n$(OBJ) -ml -c $(SRC)\data.c
 
 $(OBJ)\door.obj: $(SRC)\door.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\door.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\door.c
 
 $(OBJ)\editor.obj: $(SRC)\editor.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\editor.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\editor.c
 
 $(OBJ)\editor1.obj: $(SRC)\editor1.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\editor1.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\editor1.c
 
 $(OBJ)\exec.obj: $(SRC)\exec.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\exec.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\exec.c
 
 $(OBJ)\files.obj: $(SRC)\files.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\files.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\files.c
 
 $(OBJ)\files2.obj: $(SRC)\files2.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\files2.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\files2.c
 
 $(OBJ)\ftsc.obj: $(SRC)\ftsc.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\ftsc.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\ftsc.c
 
 $(OBJ)\general.obj: $(SRC)\general.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\general.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\general.c
+
+$(OBJ)\import.obj: $(SRC)\import.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\import.c
 
 $(OBJ)\input.obj: $(SRC)\input.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\input.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\input.c
 
 $(OBJ)\janus.obj: $(SRC)\janus.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\janus.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\janus.c
 
 $(OBJ)\langload.obj: $(SRC)\langload.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\langload.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\langload.c
 
 $(OBJ)\login.obj: $(SRC)\login.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\login.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\login.c
 
 $(OBJ)\lora.obj: $(SRC)\lora.c
-        $(CC) -n$(OBJ) -mm -c $(SRC)\lora.c
+        $(CC) -Y -n$(OBJ) -ml -c $(SRC)\lora.c
 
 $(OBJ)\maintask.obj: $(SRC)\maintask.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\maintask.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\maintask.c
 
 $(OBJ)\menu.obj: $(SRC)\menu.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\menu.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\menu.c
 
 $(OBJ)\message.obj: $(SRC)\message.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\message.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\message.c
 
 $(OBJ)\message1.obj: $(SRC)\message1.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\message1.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\message1.c
 
 $(OBJ)\misc.obj: $(SRC)\misc.c
-        $(CC) -n$(OBJ) -mm -c $(SRC)\misc.c
+        $(CC) -Y -n$(OBJ) -ml -c $(SRC)\misc.c
 
 $(OBJ)\modem.obj: $(SRC)\modem.c
-        $(CC) -n$(OBJ) -mm -c $(SRC)\modem.c
+        $(CC) -Y -n$(OBJ) -ml -c $(SRC)\modem.c
 
 $(OBJ)\ovrmisc.obj: $(SRC)\ovrmisc.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\ovrmisc.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\ovrmisc.c
 
 $(OBJ)\pipbase.obj: $(SRC)\pipbase.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\pipbase.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\pipbase.c
 
 $(OBJ)\poller.obj: $(SRC)\poller.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\poller.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\poller.c
 
 $(OBJ)\quickmsg.obj: $(SRC)\quickmsg.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\quickmsg.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\quickmsg.c
 
 $(OBJ)\qwkspt.obj: $(SRC)\qwkspt.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\qwkspt.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\qwkspt.c
 
 $(OBJ)\readmail.obj: $(SRC)\readmail.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\readmail.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\readmail.c
 
 $(OBJ)\sched.obj: $(SRC)\sched.c
-        $(CC) -n$(OBJ) -mm -c $(SRC)\sched.c
+        $(CC) -Y -n$(OBJ) -ml -c $(SRC)\sched.c
 
 $(OBJ)\squish.obj: $(SRC)\squish.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\squish.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\squish.c
 
 $(OBJ)\status.obj: $(SRC)\status.c
-        $(CC) -n$(OBJ) -mm -c $(SRC)\status.c
+        $(CC) -Y -n$(OBJ) -ml -c $(SRC)\status.c
 
 $(OBJ)\tcfuncs.obj: $(SRC)\tcfuncs.c
-        $(CC) -n$(OBJ) -mm -c $(SRC)\tcfuncs.c
+        $(CC) -Y -n$(OBJ) -ml -c $(SRC)\tcfuncs.c
 
 $(OBJ)\timer.obj: $(SRC)\timer.c
-        $(CC) -n$(OBJ) -mm -c $(SRC)\timer.c
+        $(CC) -Y -n$(OBJ) -ml -c $(SRC)\timer.c
 
 $(OBJ)\video.obj: $(SRC)\video.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\video.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\video.c
 
 $(OBJ)\wazoo.obj: $(SRC)\wazoo.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\wazoo.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\wazoo.c
 
 $(OBJ)\yoohoo.obj: $(SRC)\yoohoo.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\yoohoo.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\yoohoo.c
 
 $(OBJ)\zmisc.obj: $(SRC)\zmisc.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\zmisc.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\zmisc.c
 
 $(OBJ)\zsend.obj: $(SRC)\zsend.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\zsend.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\zsend.c
 
 $(OBJ)\zreceive.obj: $(SRC)\zreceive.c
-        $(CC) -Y -n$(OBJ) -mm -c $(SRC)\zreceive.c
+        $(CC) -Yo -n$(OBJ) -ml -c $(SRC)\zreceive.c
 
 
 
 
 
 $(OBJ)\loracomp.obj: $(SRC)\loracomp.c
-        $(CC) -n$(OBJ) -mm -c $(SRC)\loracomp.c
+        $(CC) -n$(OBJ) -ml -c $(SRC)\loracomp.c
 
 $(OBJ)\loralng.obj: $(SRC)\loralng.c
-        $(CC) -n$(OBJ) -mm -c $(SRC)\loralng.c
+        $(CC) -n$(OBJ) -ml -c $(SRC)\loralng.c
 
 $(OBJ)\put_lang.obj: $(SRC)\put_lang.c
-        $(CC) -n$(OBJ) -mm -c $(SRC)\put_lang.c
+        $(CC) -n$(OBJ) -ml -c $(SRC)\put_lang.c
 
 $(OBJ)\get_lang.obj: $(SRC)\get_lang.c
-        $(CC) -n$(OBJ) -mm -c $(SRC)\get_lang.c
+        $(CC) -n$(OBJ) -ml -c $(SRC)\get_lang.c
 
 
 
@@ -455,6 +481,12 @@ $(OBJ)\tym2lora.obj: $(SRC)\tym2lora.c
 
 $(OBJ)\usered.obj: $(SRC)\usered.c
         $(CC) -n$(OBJ) -c -ms $(SRC)\usered.c
+
+
+
+
+$(OBJ)\lnetmgr.obj: $(SRC)\lnetmgr.c
+        $(CC) -n$(OBJ) -c -mm $(SRC)\lnetmgr.c
 
 
 

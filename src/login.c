@@ -45,10 +45,37 @@ int login_user()
 
    CLEAR_INBOUND();
 
-   if (!noask.ansilogon) {
-      m_print (bbstxt[B_ANSI_LOGON]);
-      if (yesno_question (DEF_YES))
-         usr.ansi = usr.color = 1;
+   if (noask.ansilogon) {
+      if (noask.ansilogon == 3)
+         usr.ansi = usr.color = usr.formfeed = 1;
+      else if (local_mode || noask.ansilogon == 2) {
+         m_print (bbstxt[B_ANSI_LOGON]);
+         if (yesno_question (DEF_YES) == DEF_YES)
+            usr.ibmset = usr.ansi = usr.color = usr.formfeed = 1;
+      }
+      else if (noask.ansilogon == 1) {
+         SENDBYTE (0x1B);
+         SENDBYTE ('[');
+         SENDBYTE ('6');
+         SENDBYTE ('n');
+
+         i = 0;
+         while ((m = TIMED_READ (1)) != -1) {
+            if (i == 0 && m != 0x1B)
+               break;
+            if (i == 1 && m != '[')
+               break;
+            if (i == 2 && m == 'R')
+               break;
+            if (i == 2 && !isdigit(m) && m != ';')
+               break;
+            if (i < 2)
+               i++;
+         }
+
+         if (i == 2 && m == 'R')
+            usr.ibmset = usr.ansi = usr.color = usr.formfeed = 1;
+      }
    }
 
    read_system_file("LOGO");
@@ -77,7 +104,7 @@ new_login:
    crc = crc_name (stringa);
 
    sprintf (filename, "%s.IDX", user_file);
-   fd = shopen (filename, O_RDWR|O_BINARY);
+   fd = shopen (filename, O_RDONLY|O_BINARY);
 
    fflag = 0;
    posit = 0;
@@ -279,7 +306,8 @@ new_login:
    if ((usr.time + original_time) > class[usr_class].max_time)
       original_time = class[usr_class].max_time - usr.time;
 
-   status_line(msgtxt[M_USER_LAST_TIME], usr.ldate);
+   if (usr.times)
+      status_line(msgtxt[M_USER_LAST_TIME], usr.ldate);
 
    if(strncmp(stringa,usr.ldate,9))
            status_line(msgtxt[M_TIMEDL_ZEROED]);
@@ -343,15 +371,15 @@ new_login:
    if (!CARRIER)
       return (0);
 
+   read_hourly_files ();
    read_comment ();
 
    data(stringa);
    if (!strncmp(stringa,usr.birthdate,6))
       read_system_file("BIRTHDAY");
 
-   if(usr.times > 1)
-   {
-      if(usr.times < 7)
+   if(usr.times > 1) {
+      if(usr.times < min_calls)
          read_system_file("ROOKIE");
 
       sprintf(filename,"%s%d",sys_path,posit);
@@ -401,10 +429,9 @@ char *buff;
         strcpy(tusr.name, buff);
         strcpy(tusr.handle, buff);
 
-        m_print("\n");
+        m_print(bbstxt[B_ONE_CR]);
 
-        if(rate >= speed_graphics)
-        {
+        if(rate >= speed_graphics) {
                 do {
                         m_print(bbstxt[B_ASK_ANSI]);
                         c = yesno_question (DEF_NO|QUESTION);
@@ -481,6 +508,18 @@ char *buff;
                 }
         }
 
+        do {
+                m_print(bbstxt[B_ASK_IBMSET]);
+                c = yesno_question ((usr.ansi || usr.avatar) ? DEF_YES|QUESTION : DEF_NO|QUESTION);
+                if(c == QUESTION)
+                        read_system_file("WHY_IBM");
+                if (!CARRIER)
+                        return (1);
+        } while(c != DEF_NO && c != DEF_YES);
+
+        if(c == DEF_YES)
+                tusr.ibmset=1;
+
         usr.len = 24;
         screen_change ();
         tusr.len = usr.len;
@@ -513,7 +552,7 @@ char *buff;
                 chars_input(stringa,35,INPUT_FIELD);
 		if (!CARRIER)
 			return (1);
-	} while(strlen(stringa) < 5);
+        } while(!strlen(stringa));
 
         strcpy(tusr.city,fancy_str(stringa));
 
@@ -614,7 +653,7 @@ char *buff;
         memcpy((char *)&usr, (char *)&tusr, sizeof(struct _usr));
 
         sprintf (filename, "%s.IDX", user_file);
-        fd = shopen (filename, O_RDWR|O_BINARY);
+        fd = open (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
         lseek (fd, 0L, SEEK_END);
         write (fd, (char *)&usridx, sizeof (struct _usridx));
         close (fd);

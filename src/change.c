@@ -44,18 +44,26 @@ void user_configuration()
                 usr.full_read ? bbstxt[B_YES] : bbstxt[B_NO],
                 usr.hotkey ? bbstxt[B_YES] : bbstxt[B_NO]);
 
+        m_print(bbstxt[B_CONFIG_IBMSET],
+                usr.ibmset ? bbstxt[B_YES] : bbstxt[B_NO]);
+
         m_print(bbstxt[B_CONFIG_LANGUAGE], lang_descr[usr.language]);
         m_print(bbstxt[B_CONFIG_SIGN],usr.signature);
 }
 
 void more_change()
 {
-        usr.more^=1;
+   usr.more ^= 1;
 }
 
 void hotkey_change()
 {
-        usr.hotkey^=1;
+   usr.hotkey ^= 1;
+}
+
+void ibmset_change()
+{
+   usr.ibmset ^= 1;
 }
 
 void color_change()
@@ -84,8 +92,7 @@ void ansi_change()
 
         usr.ansi^=1;
 
-        if(!usr.ansi)
-        {
+        if(!usr.ansi) {
                 usr.use_lore = 1;
                 usr.color = 0;
 	}
@@ -99,8 +106,7 @@ void ansi_change()
 
         if (usr.ansi)
                 m_print(bbstxt[B_ANSI_USED]);
-        else
-        {
+        else {
                 m_print(bbstxt[B_ANSI_NOT_USED]);
                 if (usr.use_lore)
                         m_print(bbstxt[B_FULL_NOT_USED2]);
@@ -129,8 +135,7 @@ void avatar_change()
 
         if (usr.avatar)
                 m_print(bbstxt[B_AVATAR_USED]);
-        else
-        {
+        else {
                 m_print(bbstxt[B_AVATAR_NOT_USED]);
                 if (usr.use_lore)
                         m_print(bbstxt[B_FULL_NOT_USED2]);
@@ -203,7 +208,8 @@ void nulls_change()
    char stringa[6];
 
    m_print (bbstxt[B_NULLS_CHANGE]);
-   input (stringa,80);
+   sprintf (stringa, "%d", usr.nulls);
+   chars_input (stringa, 3, INPUT_UPDATE|INPUT_FIELD);
 
    col = atoi(stringa);
 
@@ -226,16 +232,30 @@ void handle_change()
 
 void voice_phone_change()
 {
-   char stringa[20];
+   char stringa[20], i;
 
    for (;;) {
       m_print(bbstxt[B_VOICE_PHONE]);
 
       m_print(bbstxt[B_ASK_NUMBER]);
-      input(stringa, 19);
+      chars_input(stringa,19,INPUT_FIELD);
 
       if (!strlen (stringa) || !CARRIER)
          return;
+
+      for (i = 0; i < strlen (stringa); i++) {
+         if ( (stringa[i] >= '0' && stringa[i] <= '9') ||
+              stringa[i] == '+' || stringa[i] == '-' || stringa[i] == ' ' ||
+              stringa[i] == '(' || stringa[i] == ')' || stringa[i] == '/'
+            )
+            continue;
+         else {
+            m_print (bbstxt[B_INVALID_CHAR], stringa[i], stringa[i]);
+            break;
+         }
+      }
+      if (i < strlen (stringa))
+         continue;
 
       m_print(bbstxt[B_PHONE_IS], stringa);
       m_print(bbstxt[B_PHONE_OK]);
@@ -248,16 +268,30 @@ void voice_phone_change()
 
 void data_phone_change()
 {
-   char stringa[20];
+   char stringa[20], i;
 
    for (;;) {
       m_print(bbstxt[B_DATA_PHONE]);
 
       m_print(bbstxt[B_ASK_NUMBER]);
-      input(stringa, 19);
+      chars_input(stringa,19,INPUT_FIELD);
 
       if (!strlen (stringa) || !CARRIER)
          return;
+
+      for (i = 0; i < strlen (stringa); i++) {
+         if ( (stringa[i] >= '0' && stringa[i] <= '9') ||
+              stringa[i] == '+' || stringa[i] == '-' || stringa[i] == ' ' ||
+              stringa[i] == '(' || stringa[i] == ')' || stringa[i] == '/'
+            )
+            continue;
+         else {
+            m_print (bbstxt[B_INVALID_CHAR], stringa[i], stringa[i]);
+            break;
+         }
+      }
+      if (i < strlen (stringa))
+         continue;
 
       m_print(bbstxt[B_PHONE_IS], stringa);
       m_print(bbstxt[B_PHONE_OK]);
@@ -273,7 +307,8 @@ void city_change()
    char stringa[40];
 
    m_print(bbstxt[B_CITY_STATE]);
-   input(stringa,35);
+   strcpy (stringa, usr.city);
+   chars_input(stringa,35,INPUT_FIELD|INPUT_UPDATE);
 
    if (!strlen (stringa))
       return;
@@ -294,7 +329,7 @@ void password_change()
 
    for (;;) {
       m_print(bbstxt[B_SELECT_PASSWORD]);
-      inpwd(stringa,15);
+      chars_input(stringa,15,INPUT_PWD|INPUT_FIELD);
 
       if (!strlen(stringa))
          return;
@@ -304,7 +339,7 @@ void password_change()
       m_print(bbstxt[B_VERIFY_PASSWORD]);
 
       m_print(bbstxt[B_PASSWORD]);
-      inpwd(stringa,15);
+      chars_input(stringa,15,INPUT_PWD|INPUT_FIELD);
 
       if (!strlen(stringa) || !CARRIER)
          return;
@@ -345,8 +380,7 @@ int select_language ()
 
    m_print(bbstxt[B_LANGUAGE_AVAIL]);
 
-   while (lang_name[i] != NULL)
-   {
+   while (lang_name[i] != NULL) {
       m_print(bbstxt[B_PROTOCOL_FORMAT], lang_keys[i], lang_descr[i]);
       strcom[i] = toupper(lang_keys[i]);
       i++;
@@ -370,5 +404,33 @@ int select_language ()
    }
 
    return (i);
+}
+
+void select_group (type, tosig)
+int type, tosig;
+{
+   int sig;
+   char stringa[10];
+
+   if (tosig == -1) {
+      if (type == 1)
+         read_system_file ("MGROUP");
+      else if (type == 2)
+         read_system_file ("FGROUP");
+
+      do {
+         m_print (bbstxt[B_GROUP_LIST]);
+         chars_input (stringa, 4, INPUT_FIELD);
+         if ( (sig = atoi (stringa)) == 0)
+            return;
+      } while (sig < 0 || sig > 255);
+   }
+   else
+      sig = tosig;
+
+   if (type == 1)
+      usr.file_sig = sig;
+   else if (type == 2)
+      usr.msg_sig = sig;
 }
 

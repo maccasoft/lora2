@@ -16,7 +16,6 @@
 #include "externs.h"
 #include "prototyp.h"
 
-
 void status_line(char *format, ...)
 {
    va_list var_args;
@@ -71,6 +70,7 @@ void local_status(char *format, ...)
    va_end(var_args);
 
    wgotoxy(2,2);
+   wtextattr (LCYAN|_BLUE);
    wclreol();
    wprints(2,2,LCYAN|_BLUE,string);
 
@@ -80,13 +80,12 @@ void local_status(char *format, ...)
 void m_print(char *format, ...)
 {
    va_list var_args;
-   char *string, *q, visual;
+   char *string, *q, visual, strm[2];
    byte c, a, m;
 
    string=(char *)malloc(256);
 
-   if (string==NULL || strlen(format) > 256)
-   {
+   if (string==NULL || strlen(format) > 256) {
       if (string)
          free(string);
       return;
@@ -102,25 +101,20 @@ void m_print(char *format, ...)
       if (*q == 0x1B)
          visual = 0;
 
-      if (*q == LF)
-      {
-         if (!local_mode)
-         {
+      if (*q == LF) {
+         if (!local_mode) {
             SENDBYTE('\r');
             SENDBYTE('\n');
          }
          if (snooping)
             wputs("\n");
       }
-      else if (*q == CTRLV)
-      {
+      else if (*q == CTRLV) {
          q++;
-         if (*q == CTRLA)
-         {
+         if (*q == CTRLA) {
             q++;
 
-            if (*q == CTRLP)
-            {
+            if (*q == CTRLP) {
                q++;
                change_attr(*q & 0x7F);
             }
@@ -129,15 +123,27 @@ void m_print(char *format, ...)
          }
          else if (*q == CTRLG)
             del_line();
+         else if (*q == CTRLC)
+            cup (1);
+         else if (*q == CTRLD)
+            cdo (1);
+         else if (*q == CTRLE)
+            cle (1);
+         else if (*q == CTRLF)
+            cri (1);
+         else if (*q == CTRLH) {
+            cpos ( *(q+1), *(q+2) );
+            q += 2;
+         }
       }
       else if (*q == CTRLL)
          cls ();
-      else if (*q == CTRLY)
-      {
+      else if (*q == CTRLY) {
          c = *(++q);
+         if (!usr.ibmset && (unsigned char)c >= 128)
+            c = bbstxt[B_ASCII_CONV][(unsigned char)c - 128];
          a = *(++q);
-         if(usr.avatar && !local_mode)
-         {
+         if(usr.avatar && !local_mode) {
             BUFFER_BYTE(CTRLY);
             BUFFER_BYTE(c);
             BUFFER_BYTE(a);
@@ -148,12 +154,18 @@ void m_print(char *format, ...)
          if (snooping)
             wdupc (c, a);
       }
-      else
-      {
+      else if (*q == CTRLA) {
+         m_print (bbstxt[B_PRESS_ENTER]);
+         input (strm, 0);
+      }
+      else {
+         c = *q;
+         if (!usr.ibmset && (unsigned char)c >= 128)
+            c = bbstxt[B_ASCII_CONV][c - 128];
          if (!local_mode)
-            BUFFER_BYTE((*q));
+            BUFFER_BYTE(c);
          if (snooping && visual)
-            wputc(*q);
+            wputc(c);
       }
    }
 
@@ -185,13 +197,12 @@ void deposit_time ()
    do {
       m_print(bbstxt[B_HOW_MUCH_DEPOSIT]);
       input (stringa, 4);
-      if (!CARRIER)
+      if (!CARRIER || !stringa[0])
          return;
       col = atoi(stringa);
    } while ((col < 0 || col > (time_remain () - 2)) && CARRIER);
 
-   if (col > 0)
-   {
+   if (col > 0) {
       usr.account += col;
       allowed -= col;
       usr.time += col;
@@ -212,7 +223,7 @@ void deposit_kbytes ()
    do {
       m_print(bbstxt[B_HOW_MUCH_DEPOSIT]);
       input (stringa, 4);
-      if (!CARRIER)
+      if (!CARRIER || !stringa[0])
          return;
       col = atoi(stringa);
    } while ((col < 0 || col > (class[usr_class].max_dl - usr.dnldl)) && CARRIER);
@@ -236,15 +247,14 @@ void withdraw_time ()
    do {
       m_print(bbstxt[B_HOW_MUCH_WITHDRAW]);
       input (stringa, 4);
-      if (!CARRIER)
+      if (!CARRIER || !stringa[0])
          return;
       col = atoi(stringa);
-     if ((time_remain() + col) > time_to_next(1))
-     {
-        read_system_file ("TIMEWARN");
-        col = -1;
-        continue;
-     }
+      if ((time_remain() + col) > (allowed ? allowed : time_to_next(1))) {
+         read_system_file ("TIMEWARN");
+         col = -1;
+         continue;
+      }
    } while ((col < 0 || col > usr.account) && CARRIER);
 
    if (col > 0) {
@@ -268,7 +278,7 @@ void withdraw_kbytes ()
    do {
       m_print(bbstxt[B_HOW_MUCH_WITHDRAW]);
       input (stringa, 4);
-      if (!CARRIER)
+      if (!CARRIER || !stringa[0])
          return;
       col = atoi(stringa);
    } while ((col < 0 || col > usr.f_account) && CARRIER);
@@ -316,7 +326,45 @@ struct _bbslist *bbs;
    return (line);
 }
 
-void bbs_add_list ()
+void bbs_list_download (num)
+int num;
+{
+   FILE *fp;
+   int fd;
+   char filename[80];
+   struct _bbslist bbs;
+
+   if (num)
+      sprintf (filename, "%sBBSLIST%d.BBS", sys_path, num);
+   else
+      sprintf (filename, "%sBBSLIST.BBS", sys_path);
+   fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+
+   sprintf (filename, "%sBBS%d.TXT", sys_path, line_offset);
+   fp = fopen (filename, "wt");
+
+   while (read (fd, (char *)&bbs, sizeof (struct _bbslist)) == sizeof (struct _bbslist)) {
+      fprintf (fp, bbstxt[B_FBBSLIST_UNDERLINE]);
+      fprintf (fp, bbstxt[B_FBBS_NAME], bbs.bbs_name);
+      fprintf (fp, bbstxt[B_FBBS_PHONE], bbs.number);
+      fprintf (fp, bbstxt[B_FBBS_BAUD], bbs.baud);
+      fprintf (fp, bbstxt[B_FBBS_OPEN], bbs.open_times);
+      fprintf (fp, bbstxt[B_FBBS_SOFT], bbs.bbs_soft);
+      fprintf (fp, bbstxt[B_FBBS_NET], bbs.net);
+      fprintf (fp, bbstxt[B_FBBS_SYSOP], bbs.sysop_name);
+      fprintf (fp, bbstxt[B_FBBS_OTHER], bbs.other);
+   }
+
+   fprintf (fp, bbstxt[B_FBBSLIST_UNDERLINE]);
+
+   fclose (fp);
+   close (fd);
+
+   download_file (filename, 0);
+}
+
+void bbs_add_list (num)
+int num;
 {
    int fd;
    char filename [80];
@@ -324,7 +372,6 @@ void bbs_add_list ()
 
    memset ((char *)&bbs, 0, sizeof (struct _bbslist));
 
-   cls ();
    m_print (bbstxt[B_BBS_ASKNAME]);
    chars_input (bbs.bbs_name, 39, INPUT_FIELD);
    if (!bbs.bbs_name[0])
@@ -362,19 +409,26 @@ void bbs_add_list ()
    if (yesno_question (DEF_YES) == DEF_NO)
       return;
 
-   sprintf (filename, "%sBBSLIST.BBS", sys_path);
+   if (num)
+      sprintf (filename, "%sBBSLIST%d.BBS", sys_path, num);
+   else
+      sprintf (filename, "%sBBSLIST.BBS", sys_path);
    fd = cshopen (filename, O_APPEND|O_WRONLY|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
    write (fd, (char *)&bbs, sizeof (struct _bbslist));
    close (fd);
 }
 
-void bbs_short_list ()
+void bbs_short_list (num)
+int num;
 {
    int fd, line;
    char filename [80];
    struct _bbslist bbs;
 
-   sprintf (filename, "%sBBSLIST.BBS", sys_path);
+   if (num)
+      sprintf (filename, "%sBBSLIST%d.BBS", sys_path, num);
+   else
+      sprintf (filename, "%sBBSLIST.BBS", sys_path);
    fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
    cls ();
@@ -382,8 +436,7 @@ void bbs_short_list ()
 
    line = 3;
 
-   while (read (fd, (char *)&bbs, sizeof (struct _bbslist)) == sizeof (struct _bbslist))
-   {
+   while (read (fd, (char *)&bbs, sizeof (struct _bbslist)) == sizeof (struct _bbslist)) {
       m_print (bbstxt[B_BBS_SHORTLIST], bbs.bbs_name, bbs.number, bbs.baud, bbs.open_times);
       if (!(line=more_question(line)))
          break;
@@ -395,30 +448,31 @@ void bbs_short_list ()
    press_enter ();
 }
 
-void bbs_long_list ()
+void bbs_long_list (num)
+int num;
 {
    int fd, line;
    char filename [80], name[40];
    struct _bbslist bbs;
 
-   cls ();
    name[0] = 0;
    m_print (bbstxt[B_BBS_NAMETOSEARCH]);
    chars_input (name, 39, INPUT_UPDATE|INPUT_FIELD);
    if (!CARRIER)
       return;
 
-   sprintf (filename, "%sBBSLIST.BBS", sys_path);
+   if (num)
+      sprintf (filename, "%sBBSLIST%d.BBS", sys_path, num);
+   else
+      sprintf (filename, "%sBBSLIST.BBS", sys_path);
    fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
    cls ();
    line = 1;
 
-   while (read (fd, (char *)&bbs, sizeof (struct _bbslist)) == sizeof (struct _bbslist))
-   {
+   while (read (fd, (char *)&bbs, sizeof (struct _bbslist)) == sizeof (struct _bbslist)) {
       strcpy (filename, bbs.bbs_name);
-      if (stristr (filename, name))
-      {
+      if (stristr (filename, name)) {
          if (!(line = bbs_list (line, &bbs)))
             break;
       }
@@ -430,7 +484,8 @@ void bbs_long_list ()
    press_enter ();
 }
 
-void bbs_change ()
+void bbs_change (num)
+int num;
 {
    int fd;
    char filename [80], name[40], found;
@@ -444,18 +499,19 @@ void bbs_change ()
    if (!CARRIER || !name[0])
       return;
 
-   sprintf (filename, "%sBBSLIST.BBS", sys_path);
+   if (num)
+      sprintf (filename, "%sBBSLIST%d.BBS", sys_path, num);
+   else
+      sprintf (filename, "%sBBSLIST.BBS", sys_path);
    fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
    cls ();
    found = 0;
    pos = tell (fd);
 
-   while (read (fd, (char *)&bbs, sizeof (struct _bbslist)) == sizeof (struct _bbslist))
-   {
+   while (read (fd, (char *)&bbs, sizeof (struct _bbslist)) == sizeof (struct _bbslist)) {
       strcpy (filename, bbs.bbs_name);
-      if (stristr (filename, name))
-      {
+      if (stristr (filename, name)) {
          bbs_list (0, &bbs);
          found = 1;
          break;
@@ -464,8 +520,7 @@ void bbs_change ()
       pos = tell (fd);
    }
 
-   if (!found)
-   {
+   if (!found) {
       close (fd);
       return;
    }
@@ -499,7 +554,8 @@ void bbs_change ()
    close (fd);
 }
 
-void bbs_remove ()
+void bbs_remove (num)
+int num;
 {
    int fd;
    char filename [80], name[40];
@@ -507,26 +563,27 @@ void bbs_remove ()
    struct _bbslist bbs;
 
    cls ();
-   m_print ("\nŠEnter BBS name to delete from list : ");
+   m_print (bbstxt[B_BBS_DELETE]);
    chars_input (name, 39, INPUT_FIELD);
    if (!CARRIER || !name[0])
       return;
 
-   sprintf (filename, "%sBBSLIST.BBS", sys_path);
+   if (num)
+      sprintf (filename, "%sBBSLIST%d.BBS", sys_path, num);
+   else
+      sprintf (filename, "%sBBSLIST.BBS", sys_path);
    fd = cshopen (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
 
    m_print (bbstxt[B_ONE_CR]);
    wpos = pos = tell (fd);
 
-   while (read (fd, (char *)&bbs, sizeof (struct _bbslist)) == sizeof (struct _bbslist))
-   {
+   while (read (fd, (char *)&bbs, sizeof (struct _bbslist)) == sizeof (struct _bbslist)) {
       pos = tell (fd);
 
       strcpy (filename, bbs.bbs_name);
-      if (stristr (filename, name))
-      {
+      if (stristr (filename, name)) {
          bbs_list (0, &bbs);
-         m_print ("\nRemove this BBS");
+         m_print (bbstxt[B_BBSLIST_REMOVE]);
          if (yesno_question (DEF_NO) == DEF_YES)
             continue;
       }
@@ -549,7 +606,14 @@ int n;
    long prev;
    struct _usr tempusr;
 
+   if (vote_limit <= 0) {
+      read_system_file ("VOTELIM");
+      return;
+   }
+
+
    if (!get_command_word (stringa, 35)) {
+      read_system_file ("PREVOTE");
       m_print(bbstxt[B_VOTE_NAME]);
       chars_input(stringa, 35, INPUT_FANCY|INPUT_FIELD);
       if (!CARRIER || !stringa[0])
@@ -564,7 +628,7 @@ int n;
       if (tempusr.usrhidden || tempusr.deleted || !tempusr.name[0])
          continue;
 
-      if (tempusr.priv != vote_priv || tempusr.novote)
+      if (tempusr.priv != vote_priv || tempusr.novote || !strcmp (tempusr.name, usr.name))
          continue;
 
       if (stristr(tempusr.name, stringa)) {
@@ -575,6 +639,13 @@ int n;
             lseek(fd,prev,SEEK_SET);
             write(fd,(char *)&tempusr,sizeof(struct _usr));
             m_print (bbstxt[B_VOTE_COLLECTED]);
+            status_line ("+Vote sent for %s", tempusr.name);
+         }
+
+         vote_limit--;
+         if (vote_limit <= 0) {
+            read_system_file ("VOTELIM");
+            break;
          }
       }
 
@@ -598,4 +669,5 @@ void ballot_votes ()
       usr.votes = 0;
    }
 }
+
 

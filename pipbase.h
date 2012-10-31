@@ -7,8 +7,8 @@ refer to these informations */
 
 #pragma pack(1)
 
-#define VERSION 1
-#define SUBVERSION 00
+#define PIPVERSION 1
+#define PIPSUBVERSION 00
 
 #define BUFSIZE 512
 

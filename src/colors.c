@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
+#include <alloc.h>
 
 #include <cxl\cxlvid.h>
 #include <cxl\cxlwin.h>
@@ -9,28 +11,41 @@
 #include "externs.h"
 #include "prototyp.h"
 
+static byte last_color = 0x07;
+
+static void ansi_print(char *format, ...);
+
 void cls()
 {
-        if (snooping)
-           change_attr(LGREY|_BLACK);
+   byte pc;
 
-        if (usr.formfeed) {
-                if (usr.ansi)
-                        m_print("\x1B[2J\x1B[1;1f");
-                if (usr.avatar && !local_mode)
-                        BUFFER_BYTE(CTRLL);
-                if (snooping)
-                        wclear();
-        }
-        else if (!local_mode) {
-                BUFFER_BYTE('\r');
-                BUFFER_BYTE('\n');
-                if (snooping)
-                        wputs("\n");
-	}
+   if (snooping) {
+      pc = last_color;
+      change_attr(LGREY|_BLACK);
+      last_color = pc;
+   }
 
-        if (!local_mode)
-           UNBUFFER_BYTES ();
+   if (usr.formfeed) {
+      if (usr.ansi && !local_mode)
+         ansi_print("\x1B[2J\x1B[1;1f");
+      if (usr.avatar && !local_mode)
+         BUFFER_BYTE(CTRLL);
+      if (snooping)
+         wclear();
+   }
+   else {
+      if (!local_mode) {
+         BUFFER_BYTE('\r');
+         BUFFER_BYTE('\n');
+      }
+      if (snooping)
+         wputs("\n");
+   }
+
+   restore_last_color ();
+
+   if (!local_mode)
+      UNBUFFER_BYTES ();
 }
 
 void change_attr(i)
@@ -41,7 +56,8 @@ int i;
         if ((!usr.ansi && !usr.avatar) || !usr.color)
 		return;
 
-        if (snooping)
+        last_color = i;
+        if (snooping || local_mode)
                 wtextattr(i);
 
         if (usr.avatar && !local_mode) {
@@ -51,7 +67,7 @@ int i;
 
                 UNBUFFER_BYTES ();
         }
-        else if (usr.ansi) {
+        else if (usr.ansi && !local_mode) {
 		strcpy(s,"\033[0;");
 
 		switch (i & 0x0F) {
@@ -131,14 +147,14 @@ int i;
 
 		strcat(s,"m");
 
-                m_print(s);
+                ansi_print(s);
 	}
 }
 
 void del_line()
 {
    if (usr.ansi)
-      m_print("\x1B[2K");
+      ansi_print("\x1B[2K");
    if (usr.avatar && !local_mode) {
       BUFFER_BYTE(CTRLV);
       BUFFER_BYTE(CTRLC);
@@ -153,7 +169,7 @@ void cpos(y, x)
 int y, x;
 {
         if (usr.ansi && !local_mode)
-                m_print("\x1B[%d;%df",y,x);
+                ansi_print("\x1B[%d;%df",y,x);
         if (usr.avatar && !local_mode) {
                 BUFFER_BYTE (CTRLV);
                 BUFFER_BYTE (CTRLH);
@@ -179,7 +195,7 @@ int y;
    }
 
    if (usr.ansi)
-      m_print ("\x1B[%dA", y);
+      ansi_print ("\x1B[%dA", y);
    else if (usr.avatar)
       for(;--y >= 0;)
       {
@@ -201,7 +217,7 @@ int y;
    }
 
    if (usr.ansi)
-      m_print ("\x1B[%dB", y);
+      ansi_print ("\x1B[%dB", y);
    else if (usr.avatar)
       for(;--y >= 0;)
       {
@@ -223,7 +239,7 @@ int x;
    }
 
    if (usr.ansi)
-      m_print ("\x1B[%dC", x);
+      ansi_print ("\x1B[%dC", x);
    else if (usr.avatar)
       for(;--x >= 0;)
       {
@@ -245,12 +261,52 @@ int x;
    }
 
    if (usr.ansi)
-      m_print ("\x1B[%dD", x);
+      ansi_print ("\x1B[%dD", x);
    else if (usr.avatar)
       for(;--x >= 0;)
       {
          SENDBYTE (CTRLV);
          SENDBYTE (CTRLF);
       }
+}
+
+void restore_last_color ()
+{
+   change_attr (last_color);
+}
+
+static void ansi_print(char *format, ...)
+{
+   va_list var_args;
+   char *string, *q, visual;
+
+   string=(char *)malloc(256);
+
+   if (string==NULL || strlen(format) > 256) {
+      if (string)
+         free(string);
+      return;
+   }
+
+   va_start(var_args,format);
+   vsprintf(string,format,var_args);
+   va_end(var_args);
+
+   visual = 1;
+
+   for(q=string;*q;q++) {
+      if (*q == 0x1B)
+         visual = 0;
+
+      if (!local_mode)
+         BUFFER_BYTE((*q));
+      if (snooping && visual)
+         wputc(*q);
+   }
+
+   if (!local_mode)
+      UNBUFFER_BYTES ();
+
+   free(string);
 }
 

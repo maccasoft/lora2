@@ -16,6 +16,7 @@
 #include "lora.h"
 #include "externs.h"
 #include "prototyp.h"
+#include "quickmsg.h"
 
 union Converter {
    unsigned char  uc[10];
@@ -25,97 +26,99 @@ union Converter {
    double          d[1];
 };
 
-
+static void update_lastread_pointers (void);
+static int fido_scan_messages (int *, int *, int, int, int, int, FILE *, char);
+static int prescan_tagged_areas (char, FILE *);
 static int is_tagged (int);
 static int tag (int);
 static int un_tag (int);
-static float IEEToMSBIN (float f);
 static char * namefixup (char *);
 
 void tag_area_list (flag, sig) /* flag == 1, Normale due colonne */
 int flag, sig;                       /* flag == 2, Normale una colonna */
 {                                    /* flag == 3, Anche nomi, una colonna */
-   int fd, i, pari, area, linea, nsys;
+   int fd, fdi, i, pari, area, linea, nsys, nm;
    char stringa[13], filename[50], dir[80];
    struct _sys tsys;
-   struct _sys_idx sysidx[MSG_AREAS];
+   struct _sys_idx sysidx[10];
 
    sprintf(filename,"%sSYSMSG.IDX", sys_path);
-   fd = shopen(filename, O_RDONLY|O_BINARY);
-   if (fd == -1)
+   fdi = shopen(filename, O_RDONLY|O_BINARY);
+   if (fdi == -1)
       return;
-   nsys = read(fd, (char *)&sysidx, sizeof(struct _sys_idx) * MSG_AREAS);
-   nsys /= sizeof (struct _sys_idx);
-   close(fd);
 
    m_print(bbstxt[B_AREA_TAG_UNTAG]);
 
    for (;;) {
-      if (!get_command_word (stringa, 12))
-      {
+      if (!get_command_word (stringa, 12)) {
          change_attr(WHITE|_BLACK);
 
          m_print(bbstxt[B_TAG_AREA]);
          area = 0;
 
          input(stringa, 12);
-         if (!CARRIER || time_remain() <= 0)
+         if (!CARRIER || time_remain() <= 0) {
+            close (fdi);
             return;
+         }
       }
 
-      if (stringa[0] == '?')
-      {
+      if (stringa[0] == '?') {
          sprintf(filename, SYSMSG_PATH, sys_path);
          fd = shopen(filename, O_RDONLY|O_BINARY);
-         if (fd == -1)
+         if (fd == -1) {
+            close (fdi);
             return;
+         }
 
          cls();
          m_print(bbstxt[B_AREAS_TITLE], bbstxt[B_MESSAGE]);
 
          pari = 0;
          linea = 4;
+         nm = 0;
+         lseek(fdi, 0L, SEEK_SET);
 
-         for (i=0; i < nsys; i++) {
-            if (usr.priv < sysidx[i].priv ||
-                (usr.flags & sysidx[i].flags) != sysidx[i].flags)
-               continue;
+         do {
+            nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+            nsys /= sizeof (struct _sys_idx);
 
-            lseek(fd, (long)i * SIZEOF_MSGAREA, SEEK_SET);
-            read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA);
+            for (i=0; i < nsys; i++, nm++) {
+               if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+                  continue;
 
-            if (sig && tsys.msg_sig != sig)
-               continue;
+               lseek(fd, (long)nm * SIZEOF_MSGAREA, SEEK_SET);
+               read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA);
 
-            m_print("%c%3d ... ",is_tagged(sysidx[i].area) ? '@' : ' ',sysidx[i].area);
+               if (sig && tsys.msg_sig != sig)
+                  continue;
 
-            if (flag == 1)
-            {
-               strcpy(dir, tsys.msg_name);
-               dir[31] = '\0';
-               if (pari)
-               {
-                  m_print("%s\n",dir);
-                  pari = 0;
+               m_print("%c%3d ... ",is_tagged(sysidx[i].area) ? '@' : ' ',sysidx[i].area);
+
+               if (flag == 1) {
+                  strcpy(dir, tsys.msg_name);
+                  dir[31] = '\0';
+                  if (pari) {
+                     m_print("%s\n",dir);
+                     pari = 0;
+                     if (!(linea = more_question(linea)))
+                        break;
+                  }
+                  else {
+                     m_print("%-31s ",dir);
+                     pari = 1;
+                  }
+               }
+               else if (flag == 2 || flag == 3) {
+                  if (flag == 3)
+                     m_print("%-12s ",sysidx[i].key);
+                  m_print(" %s\n",tsys.msg_name);
+
                   if (!(linea = more_question(linea)))
                      break;
                }
-               else
-               {
-                  m_print("%-31s ",dir);
-                  pari = 1;
-               }
             }
-            else if (flag == 2 || flag == 3)
-            {
-               if (flag == 3)
-                  m_print("%-12s ",sysidx[i].key);
-               m_print(" %s\n",tsys.msg_name);
-
-               if (!(linea = more_question(linea)))
-                  break;
-            }
-         }
+         } while (linea && nsys == 10);
 
          close(fd);
 
@@ -127,37 +130,44 @@ int flag, sig;                       /* flag == 2, Normale una colonna */
          area = -1;
       }
 
-      else if (stringa[0] == '-')
-      {
+      else if (stringa[0] == '-') {
          for (i = 0; i < MAXLREAD; i++)
             un_tag (usr.lastread[i].area);
       }
 
-      else if (strlen(stringa) < 1)
+      else if (strlen(stringa) < 1) {
+         close (fdi);
          return;
+      }
 
       else {
+         lseek(fdi, 0L, SEEK_SET);
          area = atoi(stringa);
-         if (area < 1 || area > MSG_AREAS)
-         {
+         if (area < 1 || area > MSG_AREAS) {
             area = -1;
-            for(i=0;i<nsys;i++)
-               if (!stricmp(stringa,sysidx[i].key))
-               {
-                  area = sysidx[i].area;
-                  break;
+            do {
+               nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+               nsys /= sizeof (struct _sys_idx);
+
+               for(i=0;i<nsys;i++) {
+                  if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+                     continue;
+                  if (!stricmp(stringa,sysidx[i].key)) {
+                     area = sysidx[i].area;
+                     break;
+                  }
                }
+            } while (i == nsys && nsys == 10);
          }
 
-         if (area && read_system2 (area, 1, &tsys))
-         {
+         if (area && read_system2 (area, 1, &tsys)) {
             if (is_tagged (area)) {
                un_tag (area);
-               m_print ("\nArea Š%d (%s) %s.\n", area, tsys.msg_name, "untagged");
+               m_print (bbstxt[B_QWK_AREATAG], area, tsys.msg_name, bbstxt[B_QWK_UNTAGGED]);
             }
             else {
                tag (area);
-               m_print ("\nArea Š%d (%s) %s.\n", area, tsys.msg_name, "tagged");
+               m_print (bbstxt[B_QWK_AREATAG], area, tsys.msg_name, bbstxt[B_QWK_TAGGED]);
             }
          }
       }
@@ -225,10 +235,7 @@ int sort_func (const void *a1, const void *b1)
 
 void pack_tagged_areas ()
 {
-   FILE *fpq;
-   int i, msgcount, start, dlg, last[MAXLREAD];
    char file[80], stringa[80], c;
-   struct _sys tsys;
    struct ffblk fbuf;
 
    qsort (&usr.lastread, MAXLREAD, sizeof (struct _lastread), sort_func);
@@ -249,84 +256,8 @@ void pack_tagged_areas ()
    chdir (stringa);
    m_print (bbstxt[B_ONE_CR]);
 
-   msgcount = 0;
-   dlg = 1;
-   memcpy ((char *)&tsys, (char *)&sys, sizeof (struct _sys));
-
-   for (i=0; i<MAXLREAD && CARRIER; i++) {
-      last[i] = usr.lastread[i].msg_num;
-
-      if (!usr.lastread[i].area)
-         continue;
-
-      if (!read_system (usr.lastread[i].area, 1))
-         continue;
-
-      m_print (bbstxt[B_SCAN_SEARCHING], color_chat (dlg++), usr.lastread[i].area);
-
-      if (sys.quick_board)
-         quick_scan_message_base (sys.quick_board, usr.lastread[i].area);
-      else if (sys.pip_board)
-         pip_scan_message_base (usr.lastread[i].area);
-      else if (sys.squish)
-         squish_scan_message_base (usr.lastread[i].area, sys.msg_path);
-      else
-         scan_message_base(usr.lastread[i].area);
-
-      start = usr.lastread[i].msg_num;
-      start++;
-
-      if (start <= last_msg) {
-         sprintf (file, "%sTASK%02X\\%03d.TXT", QWKDir, line_offset, usr.lastread[i].area);
-         fpq = fopen(file, "wt");
-         if (fpq == NULL)
-            break;
-
-         while (start <= last_msg && !RECVD_BREAK() && CARRIER) {
-            if (local_mode && local_kbd == 0x03)
-               break;
-            fprintf (fpq, " * %s\n", sys.msg_name);
-            if (sys.quick_board)
-               quick_write_message_text (start, INCLUDE_HEADER|APPEND_TEXT, file, fpq);
-            else if (sys.pip_board)
-               pip_write_message_text (start, INCLUDE_HEADER|APPEND_TEXT, file, fpq);
-            else if (sys.squish)
-               squish_write_message_text (start, INCLUDE_HEADER|APPEND_TEXT, file, fpq);
-            else
-               write_message_text (start, INCLUDE_HEADER|APPEND_TEXT, file, fpq);
-
-            msgcount++;
-            start++;
-
-            time_release ();
-         }
-
-         fclose (fpq);
-      }
-
-      last[i] = start - 1;
-   }
-
-   m_print (bbstxt[B_PACKED_MESSAGES], msgcount);
-
-   memcpy ((char *)&sys, (char *)&tsys, sizeof (struct _sys));
-
-   if (sys.quick_board)
-      quick_scan_message_base (sys.quick_board, usr.msg);
-   else if (sys.pip_board)
-      pip_scan_message_base (usr.msg);
-   else
-      scan_message_base(usr.msg);
-
-   if (!msgcount)
+   if (!prescan_tagged_areas (0, NULL))
       return;
-
-   m_print(bbstxt[B_ASK_DOWNLOAD_ASCII]);
-   if ((c = yesno_question (DEF_YES)) == DEF_NO)
-      return;
-
-   for (i=0; i<MAXLREAD; i++)
-      usr.lastread[i].msg_num = last[i];
 
    do {
       m_print (bbstxt[B_ASK_COMPRESSOR]);
@@ -376,6 +307,8 @@ void pack_tagged_areas ()
    download_file (file, 0);
    if (cps)
       unlink (file);
+
+   update_lastread_pointers ();
 }
 
 void resume_transmission ()
@@ -404,10 +337,9 @@ void resume_transmission ()
 void qwk_pack_tagged_areas ()
 {
    FILE *fpq;
-   int i, msgcount, start, dlg, last[MAXLREAD], fd, totals, x;
+   int i, fd, totals;
    char file[80], stringa[80], c;
    time_t aclock;
-   float in, out;
    struct _sys tsys;
    struct ffblk fbuf;
    struct tm *newtime;
@@ -430,8 +362,6 @@ void qwk_pack_tagged_areas ()
    chdir (stringa);
    m_print (bbstxt[B_ONE_CR]);
 
-   msgcount = 0;
-   dlg = 1;
    memcpy ((char *)&tsys, (char *)&sys, sizeof (struct _sys));
 
    sprintf (file, "%sTASK%02X\\CONTROL.DAT", QWKDir, line_offset);
@@ -455,8 +385,8 @@ void qwk_pack_tagged_areas ()
       newtime->tm_mon+1,newtime->tm_mday,newtime->tm_year,
       newtime->tm_hour,newtime->tm_min,newtime->tm_sec);
    fputs(stringa,fpq);              /* Line #6 */
-   strcpy (stringa, usr.name);
-   fputs(strupr(stringa),fpq);
+//   strcpy (stringa, usr.name);
+   fputs(usr.name,fpq);
    fputs("\n",fpq);
    fputs(" \n",fpq);             /* Line #8 */
    fputs("0\n",fpq);
@@ -464,8 +394,7 @@ void qwk_pack_tagged_areas ()
    sprintf (stringa, SYSMSG_PATH, sys_path);
    fd = shopen (stringa, O_RDONLY|O_BINARY);
    totals = 0;
-   for (i=0; i < 1000; i++)
-   {
+   for (i=0; i < 1000; i++) {
       if ((read (fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA)) != SIZEOF_MSGAREA)
          break;
       if (usr.priv < tsys.msg_priv)
@@ -484,7 +413,7 @@ void qwk_pack_tagged_areas ()
          continue;
       if ((usr.flags & tsys.msg_flags) != tsys.msg_flags)
          continue;
-      sprintf (stringa, "%d\n", i);
+      sprintf (stringa, "%d\n", tsys.msg_num);
       fputs (stringa, fpq);
       memset (stringa, 0, 11);
       strncpy (stringa, tsys.msg_name, 40);
@@ -504,16 +433,16 @@ void qwk_pack_tagged_areas ()
    if (fpq == NULL)
       return;
 
-   sprintf(stringa,"DOOR = LoraMail  \n");
+   sprintf(stringa,"DOOR = LoraBBS\n");
    fputs(stringa,fpq);           /* Line #1 */
 
-   sprintf(stringa,"VERSION = 2.00  \n");
+   sprintf(stringa,"VERSION = 2.20\n");
    fputs(stringa,fpq);           /* Line #2 */
 
-   sprintf(stringa,"SYSTEM = Lora BBS  \n");
+   sprintf(stringa,"SYSTEM = LoraBBS\n");
    fputs(stringa,fpq);           /* Line #3 */
 
-   sprintf(stringa,"CONTROLNAME = LORAMAIL\n");
+   sprintf(stringa,"CONTROLNAME = LORA\n");
    fputs(stringa,fpq);           /* Line #4 */
 
    sprintf(stringa,"CONTROLTYPE = ADD\n");
@@ -537,97 +466,8 @@ void qwk_pack_tagged_areas ()
    for (i=0; i < 54; i++)
        fwrite(" ",1,1,fpq);
 
-   totals = 1;
-
-   for (i=0; i<MAXLREAD && CARRIER; i++) {
-      last[i] = usr.lastread[i].msg_num;
-
-      if (!usr.lastread[i].area)
-         continue;
-
-      if (!read_system (usr.lastread[i].area, 1))
-         continue;
-
-      m_print (bbstxt[B_SCAN_SEARCHING], color_chat (dlg++), usr.lastread[i].area);
-
-      if (sys.quick_board)
-         quick_scan_message_base (sys.quick_board, usr.lastread[i].area);
-      else if (sys.pip_board)
-         pip_scan_message_base (usr.lastread[i].area);
-      else if (sys.squish)
-         squish_scan_message_base (usr.lastread[i].area, sys.msg_path);
-      else
-         scan_message_base(usr.lastread[i].area);
-
-      start = usr.lastread[i].msg_num;
-      start++;
-      fd = -1;
-
-      if (start <= last_msg) {
-         while (start <= last_msg && !RECVD_BREAK() && CARRIER) {
-            if (local_mode && local_kbd == 0x03)
-               break;
-
-            if (sys.quick_board)
-               x = quick_write_message_text (start, QWK_TEXTFILE|APPEND_TEXT, file, fpq);
-            else if (sys.pip_board)
-               x = pip_write_message_text (start, QWK_TEXTFILE|APPEND_TEXT, file, fpq);
-            else if (sys.squish)
-               x = squish_write_message_text (start, QWK_TEXTFILE|APPEND_TEXT, file, fpq);
-            else
-               x = write_message_text (start, QWK_TEXTFILE|APPEND_TEXT, file, fpq);
-
-            if (x) {
-               msgcount++;
-               totals++;
-
-               if (fd == -1) {
-                  sprintf (file, "%sTASK%02X\\%03d.NDX", QWKDir, line_offset, usr.lastread[i].area - 1);
-                  fd = cshopen(file,O_CREAT | O_TRUNC | O_BINARY | O_RDWR,S_IWRITE);
-               }
-
-               sprintf(stringa,"%u",totals);   /* Stringized version of current position */
-               in = (float) atof(stringa);
-               out = IEEToMSBIN(in);
-               write(fd,&out,sizeof(float));
-
-               c = 0;
-               write(fd,&c,sizeof(char));              /* Conference # */
-
-               totals += x - 1;
-            }
-
-            start++;
-            time_release ();
-         }
-      }
-
-      last[i] = start - 1;
-
-      close (fd);
-   }
-
-   fclose (fpq);
-   m_print (bbstxt[B_PACKED_MESSAGES], msgcount);
-
-   memcpy ((char *)&sys, (char *)&tsys, sizeof (struct _sys));
-
-   if (sys.quick_board)
-      quick_scan_message_base (sys.quick_board, usr.msg);
-   else if (sys.pip_board)
-      pip_scan_message_base (usr.msg);
-   else
-      scan_message_base(usr.msg);
-
-   if (!msgcount)
+   if (!prescan_tagged_areas (1, fpq))
       return;
-
-   m_print(bbstxt[B_ASK_DOWNLOAD_QWK]);
-   if ((c = yesno_question (DEF_YES)) == DEF_NO)
-      return;
-
-   for (i=0; i<MAXLREAD; i++)
-      usr.lastread[i].msg_num = last[i];
 
    do {
       m_print (bbstxt[B_ASK_COMPRESSOR]);
@@ -673,9 +513,11 @@ void qwk_pack_tagged_areas ()
    download_file (file, 0);
    if (cps)
       unlink (file);
+
+   update_lastread_pointers ();
 }
 
-static float IEEToMSBIN(float f)
+float IEEToMSBIN(float f)
 {
    union Converter t;
    int   sign,exp;
@@ -774,7 +616,10 @@ void getrep(void)
       }
    }
 
-   sprintf (temp, "%sTASK%02X\\%s.REP", QWKDir, line_offset, BBSid);
+   sprintf (temp, "%sTASK%02X\\%s.RE?", QWKDir, line_offset, BBSid);
+   if (findfirst (temp, &fbuf, 0))
+      return;
+   sprintf (temp, "%sTASK%02X\\%s", QWKDir, line_offset, fbuf.ff_name);
    repfile = shopen (temp, O_RDONLY|O_BINARY);
    if (repfile == -1)
       return;
@@ -782,11 +627,11 @@ void getrep(void)
    close (repfile);
 
    if (!strncmp (temp1, "PK", 2))
-      sprintf (temp, "PKUNZIP %sTASK%02X\\%s.REP %sTASK%02X*M", QWKDir, line_offset, BBSid, QWKDir, line_offset);
+      sprintf (temp, "PKUNZIP %sTASK%02X\\%s %sTASK%02X*M", QWKDir, line_offset, fbuf.ff_name, QWKDir, line_offset);
    else if (!strncmp (&temp1[2], "-lh", 3))
-      sprintf (temp, "LHARC e %sTASK%02X\\%s.REP %sTASK%02X\\*M", QWKDir, line_offset, BBSid, QWKDir, line_offset);
+      sprintf (temp, "LHARC e %sTASK%02X\\%s %sTASK%02X\\*M", QWKDir, line_offset, fbuf.ff_name, QWKDir, line_offset);
    else if (!strncmp (temp1, "`ê", 2))
-      sprintf (temp, "ARJ e %sTASK%02X\\%s.REP %sTASK%02X\\*M", QWKDir, line_offset, BBSid, QWKDir, line_offset);
+      sprintf (temp, "ARJ e %sTASK%02X\\%s %sTASK%02X\\*M", QWKDir, line_offset, fbuf.ff_name, QWKDir, line_offset);
    else {
       unlink (temp);
       return;
@@ -820,13 +665,13 @@ void getrep(void)
                usr.msg = x;
 
                if (sys.quick_board)
-                  quick_scan_message_base (sys.quick_board, usr.msg);
+                  quick_scan_message_base (sys.quick_board, usr.msg, 1);
                else if (sys.pip_board)
-                  pip_scan_message_base (usr.msg);
+                  pip_scan_message_base (usr.msg, 1);
                else if (sys.squish)
-                  squish_scan_message_base (usr.msg, sys.msg_path);
+                  squish_scan_message_base (usr.msg, sys.msg_path, 1);
                else
-                  scan_message_base(usr.msg);
+                  scan_message_base(usr.msg, 1);
                prev_area = x;
             }
 
@@ -947,5 +792,339 @@ static char * namefixup(char *name)
    strtrim (name);
 
    return (name);
+}
+
+static int prescan_tagged_areas (qwk, fpq)
+char qwk;
+FILE *fpq;
+{
+   int fdi, fdp;
+   int i, msgcount, tt, pp, last[MAXLREAD], personal, total, totals;
+   char file[80];
+   struct _sys tsys;
+
+   qsort (&usr.lastread, MAXLREAD, sizeof (struct _lastread), sort_func);
+
+   total = personal = msgcount = 0;
+   totals = 1;
+   memcpy ((char *)&tsys, (char *)&sys, sizeof (struct _sys));
+
+   if (qwk) {
+      sprintf (file, "%sTASK%02X\\PERSONAL.NDX", QWKDir, line_offset);
+      fdp = cshopen(file,O_CREAT | O_TRUNC | O_BINARY | O_WRONLY,S_IREAD|S_IWRITE);
+   }
+   else
+      fdp = -1;
+
+   m_print (bbstxt[B_QWK_HEADER1]);
+   m_print (bbstxt[B_QWK_HEADER2]);
+
+   for (i=0; i<MAXLREAD && CARRIER; i++) {
+      last[i] = usr.lastread[i].msg_num;
+
+      if (!usr.lastread[i].area)
+         continue;
+
+      if (!read_system (usr.lastread[i].area, 1))
+         continue;
+
+      if (!qwk) {
+         sprintf (file, "%sTASK%02X\\%03d.TXT", QWKDir, line_offset, usr.lastread[i].area);
+         fpq = fopen(file, "w+t");
+         fprintf (fpq, "[*] AREA: %s\n\n", sys.msg_name);
+      }
+
+      m_print (bbstxt[B_SCAN_SEARCHING], sys.msg_num, sys.msg_name);
+
+      tt = pp = 0;
+
+      if (qwk) {
+         sprintf (file, "%sTASK%02X\\%03d.NDX", QWKDir, line_offset, usr.lastread[i].area);
+         fdi = cshopen(file,O_CREAT | O_TRUNC | O_BINARY | O_WRONLY,S_IREAD|S_IWRITE);
+      }
+      else
+         fdi = -1;
+
+      if (sys.quick_board) {
+         quick_scan_message_base (sys.quick_board, usr.lastread[i].area, 1);
+         totals = quick_scan_messages (&tt, &pp, sys.quick_board, usr.lastread[i].msg_num + 1, fdi, fdp, totals, fpq, qwk);
+      }
+      else if (sys.pip_board) {
+         pip_scan_message_base (usr.lastread[i].area, 1);
+         totals = pip_scan_messages (&tt, &pp, sys.pip_board, usr.lastread[i].msg_num + 1, fdi, fdp, totals, fpq, qwk);
+      }
+      else if (sys.squish) {
+         squish_scan_message_base (usr.lastread[i].area, sys.msg_path, 1);
+         totals = squish_scan_messages (&tt, &pp, usr.lastread[i].msg_num + 1, fdi, fdp, totals, fpq, qwk);
+      }
+      else {
+         scan_message_base(usr.lastread[i].area, 1);
+         totals = fido_scan_messages (&tt, &pp, usr.lastread[i].msg_num + 1, fdi, fdp, totals, fpq, qwk);
+      }
+
+      close (fdi);
+      if (!qwk)
+         fclose (fpq);
+
+      if (!tt) {
+         if (qwk)
+            sprintf (file, "%sTASK%02X\\%03d.NDX", QWKDir, line_offset, usr.lastread[i].area);
+         else
+            sprintf (file, "%sTASK%02X\\%03d.TXT", QWKDir, line_offset, usr.lastread[i].area);
+         unlink (file);
+      }
+
+      m_print (bbstxt[B_QWK_STATISTICS], last_msg, pp, tt);
+
+      msgcount += tt;
+      personal += pp;
+      total += last_msg;
+      time_release ();
+   }
+
+   if (qwk)
+      fclose (fpq);
+
+   if (fdp != -1) {
+      close (fdp);
+      if (!personal) {
+         sprintf (file, "%sTASK%02X\\PERSONAL.NDX", QWKDir, line_offset);
+         unlink (file);
+      }
+   }
+
+   m_print (bbstxt[B_QWK_HEADER2]);
+   m_print (bbstxt[B_PACKED_MESSAGES], total, personal, msgcount);
+
+   memcpy ((char *)&sys, (char *)&tsys, sizeof (struct _sys));
+
+   if (sys.quick_board)
+      quick_scan_message_base (sys.quick_board, usr.msg, 1);
+   else if (sys.pip_board)
+      pip_scan_message_base (usr.msg, 1);
+   else if (sys.squish)
+      squish_scan_message_base (usr.msg, sys.msg_path, 1);
+   else
+      scan_message_base(usr.msg, 1);
+
+   if (msgcount) {
+      if (qwk)
+         m_print(bbstxt[B_ASK_DOWNLOAD_QWK]);
+      else
+         m_print(bbstxt[B_ASK_DOWNLOAD_ASCII]);
+      if (yesno_question (DEF_YES) == DEF_NO)
+         return (0);
+   }
+   else
+      press_enter ();
+
+   return (msgcount);
+}
+
+static void update_lastread_pointers ()
+{
+   int i;
+   struct _sys tsys;
+
+   m_print (bbstxt[B_QWK_UPDATE]);
+
+   memcpy ((char *)&tsys, (char *)&sys, sizeof (struct _sys));
+
+   for (i=0; i<MAXLREAD; i++) {
+      if (!usr.lastread[i].area)
+         continue;
+
+      if (!read_system (usr.lastread[i].area, 1))
+         continue;
+
+      if (sys.quick_board)
+         quick_scan_message_base (sys.quick_board, usr.lastread[i].area, 1);
+      else if (sys.pip_board)
+         pip_scan_message_base (usr.lastread[i].area, 1);
+      else if (sys.squish)
+         squish_scan_message_base (usr.lastread[i].area, sys.msg_path, 1);
+      else
+         scan_message_base(usr.lastread[i].area, 1);
+
+      usr.lastread[i].msg_num = last_msg;
+   }
+
+   memcpy ((char *)&sys, (char *)&tsys, sizeof (struct _sys));
+
+   if (sys.quick_board)
+      quick_scan_message_base (sys.quick_board, usr.msg, 1);
+   else if (sys.pip_board)
+      pip_scan_message_base (usr.msg, 1);
+   else if (sys.squish)
+      squish_scan_message_base (usr.msg, sys.msg_path, 1);
+   else
+      scan_message_base(usr.msg, 1);
+}
+
+static int fido_scan_messages (total, personal, start, fdi, fdp, totals, fpq, qwk)
+int *total, *personal, start, fdi, fdp, totals;
+FILE *fpq;
+char qwk;
+{
+   FILE *fp;
+   float in, out;
+   int i, tt, pp, z, m, pos, blks, msg_num;
+   char c, buff[80], wrp[80], qwkbuffer[130], shead;
+   long fpos, qpos;
+   struct QWKmsghd QWK;
+   struct _msg msgt;
+
+   tt = 0;
+   pp = 0;
+
+   for(msg_num = start; msg_num <= last_msg; msg_num++) {
+      if (!(msg_num % 5))
+         display_percentage (msg_num - start, last_msg - start);
+
+      sprintf(buff,"%s%d.MSG",sys.msg_path,msg_num);
+
+      fp = fopen (buff, "rb");
+      if(fp == NULL)
+         continue;
+      fread((char *)&msgt,sizeof(struct _msg),1,fp);
+
+      if((msgt.attr & MSGPRIVATE) && stricmp(msgt.from,usr.name) && stricmp(msgt.to,usr.name) && usr.priv < SYSOP) {
+         fclose (fp);
+         continue;
+      }
+
+      totals++;
+      if (fdi != -1) {
+         sprintf(buff,"%u",totals);   /* Stringized version of current position */
+         in = (float) atof(buff);
+         out = IEEToMSBIN(in);
+         write(fdi,&out,sizeof(float));
+
+         c = 0;
+         write(fdi,&c,sizeof(char));              /* Conference # */
+      }
+
+      if (!stricmp(msgt.to, usr.name)) {
+         pp++;
+         if (fdp != -1) {
+            write(fdp,&out,sizeof(float));
+            write(fdp,&c,sizeof(char));              /* Conference # */
+         }
+      }
+
+      blks = 1;
+      pos = 0;
+      memset (qwkbuffer, ' ', 128);
+      shead = 0;
+      i = 0;
+      fpos = filelength(fileno(fp));
+
+      while(ftell(fp) < fpos) {
+         c = fgetc(fp);
+
+         if((byte)c == 0x8D || c == 0x0A || c == '\0')
+            continue;
+
+         buff[i++]=c;
+
+         if(c == 0x0D) {
+            buff[i-1]='\0';
+
+            if(buff[0] == 0x01) {
+               if (!strncmp(&buff[1],"INTL",4) && !shead)
+                  sscanf(&buff[6],"%d:%d/%d %d:%d/%d",&msg_tzone,&i,&i,&msg_fzone,&i,&i);
+               if (!strncmp(&buff[1],"TOPT",4) && !shead)
+                  sscanf(&buff[6],"%d",&msg_tpoint);
+               if (!strncmp(&buff[1],"FMPT",4) && !shead)
+                  sscanf(&buff[6],"%d",&msg_fpoint);
+               i=0;
+               continue;
+            }
+            else if (!shead) {
+               if (qwk)
+                  qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
+               else
+                  text_header (&msgt,msg_num,fpq);
+               shead = 1;
+            }
+
+            if(buff[0] == 0x01 || !strncmp(buff,"SEEN-BY",7)) {
+               i=0;
+               continue;
+            }
+
+            if (qwk) {
+               write_qwk_string (buff, qwkbuffer, &pos, &blks, fpq);
+               write_qwk_string ("\r\n", qwkbuffer, &pos, &blks, fpq);
+            }
+            else
+               fprintf(fpq,"%s\n",buff);
+            i = 0;
+         }
+         else {
+            if(i<(usr.width-1))
+               continue;
+
+            buff[i]='\0';
+            while(i>0 && buff[i] != ' ')
+               i--;
+
+            m=0;
+
+            if(i != 0)
+               for(z=i+1;z<(usr.width-1);z++) {
+                  wrp[m++]=buff[z];
+                  buff[i]='\0';
+               }
+
+            wrp[m]='\0';
+
+            if (!shead) {
+               if (qwk)
+                  qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
+               else
+                  text_header (&msgt,msg_num,fpq);
+               shead = 1;
+            }
+
+            if (qwk) {
+               write_qwk_string (buff, qwkbuffer, &pos, &blks, fpq);
+               write_qwk_string ("\r\n", qwkbuffer, &pos, &blks, fpq);
+            }
+            else
+               fprintf(fpq,"%s\n",buff);
+
+            buff[0] = '\0';
+            strcat(buff,wrp);
+            i = strlen(wrp);
+         }
+      }
+
+      fclose(fp);
+
+      if (qwk) {
+         qwkbuffer[128] = 0;
+         fwrite(qwkbuffer, 128, 1, fpq);
+         blks++;
+
+      /* Now update with record count */
+         fseek(fpq,qpos,SEEK_SET);          /* Restore back to header start */
+         sprintf(buff,"%d",blks);
+         ljstring(QWK.Msgrecs,buff,6);
+         fwrite((char *)&QWK,128,1,fpq);           /* Write out the header */
+         fseek(fpq,0L,SEEK_END);               /* Bump back to end of file */
+
+         totals += blks - 1;
+      }
+      else
+         fprintf(fpq,bbstxt[B_TWO_CR]);
+
+      tt++;
+   }
+
+   *personal = pp;
+   *total = tt;
+
+   return (totals);
 }
 

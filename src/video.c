@@ -38,26 +38,25 @@ struct _fossil_info
 };
 
 static int fossil_inf(struct _fossil_info far *);
-static void virtual_screen (void);
-void after_door (void);
+// static void virtual_screen (void);
 
-void setup_screen()
+/*---------------------------------------------------------------------------
+   void setup_screen (void);
+
+   Disegna le due parti piu' importanti dello schermo, dalla riga 1 alla
+   riga 23 (dove viene visualizzato il tracciato delle chiamate) e dalla
+   riga 24 alla riga 25 (dove appaiono i vari messaggi di stato).
+---------------------------------------------------------------------------*/
+void setup_screen ()
 {
    videoinit();
-   virtual_screen ();
+//   virtual_screen ();
    hidecur();
 
    mainview = wopen(0,0,22,79,5,LGREY|_BLACK,LGREY|_BLACK);
    wactiv(mainview);
-   free (_winfo.active->wbuf);
-   _winfo.active->wbuf = NULL;
 
    status = wopen(23,0,24,79,5,BLACK|_LGREY,BLACK|_LGREY);
-   after_door();
-}
-
-void after_door ()
-{
    wactiv(status);
    wprints(0,65,BLACK|_LGREY," [Time:      ]");
    wprints(1,79 - strlen(reg_prompt),BLACK|_LGREY,reg_prompt);
@@ -65,45 +64,74 @@ void after_door ()
    wactiv(mainview);
 }
 
+/*---------------------------------------------------------------------------
+  void activation_key (void);
+
+  Verifica la chiave di registrazione del programma, attivando le opzioni
+  riservate. Se si tratta di una chiave per point la variabile globale
+  registered assume il valore 2, altrimenti il valore 1.
+---------------------------------------------------------------------------*/
 void activation_key()
 {
    int i;
    dword crc2, crc3, crc10, crc;
 
-   crc2 = 0x7FE50189L;
-   for (i=0; i<strlen(sysop);i++)
-      crc2 = UpdateCRC ((byte)sysop[i], crc2);
+   if (alias[0].point) {
+      crc = 0x6FE41197L;
+      for (i=0; i<strlen(sysop);i++)
+         crc = UpdateCRC ((byte)sysop[i], crc);
 
-   crc3 = 0x74E40291L;
-   for (i=0; i<strlen(sysop);i++)
-      crc3 = UpdateCRC ((byte)sysop[i], crc3);
+      registered = 0;
 
-   crc10 = 0x7FA45109L;
-   for (i=0; i<strlen(sysop);i++)
-      crc10 = UpdateCRC ((byte)sysop[i], crc10);
+      if (keycode != crc || line_offset > 1)
+         return;
 
-   crc = 0x7FE40199L;
-   for (i=0; i<strlen(sysop);i++)
-      crc = UpdateCRC ((byte)sysop[i], crc);
+      reg_prompt = "  [Registered]";
+      registered = 2;
+   }
+   else {
+      crc2 = 0x7FE50189L;
+      for (i=0; i<strlen(sysop);i++)
+         crc2 = UpdateCRC ((byte)sysop[i], crc2);
 
-   registered = 0;
+      crc3 = 0x74E40291L;
+      for (i=0; i<strlen(sysop);i++)
+         crc3 = UpdateCRC ((byte)sysop[i], crc3);
 
-   if (keycode == crc2 && line_offset > 2)
-      return;
+      crc10 = 0x7FA45109L;
+      for (i=0; i<strlen(sysop);i++)
+         crc10 = UpdateCRC ((byte)sysop[i], crc10);
 
-   if (keycode == crc3 && line_offset > 3)
-      return;
+      crc = 0x7FE40199L;
+      for (i=0; i<strlen(sysop);i++)
+         crc = UpdateCRC ((byte)sysop[i], crc);
 
-   if (keycode == crc10 && line_offset > 10)
-      return;
+      registered = 0;
 
-   if (keycode != crc2 && keycode != crc3 && keycode != crc10 && keycode != crc)
-      return;
+      if (keycode == crc2 && line_offset > 2)
+         return;
 
-   reg_prompt = "[Registered]";
-   registered = 1;
+      if (keycode == crc3 && line_offset > 3)
+         return;
+
+      if (keycode == crc10 && line_offset > 10)
+         return;
+
+      if (keycode != crc2 && keycode != crc3 && keycode != crc10 && keycode != crc)
+         return;
+
+      reg_prompt = "  [Registered]";
+      registered = 1;
+   }
 }
 
+/*---------------------------------------------------------------------------
+   void mtask_find (void)
+
+   Cerca di identificare il multitasker sotto cui e' installato il programma.
+   Per ogni multitasker esiste una routine di time_release appropriata per
+   dare agli altri task il tempo CPU non usato da questo task.
+---------------------------------------------------------------------------*/
 void mtask_find ()
 {
    char buffer[80];
@@ -113,8 +141,7 @@ void mtask_find ()
    have_tv = 0;
    have_ddos = 0;
 
-   if ((have_dv = dv_get_version()) != 0)
-   {
+   if ((have_dv = dv_get_version()) != 0) {
       sprintf(buffer, "* DESQview %d.%02d detected\n",have_dv >> 8, have_dv & 0xff);
       wputs(buffer);
       _vinfo.dvexist = 1;
@@ -150,15 +177,13 @@ void write_sysinfo()
    write(fd, (char *)&sysinfo, sizeof(struct _sysinfo));
 
    pos = tell (fd);
-   while (read(fd, (char *)&lt, sizeof(struct _linestat)) == sizeof (struct _linestat))
-   {
+   while (read(fd, (char *)&lt, sizeof(struct _linestat)) == sizeof (struct _linestat)) {
       if (lt.line == line_offset)
          break;
       pos = tell (fd);
    }
 
-   if (lt.line == line_offset)
-   {
+   if (lt.line == line_offset) {
       lseek (fd, pos, SEEK_SET);
       write (fd, (char *)&linestat, sizeof(struct _linestat));
    }
@@ -177,8 +202,7 @@ void read_sysinfo()
 
    sprintf (filename, "%sSYSINFO.DAT", sys_path);
    fd = shopen(filename, O_BINARY|O_RDWR);
-   if (fd == -1)
-   {
+   if (fd == -1) {
       fd = cshopen(filename, O_BINARY|O_RDWR|O_CREAT,S_IREAD|S_IWRITE);
       memset((char *)&sysinfo, 0, sizeof(struct _sysinfo));
       status_line ("!Creating SYSINFO.DAT file");
@@ -193,8 +217,7 @@ void read_sysinfo()
       if (linestat.line == line_offset)
          break;
 
-   if (linestat.line != line_offset)
-   {
+   if (linestat.line != line_offset) {
       tempo=time(0);
       tim=localtime(&tempo);
       sprintf(linestat.startdate,"%02d-%02d-%02d",tim->tm_mon+1,tim->tm_mday,tim->tm_year % 100);
@@ -204,8 +227,7 @@ void read_sysinfo()
 
    close (fd);
 
-   if (sysinfo.pwd[0])
-   {
+   if (sysinfo.pwd[0]) {
       strcode (sysinfo.pwd, "YG&%FYTF%$RTD");
       password = sysinfo.pwd;
       locked = 1;
@@ -226,51 +248,6 @@ void firing_up()
                    tim->tm_mday, mtext[tim->tm_mon], tim->tm_year % 100);
    wputs(buffer);
    wputs("* Copyright (c) 1989-92 by Marco Maccaferri. All rights reserved.\n");
-}
-
-void get_down(errlev, flag)
-int errlev, flag;
-{
-   struct tm *tim;
-   long tempo;
-
-   tempo=time(0);
-   tim=localtime(&tempo);
-   write_sysinfo();
-
-   if (!frontdoor) {
-      status_line(":End");
-      fprintf(logf, "\n");
-   }
-
-   fclose(logf);
-
-   cclrscrn(LGREY|_BLACK);
-
-   if (flag == 1)
-      printf("* Exit at start of event with errorlevel %d\n", errlev);
-   else if (flag == 2)
-      printf("* Exit after caller with errorlevel %d\n", errlev);
-   else if (flag == 3)
-      printf("* Exit with errorlevel %d\n", errlev);
-
-   printf("* LoraBBS down at %d:%02d %d-%s-%02d\n",
-               tim->tm_hour, tim->tm_min,
-               tim->tm_mday, mtext[tim->tm_mon], tim->tm_year % 100);
-
-   if (!registered)
-      printf("* Don't forget to register.\n");
-
-   gotoxy_(20,0);
-   printf(msgtxt[M_THANKS], VERSION);
-
-   if (!local_mode) {
-      DTR_OFF();
-      MDM_DISABLE();
-   }
-
-   showcur();
-   exit ((errlev == -1) ? 0 : errlev);
 }
 
 static int fossil_inf(finfo)
@@ -314,15 +291,18 @@ void status_window()
 
 void fossil_version()
 {
-   char buffer[80];
    struct _fossil_info finfo;
 
    fossil_inf(&finfo);
+   m_print(msgtxt[M_FOSSIL_TYPE], finfo.id);
+}
 
-   change_attr(LCYAN|_BLACK);
-   sprintf(buffer, msgtxt[M_FOSSIL_TYPE], finfo.id);
-   m_print("\n");
-   m_print(buffer);
+void fossil_version2()
+{
+   struct _fossil_info finfo;
+
+   fossil_inf(&finfo);
+   m_print(bbstxt[B_FOSSIL_INFO], finfo.id);
 }
 
 void terminating_call()
@@ -341,14 +321,15 @@ void terminating_call()
    update_user();
 }
 
+/*
 static void virtual_screen()
 {
    int vbase=(&directvideo)[-1], vvirtual;
    _ES=vbase, _DI=0, _AX=0xfe00, __int__(0x10), vvirtual=_ES;
-   if(vbase!=vvirtual)
-   {
+   if(vbase!=vvirtual) {
       (&directvideo)[-1]=vvirtual;
       _vinfo.videoseg=vvirtual;
    }
 }
+*/
 

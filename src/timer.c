@@ -15,6 +15,34 @@
 #include "timer.h"
 #include "prototyp.h"
 
+void dostime (int *hour, int *min, int *sec, int *hdths)
+{
+   union REGS r;
+
+   r.h.ah = 0x2c;
+
+   (void) intdos (&r, &r);
+
+   *hour  = r.h.ch;
+   *min   = r.h.cl;
+   *sec   = r.h.dh;
+   *hdths = r.h.dl;
+}
+
+void dosdate (int *month, int *mday, int *year, int *wday)
+{
+   union REGS r;
+
+   r.h.ah = 0x2a;
+
+   (void) intdos (&r, &r);
+
+   *month  = r.x.bx;
+   *mday   = r.x.dx;
+   *year   = r.x.cx;
+   *wday   = r.x.ax;
+}
+
 /*
 	long timerset (t)
 	unsigned int t;

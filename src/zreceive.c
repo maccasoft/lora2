@@ -198,7 +198,7 @@ register int length;
                   return ERROR;
                   }
 
-               RxCount = length - (endpos - buf);
+               RxCount = length - (int) (endpos - buf);
                return d;
 
             case GOTCAN:
@@ -304,7 +304,7 @@ register int length;
                   return ERROR;
                   }
 
-               RxCount = length - (endpos - buf);
+               RxCount = length - (int) (endpos - buf);
                return d;
 
             case GOTCAN:

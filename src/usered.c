@@ -52,6 +52,9 @@
 #define USR_ACTION     31
 #define USR_EXPIRE     32
 #define USR_EXPBY      33
+#define USR_TIMEBANK   34
+#define USR_KBANK      35
+#define USR_VOTES      36
 #define USR_ALL        10240
 
 void DrawUserScreen (void);
@@ -65,7 +68,7 @@ void PurgeUsers (void);
 
 void main (void)
 {
-   int fd, c, true, cu, nu, mainview, x, y;
+   int fd, c, true, cu, nu, mainview, x, y, wh;
    char stringa[80], visible, searchname[36];
    long pos, oldpos;
    struct _usr tusr, backup;
@@ -97,16 +100,14 @@ void main (void)
    true = 1;
    strcpy (searchname, "");
 
-   while (true)
-   {
+   while (true) {
       hidecur ();
 
       c = getch ();
       if (c == 0)
          c = getch ();
 
-      switch (toupper(c))
-      {
+      switch (toupper(c)) {
          case '~':
             searchname[0] = '\0';
             winpbeg (LGREEN|_BLUE, LGREEN|_BLUE);
@@ -120,22 +121,29 @@ void main (void)
             SaveReadUser (fd, pos, -1L, &tusr);
             lseek (fd, 0L, SEEK_SET);
 
-            while (read (fd, (char *)&tusr, sizeof (struct _usr)) == sizeof (struct _usr))
-            {
+            wh = wopen (10, 25, 14, 55, 0, LRED|_BLACK, LGREY|_BLACK);
+            wactiv (wh);
+            wcenters (1, YELLOW|BLACK|BLINK, "Search in progress ...");
+
+            while (read (fd, (char *)&tusr, sizeof (struct _usr)) == sizeof (struct _usr)) {
                if ( !strncmpi(tusr.name, searchname, strlen (searchname)) )
                   break;
             }
 
-            if (tell(fd) == filelength (fd))
-            {
+            if (tell(fd) == filelength (fd)) {
                pos = SaveReadUser (fd, -1L, oldpos, &tusr);
+               wcenters (1, YELLOW|BLACK, "    Search failed     ");
                printf ("\a");
+               getch ();
+               wclose ();
+               wunlink (wh);
                DisplayUserParameters (USR_ALL, &tusr, nu, cu);
             }
-            else
-            {
+            else {
                pos = tell (fd) - sizeof (struct _usr);
                cu = (int)(pos / sizeof (struct _usr));
+               wclose ();
+               wunlink (wh);
                DisplayUserParameters (USR_ALL, &tusr, nu, cu);
             }
             break;
@@ -149,22 +157,29 @@ void main (void)
             oldpos = pos;
             SaveReadUser (fd, pos, -1L, &tusr);
 
-            while (read (fd, (char *)&tusr, sizeof (struct _usr)) == sizeof (struct _usr))
-            {
+            wh = wopen (10, 25, 14, 55, 0, LRED|_BLACK, LGREY|_BLACK);
+            wactiv (wh);
+            wcenters (1, YELLOW|BLACK|BLINK, "Search in progress ...");
+
+            while (read (fd, (char *)&tusr, sizeof (struct _usr)) == sizeof (struct _usr)) {
                if ( !strncmpi(tusr.name, searchname, strlen (searchname)) )
                   break;
             }
 
-            if (tell(fd) == filelength (fd))
-            {
+            if (tell(fd) == filelength (fd)) {
                pos = SaveReadUser (fd, -1L, oldpos, &tusr);
+               wcenters (1, YELLOW|BLACK, "    Search failed     ");
                printf ("\a");
+               getch ();
+               wclose ();
+               wunlink (wh);
                DisplayUserParameters (USR_ALL, &tusr, nu, cu);
             }
-            else
-            {
+            else {
                pos = tell (fd) - sizeof (struct _usr);
                cu = (int)(pos / sizeof (struct _usr));
+               wclose ();
+               wunlink (wh);
                DisplayUserParameters (USR_ALL, &tusr, nu, cu);
             }
             break;
@@ -173,23 +188,167 @@ void main (void)
             tusr.deleted ^= 1;
             DisplayUserParameters (USR_ALL, &tusr, nu, cu);
             break;
+         case '/':
+            c = 0;
+
+            wh = wopen (9, 10, 17, 32, 0, LRED|_BLACK, LGREY|_BLACK);
+            wactiv (wh);
+
+            while (c != 0x1B) {
+               hidecur ();
+
+               wprints (0,  1, LCYAN|BLACK,"Time");
+               wprintc (0,  1, YELLOW|BLACK,'T');
+               sprintf(stringa, "%-5d", tusr.ovr_class.max_call);
+               wprints (0, 15, LGREEN|_BLACK, stringa);
+
+               wprints (1,  1, LCYAN|BLACK,"Cume");
+               wprintc (1,  1, YELLOW|BLACK,'C');
+               sprintf(stringa, "%-5d", tusr.ovr_class.max_time);
+               wprints (1, 15, LGREEN|_BLACK, stringa);
+
+               wprints (2,  1, LCYAN|BLACK,"file Limit");
+               wprintc (2,  6, YELLOW|BLACK,'L');
+               sprintf(stringa, "%-5d", tusr.ovr_class.max_dl);
+               wprints (2, 15, LGREEN|_BLACK, stringa);
+
+               wprints (3,  1, LCYAN|BLACK,"file Ratio");
+               wprintc (3,  6, YELLOW|BLACK,'R');
+               sprintf(stringa, "%-5d", tusr.ovr_class.ratio);
+               wprints (3, 15, LGREEN|_BLACK, stringa);
+
+               wprints (4,  1, LCYAN|BLACK,"Start ratio");
+               wprintc (4,  1, YELLOW|BLACK,'S');
+               sprintf(stringa, "%-5d", tusr.ovr_class.start_ratio);
+               wprints (4, 15, LGREEN|_BLACK, stringa);
+
+               wprints (5,  1, LCYAN|BLACK,"logon Baud");
+               wprintc (5,  7, YELLOW|BLACK,'B');
+               sprintf(stringa, "%-5d", tusr.ovr_class.min_baud);
+               wprints (5, 15, LGREEN|_BLACK, stringa);
+
+               wprints (6,  1, LCYAN|BLACK,"Download baud");
+               wprintc (6,  1, YELLOW|BLACK,'D');
+               sprintf(stringa, "%-5d", tusr.ovr_class.min_file_baud);
+               wprints (6, 15, LGREEN|_BLACK, stringa);
+
+               c = getch ();
+               if (c == 0)
+                  c = getch ();
+
+               switch (toupper(c)) {
+                  case 0x1B:
+                     wclose ();
+                     wunlink (wh);
+                     break;
+                  case '\"':
+                     memcpy ((char *)&tusr, (char *)&backup, sizeof (struct _usr));
+                     break;
+                  case 'T':
+                     sprintf (stringa, "%u", tusr.ovr_class.max_call);
+                     winpbeg (LGREEN|_BLUE, LGREEN|_BLUE);
+                     winpdef (6, 15, stringa, "99999", '9', 2, NULL, 0);
+                     winpread ();
+                     strtrim (stringa);
+                     if (stringa[0]) {
+                        memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
+                        tusr.ovr_class.max_call = atoi (stringa);
+                     }
+                     break;
+                  case 'C':
+                     sprintf (stringa, "%u", tusr.ovr_class.max_time);
+                     winpbeg (LGREEN|_BLUE, LGREEN|_BLUE);
+                     winpdef (6, 15, stringa, "99999", '9', 2, NULL, 0);
+                     winpread ();
+                     strtrim (stringa);
+                     if (stringa[0]) {
+                        memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
+                        tusr.ovr_class.max_time = atoi (stringa);
+                     }
+                     break;
+                  case 'L':
+                     sprintf (stringa, "%u", tusr.ovr_class.max_dl);
+                     winpbeg (LGREEN|_BLUE, LGREEN|_BLUE);
+                     winpdef (6, 15, stringa, "99999", '9', 2, NULL, 0);
+                     winpread ();
+                     strtrim (stringa);
+                     if (stringa[0]) {
+                        memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
+                        tusr.ovr_class.max_dl = atoi (stringa);
+                     }
+                     break;
+                  case 'R':
+                     sprintf (stringa, "%u", tusr.ovr_class.ratio);
+                     winpbeg (LGREEN|_BLUE, LGREEN|_BLUE);
+                     winpdef (6, 15, stringa, "99999", '9', 2, NULL, 0);
+                     winpread ();
+                     strtrim (stringa);
+                     if (stringa[0]) {
+                        memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
+                        tusr.ovr_class.ratio = atoi (stringa);
+                     }
+                     break;
+                  case 'S':
+                     sprintf (stringa, "%u", tusr.ovr_class.start_ratio);
+                     winpbeg (LGREEN|_BLUE, LGREEN|_BLUE);
+                     winpdef (6, 15, stringa, "99999", '9', 2, NULL, 0);
+                     winpread ();
+                     strtrim (stringa);
+                     if (stringa[0]) {
+                        memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
+                        tusr.ovr_class.start_ratio = atoi (stringa);
+                     }
+                     break;
+                  case 'B':
+                     sprintf (stringa, "%u", tusr.ovr_class.min_baud);
+                     winpbeg (LGREEN|_BLUE, LGREEN|_BLUE);
+                     winpdef (6, 15, stringa, "99999", '9', 2, NULL, 0);
+                     winpread ();
+                     strtrim (stringa);
+                     if (stringa[0]) {
+                        memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
+                        tusr.ovr_class.min_baud = atoi (stringa);
+                     }
+                     break;
+                  case 'D':
+                     sprintf (stringa, "%u", tusr.ovr_class.min_file_baud);
+                     winpbeg (LGREEN|_BLUE, LGREEN|_BLUE);
+                     winpdef (6, 15, stringa, "99999", '9', 2, NULL, 0);
+                     winpread ();
+                     strtrim (stringa);
+                     if (stringa[0]) {
+                        memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
+                        tusr.ovr_class.min_file_baud = atoi (stringa);
+                     }
+                     break;
+               }
+            }
+
+            c = 0;
+            break;
          case '\"':
             memcpy ((char *)&tusr, (char *)&backup, sizeof (struct _usr));
             DisplayUserParameters (USR_ALL, &tusr, nu, cu);
             break;
-         case '/':
-            DrawUserScreen ();
-            DisplayUserParameters (USR_ALL, &tusr, nu, cu);
-            break;
          case '|':
+            SaveReadUser (fd, pos, 0L, &tusr);
             close (fd);
+
+            wh = wopen (10, 25, 14, 55, 0, LRED|_BLACK, LGREY|_BLACK);
+            wactiv (wh);
+            wcenters (1, YELLOW|BLACK|BLINK, "Purging users ...");
+
             PurgeUsers ();
+
             fd = shopen ("USERS.BBS", O_RDWR|O_BINARY);
-            pos = SaveReadUser (fd, -1L, 0L, &tusr);
 
             nu = (int)(filelength(fd) / sizeof (struct _usr)) - 1;
+            cu = 0;
 
-            memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
+            wclose ();
+            wunlink (wh);
+
+            pos = SaveReadUser (fd, -1, 0L, &tusr);
             DisplayUserParameters (USR_ALL, &tusr, nu, cu);
             break;
          case '+':
@@ -202,8 +361,7 @@ void main (void)
             }
             break;
          case '-':
-            if (cu > 0)
-            {
+            if (cu > 0) {
                cu--;
                pos = SaveReadUser (fd, pos, pos - sizeof (struct _usr), &tusr);
                DisplayUserParameters (USR_ALL, &tusr, nu, cu);
@@ -295,6 +453,7 @@ void main (void)
             }
             DisplayUserParameters (USR_UPLOADS, &tusr, nu, cu);
             break;
+/*
          case 'G':
             sprintf (stringa, "%d", tusr.sig);
             winpbeg (LGREEN|_BLUE, LGREEN|_BLUE);
@@ -304,10 +463,11 @@ void main (void)
             if (stringa[0])
             {
                memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
-               tusr.sig = atol (stringa);
+               tusr.sig = atoi (stringa);
             }
             DisplayUserParameters (USR_SIG, &tusr, nu, cu);
             break;
+*/
          case 'L':
             sprintf (stringa, "%u", tusr.dnldl);
             winpbeg (LGREEN|_BLUE, LGREEN|_BLUE);
@@ -346,6 +506,42 @@ void main (void)
                tusr.msg = atoi (stringa);
             }
             DisplayUserParameters (USR_MSG, &tusr, nu, cu);
+            break;
+         case 'E':
+            sprintf (stringa, "%u", tusr.votes);
+            winpbeg (LGREEN|_BLUE, LGREEN|_BLUE);
+            winpdef (11, 14, stringa, "99999", '9', 2, NULL, 0);
+            winpread ();
+            strtrim (stringa);
+            if (stringa[0]) {
+               memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
+               tusr.votes = atoi (stringa);
+            }
+            DisplayUserParameters (USR_VOTES, &tusr, nu, cu);
+            break;
+         case 'I':
+            sprintf (stringa, "%u", tusr.account);
+            winpbeg (LGREEN|_BLUE, LGREEN|_BLUE);
+            winpdef (12, 14, stringa, "99999", '9', 2, NULL, 0);
+            winpread ();
+            strtrim (stringa);
+            if (stringa[0]) {
+               memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
+               tusr.account = atoi (stringa);
+            }
+            DisplayUserParameters (USR_TIMEBANK, &tusr, nu, cu);
+            break;
+         case '?':
+            sprintf (stringa, "%u", tusr.f_account);
+            winpbeg (LGREEN|_BLUE, LGREEN|_BLUE);
+            winpdef (13, 14, stringa, "99999", '9', 2, NULL, 0);
+            winpread ();
+            strtrim (stringa);
+            if (stringa[0]) {
+               memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
+               tusr.f_account = atoi (stringa);
+            }
+            DisplayUserParameters (USR_KBANK, &tusr, nu, cu);
             break;
          case 'F':
             sprintf (stringa, "%u", tusr.files);
@@ -423,11 +619,6 @@ void main (void)
             memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
             tusr.color ^= 1;
             DisplayUserParameters (USR_COLOR, &tusr, nu, cu);
-            break;
-         case 'I':
-            memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
-            tusr.ibmset ^= 1;
-            DisplayUserParameters (USR_IBMSET, &tusr, nu, cu);
             break;
          case 'X':
             memcpy ((char *)&backup, (char *)&tusr, sizeof (struct _usr));
@@ -560,7 +751,7 @@ void main (void)
 
 void DrawUserScreen (void)
 {
-   wcenters (0, WHITE|BLACK, "LoraBBS v2.10 User Editor");
+   wcenters (0, WHITE|BLACK, "LoraBBS v2.20 User Editor");
    prints (1,  0, LRED|BLACK, "컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴");
 
    prints (3,  0, LCYAN|BLACK,"  user number");
@@ -571,16 +762,16 @@ void DrawUserScreen (void)
    prints (8,  0, LCYAN|BLACK,";phone number                    )data phone");
    prints (9,  0, LCYAN|BLACK,"   priV level                   Time on-line                 # of calls");
    prints (10, 0, LCYAN|BLACK,"      Uploads      K                Dl (all)      K          dL (today)      K");
-   prints (11, 0, LCYAN|BLACK,"                                        Keys");
-   prints (12, 0, LCYAN|BLACK,"                               last Msg.area             last File area");
-   prints (13, 0, LCYAN|BLACK,"                                       >nerd              _in user list");
+   prints (11, 0, LCYAN|BLACK,"        votEs                           Keys");
+   prints (12, 0, LCYAN|BLACK," tIme in bank                  last Msg.area             last File area");
+   prints (13, 0, LCYAN|BLACK,"  ?dl in bank                          >nerd              _in user list");
    prints (14, 0, LCYAN|BLACK,"       cRedit       cents                                      :hotkeys");
    prints (15, 0, LCYAN|BLACK,"      Hcolors                           taBs                     &nulls");
    prints (16, 0, LCYAN|BLACK,"                                  videO mode                 eXt.editor");
    prints (17, 0, LCYAN|BLACK,"!more prompt                  fullScreen msg                *scrn.clear");
    prints (18, 0, LCYAN|BLACK," $scrn.width                     %scrn.lngth                           ");
    prints (19, 0, LRED|BLACK, "컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴");
-   prints (20, 0, LCYAN|BLACK," /)Redraw screen     =)Show Password     ~)Find user         ^)Delete user");
+   prints (20, 0, LCYAN|BLACK," /)Override limits   =)Show Password     ~)Find user         ^)Delete user");
    prints (21, 0, LCYAN|BLACK," +)Next user         A)dd user           `)Find next usr     |)Purge users");
    prints (22, 0, LCYAN|BLACK," -)Prior user        Q)uit           Enter)Goto user #x      \")Undo last chg");
 
@@ -596,9 +787,12 @@ void DrawUserScreen (void)
    printc (10,  6, YELLOW|BLACK,'U');
    printc (10, 36, YELLOW|BLACK,'D');
    printc (10, 62, YELLOW|BLACK,'L');
+   printc (11, 11, YELLOW|BLACK,'E');
    printc (11, 40, YELLOW|BLACK,'K');
+   printc (12,  2, YELLOW|BLACK,'I');
    printc (12, 36, YELLOW|BLACK,'M');
    printc (12, 62, YELLOW|BLACK,'F');
+   printc (13,  2, YELLOW|BLACK,'?');
    printc (13, 39, YELLOW|BLACK,'>');
    printc (13, 58, YELLOW|BLACK,'_');
    printc (14,  8, YELLOW|BLACK,'R');
@@ -693,8 +887,7 @@ int nu, cu;
       sprintf(buffer, "%5ld", sysusr->upld);
       prints (10, 14, LGREEN|_BLACK, buffer);
    }
-   if (which == USR_ALL || which == USR_DOWNLOADS)
-   {
+   if (which == USR_ALL || which == USR_DOWNLOADS) {
       sprintf(buffer, "%5ld", sysusr->dnld);
       prints (10, 45, LGREEN|_BLACK, buffer);
    }
@@ -702,9 +895,17 @@ int nu, cu;
       sprintf(buffer, "%5u", sysusr->dnldl);
       prints (10, 72, LGREEN|_BLACK, buffer);
    }
+   if (which == USR_ALL || which == USR_VOTES) {
+      sprintf(buffer, "%5d", sysusr->votes);
+      prints (11, 14, LGREEN|_BLACK, buffer);
+   }
    if (which == USR_ALL || which == USR_FLAGS) {
       SetFlags (buffer, sysusr->flags);
       prints (11, 45, LGREEN|_BLACK, buffer);
+   }
+   if (which == USR_ALL || which == USR_TIMEBANK) {
+      sprintf(buffer, "%5d", sysusr->account);
+      prints (12, 14, LGREEN|_BLACK, buffer);
    }
    if (which == USR_ALL || which == USR_MSG) {
       sprintf(buffer, "%-5d", sysusr->msg);
@@ -713,6 +914,10 @@ int nu, cu;
    if (which == USR_ALL || which == USR_FILES) {
       sprintf(buffer, "%-5d", sysusr->files);
       prints (12, 72, LGREEN|_BLACK, buffer);
+   }
+   if (which == USR_ALL || which == USR_KBANK) {
+      sprintf(buffer, "%5d", sysusr->f_account);
+      prints (13, 14, LGREEN|_BLACK, buffer);
    }
    if (which == USR_ALL || which == USR_NERD)
       prints (13, 45, LGREEN|_BLACK, sysusr->nerd ? "YES" : "NO ");

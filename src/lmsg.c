@@ -41,7 +41,7 @@ char *argv[];
    int i, xlink, unknow, renum, pack, purge, overwrite;
    int link, stats, index;
 
-   printf("\nLMSG; LoraBBS 2.10 Message maintenance utility\n");
+   printf("\nLMSG; LoraBBS 2.20 Message maintenance utility\n");
    printf("      Copyright (c) 1991-92 by Marco Maccaferri, All Rights Reserved\n\n");
 
    xlink = unknow = renum = pack = purge = overwrite = 0;
@@ -111,7 +111,7 @@ char *argv[];
       if (renum && !purge && !index) {
          Renum_Fido_Areas ();
          Renum_Quick_Areas ();
-         Renum_Squish_Areas ();
+//         Renum_Squish_Areas ();
       }
 
       printf(" * Done.\n\n");
@@ -237,6 +237,8 @@ void Renum_Quick_Areas ()
    struct _msgidx msgidx;
    struct _msginfo msginfo;
 
+   printf(" * Renumber QuickBBS messages\n");
+
    msgnum = 1;
 
    sprintf (filename, "%sMSGHDR.BBS", fido_msgpath);
@@ -339,7 +341,7 @@ void Purge_Quick_Areas (renum)
       exit (1);
 
    while ( read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA ) {
-      if ( !tsys.quick_board )
+      if ( tsys.quick_board < 1 || tsys.quick_board > 200)
          continue;
 
       max_msgs[tsys.quick_board-1] = tsys.max_msgs;
@@ -395,33 +397,34 @@ void Purge_Quick_Areas (renum)
 
    while (read(fd, (char *)&msghdr, sizeof (struct _msghdr)) == sizeof (struct _msghdr)) {
       flag = 0;
+      if (msghdr.board >= 1 && msghdr.board <= 200) {
+         pnum[msghdr.board-1]++;
 
-      pnum[msghdr.board-1]++;
-
-      if (max_msgs[msghdr.board-1] && msginfo.totalonboard[msghdr.board-1] > max_msgs[msghdr.board-1]) {
-         msghdr.msgattr |= Q_RECKILL;
-         flag = 1;
-      }
-      else {
-         sscanf(&msghdr.date[1], "%02d-%02d-%02d", &mo, &dy, &yr);
-
-         day_mess = 365 * yr;
-         mo--;
-         for (m = 0; m < mo; m++)
-            day_mess += month[m];
-         day_mess += dy;
-
-         days = (int)(day_now - day_mess);
-
-         if (max_age[msghdr.board-1] && days > max_age[msghdr.board-1]) {
+         if (max_msgs[msghdr.board-1] && msginfo.totalonboard[msghdr.board-1] > max_msgs[msghdr.board-1]) {
             msghdr.msgattr |= Q_RECKILL;
             flag = 1;
          }
-         else if (age_rcvd[msghdr.board-1] &&
-          ( (msghdr.msgattr & Q_PRIVATE) && (msghdr.msgattr & Q_RECEIVED) ) &&
-          days > age_rcvd[msghdr.board-1]) {
-            msghdr.msgattr |= Q_RECKILL;
-            flag = 1;
+         else {
+            sscanf(&msghdr.date[1], "%02d-%02d-%02d", &mo, &dy, &yr);
+
+            day_mess = 365 * yr;
+            mo--;
+            for (m = 0; m < mo; m++)
+               day_mess += month[m];
+            day_mess += dy;
+
+            days = (int)(day_now - day_mess);
+
+            if (max_age[msghdr.board-1] && days > max_age[msghdr.board-1]) {
+               msghdr.msgattr |= Q_RECKILL;
+               flag = 1;
+            }
+            else if (age_rcvd[msghdr.board-1] &&
+             ( (msghdr.msgattr & Q_PRIVATE) && (msghdr.msgattr & Q_RECEIVED) ) &&
+             days > age_rcvd[msghdr.board-1]) {
+               msghdr.msgattr |= Q_RECKILL;
+               flag = 1;
+            }
          }
       }
 
@@ -447,6 +450,9 @@ void Purge_Quick_Areas (renum)
 
          write (fdidx, (char *)&msgidx, sizeof (struct _msgidx));
       }
+
+//      sprintf (filename, "%d", msghdr.msgnum);
+//      printf ("%s%*s", filename, strlen (filename), "\b\b\b\b\b\b\b");
 
       pos = tell (fd);
       msgnum++;
@@ -474,7 +480,7 @@ void Purge_Quick_Areas (renum)
       exit (1);
 
    while ( read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA) == SIZEOF_MSGAREA ) {
-      if ( !tsys.quick_board )
+      if ( tsys.quick_board < 1 || tsys.quick_board > 200)
          continue;
       cnum[tsys.quick_board-1] = tsys.msg_num;
    }
@@ -601,6 +607,8 @@ void Renum_Fido_Areas ()
    fd = open(filename, O_RDONLY|O_BINARY);
    if (fd == -1)
       exit (1);
+
+   printf(" * Renumber Fido *.MSG messages\n");
 
    first = last = 0;
 
@@ -1190,7 +1198,7 @@ int renum;
          kill = msgnum - tsys.max_msgs;
 
          for (i = first; i <= last; i++) {
-            MsgKillMsg (sq_ptr, i);
+            MsgKillMsg (sq_ptr, (dword)1);
 
             if (--kill <= 0)
                break;
@@ -1274,14 +1282,19 @@ int max_age, age_rcvd, first, last;
 
       days = (int)(day_now - day_mess);
 
-      if ( days > max_age && max_age != 0 )
-         MsgKillMsg (sq_ptr, i);
-
-      if ( ((xmsg.attr & MSGREAD) && (xmsg.attr & MSGPRIVATE)) &&
-           days > age_rcvd && age_rcvd != 0)
-         MsgKillMsg (sq_ptr, i);
+      if ( days > max_age && max_age != 0 ) {
+         MsgKillMsg (sq_ptr, (dword)i);
+         i--;
+         last--;
+      }
+      else if ( ((xmsg.attr & MSGREAD) && (xmsg.attr & MSGPRIVATE)) && days > age_rcvd && age_rcvd != 0) {
+         MsgKillMsg (sq_ptr, (dword)i);
+         i--;
+         last--;
+      }
    }
 }
+
 
 void Renum_Squish_Areas ()
 {

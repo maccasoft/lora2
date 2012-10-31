@@ -24,6 +24,18 @@ static void create_quickbase_file (void);
 static int no_dups(int, int, int);
 void display_outbound_info (int);
 
+int node_sort_func (const void *a1, const void *b1)
+{
+   struct _call_list *a, *b;
+
+   a = (struct _call_list *)a1;
+   b = (struct _call_list *)b1;
+
+   if (a->zone != b->zone)  return (a->zone - b->zone);
+   if (a->net != b->net)    return (a->net - b->net);
+   return (a->node - b->node);
+}
+
 void get_call_list()
 {
    FILE *fp;
@@ -41,7 +53,7 @@ void get_call_list()
 
    max_call = 0;
 
-   strcpy (filename, hold_area);
+   strcpy (filename, HoldAreaNameMunge (alias[0].zone));
    filename[strlen(filename) - 1] = '\0';
    strcpy (outbase, filename);
    strcat (filename, ".*");
@@ -76,9 +88,8 @@ void get_call_list()
 
                   if (blk.ff_name[m-1] == 'T' && blk.ff_name[m-2] == 'U')
                      call_list[i].size += blk.ff_fsize;
-
-                  if (blk.ff_name[m-1] == 'O' && blk.ff_name[m-2] == 'L') {
-                     sprintf(filename,"%s%s",hold_area,blk.ff_name);
+                  else if (blk.ff_name[m-1] == 'O' && blk.ff_name[m-2] == 'L') {
+                     sprintf(filename,"%s%s",HoldAreaNameMunge (call_list[i].zone),blk.ff_name);
                      fp = fopen(filename,"rt");
                      while (fgets(filename, 99, fp) != NULL) {
                         if (filename[strlen(filename)-1] == '\n')
@@ -118,6 +129,7 @@ void get_call_list()
             } while(!findnext(&blk));
       } while (!findnext (&blko));
 
+   qsort (&call_list[0], max_call, sizeof (struct _call_list), node_sort_func);
    next_call = 0;
 }
 
@@ -216,7 +228,7 @@ void f1_status()
 
    strcpy(jn, usr.name);
    jn[22] = '\0';
-   sprintf(j, "%s of %s at %d baud", jn,
+   sprintf(j, "%s from %s at %d baud", jn,
                                      usr.city,
                                      local_mode ? 0 : rate);
    wprints(0,1,BLACK|_LGREY,j);
@@ -391,9 +403,12 @@ void f4_status()
    wprints(0,1,BLACK|_LGREY,j);
 
    if (locked && password != NULL && registered)
-      wprints(1,44,BLACK|_LGREY,"[LOCK]");
+      wprints(1,37,BLACK|_LGREY,"[LOCK]");
 
-   wprints(1,54,BLACK|_LGREY,"[F9]=Help");
+   wprints(1,44,BLACK|_LGREY,"[F9]=Help");
+
+   sprintf(j, "[Line: %02d]", line_offset);
+   wprints(1,55,BLACK|_LGREY,j);
 
    sc = time_to_next (0);
    if (next_event >= 0)
@@ -423,6 +438,22 @@ void f9_status()
    function_active = 9;
 }
 
+#define MAXDUPES     1000
+#define DUPE_HEADER  (48 + 2 + 2 + 4)
+#define DUPE_FOOTER  (MAXDUPES * 4)
+
+struct _dupecheck {
+   char areatag[48];
+   int  dupe_pos;
+   int  max_dupes;
+   long area_pos;
+};
+
+struct _dupeindex {
+   char areatag[48];
+   long area_pos;
+};
+
 void system_crash()
 {
    int fd, fdidx;
@@ -432,6 +463,8 @@ void system_crash()
    struct stat statbuf, statidx;
    struct _usr usr;
    struct _usridx usridx;
+   struct _dupeindex dupeindex;
+   struct _dupecheck dupecheck;
 
    sprintf(filename, USERON_NAME, sys_path);
    fd = shopen(filename, O_RDWR|O_BINARY);
@@ -441,10 +474,8 @@ void system_crash()
    sprintf (filename, "%sLORAINFO.T%02X", sys_path, line_offset);
    unlink (filename);
 
-   while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron))
-   {
-      if (useron.line == line_offset && useron.name[0])
-      {
+   while (read(fd, (char *)&useron, sizeof(struct _useron)) == sizeof(struct _useron)) {
+      if (useron.line == line_offset && useron.name[0]) {
          status_line("!System crash detected on task %d", line_offset);
          status_line("!User on-line at time of crash was %s", useron.name);
 
@@ -465,15 +496,19 @@ void system_crash()
       fd = cshopen (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
    fstat (fd, &statbuf);
 
+   if ((statbuf.st_size % (long)sizeof (struct _usr)) != 0L) {
+      close (fd);
+      status_line ("!Error in %s file", filename);
+      get_down (1, 3);
+   }
+
    sprintf (filename, "%s.IDX", user_file);
    fdidx = shopen(filename, O_RDWR|O_BINARY);
    if (fdidx == -1)
       fdidx = cshopen (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
    fstat (fdidx, &statidx);
 
-
-   if ( (statbuf.st_size / sizeof (struct _usr)) != (statidx.st_size / sizeof (struct _usridx)) )
-   {
+   if ( (statbuf.st_size / sizeof (struct _usr)) != (statidx.st_size / sizeof (struct _usridx)) ) {
       status_line("!%s", "Rebuilding user index file");
       wputs ("* ");
       wputs ("Rebuilding user index file");
@@ -482,17 +517,12 @@ void system_crash()
 
       nusers = 0;
 
-      for (;;)
-      {
-         if (!registered && nusers >= 50)
-            break;
-
+      for (;;) {
          prev = tell (fd);
          if (read (fd, (char *)&usr, sizeof(struct _usr)) != sizeof(struct _usr))
             break;
 
-         if (!usr.deleted)
-         {
+         if (!usr.deleted) {
             crc = crc_name (usr.name);
             usr.id = crc;
             usridx.id = crc;
@@ -511,7 +541,63 @@ void system_crash()
    close (fd);
    close (fdidx);
 
+   sprintf (filename, "%sDUPES.DAT", sys_path);
+   fd = open (filename, O_RDONLY|O_BINARY, S_IREAD|S_IWRITE);
+   if (fd != -1) {
+      fstat (fd, &statbuf);
+      sprintf (filename, "%sDUPES.IDX", sys_path);
+      fdidx = open (filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+      fstat (fdidx, &statidx);
+
+      if ( (statbuf.st_size / (sizeof (struct _dupecheck) + DUPE_FOOTER)) != (statidx.st_size / sizeof (struct _dupeindex)) ) {
+         status_line("!%s", "Rebuilding duplicate index file");
+         wputs ("* ");
+         wputs ("Rebuilding duplicate index file");
+         wputs ("\n");
+         chsize (fdidx, 0L);
+
+         while (read (fd, (char *)&dupecheck, sizeof(struct _dupecheck)) == sizeof(struct _dupecheck)) {
+            memcpy (dupeindex.areatag, dupecheck.areatag, 48);
+            dupeindex.area_pos = dupecheck.area_pos;
+            write (fdidx, (char *)&dupeindex, sizeof(struct _dupeindex));
+            lseek (fd, (long)DUPE_FOOTER, SEEK_CUR);
+         }
+      }
+
+      close (fd);
+      close (fdidx);
+   }
+
+   sprintf (filename, SYSMSG_PATH, sys_path);
+   fd = shopen(filename, O_RDWR|O_BINARY);
+   if (fd == -1)
+      fd = cshopen (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+   fstat (fd, &statbuf);
+   close (fd);
+
+   if ((statbuf.st_size % (long)SIZEOF_MSGAREA) != 0L) {
+      close (fd);
+      close (fdidx);
+      status_line ("!Error in %s file", filename);
+      get_down (1, 3);
+   }
+
+   sprintf (filename, "%sSYSFILE.DAT", sys_path);
+   fd = shopen(filename, O_RDWR|O_BINARY);
+   if (fd == -1)
+      fd = cshopen (filename, O_CREAT|O_TRUNC|O_RDWR|O_BINARY, S_IREAD|S_IWRITE);
+   fstat (fd, &statbuf);
+   close (fd);
+
+   if ((statbuf.st_size % (long)SIZEOF_FILEAREA) != 0L) {
+      close (fd);
+      close (fdidx);
+      status_line ("!Error in %s file", filename);
+      get_down (1, 3);
+   }
+
    create_quickbase_file ();
+   build_nodelist_index (0);
 }
 
 void get_last_caller()
@@ -520,13 +606,12 @@ void get_last_caller()
    char filename[80];
    struct _lastcall lc;
 
-   memcpy ((char *)&lastcall, 0, sizeof (struct _lastcall));
+   memset ((char *)&lastcall, 0, sizeof (struct _lastcall));
 
    sprintf(filename, "%sLASTCALL.BBS", sys_path);
    fd = cshopen(filename, O_RDONLY|O_BINARY|O_CREAT,S_IREAD|S_IWRITE);
 
-   while (read(fd, (char *)&lc, sizeof(struct _lastcall)) == sizeof(struct _lastcall))
-   {
+   while (read(fd, (char *)&lc, sizeof(struct _lastcall)) == sizeof(struct _lastcall)) {
       if (lc.line == line_offset)
          memcpy ((char *)&lastcall, (char *)&lc, sizeof (struct _lastcall));
    }
@@ -624,8 +709,7 @@ void manual_poll ()
       return;
    }
 
-   if (!get_bbs_record (zone, net, node))
-   {
+   if (!get_bbs_record (zone, net, node, 0)) {
       if ( strchr (stringa1, ':') || strchr (stringa1, '/') || strchr (stringa1, '.') )
          return;
    }

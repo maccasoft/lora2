@@ -702,17 +702,19 @@ void sysop_chatting ()
    local_kbd = -1;
    start_write = time(NULL);
 
-   m_print(bbstxt[B_BREAKING_CHAT]);
+   if (!read_system_file ("STARTCHT"))
+      m_print(bbstxt[B_BREAKING_CHAT]);
+
    wrp[0]='\0';
 
-   while (local_kbd != 0x1B)
-   {
+   while (local_kbd != 0x1B) {
       chat_wrap(wrp, 79);
       if (!CARRIER)
          return;
    }
 
-   m_print(bbstxt[B_CHAT_END]);
+   if (!read_system_file ("ENDCHT"))
+      m_print(bbstxt[B_CHAT_END]);
    local_kbd = -1;
    local_mode = 0;
 

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <ctype.h>
+#include <stdlib.h>
 #include <dos.h>
 #include <string.h>
 #include <dir.h>
@@ -10,19 +11,16 @@
 #include <sys\stat.h>
 
 #include <cxl\cxlstr.h>
+#include <cxl\cxlwin.h>
 
 #include "defines.h"
 #include "lora.h"
 #include "externs.h"
 #include "prototyp.h"
 
-static int qbbs_get_bbs_record(int, int, int);
-static int v5_get_bbs_record(int, int, int);
-static int v6_get_bbs_record(int, int, int);
-static int v7_get_bbs_record(int, int, int);
-static void unpk(char *, char *, int);
+static int lora_get_bbs_record(int, int, int, int);
+static int update_nodelist (char *, char *);
 
-static char unwrk[] = " EANROSTILCHBDMUGPKYWFVJXZQ-'0123456789";
 
 void throughput (opt, bytes)
 int opt;
@@ -239,317 +237,466 @@ char *fname, *rname, *cname, *cpath, *info;
       }
 }
 
-int get_bbs_record (zone, net, node)
+int get_bbs_record (zone, net, node, point)
 int zone, net, node;
 {
         char stringa[80];
 
-        sprintf (stringa, "%sNODEX.DAT", net_info);
+        sprintf (stringa, "%sNODE.IDX", net_info);
         if (dexists (stringa))
-                return (v7_get_bbs_record (zone, net, node));
-
-        sprintf (stringa, "%sNODELIST.DAT", net_info);
-        if (dexists (stringa))
-                return (v6_get_bbs_record (zone, net, node));
-
-        sprintf (stringa, "%sQNL_IDX.BBS", net_info);
-        if (dexists (stringa))
-                return (qbbs_get_bbs_record (zone, net, node));
-
-        sprintf (stringa, "%sNODELIST.SYS", net_info);
-        if (dexists (stringa))
-                return (v5_get_bbs_record (zone, net, node));
+                return (lora_get_bbs_record (zone, net, node, point));
 
         return (0);
 }
 
-static int v7_get_bbs_record(zone, net, node)
-int zone, net, node;
-{
-   int fdi, m;
-   char stringa[128], pack[128];
-   struct _vers7 fnode;
-
-   sprintf(stringa,"%sNODEX.DAT",net_info);
-   fdi = shopen(stringa, O_RDONLY|O_BINARY);
-   if(fdi == -1)
-   {
-      status_line(msgtxt[M_UNABLE_TO_OPEN],stringa);
-      return (0);
-   }
-
-   while (read(fdi, (char *)&fnode, sizeof (struct _vers7)) == sizeof (struct _vers7))
-   {
-      if (fnode.Node == node &&
-          fnode.Net == net &&
-          (fnode.Zone == zone || !zone)
-         )
-      {
-         read (fdi, (char *)&nodelist.phone, fnode.Phone_len);
-         nodelist.password[fnode.Phone_len] = '\0';
-         read (fdi, (char *)&nodelist.password, fnode.Password_len);
-         nodelist.password[fnode.Password_len] = '\0';
-         read (fdi, pack, fnode.pack_len);
-         unpk (pack, stringa, fnode.pack_len);
-
-         m = 0;
-
-         strncpy (nodelist.name, &stringa[m], fnode.Bname_len);
-         nodelist.name[fnode.Bname_len] = '\0';
-         m += fnode.Bname_len;
-
-         m += fnode.Sname_len;
-
-         strncpy (nodelist.city, &stringa[m], fnode.Cname_len);
-         nodelist.city[fnode.Cname_len] = '\0';
-         m += fnode.Cname_len;
-
-         nodelist.rate = fnode.BaudRate;
-         nodelist.modem = fnode.ModemType;
-
-         close (fdi);
-         return (1);
-      }
-      else
-         lseek (fdi, (long)(fnode.pack_len +
-                            fnode.Phone_len +
-                            fnode.Password_len), SEEK_CUR);
-   }
-
-   close (fdi);
-
-   return (0);
-}
-
-static void unpk(char *instr,char *outp,int count)
-{
-    struct chars {
-           unsigned char c1;
-           unsigned char c2;
-           };
-
-    union {
-          unsigned w1;
-          struct chars d;
-          } u;
-
-   register int i, j;
-   char obuf[4];
-
-   outp[0] = '\0';
-
-   while (count) {
-       u.d.c1 = *instr++;
-       u.d.c2 = *instr++;
-       count -= 2;
-       for(j=2;j>=0;j--) {
-           i = u.w1 % 40;
-           u.w1 /= 40;
-            obuf[j] = unwrk[i];
-           }
-       obuf[3] = '\0';
-       (void) strcat (outp, obuf);
-       }
-}
-
-
-static int v6_get_bbs_record(zone, net, node)
-int zone, net, node;
-{
-   int fd, fdi, m, total, real_rd, last_zone;
-   char *ndx, stringa[60];
-   long node_record;
-   struct _ndi *index;
-
-   last_zone = zone;
-
-   sprintf(stringa,"%sNODELIST.DAT",net_info);
-   fd = shopen(stringa,O_RDONLY|O_BINARY);
-   if(fd == -1)
-   {
-      status_line(msgtxt[M_UNABLE_TO_OPEN],stringa);
-      return (0);
-   }
-
-   sprintf(stringa,"%sNODELIST.IDX",net_info);
-   fdi=shopen(stringa,O_RDONLY|O_BINARY);
-   if(fdi == -1)
-   {
-      status_line(msgtxt[M_UNABLE_TO_OPEN],stringa);
-      return (0);
-   }
-
-   ndx = (char *)malloc(INDEX_BUFFER);
-   if (ndx == NULL)
-   {
-      status_line(msgtxt[M_NODELIST_MEM]);
-      close(fdi);
-      close(fd);
-      return (0);
-   }
-
-   node_record = 0L;
-
-   do {
-      real_rd = read(fdi,ndx,INDEX_BUFFER);
-      total = real_rd/sizeof(struct _ndi);
-
-      for (m=0;m<total;m++)
-      {
-         index = (struct _ndi *)&ndx[m*4];
-
-         if (index->node == -2)
-            last_zone = index->net;
-
-         if (index->node == node &&
-             index->net == net &&
-             (last_zone == zone || !zone)
-            )
-         {
-            lseek(fd,node_record*sizeof(struct _node),SEEK_SET);
-            read(fd,(char *)&nodelist,sizeof(struct _node));
-
-            close (fdi);
-            close (fd);
-
-            free(ndx);
-
-            return (1);
-         }
-
-         node_record++;
-      }
-   } while (real_rd == INDEX_BUFFER);
-
-   close (fdi);
-   close (fd);
-
-   free(ndx);
-
-   return (0);
-}
-
-static int v5_get_bbs_record(zone, net, node)
-int zone, net, node;
-{
-   if (zone || net || node);
-   return (0);
-}
-
-/*--------------------------------------------------------------------------*/
-/* QuickBBS 2.00 QNL_IDX.BBS                                                */
-/* (File is terminated by EOF)                                              */
-/*--------------------------------------------------------------------------*/
-
-struct QuickNodeIdxRecord
-{
-   int QI_Zone;
-   int QI_Net;
-   int QI_Node;
-   byte QI_NodeType;
+struct _idx_header {
+   char name[14];
+   long entry;
 };
 
-
-/*--------------------------------------------------------------------------*/
-/* QuickBBS 2.00 QNL_DAT.BBS                                                */
-/* (File is terminated by EOF)                                              */
-/*--------------------------------------------------------------------------*/
-
-struct QuickNodeListRecord
-{
-   byte QL_NodeType;
-   int QL_Zone;
-   int QL_Net;
-   int QL_Node;
-   byte QL_Name[21];                             /* Pascal! 1 byte count, up
-                                                  * to 20 chars */
-   byte QL_City[41];                             /* 1 + 40 */
-   byte QL_Phone[41];                            /* 1 + 40 */
-   byte QL_Password[9];                          /* 1 + 8 */
-   word QL_Flags;                                /* Same as flags in new
-                                                  * nodelist structure */
-   int QL_BaudRate;
-   int QL_Cost;
+struct _idx_entry {
+   int  zone;
+   int  net;
+   long offset;
 };
 
-static int qbbs_get_bbs_record(zone, net, node)
-int zone, net, node;
+void build_nodelist_index (force)
+int force;
 {
-   #define QINDEX_BUFFER  100
-   int fd, fdi, m, total, real_rd;
-   char *ndx, stringa[60];
-   long node_record;
-   struct QuickNodeIdxRecord *index;
-   struct QuickNodeListRecord Rec;
+   FILE *fps, *fpd, *fpcfg;
+   int nzone, nnet, i;
+   char filename[80], linea[512], build, *p, *diff, final[14];
+   long hdrpos, entrypos;
+   struct stat statbuf, statcfg, statidx;
+   struct _idx_header header;
+   struct _idx_entry entry;
 
-   sprintf(stringa,"%sQNL_DAT.BBS",net_info);
-   fd = shopen(stringa,O_RDONLY|O_BINARY);
-   if(fd == -1)
-   {
-      status_line(msgtxt[M_UNABLE_TO_OPEN],stringa);
-      return (0);
+   build = 0;
+   nzone = alias[0].zone;
+   nnet = alias[0].net;
+
+   sprintf (filename, "%sNODELIST.CFG", net_info);
+   if (stat (filename, &statcfg) == -1)
+      return;
+
+   sprintf (filename, "%sNODE.IDX", net_info);
+   if (stat (filename, &statidx) == -1)
+      build = 1;
+//   else if (statidx.st_mtime < statcfg.st_mtime)
+//      build = 1;
+
+   sprintf (filename, "%sNODELIST.CFG", net_info);
+   fpcfg = fopen (filename, "rt");
+
+   while (fgets(linea, 511, fpcfg) != NULL) {
+      if (linea[0] == ';' || linea[0] == '%')
+         continue;
+      while (linea[strlen (linea) -1] == 0x0D || linea[strlen (linea) -1] == 0x0A || linea[strlen (linea) -1] == ' ')
+         linea[strlen (linea) -1] = '\0';
+      p = strtok (linea, " ");
+      if (!stricmp (p, "NODELIST")) {
+         p = strtok (NULL, " ");
+         sprintf (filename, "%s%s", net_info, p);
+         if (!stat (filename, &statbuf)) {
+            if (statbuf.st_mtime > statidx.st_mtime)
+               build = 1;
+         }
+      }
    }
 
-   sprintf(stringa,"%sQNL_IDX.BBS",net_info);
-   fdi=shopen(stringa,O_RDONLY|O_BINARY);
-   if(fdi == -1)
-   {
-      status_line(msgtxt[M_UNABLE_TO_OPEN],stringa);
-      return (0);
+   memset ((char *)&nodelist, 0, sizeof (struct _node));
+
+   sprintf (filename, "%sNODE.IDX", net_info);
+   fps = fopen (filename, "rb");
+
+   while (fread ((char *)&header, sizeof (struct _idx_header), 1, fps) == 1) {
+      sprintf (filename, "%s%s", net_info, header.name);
+      if (!stat (filename, &statbuf)) {
+         if (statbuf.st_mtime > statidx.st_mtime) {
+            build = 1;
+            break;
+         }
+      }
+      else {
+         build = 1;
+         break;
+      }
+
+      fseek (fps, header.entry * sizeof (struct _idx_entry), SEEK_CUR);
    }
 
-   ndx = (char *)malloc(QINDEX_BUFFER*sizeof(struct QuickNodeIdxRecord));
-   if (ndx == NULL)
-   {
-      status_line(msgtxt[M_NODELIST_MEM]);
-      close(fdi);
-      close(fd);
-      return (0);
-   }
+   fclose (fps);
 
-   node_record = 0L;
+   if (build || force) {
+      rewind (fpcfg);
 
-   do {
-      real_rd = read(fdi,ndx,QINDEX_BUFFER*sizeof(struct QuickNodeIdxRecord));
-      total = real_rd/sizeof(struct QuickNodeIdxRecord);
+      status_line(":Rebuild nodelist index");
+      wputs("* Rebuild nodelist index\n");
 
-      for (m=0;m<total;m++)
-      {
-         index = (struct QuickNodeIdxRecord *)&ndx[m*sizeof(struct QuickNodeIdxRecord)];
+      sprintf (filename, "%sNODE.IDX", net_info);
+      fpd = fopen (filename, "w+b");
 
-         if (index->QI_Node == node &&
-             index->QI_Net == net &&
-             (index->QI_Zone == zone || !zone)
-            )
-         {
-            lseek(fd,node_record*sizeof(struct QuickNodeListRecord),SEEK_SET);
-            read(fd,(char *)&Rec,sizeof(struct QuickNodeListRecord));
+      while (fgets(linea, 511, fpcfg) != NULL) {
+         if (linea[0] == ';' || linea[0] == '%')
+            continue;
 
-            close (fdi);
-            close (fd);
+         while (linea[strlen (linea) -1] == 0x0D || linea[strlen (linea) -1] == 0x0A || linea[strlen (linea) -1] == ' ')
+            linea[strlen (linea) -1] = '\0';
 
-            free(ndx);
+         p = strtok (linea, " ");
+         if (stricmp (p, "NODELIST"))
+            continue;
 
-            strncpy(nodelist.password, &Rec.QL_Password[1], Rec.QL_Password[0]);
-            strncpy(nodelist.phone, &Rec.QL_Phone[1], Rec.QL_Phone[0]);
-            strncpy(nodelist.name, &Rec.QL_Name[1], Rec.QL_Name[0]);
-            strncpy(nodelist.city, &Rec.QL_City[1], Rec.QL_City[0]);
-            nodelist.rate = Rec.QL_BaudRate;
-            nodelist.cost = Rec.QL_Cost;
+         p = strtok (NULL, " ");
+         if (strchr (p, '.') == NULL) {
+            diff = strtok (NULL, " ");
+            i = update_nodelist (p, diff);
+            if (i == -1)
+               continue;
+            sprintf (final, "%s.%03d", p, i);
+         }
+         else
+            strcpy (final, p);
+         sprintf (filename, "%s%s", net_info, final);
+         fps = fopen (filename, "rb");
+         if (fps == NULL)
+            continue;
 
-            return (1);
+         status_line ("+Compiling %s", fancy_str (filename));
+
+         hdrpos = ftell  (fpd);
+         memset ((char *)&header, 0, sizeof (struct _idx_header));
+         strcpy (header.name, strupr(final));
+         fwrite ((char *)&header, sizeof (struct _idx_header), 1, fpd);
+
+         entrypos = ftell (fps);
+         nzone = alias[0].zone;
+         nnet = alias[0].net;
+
+         while (fgets(linea, 511, fps) != NULL) {
+            if (linea[0] == ';') {
+               entrypos = ftell (fps);
+               continue;
+            }
+
+            p = strtok (linea, ",");
+            if (stricmp (p, "Zone") && stricmp (p, "Region") && stricmp (p, "Host")) {
+               entrypos = ftell (fps);
+               continue;
+            }
+
+            if (!stricmp (p, "Zone")) {
+               p = strtok (NULL, ",");
+               nzone = nnet = atoi (p);
+            }
+            else {
+               p = strtok (NULL, ",");
+               nnet = atoi (p);
+            }
+
+            wclreol ();
+            sprintf (filename, "%d:%d/0\r", nzone, nnet);
+            wputs (filename);
+
+            entry.zone = nzone;
+            entry.net = nnet;
+            entry.offset = entrypos;
+            fwrite ((char *)&entry, sizeof (struct _idx_entry), 1, fpd);
+            header.entry++;
+            entrypos = ftell (fps);
          }
 
-         node_record++;
+         fclose (fps);
+
+         fseek (fpd, hdrpos, SEEK_SET);
+         fwrite ((char *)&header, sizeof (struct _idx_header), 1, fpd);
+         fseek (fpd, 0L, SEEK_END);
       }
-   } while (real_rd == QINDEX_BUFFER);
 
-   close (fdi);
-   close (fd);
+      fclose (fpd);
+   }
 
-   free(ndx);
+   wclreol ();
 
+   fclose (fpcfg);
+}
+
+static int lora_get_bbs_record(zone, net, node, point)
+int zone, net, node, point;
+{
+   FILE *fp;
+   int nzone, nnet, nnode, npoint, i;
+   char filename[80], linea[512], *p, first;
+   long num;
+   struct _idx_header header;
+   struct _idx_entry entry;
+
+   if (point);
+
+   memset ((char *)&nodelist, 0, sizeof (struct _node));
+
+   sprintf (filename, "%sNODE.IDX", net_info);
+   fp = fopen (filename, "rb");
+
+   while (fread ((char *)&header, sizeof (struct _idx_header), 1, fp) == 1) {
+      for (num = 0L; num < header.entry; num++) {
+         fread ((char *)&entry, sizeof (struct _idx_entry), 1, fp);
+         if ((zone && entry.zone == zone) && entry.net == net) {
+            fclose (fp);
+            if (strchr (header.name, '.') == NULL) {
+               i = update_nodelist (header.name, NULL);
+               if (i == -1)
+                  return (0);
+               sprintf (filename, "%s%s.%03d", net_info, header.name, i);
+            }
+            else
+               sprintf (filename, "%s%s", net_info, header.name);
+            fp = fopen (filename, "rb");
+            if (fp == NULL)
+               return (0);
+            fseek (fp, entry.offset, SEEK_SET);
+            first = 0;
+            while (fgets(linea, 511, fp) != NULL) {
+               if (linea[0] == ';')
+                  continue;
+
+               if (linea[0] != ',') {
+                  p = strtok (linea, ",");
+                  if (!stricmp (p, "Zone") || !stricmp (p, "Region") || !stricmp (p, "Host")) {
+                     if (first)
+                        break;
+                     else
+                        first = 1;
+                     p = strtok (NULL, ",");
+                     *p = '\0';
+                  }
+
+                  p = strtok (NULL, ",");
+               }
+               else
+                  p = strtok (linea, ",");
+
+               if (atoi (p) != node)
+                  continue;
+
+               p = strtok (NULL, ",");
+               if (strlen (p) > 33)
+                  p[33] = '\0';
+               strcpy (nodelist.name, p);
+               strischg (nodelist.name, "_", " ");
+
+               p = strtok (NULL, ",");
+               if (strlen (p) > 29)
+                  p[29] = '\0';
+               strcpy (nodelist.city, p);
+               strischg (nodelist.city, "_", " ");
+
+               strtok (NULL, ",");
+
+               p = strtok (NULL, ",");
+               if (strlen (p) > 39)
+                  p[39] = '\0';
+               strcpy (nodelist.phone, p);
+
+               p = strtok (NULL, ",");
+               nodelist.rate = atoi (p) / 300;
+
+               nodelist.net = net;
+               nodelist.number = node;
+
+               p = strtok (NULL, " ");
+               if (strstr (p, "HST") != NULL)
+                  nodelist.modem |= 0x01;
+               if (strstr (p, "PEP") != NULL)
+                  nodelist.modem |= 0x02;
+
+               fclose (fp);
+
+               sprintf (filename, "%sNODELIST.CFG", net_info);
+               fp = fopen (filename, "rt");
+
+               while (fgets(linea, 511, fp) != NULL) {
+                  if (linea[0] == ';' || linea[0] == '%')
+                     continue;
+
+                  while (linea[strlen (linea) -1] == 0x0D || linea[strlen (linea) -1] == 0x0A || linea[strlen (linea) -1] == ' ')
+                     linea[strlen (linea) -1] = '\0';
+
+                  p = strtok (linea, " ");
+                  if (!stricmp (p, "PASSWORD")) {
+                     p = strtok (NULL, " ");
+                     parse_netnode (p, &nzone, &nnet, &nnode, &npoint);
+                     if (nzone == zone && nnet == net && nnode == node && !npoint) {
+                        p = strtok (NULL, " ");
+                        if (strlen (p) > 29)
+                           p[29] = '\0';
+                        strcpy (nodelist.password, strupr(p));
+                     }
+                  }
+                  else if (!stricmp (p, "PHONE")) {
+                     p = strtok (NULL, " ");
+                     parse_netnode (p, &nzone, &nnet, &nnode, &npoint);
+                     if (nzone == zone && nnet == net && nnode == node && !npoint) {
+                        p = strtok (NULL, " ");
+                        if (strlen (p) > 39)
+                           p[39] = '\0';
+                        strcpy (nodelist.phone, p);
+                     }
+                  }
+                  else if (!stricmp (p, "DIAL")) {
+                     p = strtok (NULL, " ");
+                     if (!strncmp (nodelist.phone, p, strlen (p))) {
+                        strcpy (filename, p);
+                        p = strtok (NULL, " ");
+                        strisrep (nodelist.phone, filename, p);
+                     }
+                  }
+               }
+
+               fclose (fp);
+               return (1);
+            }
+
+            fclose (fp);
+            return (0);
+         }
+      }
+   }
+
+   fclose (fp);
    return (0);
 }
 
+#define isLeap(x) ((x)%1000)?((((x)%100)?(((x)%4)?0:1):(((x)%400)?0:1))):(((x)%4000)?1:0)
 
+int update_nodelist (name, diff)
+char *name, *diff;
+{
+   FILE *fps, *fpd, *fpn;
+   int i, max = -1, next, m;
+   char filename[128], linea[512], *p;
+   struct ffblk blk;
+   long tempo;
+   struct tm *tim;
+
+   tempo = time (NULL);
+   tim = localtime(&tempo);
+
+   sprintf (filename, "%s%s.*", net_info, name);
+   if (findfirst (filename, &blk, 0))
+      return (-1);
+
+   do {
+      if ((p = strchr (blk.ff_name, '.')) == NULL)
+         continue;
+      p++;
+      i = atoi (p);
+      if (i > max)
+	 max = i;
+   } while (!findnext (&blk));
+
+   next = max + 7;
+   if ((isLeap (tim->tm_year)) && next > 366)
+      next -= 366;
+   else if (!(isLeap (tim->tm_year)) && next > 365)
+      next -= 365;
+
+   if (diff == NULL)
+      return (max);
+
+   sprintf (filename, "%s%s.%03d", net_info, diff, next);
+   if (!dexists (filename))
+      return (max);
+
+   status_line ("+Updating %s.%03d with %s.%03d", name, max, diff, next);
+
+   fps = fopen(filename, "rt");
+   setvbuf (fps, NULL, _IOFBF, 2048);
+
+   sprintf (filename, "%s%s.%03d", net_info, name, max);
+   fpn = fopen(filename, "rt");
+   setvbuf (fpn, NULL, _IOFBF, 2048);
+
+   sprintf (filename, "%s%s.%03d", net_info, name, next);
+   fpd = fopen(filename, "wt");
+   setvbuf (fpd, NULL, _IOFBF, 2048);
+
+   fgets(linea, 511, fps);
+   fgets(filename, 127, fpn);
+   if (stricmp (linea, filename)) {
+      status_line ("!%s.%03d doesn't match %s.%03d", diff, next, name, max);
+      fclose (fpd);
+      fclose (fpn);
+      fclose (fps);
+
+      sprintf (filename, "%s%s.%03d", net_info, name, next);
+      unlink (filename);
+      sprintf (filename, "%s%s.%03d", net_info, diff, next);
+      unlink (filename);
+
+      return (max);
+   }
+
+   rewind (fpn);
+
+   while (fgets(linea, 511, fps) != NULL) {
+      while (linea[strlen (linea) -1] == 0x0D || linea[strlen (linea) -1] == 0x0A || linea[strlen (linea) -1] == ' ')
+	 linea[strlen (linea) -1] = '\0';
+
+      if (linea[0] == 'A' && isdigit(linea[1])) {
+         m = atoi (&linea[1]);
+         for (i = 0; i < m; i++) {
+            fgets(linea, 511, fps);
+            fputs(linea, fpd);
+         }
+      }
+      else if (linea[0] == 'C' && isdigit(linea[1])) {
+         m = atoi (&linea[1]);
+         for (i = 0; i < m; i++) {
+            fgets(linea, 511, fpn);
+            fputs(linea, fpd);
+         }
+      }
+      else if (linea[0] == 'D' && isdigit(linea[1])) {
+         m = atoi (&linea[1]);
+         for (i = 0; i < m; i++)
+            fgets(linea, 511, fpn);
+      }
+   }
+
+   fclose (fpd);
+   fclose (fpn);
+   fclose (fps);
+
+   sprintf (filename, "%s%s.%03d", net_info, name, max);
+   unlink (filename);
+   sprintf (filename, "%s%s.%03d", net_info, diff, next);
+   unlink (filename);
+
+   return (next);
+}
+
+char *random_origins (void)
+{
+   FILE *fp;
+   struct time dt;
+
+   if (sys.origin[0] == '@') {
+      gettime (&dt);
+      srand (dt.ti_sec * 100 + dt.ti_hund);
+
+      fp = fopen (&sys.origin[1], "rt");
+      fseek (fp, (long)random ((int)filelength(fileno (fp))), SEEK_SET);
+      fgets (e_input, 120, fp);
+      if (fgets (e_input, 120, fp) == NULL) {
+         rewind (fp);
+         fgets (e_input, 120, fp);
+      }
+
+      fclose (fp);
+   }
+   else
+      strcpy (e_input, sys.origin);
+
+   return (e_input);
+}

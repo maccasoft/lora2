@@ -1,20 +1,25 @@
 #include <stdio.h>
 #include <ctype.h>
-#include <sys/types.h>
-#include <sys/stat.h>
+#include <io.h>
+#include <fcntl.h>
 #include <string.h>
 #include <stdlib.h>
 #include <process.h>
 #include <time.h>
-#include "tc_utime.h"
 #include <alloc.h>
 #include <mem.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
+#include "tc_utime.h"
 #include "defines.h"
 #include "lora.h"
 #include "zmodem.h"
 #include "externs.h"
 #include "prototyp.h"
+
+extern int outinfo;
+void initialize_modem (void);
 
 static void write_sched (void);
 
@@ -36,6 +41,7 @@ void find_event ()
    int junk;
    int our_time;
    int i;
+   char cmds[80];
 /*   char cmds[150];*/
 
    /* Get the current day of the week */
@@ -78,15 +84,7 @@ void find_event ()
                if (e_ptrs[i]->last_ran != cur_mday)
                   {
                   cur_event = i;
-/*                  do_ready (msgtxt[M_READY_WAITING]);*/
                   status_line (msgtxt[M_STARTING_EVENT], i + 1);
-
-/*
-                  if (!blank_on_key)
-                     screen_blank = 0;
-
-                  more_mail = 1;
-*/
 
                   /* Mark that this one is running */
                   e_ptrs[i]->last_ran = cur_mday;
@@ -100,52 +98,50 @@ void find_event ()
                   /* Write out the schedule */
                   write_sched ();
 
+                  if (e_ptrs[i]->echomail & (ECHO_STARTEXPORT|ECHO_STARTIMPORT))
+                     {
+                     if (e_ptrs[i]->echomail & ECHO_STARTIMPORT)
+                        process_startup_mail (1);
+                     else
+                        process_startup_mail (0);
+                     }
+
+                  if (e_ptrs[i]->res_net && !(e_ptrs[cur_event]->behavior & MAT_NOOUT))
+                     {
+                     junk = 'F';
+                     if (e_ptrs[i]->behavior & MAT_CM)
+                        junk = 'C';
+                     sprintf (cmds, "%s%04x%04x.%cLO", HoldAreaNameMunge (e_ptrs[i]->res_zone), e_ptrs[i]->res_net, e_ptrs[i]->res_node, junk);
+                     junk = open (cmds, O_WRONLY|O_CREAT|O_BINARY, S_IREAD|S_IWRITE);
+                     close (junk);
+
+                     sprintf (cmds, "%s%04x%04x.$$?", HoldAreaNameMunge (e_ptrs[i]->res_zone), e_ptrs[i]->res_net, e_ptrs[i]->res_node);
+                     if (dexists (cmds))
+                        unlink (cmds);
+                     }
+
                   /* If we are supposed to exit, then do it */
                   if (e_ptrs[i]->errlevel[0])
                      {
                      status_line (msgtxt[M_EVENT_EXIT], e_ptrs[i]->errlevel[0]);
-
-/*                     screen_blank = 0;*/
                      get_down (e_ptrs[i]->errlevel[0], 1);
                      }
-/*
-                  else if (packer != NULL)
+
+                  if (e_ptrs[i]->behavior & MAT_RESYNC)
                      {
-                     if (!blank_on_key)
-                        screen_blank = 0;
-                     status_line (msgtxt[M_CLEAN_PACK]);
-                     mdm_init (modem_busy);
-                     exit_DTR ();
-                     screen_clear ();
-                     vfossil_cursor (1);
-                     if (cleanup != NULL)
-                        {
-                        (void) strcpy (cmds, cleanup);
-                        if (i >= 0)
-                           (void) strcat (cmds, e_ptrs[i]->cmd);
-                        b_spawn (cmds);
-                        }
-                     (void) strcpy (cmds, packer);
-                     if (i >= 0)
-                        (void) strcat (cmds, e_ptrs[i]->cmd);
-                     b_spawn (cmds);
-                     if (fullscreen)
-                        {
-                        screen_clear ();
-                        sb_dirty ();
-                        opening_banner ();
-                        mailer_banner ();
-                        }
-                     DTR_ON ();
-                     mdm_init (modem_init);
-                     status_line (msgtxt[M_AFTER_CLEAN_PACK]);
+                     if (poll_galileo (e_ptrs[i]->with_connect, e_ptrs[i]->no_connect))
+                        status_window ();
+
+                     initialize_modem ();
+                     local_status(msgtxt[M_SETTING_BAUD]);
                      }
-*/
 
                   cur_event = i;
                   max_connects = e_ptrs[i]->with_connect;
                   max_noconnects = e_ptrs[i]->no_connect;
                   get_call_list ();
+                  outinfo = 0;
+                  display_outbound_info (outinfo);
                   }
                else
                   {

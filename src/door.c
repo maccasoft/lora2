@@ -20,19 +20,33 @@
 #include "zmodem.h"
 #include "exec.h"
 
-static void update_status_line (void);
-void after_door (void);
+void update_status_line (void);
+static void general_door (char *, int);
 
-void open_outside_door(s)
+void open_outside_door (s)
 char *s;
 {
-        int i, m, oldtime, noreread, retval, oldcume;
+   general_door (s, 0);
+}
+
+void editor_door (s)
+char *s;
+{
+   general_door (s, 1);
+}
+
+static void general_door(s, flag)
+char *s;
+int flag;
+{
+        int i, m, oldtime, noreread, retval, oldcume, *varr;
         char ext[200], buffer[50], swapping, *args, freeze, tmp[36];
         char noinfo;
         long t, freeze_time;
         struct _usr tmpusr;
 
-        status_line(":External %s", s);
+        if (!flag)
+                status_line(":External %s", s);
 
         noinfo = 0;
         freeze = 0;
@@ -44,10 +58,8 @@ char *s;
 
         freeze_time = time(NULL);
 
-        for (i=0;i<strlen(s);i++)
-        {
-                if (s[i] != '*')
-                {
+        for (i=0;i<strlen(s);i++) {
+                if (s[i] != '*') {
                         if (s[i] == '_')
                                 ext[m++] = ' ';
                         else if (s[i] == '\\' && s[i+1] == '_')
@@ -76,12 +88,6 @@ char *s;
                         strcat(ext, sys.msg_path);
                         m += strlen(sys.msg_path);
                         break;
-/*
-                case '2':
-                        strcat(ext, sys.bankpath);
-                        m += strlen(sys.bankpath);
-                        break;
-*/
                 case 'B':
                         sprintf(buffer,"%d", local_mode ? 0 : rate);
                         strcat(ext, buffer);
@@ -195,8 +201,10 @@ char *s;
                 close (i);
         }
 
-        read_system_file ("LEAVING");
+        if (!flag)
+                read_system_file ("LEAVING");
 
+        varr = ssave ();
         cclrscrn(LGREY|_BLACK);
         showcur();
         fclose (logf);
@@ -227,6 +235,7 @@ char *s;
 
         if (!noreread && !noinfo)
         {
+                sprintf(buffer, "%sLORAINFO.T%02X", sys_path, line_offset);
                 i = shopen (buffer, O_RDONLY|O_BINARY);
                 read (i, (char *)&tmpusr, sizeof(struct _usr));
                 read (i, (char *)&lorainfo, sizeof(struct _lorainfo));
@@ -259,23 +268,30 @@ char *s;
 
         logf = fopen(log_name, "at");
         setbuf(logf, NULL);
-        status_line(":Returned from door (%d)", retval);
+        if (!flag)
+                status_line(":Returned from door (%d)", retval);
 
         unlink(buffer);
 
         if (local_mode || snooping)
                 showcur();
 
-        after_door();
-        update_status_line ();
+        if (varr != NULL)
+           srestore (varr);
 
-        read_system_file ("RETURN");
+        if (function_active == 1)
+                f1_status ();
+        else if (function_active == 3)
+                f3_status ();
+
+        if (!flag)
+                read_system_file ("RETURN");
 }
 
 void outside_door(s)
 char *s;
 {
-   open_outside_door (s);
+   general_door (s, 0);
 }
 
 void translate_filenames(s, mecca_resp, readln)
@@ -564,7 +580,7 @@ char *s;
    return (retval);
 }
 
-static void update_status_line ()
+void update_status_line ()
 {
         if (function_active == 1)
                 f1_status ();
@@ -679,18 +695,18 @@ int function, zone, net, node, do_stat;
     */
 
       sprintf (flagname, "%s%04x%04x.BSY",
-                            HoldName, net, node);
+                            HoldAreaNameMunge (zone), net, node);
       if (!rename (tmpname, flagname))
          {
-         if (do_stat)
-            status_line (msgtxt[M_CREATED_FLAGFILE],flagname);
+//         if (do_stat)
+//            status_line (msgtxt[M_CREATED_FLAGFILE],flagname);
          last_set_zone = zone;
          last_set_net = net;
          last_set_node = node;
          return (FALSE);
          }
-      if (do_stat)
-         status_line (msgtxt[M_THIS_ADDRESS_LOCKED], zone, net, node);
+//      if (do_stat)
+//         status_line (msgtxt[M_THIS_ADDRESS_LOCKED], zone, net, node);
       unlink (tmpname);
       return (TRUE);
 
@@ -703,17 +719,17 @@ int function, zone, net, node, do_stat;
     */
 
       sprintf (flagname, "%s%04x%04x.BSY",
-                            HoldName, net, node);
+                            HoldAreaNameMunge (zone), net, node);
       if (!unlink (flagname))
          {
-         if (do_stat)
-            status_line (msgtxt[M_CLEARED_FLAGFILE], flagname);
+//         if (do_stat)
+//            status_line (msgtxt[M_CLEARED_FLAGFILE], flagname);
          last_set_zone = -1;
          return (TRUE);
          }
 
-      if (do_stat)
-         status_line (msgtxt[M_FAILED_CLEAR_FLAG],flagname);
+//      if (do_stat)
+//         status_line (msgtxt[M_FAILED_CLEAR_FLAG],flagname);
       return (FALSE);
 
       case TEST_FLAG:
@@ -736,7 +752,7 @@ int function, zone, net, node, do_stat;
       if (flag_dir != NULL)
          {
          sprintf (tmpname, "%s%04x%04x.BSY",
-                            HoldName, net, node);
+                            HoldAreaNameMunge (zone), net, node);
 
          if ((fptr = fopen (tmpname, "rb")) != NULL)
             {

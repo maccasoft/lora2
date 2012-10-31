@@ -20,11 +20,12 @@
 
 #define MENU_LENGTH 14
 #define MENU_STACK  10
-#define MAX_ITEMS   35
+#define MAX_ITEMS   50
 
-static int i, readed, active, menu_sp, old_activ, first_time;
-static char mnu_name[MENU_LENGTH], *st;
-static char menu_stack[MENU_STACK][MENU_LENGTH], filename[50];
+static int i;
+static char mnu_name[MENU_LENGTH], *st, max_menu, active, old_activ;
+static char menu_stack[MENU_STACK][MENU_LENGTH], filename[50], first_time;
+static char menu_sp, readed;
 static struct _cmd *cmd = NULL;
 
 static int process_menu_option(int, char *);
@@ -44,13 +45,16 @@ struct _menu_header {
 void menu_dispatcher(start)
 char *start;
 {
-   int m, fd, max_menu, processed;
-   char last_command;
+   FILE *fd;
+   int m, processed;
+   char last_command, err;
    struct _menu_header m_header;
 
    st = start;
    strcpy(mnu_name, (start == NULL) ? "MAIN" : start);
 
+   max_menu = 0;
+   err = 0;
    readed = 0;
    menu_sp = 0;
    old_activ = 0;
@@ -59,71 +63,79 @@ char *start;
    cmd = NULL;
 
    i = 0;
-   cmd[i].nocls = 0;
+//   cmd[i].nocls = 0;
    cmd_string[0] = '\0';
 
    i = (start == NULL) ? 0 : -1;
 
-   for (;;)
-   {
+   for (;;) {
       XON_ENABLE();
       _BRK_ENABLE();
 
-      if (!readed)
-      {
-         if (i != -1 && !cmd[i].nocls)
+      if (!readed) {
+         if (i != -1 && max_menu)
             cls();
 
          sprintf(filename,"%s%s.MNU",menu_bbs,lang_name[usr.language]);
-         fd=shopen(filename,O_RDONLY|O_BINARY);
-         if (fd == -1 || filelength (fd) < sizeof (struct _menu_header))
-         {
+         fd=fopen(filename,"rb");
+         if (fd == NULL || filelength (fileno(fd)) < sizeof (struct _menu_header)) {
             sprintf(filename,"%s%s.MNU",menu_bbs,lang_name[0]);
-            fd=shopen(filename,O_RDONLY|O_BINARY);
-            if (fd == -1)
-            {
+            fd=fopen(filename,"rb");
+            if (fd == NULL) {
                status_line("!Can't open `%s'",filename);
                return;
             }
          }
 
-         for (;;)
-         {
-            if (read(fd,(char *)&m_header,sizeof(struct _menu_header)) != sizeof(struct _menu_header))
-            {
+         for (;;) {
+            if (fread((char *)&m_header, 1, sizeof(struct _menu_header),fd) != sizeof(struct _menu_header)) {
                status_line("!Menu `%s' not found", mnu_name);
-               return;
+               if (err == 1)
+                  return;
+               strcpy (mnu_name, "MAIN");
+               fseek (fd, 0, SEEK_SET);
+               err = 1;
             }
+            else {
+               if (!stricmp(m_header.name, mnu_name))
+                  break;
 
-            if (!stricmp(m_header.name, mnu_name))
-               break;
-
-            lseek (fd, (long)sizeof(struct _cmd) * m_header.n_elem, SEEK_CUR);
+               fseek (fd, (long)sizeof(struct _cmd) * m_header.n_elem, SEEK_CUR);
+            }
          }
+
+         err = 0;
 
          if (m_header.n_elem > MAX_ITEMS)
             m_header.n_elem = MAX_ITEMS;
          if (cmd != NULL)
             free (cmd);
+         if (sq_ptr != NULL) {
+            MsgCloseArea (sq_ptr);
+            if (sys.squish) {
+               sq_ptr = MsgOpenArea (sys.msg_path, MSGAREA_CRIFNEC, MSGTYPE_SQUISH);
+               MsgUnlock (sq_ptr);
+            }
+            else
+               sq_ptr = NULL;
+         }
          cmd = (struct _cmd *)malloc (m_header.n_elem * sizeof (struct _cmd));
-         if (cmd == NULL)
-         {
+         if (cmd == NULL) {
             status_line(msgtxt[M_NODELIST_MEM]);
             return;
          }
 
-         i = read(fd,(char *)cmd,sizeof(struct _cmd) * m_header.n_elem);
-         close (fd);
+         fread((char *)cmd,sizeof(struct _cmd) * m_header.n_elem,1,fd);
+         fclose (fd);
 
          readed = 1;
          first_time = 1;
-         max_menu = i / sizeof(struct _cmd);
+         max_menu = m_header.n_elem;
       }
 
       i = 0;
 
-      for (m=0; m < max_menu; m++)
-      {
+      for (m=0; m < max_menu; m++) {
          if(usr.priv < cmd[m].priv || cmd[m].priv == HIDDEN)
             continue;
          if((usr.flags & cmd[m].flags) != cmd[m].flags)
@@ -132,24 +144,21 @@ char *start;
          if (cmd[m].first_time && !first_time)
             continue;
 
-         if(cmd[m].flag_type == _F_DNLD || cmd[m].flag_type == _F_GLOBAL_DNLD)
-         {
+         if(cmd[m].flag_type == _F_DNLD || cmd[m].flag_type == _F_GLOBAL_DNLD) {
             if (usr.priv < sys.download_priv || sys.download_priv == HIDDEN)
                continue;
             if((usr.flags & sys.download_flags) != sys.download_flags)
                continue;
          }
 
-         if(cmd[m].flag_type == _F_UPLD)
-         {
+         if(cmd[m].flag_type == _F_UPLD) {
             if (usr.priv < sys.upload_priv || sys.upload_priv == HIDDEN)
                continue;
             if((usr.flags & sys.upload_flags) != sys.upload_flags)
                continue;
          }
 
-         if(cmd[m].flag_type == _F_TITLES)
-         {
+         if(cmd[m].flag_type == _F_TITLES) {
             if (usr.priv < sys.list_priv || sys.list_priv == HIDDEN)
                continue;
             if((usr.flags & sys.list_flags) != sys.list_flags)
@@ -174,6 +183,7 @@ char *start;
                continue;
 
             get_buffer_keystrokes (cmd[m].argument);
+            i = m;
             if (process_menu_option(cmd[m].flag_type, cmd[m].argument)) {
                if (cmd != NULL)
                   free (cmd);
@@ -195,17 +205,14 @@ char *start;
          set_useron_record(BROWSING, 0, 0);
       first_time = 0;
 
-      if (!cmd_string[0])
-      {
-         if (local_mode)
-         {
+      if (!cmd_string[0]) {
+         if (local_mode) {
             while (kbhit())
                m = getch ();
             local_kbd = -1;
          }
 
-         if (usr.hotkey)
-         {
+         if (usr.hotkey) {
             cmd_input (cmd_string, MAX_CMDLEN - 1);
             m_print (bbstxt[B_ONE_CR]);
          }
@@ -268,13 +275,11 @@ char *start;
             if (!ok_counter (cmd[i].argument))
                break;
             get_buffer_keystrokes (cmd[i].argument);
-            if (cmd_string[0] && cmd[i].flag_type != _MSG_INDIVIDUAL && cmd[i].flag_type != _MAIL_INDIVIDUAL)
-            {
+            if (cmd_string[0] && cmd[i].flag_type != _MSG_INDIVIDUAL && cmd[i].flag_type != _MAIL_INDIVIDUAL) {
                strcpy (&cmd_string[0], &cmd_string[1]);
                strtrim (cmd_string);
             }
-            if (process_menu_option(cmd[i].flag_type, cmd[i].argument))
-            {
+            if (process_menu_option(cmd[i].flag_type, cmd[i].argument)) {
                if (cmd != NULL)
                   free (cmd);
                return;
@@ -313,18 +318,24 @@ char *argument;
       xp = get_sig (argument);
       if ((p=strstr(argument, "/A=")) != NULL)
          usr.msg = atoi(p + 3);
-      if (!read_system(usr.msg, active))
-         display_area_list(active, 1, xp);
+      if (!read_system(usr.msg, active)) {
+         if (strstr (argument, "/2") != NULL)
+            display_area_list(active, 1, xp);
+         else if (strstr (argument, "/3") != NULL)
+            display_area_list(active, 3, xp);
+         else
+            display_area_list(active, 2, xp);
+      }
       else
          status_line(msgtxt[M_BBS_EXIT], usr.msg, sys.msg_name);
       if (sys.quick_board)
-         quick_scan_message_base (sys.quick_board, usr.msg);
+         quick_scan_message_base (sys.quick_board, usr.msg, 1);
       else if (sys.pip_board)
-         pip_scan_message_base (usr.msg);
+         pip_scan_message_base (usr.msg, 1);
       else if (sys.squish)
-         squish_scan_message_base (usr.msg, sys.msg_path);
+         squish_scan_message_base (usr.msg, sys.msg_path, 1);
       else
-         scan_message_base(usr.msg);
+         scan_message_base(usr.msg, 1);
       allow_reply = 0;
       gosub_menu(argument);
       break;
@@ -335,8 +346,14 @@ char *argument;
       xp = get_sig (argument);
       if ((p=strstr(argument, "/A=")) != NULL)
          usr.files = atoi(p + 3);
-      if (!read_system (usr.files, active))
-         display_area_list(active, 1, xp);
+      if (!read_system (usr.files, active)) {
+         if (strstr (argument, "/2") != NULL)
+            display_area_list(active, 1, xp);
+         else if (strstr (argument, "/3") != NULL)
+            display_area_list(active, 3, xp);
+         else
+            display_area_list(active, 2, xp);
+      }
       else
          status_line(msgtxt[M_BBS_SPAWN], usr.files, sys.file_name);
       gosub_menu (argument);
@@ -364,6 +381,8 @@ char *argument;
       break;
    case _CONFIG:
       user_configuration();
+      if (strstr (argument, "/R") != NULL)
+         press_enter ();
       break;
    case _USERLIST:
       user_list(argument);
@@ -378,7 +397,7 @@ char *argument;
       software_version();
       break;
    case _QUOTES:
-      cls();
+      read_system_file ("APHORISM");
       show_quote();
       break;
    case _CLEAR_GOTO:
@@ -405,7 +424,12 @@ char *argument;
    case _CHG_AREA:
       xp = get_sig (argument);
       do {
-         display_area_list(active, 1, xp);
+         if (strstr (argument, "/2") != NULL)
+            display_area_list(active, 1, xp);
+         else if (strstr (argument, "/3") != NULL)
+            display_area_list(active, 3, xp);
+         else
+            display_area_list(active, 2, xp);
          if (!CARRIER || time_remain() <= 0)
             break;
 
@@ -415,16 +439,15 @@ char *argument;
          else if (active == 2)
             s = read_system(usr.files, active);
       } while (!s);
-      if (active == 1)
-      {
+      if (active == 1) {
          if (sys.quick_board)
-            quick_scan_message_base (sys.quick_board, usr.msg);
+            quick_scan_message_base (sys.quick_board, usr.msg, 1);
          else if (sys.pip_board)
-            pip_scan_message_base (usr.msg);
+            pip_scan_message_base (usr.msg, 1);
          else if (sys.squish)
-            squish_scan_message_base (usr.msg, sys.msg_path);
+            squish_scan_message_base (usr.msg, sys.msg_path, 1);
          else
-            scan_message_base(usr.msg);
+            scan_message_base(usr.msg, 1);
          allow_reply = 0;
       }
       first_time = 1;
@@ -439,18 +462,24 @@ char *argument;
          active = 1;
          if (p[2] == '=')
             usr.msg = atoi(p + 3);
-         if (!read_system(usr.msg, active))
-            display_area_list(active, 1, xp);
+         if (!read_system(usr.msg, active)) {
+            if (strstr (argument, "/2") != NULL)
+               display_area_list(active, 1, xp);
+            else if (strstr (argument, "/3") != NULL)
+               display_area_list(active, 3, xp);
+            else
+               display_area_list(active, 2, xp);
+         }
          else
             status_line(msgtxt[M_BBS_EXIT], usr.msg, sys.msg_name);
          if (sys.quick_board)
-            quick_scan_message_base (sys.quick_board, usr.msg);
+            quick_scan_message_base (sys.quick_board, usr.msg, 1);
          else if (sys.pip_board)
-            pip_scan_message_base (usr.msg);
+            pip_scan_message_base (usr.msg, 1);
          else if (sys.squish)
-            squish_scan_message_base (usr.msg, sys.msg_path);
+            squish_scan_message_base (usr.msg, sys.msg_path, 1);
          else
-            scan_message_base(usr.msg);
+            scan_message_base(usr.msg, 1);
          allow_reply = 0;
       }
       if ((p=strstr(argument, "/F")) != NULL)
@@ -458,8 +487,14 @@ char *argument;
          active = 2;
          if (p[2] == '=')
             usr.files = atoi(p + 3);
-         if (!read_system (usr.files, active))
-            display_area_list(active, 1, xp);
+         if (!read_system (usr.files, active)) {
+            if (strstr (argument, "/2") != NULL)
+               display_area_list(active, 1, xp);
+            else if (strstr (argument, "/3") != NULL)
+               display_area_list(active, 3, xp);
+            else
+               display_area_list(active, 2, xp);
+         }
          else
             status_line(msgtxt[M_BBS_SPAWN], usr.files, sys.file_name);
       }
@@ -488,22 +523,22 @@ char *argument;
    case _F_RAWDIR:
       raw_dir();
       break;
+   case _F_KILL:
+      file_kill ();
+      break;
    case _SET_PWD:
       password_change();
       break;
    case _SET_HELP:
-      if (cmd != NULL)
-      {
+      if (cmd != NULL) {
          free (cmd);
          cmd = NULL;
       }
       v = select_language ();
-      if (v != -1)
-      {
+      if (v != -1) {
          usr.language = (byte) v;
          free (bbstxt);
-         if (!load_language (usr.language))
-         {
+         if (!load_language (usr.language)) {
             usr.language = 0;
             load_language (usr.language);
          }
@@ -559,11 +594,9 @@ char *argument;
             line_editor(0);
             gosub_menu(argument);
          }
-         else
-         {
+         else {
             if (external_editor (0))
-               if (lo)
-               {
+               if (lo) {
                   logoff_procedure ();
                   return (1);
                }
@@ -655,8 +688,7 @@ char *argument;
       edit_change_subject();
       break;
    case _PRESS_ENTER:
-      if (argument[0])
-      {
+      if (argument[0]) {
          m_print (argument);
          input(filename,2);
       }
@@ -678,13 +710,13 @@ char *argument;
       } while (!s);
       if (active == 1) {
          if (sys.quick_board)
-            quick_scan_message_base (sys.quick_board, usr.msg);
+            quick_scan_message_base (sys.quick_board, usr.msg, 1);
          else if (sys.pip_board)
-            pip_scan_message_base (usr.msg);
+            pip_scan_message_base (usr.msg, 1);
          else if (sys.squish)
-            squish_scan_message_base (usr.msg, sys.msg_path);
+            squish_scan_message_base (usr.msg, sys.msg_path, 1);
          else
-            scan_message_base(usr.msg);
+            scan_message_base(usr.msg, 1);
          allow_reply = 0;
       }
       first_time = 1;
@@ -728,8 +760,7 @@ char *argument;
       if (!get_menu_password (cmd[i].argument))
          break;
       xp = get_sig (argument);
-      if ((p=strstr(argument, "/M")) != NULL)
-      {
+      if ((p=strstr(argument, "/M")) != NULL) {
          active = 1;
          if (p[2] == '=')
             usr.msg = atoi(p + 3);
@@ -738,17 +769,16 @@ char *argument;
          else
             status_line(msgtxt[M_BBS_EXIT], usr.msg, sys.msg_name);
          if (sys.quick_board)
-            quick_scan_message_base (sys.quick_board, usr.msg);
+            quick_scan_message_base (sys.quick_board, usr.msg, 1);
          else if (sys.pip_board)
-            pip_scan_message_base (usr.msg);
+            pip_scan_message_base (usr.msg, 1);
          else if (sys.squish)
-            squish_scan_message_base (usr.msg, sys.msg_path);
+            squish_scan_message_base (usr.msg, sys.msg_path, 1);
          else
-            scan_message_base(usr.msg);
+            scan_message_base(usr.msg, 1);
          allow_reply = 0;
       }
-      if ((p=strstr(argument, "/F")) != NULL)
-      {
+      if ((p=strstr(argument, "/F")) != NULL) {
          active = 2;
          if (p[2] == '=')
             usr.files = atoi(p + 3);
@@ -784,17 +814,16 @@ char *argument;
       {
          active = v;
 
-         if (active == 1)
-         {
+         if (active == 1) {
             read_system(usr.msg, active);
             if (sys.quick_board)
-               quick_scan_message_base (sys.quick_board, usr.msg);
+               quick_scan_message_base (sys.quick_board, usr.msg, 1);
             else if (sys.pip_board)
-               pip_scan_message_base (usr.msg);
+               pip_scan_message_base (usr.msg, 1);
             else if (sys.squish)
-               squish_scan_message_base (usr.msg, sys.msg_path);
+               squish_scan_message_base (usr.msg, sys.msg_path, 1);
             else
-               scan_message_base(usr.msg);
+               scan_message_base(usr.msg, 1);
             allow_reply = 0;
          }
       }
@@ -851,8 +880,7 @@ char *argument;
 
       return_menu();
 
-      if (old_activ)
-      {
+      if (old_activ) {
          active = old_activ;
          if (active == 1)
             read_system(usr.msg, active);
@@ -874,13 +902,13 @@ char *argument;
       } while (!s);
       if (active == 1) {
          if (sys.quick_board)
-            quick_scan_message_base (sys.quick_board, usr.msg);
+            quick_scan_message_base (sys.quick_board, usr.msg, 1);
          else if (sys.pip_board)
-            pip_scan_message_base (usr.msg);
+            pip_scan_message_base (usr.msg, 1);
          else if (sys.squish)
-            squish_scan_message_base (usr.msg, sys.msg_path);
+            squish_scan_message_base (usr.msg, sys.msg_path, 1);
          else
-            scan_message_base(usr.msg);
+            scan_message_base(usr.msg, 1);
          allow_reply = 0;
       }
       first_time = 1;
@@ -991,19 +1019,34 @@ char *argument;
       hotkey_change ();
       break;
    case _BBSLIST_ADD:
-      bbs_add_list ();
+      if ((p=strchr(argument,'/')) != NULL && isdigit(*(p + 1)))
+         bbs_add_list (atoi (p + 1));
+      else
+         bbs_add_list (0);
       break;
    case _BBSLIST_SHORT:
-      bbs_short_list ();
+      if ((p=strchr(argument,'/')) != NULL && isdigit(*(p + 1)))
+         bbs_short_list (atoi (p + 1));
+      else
+         bbs_short_list (0);
       break;
    case _BBSLIST_LONG:
-      bbs_long_list ();
+      if ((p=strchr(argument,'/')) != NULL && isdigit(*(p + 1)))
+         bbs_long_list (atoi (p + 1));
+      else
+         bbs_long_list (0);
       break;
    case _BBSLIST_CHANGE:
-      bbs_change ();
+      if ((p=strchr(argument,'/')) != NULL && isdigit(*(p + 1)))
+         bbs_change (atoi (p + 1));
+      else
+         bbs_change (0);
       break;
    case _BBSLIST_REMOVE:
-      bbs_remove ();
+      if ((p=strchr(argument,'/')) != NULL && isdigit(*(p + 1)))
+         bbs_remove (atoi (p + 1));
+      else
+         bbs_remove (0);
       break;
    case _QWK_DOWNLOAD:
       qwk_pack_tagged_areas ();
@@ -1018,6 +1061,45 @@ char *argument;
             vote_user (xp);
       }
       break;
+   case 117:
+      ibmset_change ();
+      break;
+   case 118:
+      if (!get_menu_password (argument))
+         break;
+      xp = get_sig (argument);
+      display_new_area_list (xp);
+      if (sys.quick_board)
+         quick_scan_message_base (sys.quick_board, usr.msg, 1);
+      else if (sys.pip_board)
+         pip_scan_message_base (usr.msg, 1);
+      else if (sys.squish)
+         squish_scan_message_base (usr.msg, sys.msg_path, 1);
+      else
+         scan_message_base(usr.msg, 1);
+      allow_reply = 0;
+      break;
+   case 119:
+      xport_message ();
+      break;
+   case 120:
+      if ((p=strchr(argument,'/')) != NULL && isdigit(*(p + 1)))
+         bbs_list_download (atoi (p + 1));
+      else
+         bbs_list_download (0);
+      break;
+   case 121:
+      if ((p=strstr(argument, "/G=")) != NULL)
+         xp = atoi (&p[3]);
+      else
+         xp = -1;
+
+      if (strstr(argument, "/M") != NULL)
+         select_group (1, xp);
+      else if (strstr(argument, "/F") != NULL)
+         select_group (2, xp);
+      else
+         select_group (0, xp);
    }
 
    return (0);
@@ -1672,18 +1754,31 @@ char *argument;
    char *p;
    int xp = 0;
 
-   if ((p=strstr(argument, "/G")) != NULL) {
-      if ( *(p +2) == '=')
-         xp = atoi(p + 3);
-      else
-         xp = usr.sig;
-   }
-
    if ((p=strstr(argument, "/F")) != NULL)
       active = 2;
 
    if ((p=strstr(argument, "/M")) != NULL)
       active = 1;
+
+   if ((p=strstr(argument, "/G")) != NULL) {
+      if ( *(p +2) == '=') {
+         if ( *(p + 3) == '?' )
+            xp = -1;
+         else {
+            xp = atoi(p + 3);
+            if (active == 1)
+               usr.msg_sig = xp;
+            else if (active == 2)
+               usr.file_sig = xp;
+         }
+      }
+      else {
+         if (active == 1)
+            xp = usr.msg_sig;
+         else if (active == 2)
+            xp = usr.file_sig;
+      }
+   }
 
    return (xp);
 }

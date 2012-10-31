@@ -39,7 +39,7 @@ static int gen_req_name(char *,char *,int *);
 #define PRODUCT_CODE 0x4E
 #define isLORA       0x4E
 #define MAJVERSION   2
-#define MINVERSION   10
+#define MINVERSION   11
 #define no_zapzed    0
 #define NUM_FLAGS    4
 
@@ -48,52 +48,11 @@ static int gen_req_name(char *,char *,int *);
 
 static int net_problems;
 
-/*
-FTSC_Whack_CR()
-{
-long t1,t2;
-char i, j, k, l, m;
-char buf[80];
-
-t1 = timerset(3000);
-j = CR;
-strcpy (buf, "\nCalled: ");
-l = strlen (buf);
-m = 0;
-while (!timeup(t1) && CARRIER()) {
-	SENDBYTE (j);
-	j = 45 - j;
-	while (((i = TIMED_READ(0)) != EOF) && (!timeup(t1)) && CARRIER()) {
-		if (i == CR) {
-			if (m) {
-				SENDBYTE('');
-				printf("%s\r",buf);
-				return (0);
-				}
-			}
-		else
-			if (i >= ' ') {
-				buf[l++] = i;
-				buf[l] = '\0';
-				if (l > 77)
-					l = 77;
-				m = 1;
-				}
-		}
-
-	t2 = timerset (100);
-	while (!timeup (t2));
-	}
-
-status_line ("*Nobody answered the door");
-return (-1);
-}
-*/
 
 int FTSC_sender (wz)
 int wz;
 {
-	int j;
+        int j, i;
 	long t1;
 
         XON_DISABLE ();
@@ -157,18 +116,63 @@ int wz;
 	}
 
 get_out:
-	t1 = timerset (100);
-	while (!timeup (t1));
-	if (!wz)
-                status_line (msgtxt[M_0001_END]);
-	return(TRUE);
+   t1 = timerset (100);
+   while (!timeup (t1));
+
+   if (!wz) {
+      status_line (msgtxt[M_0001_END]);
+      terminating_call();
+
+      if (got_arcmail) {
+         if (cur_event > -1 && e_ptrs[cur_event]->errlevel[2])
+            aftermail_exit = e_ptrs[cur_event]->errlevel[2];
+
+         if (!aftermail_exit)
+            aftermail_exit = aftercaller_exit;
+
+         if (cur_event > -1 && (e_ptrs[cur_event]->echomail & ECHO_IMPORT)) {
+            if (modem_busy != NULL)
+               mdm_sendcmd (modem_busy);
+
+            i = 1;
+            if ( (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL)) ) {
+               if (prot_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_PROT))
+                  import_mail (prot_filepath, &i);
+               if (know_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_KNOW))
+                  import_mail (know_filepath, &i);
+               if (norm_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_NORMAL))
+                  import_mail (norm_filepath, &i);
+            }
+            else {
+               if (prot_filepath != NULL)
+                  import_mail (prot_filepath, &i);
+               if (know_filepath != NULL)
+                  import_mail (know_filepath, &i);
+               if (norm_filepath != NULL)
+                  import_mail (norm_filepath, &i);
+            }
+
+            i = 2;
+            import_mail (".\\", &i);
+            if (e_ptrs[cur_event]->echomail & ECHO_EXPORT)
+               export_mail (NETMAIL_RSN|ECHOMAIL_RSN);
+         }
+
+         status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
+         get_down (aftermail_exit, 3);
+      }
+
+      get_down(aftercaller_exit, 2);
+   }
+
+   return(TRUE);
 }
 
 int FTSC_receiver (wz)
 int wz;
 {
         char fname[64], i, *HoldName;
-	int havemail, done;
+        int havemail, done, x;
 	unsigned char j;
 	long t1, t2;
 	struct ffblk dt1;
@@ -287,12 +291,56 @@ int wz;
 		}
 	}
 
-	if (!no_requests)
-		SEA_recvreq ();
+   if (!no_requests)
+      SEA_recvreq ();
 
-	if (!wz)
-                status_line (msgtxt[M_0001_END]);
-	return 1;
+   if (!wz) {
+      status_line (msgtxt[M_0001_END]);
+      terminating_call();
+
+      if (got_arcmail) {
+         if (cur_event > -1 && e_ptrs[cur_event]->errlevel[2])
+            aftermail_exit = e_ptrs[cur_event]->errlevel[2];
+
+         if (!aftermail_exit)
+            aftermail_exit = aftercaller_exit;
+
+         if (cur_event > -1 && (e_ptrs[cur_event]->echomail & ECHO_IMPORT)) {
+            if (modem_busy != NULL)
+               mdm_sendcmd (modem_busy);
+
+            x = 1;
+            if ( (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL)) ) {
+               if (prot_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_PROT))
+                  import_mail (prot_filepath, &x);
+               if (know_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_KNOW))
+                  import_mail (know_filepath, &x);
+               if (norm_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_NORMAL))
+                  import_mail (norm_filepath, &x);
+            }
+            else {
+               if (prot_filepath != NULL)
+                  import_mail (prot_filepath, &x);
+               if (know_filepath != NULL)
+                  import_mail (know_filepath, &x);
+               if (norm_filepath != NULL)
+                  import_mail (norm_filepath, &x);
+            }
+
+            x = 2;
+            import_mail (".\\", &x);
+            if (e_ptrs[cur_event]->echomail & ECHO_EXPORT)
+               export_mail (NETMAIL_RSN|ECHOMAIL_RSN);
+         }
+
+         status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
+         get_down (aftermail_exit, 3);
+      }
+
+      get_down(aftercaller_exit, 2);
+   }
+
+   return 1;
 }
 
 static int FTSC_sendmail ()
@@ -556,7 +604,7 @@ static int FTSC_recvmail ()
                 remote_node = called_node = tmppkt.orig_node;
                 remote_net = called_net = tmppkt.orig_net;
                 remote_zone = called_zone = tmppkt.orig_zone;
-                if (get_bbs_record(remote_zone,remote_net,remote_node))
+                if (get_bbs_record(remote_zone,remote_net,remote_node, remote_point))
                         status_line("%s: %s (%u:%u/%u)",msgtxt[M_REMOTE_SYSTEM],nodelist.name,remote_zone,remote_net,remote_node);
                 else
                         status_line("%s: %s (%u:%u/%u)",msgtxt[M_REMOTE_SYSTEM],msgtxt[M_UNKNOWN_MAILER],remote_zone,remote_net,remote_node);

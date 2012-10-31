@@ -7,6 +7,7 @@
 #include <io.h>
 #include <fcntl.h>
 #include <alloc.h>
+#include <stdlib.h>
 
 #include <cxl\cxlstr.h>
 
@@ -14,6 +15,8 @@
 #include "lora.h"
 #include "externs.h"
 #include "prototyp.h"
+
+char *firstchar(char *, char *, int);
 
 
 void timer (decs)
@@ -61,6 +64,7 @@ void press_enter()
         m_print("\r");
         space (strlen (bbstxt[B_PRESS_ENTER]) + 1);
         m_print("\r");
+        restore_last_color ();
 }
 
 int continua()
@@ -76,6 +80,7 @@ int continua()
         m_print("\r");
         space (strlen (bbstxt[B_MORE]) + 14);
         m_print("\r");
+        restore_last_color ();
 
         if(i == DEF_NO)
         {
@@ -346,15 +351,24 @@ int zone;
 {
    register char *q;
 
-   if (zone == (int) alias[0].zone || !zone)
-      return(hold_area);
    q = hold_area;
+
    while (*q)
       q++;
-   --q;
-   (void) sprintf(q, ".%03x\\", zone);
 
-   return(hold_area);
+   if ( *(q - 5) == '.')
+      q -= 5;
+   else
+      q--;
+
+   *q = '\0';
+   if (zone != (int) alias[0].zone && zone)
+      sprintf(q, ".%03x", zone);
+
+   mkdir (hold_area);
+   strcat (hold_area, "\\");
+
+   return (hold_area);
 }
 
 int stristr (s, p)
@@ -387,4 +401,154 @@ void ljstring(char *dest,char *src,int len)
       x++;
    }
 }
+
+void display_percentage (i, v)
+int i, v;
+{
+   long t;
+   char filename[10], *backs = "\b\b\b\b\b";
+
+   t = (i * 100L) / v;
+   sprintf (filename, "%ld%%", t);
+   strncat (filename, backs, strlen (filename));
+   m_print (filename);
+}
+
+int is_here (z, ne, no, pp, forward, maxnodes)
+int z, ne, no, pp;
+struct _fwrd *forward;
+int maxnodes;
+{
+   register int i;
+
+   for (i = 0; i < maxnodes; i++)
+      if (forward[i].zone == z && forward[i].net == ne && forward[i].node == no && forward[i].point == pp)
+         return (i);
+
+   return (-1);
+}
+
+int mail_sort_func (const void *a1, const void *b1)
+{
+   struct _fwrd *a, *b;
+   a = (struct _fwrd *)a1;
+   b = (struct _fwrd *)b1;
+   if (a->net != b->net)   return (a->net - b->net);
+   return ( (int)(a->node - b->node) );
+}
+
+void parse_netnode2(netnode, zone, net, node, point)
+char *netnode;
+int *zone, *net, *node, *point;
+{
+   char *p;
+
+   p = netnode;
+
+   /* If we have a zone (and the caller wants the zone to be passed back).. */
+
+   if (strchr (netnode, ':')) {
+      *zone = atoi(p);
+      p = firstchar(p, ":", 2);
+   }
+
+   /* If we have a net number... */
+
+   if (p && strchr (p, '/')) {
+      *net = atoi (p);
+      p = firstchar (p, "/", 2);
+   }
+   else if (!stricmp (p, "ALL")) {
+      *net = 0;
+      *node = 0;
+      *point = 0;
+      return;
+   }
+
+   /* We *always* need a node number... */
+
+   if (p && *p != '.')
+      *node = atoi(p);
+   else if (p == NULL || !stricmp (p, "ALL"))
+      *node = 0;
+
+   /* And finally check for a point number... */
+
+   if (p && strchr (p, '.')) {
+      if (*p == '.')
+         p=firstchar (p, ".", 1);
+      else
+         p=firstchar (p, ".", 2);
+
+      if (p)
+         *point = atoi(p);
+      else
+         *point = 0;
+   }
+   else
+      *point = 0;
+}
+
+
+char *firstchar(strng, delim, findword)
+char *strng, *delim;
+int findword;
+{
+   int x, isw, sl_d, sl_s, wordno=0;
+   char *string, *oldstring;
+
+   /* We can't do *anything* if the string is blank... */
+
+   if (! *strng)
+      return NULL;
+
+   string=oldstring=strng;
+
+   sl_d=strlen(delim);
+
+   for (string=strng;*string;string++)
+   {
+      for (x=0,isw=0;x <= sl_d;x++)
+         if (*string==delim[x])
+            isw=1;
+
+      if (isw==0) {
+         oldstring=string;
+         break;
+      }
+   }
+
+   sl_s=strlen(string);
+
+   for (wordno=0;(string-oldstring) < sl_s;string++)
+   {
+      for (x=0,isw=0;x <= sl_d;x++)
+         if (*string==delim[x])
+         {
+            isw=1;
+            break;
+         }
+
+      if (!isw && string==oldstring)
+         wordno++;
+
+      if (isw && (string != oldstring))
+      {
+         for (x=0,isw=0;x <= sl_d;x++) if (*(string+1)==delim[x])
+         {
+            isw=1;
+            break;
+         }
+
+         if (isw==0)
+            wordno++;
+      }
+
+      if (wordno==findword)
+         return((string==oldstring || string==oldstring+sl_s) ? string : string+1);
+   }
+
+   return NULL;
+}
+
 

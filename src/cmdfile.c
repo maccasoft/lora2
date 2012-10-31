@@ -21,16 +21,77 @@ static int set_priv (char);
 static void big_char (char);
 static void big_string (int, char *, ...);
 static FILE *get_system_file (char *);
+static void build_flags (char *, long);
+char *translate_ansi (char *);
+
+static int ansi_attr = 7;
+static char vx = 1, vy = 1;
+
+void read_hourly_files ()
+{
+   int start, stop;
+   char filename[80];
+   struct ffblk blk;
+   struct time timep;
+
+   gettime (&timep);
+
+   sprintf (filename, "%s????.*", text_path);
+   if (findfirst (filename, &blk, 0))
+      return;
+
+   do {
+      if (isdigit (blk.ff_name[0]) && isdigit (blk.ff_name[1]) && isdigit (blk.ff_name[2]) && isdigit (blk.ff_name[3]) && blk.ff_name[4] == '.') {
+         start = (blk.ff_name[0] - '0') * 10 + (blk.ff_name[1] - '0');
+         stop = (blk.ff_name[2] - '0') * 10 + (blk.ff_name[3] - '0');
+         if (timep.ti_hour < start || timep.ti_hour > stop)
+            continue;
+
+         blk.ff_name[4] = '\0';
+         sprintf (filename, "%s%s", text_path, blk.ff_name);
+         read_system_file (blk.ff_name);
+         return;
+      }
+   } while (!findnext (&blk));
+
+   if (glob_text_path != NULL) {
+      sprintf (filename, "%s????.*", glob_text_path);
+      if (findfirst (filename, &blk, 0))
+         return;
+
+      do {
+         if (isdigit (blk.ff_name[0]) && isdigit (blk.ff_name[1]) && isdigit (blk.ff_name[2]) && isdigit (blk.ff_name[3]) && blk.ff_name[4] == '.') {
+            start = (blk.ff_name[0] - '0') * 10 + (blk.ff_name[1] - '0');
+            stop = (blk.ff_name[2] - '0') * 10 + (blk.ff_name[3] - '0');
+            if (timep.ti_hour < start || timep.ti_hour > stop)
+               continue;
+
+            blk.ff_name[4] = '\0';
+            sprintf (filename, "%s%s", glob_text_path, blk.ff_name);
+            read_system_file (blk.ff_name);
+            return;
+         }
+      } while (!findnext (&blk));
+   }
+}
 
 int read_system_file(name)
 char *name;
 {
+        int i;
         char filename[128];
 
         strcpy(filename, text_path);
         strcat(filename, name);
 
-        return (read_file(filename));
+        if ((i = read_file(filename)) == 0 && glob_text_path != NULL) {
+                strcpy(filename, glob_text_path);
+                strcat(filename, name);
+
+                i = read_file(filename);
+        }
+
+        return (i);
 }
 
 static FILE *get_system_file (name)
@@ -68,7 +129,7 @@ int read_file(name)
 char *name;
 {
    FILE *fp, *answer, *fpc;
-   char linea[258], stringa[80], parola[80], *p, lastresp[80];
+   char linea[260], stringa[80], parola[80], *p, lastresp[80];
    char chain[40], onexit[40], resp, c;
    int line, required, more, m, a, day, mont, year, bignum;
    word search;
@@ -76,6 +137,8 @@ char *name;
    struct ffblk blk;
    struct tm *tim;
 
+   ansi_attr = 7;
+   vx = vy = 1;
    XON_ENABLE();
    _BRK_ENABLE();
 
@@ -102,30 +165,31 @@ char *name;
 loop:
    change_attr(LGREY|_BLACK);
 
-   while (fgets(linea, 255, fp) != NULL)
-   {
-      linea [256] = '\0';
+   while (fgets(linea, 258, fp) != NULL) {
+      linea [258] = '\0';
 
-      while (strstr (linea, "\r\n") == NULL && strlen (linea) < 256)
+      while (strstr (linea, "\r\n") == NULL && strlen (linea) < 258)
          if (fgets (&linea[strlen(linea)], 255-strlen(linea), fp) == NULL)
             break;
 
-      for (p=linea;(*p) && (*p != 0x1A);p++)
-      {
-         if (!CARRIER || RECVD_BREAK())
-         {
-            CLEAR_OUTBOUND();
+      for (p=linea;(*p) && (*p != 0x1A);p++) {
+         if (!local_mode) {
+            if (!CARRIER || RECVD_BREAK()) {
+               CLEAR_OUTBOUND();
 
-            fclose (fp);
-            if (answer)
-               fclose (answer);
-            return (0);
+               fclose (fp);
+               if (answer)
+                  fclose (answer);
+               return (0);
+            }
          }
 
-         switch (*p)
-         {
+         switch (*p) {
          case CTRLA:
-            big_string (bignum, bbstxt[B_PRESS_ENTER]);
+            if (*(p + 1) == CTRLA) {
+               big_string (bignum, bbstxt[B_PRESS_ENTER]);
+               p++;
+            }
             input (stringa, 0);
             line = 1;
             break;
@@ -139,11 +203,9 @@ loop:
             break;
          case CTRLF:
             p++;
-            switch(toupper(*p))
-            {
+            switch(toupper(*p)) {
             case 'C':
-               if (cps)
-                  big_string (bignum, "%ld", cps);
+               big_string (bignum, "%ld", cps);
                break;
             case 'D':
                big_string (bignum, "%s",usr.dataphone);
@@ -160,8 +222,7 @@ loop:
                big_string (bignum, "%s",&usr.ldate[11]);
                break;
             case 'H':
-               if (cps)
-                  big_string (bignum, "%ld", (cps * 100) / (rate / 10));
+               big_string (bignum, "%ld", (cps * 100) / (rate / 10));
                break;
             case 'L':
                big_string (bignum, "%d", usr.credit);
@@ -200,6 +261,7 @@ loop:
                big_string (bignum, "%s",usr.formfeed ? bbstxt[B_YES] : bbstxt[B_NO]);
                break;
             case '0':
+            case '1':
                big_string (bignum, "%s",usr.use_lore ? bbstxt[B_NO] : bbstxt[B_YES]);
                break;
             case '2':
@@ -296,8 +358,7 @@ loop:
             case '9':
                if(usr.n_upld == 0)
                   big_string (bignum, "0:%u", usr.n_dnld);
-               else
-               {
+               else {
                    m = (unsigned int)(usr.n_dnld / usr.n_upld);
                    big_string (bignum, "1:%u", m);
                }
@@ -312,6 +373,7 @@ loop:
                }
                break;
             case ';':
+            case '"':
                big_string (bignum, "%s",usr.full_read ? bbstxt[B_YES] : bbstxt[B_NO]);
                break;
             case '[':
@@ -328,20 +390,17 @@ loop:
          case CR:
             break;
          case LF:
-            if (!local_mode)
-            {
+            if (!local_mode) {
                BUFFER_BYTE('\r');
                BUFFER_BYTE('\n');
             }
             if (snooping)
                wputs("\n");
 
-            if (!(line++ < (usr.len-1)) && usr.len != 0)
-            {
+            if (!(line++ < (usr.len-1)) && usr.len != 0) {
                if (!more)
                   continue;
-               if (!(line = more_question (line)))
-               {
+               if (!(line = more_question (line))) {
                    fclose(fp);
                    fp = NULL;
                }
@@ -366,8 +425,7 @@ loop:
                p++;
                sscanf(usr.ldate, "%2d %3s %2d", &day, parola, &year);
                parola[3] = '\0';
-               for (mont = 0; mont < 12; mont++)
-               {
+               for (mont = 0; mont < 12; mont++) {
                   if ((!stricmp(mtext[mont], parola)) || (!stricmp(mesi[mont], parola)))
                      break;
                }
@@ -425,6 +483,7 @@ loop:
                big_string (bignum, "%s",sys.file_name);
                break;
             case '0':
+            case '9':
                big_string (bignum, "%d",num_msg);
                break;
             case '1':
@@ -433,8 +492,14 @@ loop:
             case '2':
                big_string (bignum, "%d",usr.files);
                break;
+            case '5':
+               big_string (bignum, "%s", sys.msg_name);
+               break;
             case '7':
-               big_string (bignum, "%d",usr.account);
+               big_string (bignum, "%u",usr.account);
+               break;
+            case '8':
+               big_string (bignum, "%u",usr.f_account);
                break;
             case '[':
                big_string (bignum, "%d", class[usr_class].max_dl - usr.dnldl);
@@ -442,10 +507,16 @@ loop:
             case '\\':
                del_line ();
                break;
+            default:
+               p--;
+               _BRK_DISABLE ();
+               more = 0;
+               break;
             }
             break;
          case CTRLL:
             cls();
+            vx = vy = 1;
             line=1;
             break;
          case CTRLO:
@@ -470,8 +541,7 @@ loop:
                p = strchr(linea,'\0') - 1;
                break;
             case 'M':
-               if(answer)
-               {
+               if(answer) {
                   p++;
                   fprintf(answer,"%s %c\r\n",p,resp);
                }
@@ -479,8 +549,7 @@ loop:
                p = strchr(linea,'\0') - 1;
                break;
             case 'N':
-               while (CARRIER && time_remain() > 0)
-               {
+               while (CARRIER && time_remain() > 0) {
                   input(stringa,usr.width-1);
                   if(strlen(stringa))
                      break;
@@ -491,8 +560,7 @@ loop:
 
                strcpy (lastresp, stringa);
 
-               if(answer)
-               {
+               if(answer) {
                   putc(' ',answer);
                   putc(' ',answer);
                   p++;
@@ -517,8 +585,7 @@ loop:
                p = strchr(linea,'\0') - 1;
                break;
             case 'P':
-               if(answer)
-               {
+               if(answer) {
                   fprintf(answer,"\r\n");
                   usr.ptrquestion = ftell(answer);
                   fprintf(answer,"* %s\t%s\t%s\r\n",usr.name,usr.city,data(parola));
@@ -531,18 +598,15 @@ loop:
                UNBUFFER_BYTES ();
                FLUSH_OUTPUT ();
 
-               if (fpc == NULL)
-               {
+               if (fpc == NULL) {
                   fp = fopen(onexit,"rb");
-                  if (fp == NULL)
-                  {
+                  if (fp == NULL) {
                      if (answer)
                         fclose (answer);
                      return (line);
                   }
                }
-               else
-               {
+               else {
                   fp = fpc;
                   fpc = NULL;
                   p[1] = '\0';
@@ -553,8 +617,7 @@ loop:
             case 'R':
                line=1;
                p++;
-               while (CARRIER && time_remain() > 0)
-               {
+               while (CARRIER && time_remain() > 0) {
                   input (stringa, 1);
                   c = toupper(stringa[0]);
                   if(c == '\0')
@@ -673,6 +736,14 @@ loop:
                line = *(p+1);
                p+=2;
                break;
+            case CTRLY:
+               p++;
+               strncpy (stringa, &p[1], *p);
+               stringa[*p] = '\0';
+               p += *p + 1;
+               for (m = 0; m < *p; m++)
+                  m_print (stringa);
+               break;
             }
             break;
          case CTRLW:
@@ -778,15 +849,17 @@ loop:
                break;
             case 'k':
                p++;
-               if ( *p == 'F' )
-               {
+               if ( *p == 'D' ) {
+                  build_flags (parola, usr.flags);
+                  big_string (bignum, parola);
+               }
+               else if ( *p == 'F' ) {
                   p++;
                   usr.flags &= ~get_flags (p);
                   while (*p != ' ' && *p != '\0')
                      p++;
                }
-               else if ( *p == 'I' )
-               {
+               else if ( *p == 'I' ) {
                   p++;
                   if ((usr.flags & get_flags (p)) != get_flags (p))
                      p = strchr(linea,'\0') - 1;
@@ -796,15 +869,13 @@ loop:
                         p++;
                   }
                }
-               else if ( *p == 'O' )
-               {
+               else if ( *p == 'O' ) {
                   p++;
                   usr.flags |= get_flags (p);
                   while (*p != ' ' && *p != '\0')
                      p++;
                }
-               else if ( *p == 'T' )
-               {
+               else if ( *p == 'T' ) {
                   p++;
                   usr.flags ^= get_flags (p);
                   while (*p != ' ' && *p != '\0')
@@ -816,28 +887,23 @@ loop:
                fpc = fp;
                p[strlen(p)-2] = '\0';
                fp = fopen (p, "rb");
-               if (fp == NULL && usr.ansi)
-               {
+               if (fp == NULL && usr.ansi) {
                   sprintf(stringa,"%s.ANS",p);
                   fp = fopen(stringa,"rb");
                }
-               if (fp == NULL)
-               {
+               if (fp == NULL) {
                   sprintf(stringa,"%s.AVT",p);
                   fp = fopen(stringa,"rb");
                }
-               if (fp == NULL)
-               {
+               if (fp == NULL) {
                   sprintf(stringa,"%s.BBS",p);
                   fp = fopen(stringa,"rb");
                }
-               if (fp == NULL)
-               {
+               if (fp == NULL) {
                   sprintf(stringa,"%s.ASC",p);
                   fp = fopen(stringa,"rb");
                }
-               if (fp == NULL)
-               {
+               if (fp == NULL) {
                   fp = fpc;
                   fpc = NULL;
                }
@@ -863,8 +929,7 @@ loop:
                break;
             case 'W':
                p++;
-               if(answer)
-               {
+               if(answer) {
                   translate_filenames (p, resp, lastresp);
                   fprintf(answer, "%s", p);
                }
@@ -875,8 +940,7 @@ loop:
                break;
             case 'X':
                p++;
-               if ( *p == 'D' || *p == 'R' )
-               {
+               if ( *p == 'D' || *p == 'R' ) {
                   p++;
                   translate_filenames (p, resp, lastresp);
                   open_outside_door (p);
@@ -898,9 +962,16 @@ loop:
             break;
          case CTRLY:
             c = *(++p);
+            if (!usr.ibmset && (unsigned char)c >= 128)
+               c = bbstxt[B_ASCII_CONV][(unsigned char)c - 128];
             a = *(++p);
-            if(usr.avatar && !local_mode)
-            {
+            vx += a;
+            if (vx > 80) {
+               vx -= 80;
+               if (vy < 25)
+                  vy++;
+            }
+            if(usr.avatar && !local_mode) {
                BUFFER_BYTE(CTRLY);
                BUFFER_BYTE(c);
                BUFFER_BYTE(a);
@@ -913,16 +984,27 @@ loop:
             break;
          case CTRLZ:
             break;
+         case 0x1B:
+            p = translate_ansi (p);
+            break;
          default:
-            if (!bignum)
-            {
+            c = *p;
+            if (!usr.ibmset && (unsigned char)c >= 128)
+               c = bbstxt[B_ASCII_CONV][(unsigned char)c - 128];
+            if (!bignum || (!usr.ansi && !usr.avatar)) {
                if (!local_mode)
-                  BUFFER_BYTE(*p);
+                  BUFFER_BYTE(c);
                if (snooping)
-                  wputc(*p);
+                  wputc(c);
+               vx++;
+               if (vx > 80) {
+                  vx -= 80;
+                  if (vy < 25)
+                     vy++;
+               }
             }
             else
-               big_char (*p);
+               big_char (c);
             break;
          }
 
@@ -930,22 +1012,21 @@ loop:
             break;
       }
 
-      if (*p == CTRLZ || fp == NULL)
-      {
+      if (*p == CTRLZ || fp == NULL) {
          if (fp != NULL)
             fclose(fp);
 
-         UNBUFFER_BYTES ();
-         FLUSH_OUTPUT ();
+         if (!local_mode) {
+            UNBUFFER_BYTES ();
+            FLUSH_OUTPUT ();
+         }
 
-         if (fpc == NULL)
-         {
+         if (fpc == NULL) {
             fp = fopen(onexit,"rb");
             if (fp == NULL)
                break;
          }
-         else
-         {
+         else {
             fp = fpc;
             fpc = NULL;
          }
@@ -954,14 +1035,12 @@ loop:
 
    fclose(fp);
 
-   if (fpc == NULL)
-   {
+   if (fpc == NULL) {
       fp = fopen(onexit,"rb");
       if (fp != NULL)
          goto loop;
    }
-   else
-   {
+   else {
       fp = fpc;
       fpc = NULL;
       goto loop;
@@ -972,8 +1051,10 @@ loop:
    if (answer != NULL)
       fclose(answer);
 
-   UNBUFFER_BYTES ();
-   FLUSH_OUTPUT();
+   if (!local_mode) {
+      UNBUFFER_BYTES ();
+      FLUSH_OUTPUT();
+   }
 
    return(line);
 }
@@ -1136,6 +1217,13 @@ char ch;
   cle (6);
   cdo (1);
   m_print ("%5.5s ", bitbuf[2]);
+
+  vx += 6;
+  if (vx > 80) {
+     vx -= 80;
+     if (vy < 25)
+        vy++;
+  }
 }
 
 static void big_string (int big, char *format, ...)
@@ -1290,3 +1378,235 @@ char c;
    return (i);
 }
 
+static void build_flags (buffer, flag)
+char *buffer;
+long flag;
+{
+   int i, x;
+
+   memset (buffer, ' ', 36);
+   buffer[36] = '\0';
+
+   x = 0;
+
+   for (i=0;i<8;i++) {
+      if (flag & 0x80000000L)
+         buffer[x++] = '0' + i;
+      flag = flag << 1;
+   }
+
+   for (i=0;i<8;i++) {
+      if (flag & 0x80000000L)
+         buffer[x++] = ((i<2)?'8':'?') + i;
+      flag = flag << 1;
+   }
+
+   for (i=0;i<8;i++) {
+      if (flag & 0x80000000L)
+         buffer[x++] = 'G' + i;
+      flag = flag << 1;
+   }
+
+   for (i=0;i<8;i++) {
+      if (flag & 0x80000000L)
+         buffer[x++] = 'O' + i;
+      flag = flag << 1;
+   }
+}
+
+#define  NORM   0x07
+#define  BOLD   0x08
+#define  FAINT  0xF7
+#define  VBLINK 0x80
+#define  REVRS  0x77
+
+char *translate_ansi (pf)
+char *pf;
+{
+   static char sx = 1, sy = 1;
+   char c, str[10];
+   int Pn[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+   int i = 0, p = 0;
+
+   pf++;
+   c = *pf;
+   if (c != '[') {
+      m_print ("\x1b%c", c);
+      vx += 2;
+      if (vx > 80) {
+         vx -= 80;
+         if (vy < 25)
+            vy++;
+      }
+      return (pf);
+   }
+
+   while (1) {
+      pf++;
+      c = *pf;
+
+      if (isdigit (c))
+         *(str + i++) = c;
+      else {
+         *(str + i) = '\0';
+         i = 0;
+         Pn[p++] = atoi (str);
+
+         if (c == ';')
+            continue;
+         else
+            switch(c) {
+               /* (CUP) set cursor position  */
+               case 'H':
+               case 'F':
+                  vy = Pn[0] ? Pn[0] : 1;
+                  vx = Pn[1] ? Pn[1] : 1;
+                  cpos (vy, vx);
+                  return (pf);
+                  /* (CUU) cursor up   */
+               case 'A':
+                  vy -= Pn[0];
+                  if (vy < 1)
+                     vy = 1;
+                  cup (Pn[0]);
+                  return (pf);
+                  /* (CUD) cursor down */
+               case 'B':
+                  vy += Pn[0];
+                  if (vy > 25)
+                     vy = 25;
+                  cdo (Pn[0]);
+                  return (pf);
+                  /* (CUF) cursor forward */
+               case 'C':
+                  vx += Pn[0];
+                  if (vx > 80)
+                     vx = 80;
+                  cri (Pn[0]);
+                  return (pf);
+                  /* (CUB) cursor backward   */
+               case 'D':
+                  vx -= Pn[0];
+                  if (vx < 1)
+                     vx = 1;
+                  cle (Pn[0]);
+                  return (pf);
+                  /* (SCP) save cursor position */
+               case 's':
+                  sx = vx;
+                  sy = vy;
+                  return (pf);
+                  /* (RCP) restore cursor position */
+               case 'u':
+                  vx = sx;
+                  vy = sy;
+                  cpos (vy, vx);
+                  return (pf);
+                  /* clear screen   */
+               case 'J':
+                  if (Pn[0] == 2) {
+                     vx = vy = 1;
+                     cls ();
+                  }
+                  return (pf);
+                  /* (EL) erase line   */
+               case 'K':
+                  del_line ();
+                  return (pf);
+                  /* An attribute command is more elaborate than the    */
+                  /* others because it may have many numeric parameters */
+               case 'm':
+                  for(i=0; i<p; i++) {
+                     if (Pn[i] >= 30 && Pn[i] <= 37) {
+                        ansi_attr &= 0xf8;
+                        switch (Pn[i]) {
+                           case 30:
+                              ansi_attr |= BLACK;
+                              break;
+                           case 31:
+                              ansi_attr |= RED;
+                              break;
+                           case 32:
+                              ansi_attr |= GREEN;
+                              break;
+                           case 33:
+                              ansi_attr |= BROWN;
+                              break;
+                           case 34:
+                              ansi_attr |= BLUE;
+                              break;
+                           case 35:
+                              ansi_attr |= MAGENTA;
+                              break;
+                           case 36:
+                              ansi_attr |= CYAN;
+                              break;
+                           case 37:
+                              ansi_attr |= LGREY;
+                              break;
+                        }
+                     }
+
+                     if (Pn[i] >= 40 && Pn[i] <= 47) {
+                        ansi_attr &= 0x8f;
+                        switch (Pn[i]) {
+                           case 40:
+                              ansi_attr |= _BLACK;
+                              break;
+                           case 41:
+                              ansi_attr |= _RED;
+                              break;
+                           case 42:
+                              ansi_attr |= _GREEN;
+                              break;
+                           case 43:
+                              ansi_attr |= _BROWN;
+                              break;
+                           case 44:
+                              ansi_attr |= _BLUE;
+                              break;
+                           case 45:
+                              ansi_attr |= _MAGENTA;
+                              break;
+                           case 46:
+                              ansi_attr |= _CYAN;
+                              break;
+                           case 47:
+                              ansi_attr |= _LGREY;
+                              break;
+                        }
+                     }
+
+                     if (Pn[i] >= 0 && Pn[i] <= 7)
+                        switch(Pn[i]) {
+                           case 0:
+                              ansi_attr = NORM;
+                              break;
+                           case 1:
+                              ansi_attr |= BOLD;
+                              break;
+                           case 2:
+                              ansi_attr &= FAINT;
+                              break;
+                           case 5:
+                           case 6:
+                              ansi_attr |= VBLINK;
+                              break;
+                           case 7:
+                              ansi_attr ^= REVRS;
+                              break;
+                           default:
+                              ansi_attr = NORM;
+                              break;
+                        }
+                  }
+
+                  change_attr (ansi_attr);
+                  return (pf);
+
+               default:
+                  return (pf);
+            }
+      }
+   }
+}

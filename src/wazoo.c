@@ -35,7 +35,7 @@ static void description(char *, int);
 
 extern char remote_system[50];
 extern char remote_sysop[20];
-extern char remote_program[50];
+extern char remote_program[60];
 extern struct _alias addrs[MAX_EMSI_ADDR];
 
 static int emsi, emsi_sent;
@@ -43,7 +43,7 @@ static int emsi, emsi_sent;
 void WaZOO(originator)
 int originator;
 {
-   int stat, np, wh;
+   int stat, np, wh, i;
    char req[80];
 
    stat = 0;
@@ -79,7 +79,7 @@ int originator;
    wprints(2,1,LCYAN|_BLUE,"Method:");
    wprints(4,1,LCYAN|_BLUE,remote_program);
 
-   if (remote_net == alias[assumed].net && remote_node == alias[assumed].node) {
+   if (remote_net == alias[assumed].net && remote_node == alias[assumed].node && remote_point) {
       called_net = alias[assumed].fakenet;
       called_node = remote_point;
    }
@@ -97,6 +97,12 @@ int originator;
    if (remote_capabilities & ZED_ZAPPER) {
       status_line(msgtxt[M_WAZOO_METHOD], "ZedZap");
       wprints(2,9,LCYAN|_BLUE,"ZedZap");
+      remote_capabilities &= ~ZED_ZIPPER;
+   }
+   else if (remote_capabilities & ZED_ZAPPER) {
+      status_line(msgtxt[M_WAZOO_METHOD], "ZedZip");
+      wprints(2,9,LCYAN|_BLUE,"ZedZip");
+      remote_capabilities &= ~ZED_ZAPPER;
    }
    else {
       status_line(msgtxt[M_WAZOO_METHOD], "DietIfna");
@@ -122,16 +128,17 @@ int originator;
       send_WaZOO(originator);
       if (!CARRIER)
          goto endwazoo;
-      get_Zmodem(filepath, NULL);
+      if (!get_Zmodem(filepath, NULL))
+         goto endwazoo;
       if (!CARRIER)
          goto endwazoo;
-      if (made_request) {
-         stat  = respond_to_file_requests(fsent);
+      stat  = respond_to_file_requests(fsent);
+      if (stat)
          send_Zmodem(NULL,NULL,((stat)?END_BATCH:NOTHING_TO_DO),DO_WAZOO);
-      }
    }
    else {
-      get_Zmodem(filepath, NULL);
+      if (!get_Zmodem(filepath, NULL))
+         goto endwazoo;
       if (!CARRIER)
          goto endwazoo;
       send_WaZOO(originator);
@@ -164,8 +171,37 @@ endwazoo:
       if (!aftermail_exit)
          aftermail_exit = aftercaller_exit;
 
-      status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
-      get_down (aftermail_exit, 3);
+      if (cur_event > -1 && (e_ptrs[cur_event]->echomail & ECHO_IMPORT)) {
+         if (modem_busy != NULL)
+            mdm_sendcmd (modem_busy);
+
+         i = 1;
+         if ( (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL)) ) {
+            if (prot_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_PROT))
+               import_mail (prot_filepath, &i);
+            if (know_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_KNOW))
+               import_mail (know_filepath, &i);
+            if (norm_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_NORMAL))
+               import_mail (norm_filepath, &i);
+         }
+         else {
+            if (prot_filepath != NULL)
+               import_mail (prot_filepath, &i);
+            if (know_filepath != NULL)
+               import_mail (know_filepath, &i);
+            if (norm_filepath != NULL)
+               import_mail (norm_filepath, &i);
+         }
+
+         i = 2;
+         import_mail (".\\", &i);
+         if (e_ptrs[cur_event]->echomail & ECHO_EXPORT)
+            export_mail (NETMAIL_RSN|ECHOMAIL_RSN);
+      }
+      else {
+         status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
+         get_down (aftermail_exit, 3);
+      }
    }
 
    get_down(aftercaller_exit, 2);
@@ -272,48 +308,47 @@ int caller;
                   sptr++;
                   i = TRUNC_AFTER;
                }
-                else if (sptr[0]=='^') {
-					sptr++;
-					i = DELETE_AFTER;
-				}
-				else
-					i = NOTHING_AFTER;
+               else if (sptr[0]=='^') {
+                  sptr++;
+                  i = DELETE_AFTER;
+               }
+               else
+                  i = NOTHING_AFTER;
 
-				if (!sptr[0])
-					continue;
+               if (!sptr[0])
+                  continue;
 
-				if (sptr[0] != '~') {
+               if (sptr[0] != '~') {
+                  if (stat(sptr,&buf))
+                     continue;
+                  else
+                     if (!buf.st_size)
+                        continue;
 
-					if (stat(sptr,&buf))
-						continue;
-					else
-					    if (!buf.st_size)
-						continue;
+                  if (!send_Zmodem(sptr,NULL,fsent++,DO_WAZOO)) {
+                     fclose(fp);
+                     goto bad_send;
+                  }
 
-                                        if (!send_Zmodem(sptr,NULL,fsent++,DO_WAZOO)) {
-						fclose(fp);
-                                                goto bad_send;
-					}
+                  if (i == DELETE_AFTER)
+                     unlink(sptr);
+                  else if (i == TRUNC_AFTER) {
+                     unlink(sptr);
+                     i = creat(sptr,S_IREAD|S_IWRITE);
+                     close(i);
+                  }
 
-					if (i == DELETE_AFTER)
-						unlink(sptr);
-					else if (i == TRUNC_AFTER) {
-						unlink(sptr);
-						i = creat(sptr,S_IREAD|S_IWRITE);
-						close(i);
-					}
-
-					fseek(fp,last_start,SEEK_SET);
-					putc('~',fp);
-					fflush(fp);
-					rewind(fp);
-					fseek(fp,current,SEEK_SET);
-				}
-			}
-			fclose(fp);
-			unlink(fname);
-		}
-	}
+                  fseek(fp,last_start,SEEK_SET);
+                  putc('~',fp);
+                  fflush(fp);
+                  rewind(fp);
+                  fseek(fp,current,SEEK_SET);
+               }
+            }
+            fclose(fp);
+            unlink(fname);
+         }
+      }
 
 
    if (remote_point) {
@@ -421,11 +456,11 @@ int caller;
       }
    }
 
-   if (!emsi) {
+   if (!emsi)
       fsent = respond_to_file_requests(fsent);
-      if (!fsent)
-         status_line (msgtxt[M_NOTHING_TO_SEND], remote_zone, remote_net, remote_node, remote_point);
-   }
+
+   if (!fsent)
+      status_line (msgtxt[M_NOTHING_TO_SEND], remote_zone, remote_net, remote_node, remote_point);
 
 done_send:
    if (!emsi)
@@ -451,7 +486,7 @@ int respond_to_file_requests(fsent)
 int fsent;
 {
    char  req[80],s[14];
-   struct stat  buf;
+   struct stat  buf, buf2;
    FILE *fp = NULL;
    int np, nfiles, junk;
    char *rqname;
@@ -487,35 +522,38 @@ int fsent;
                }
 
                if ((rqname = n_frproc (req, &junk, 0)) != NULL) {
-                  stat(rqname,&buf);
-                  if (max_kbytes < (int)(buf.st_size / 1024L) && max_kbytes) {
-                     status_line (msgtxt[M_FREQ_LIMIT]);
-                     description (rqname, -1);
+                  if (stat(rqname,&buf2) == -1)
                      continue;
-                  }
-                  else
-                     max_kbytes -= (int)(buf.st_size / 1024L);
 
-                  if ((remote_capabilities & DOES_IANUS) && strstr (mdm_flags, "Hst") == NULL) {
-                     if (record_reqfile(rqname) == FALSE)
-                        goto janus_done;
-                     description (rqname, nfiles);
-                     ++fsent;
+                  if ((long)max_kbytes  > (buf2.st_size / 1024L) || !max_kbytes) {
+                     if (max_kbytes)
+                        max_kbytes -= (int)(buf2.st_size / 1024L);
+
+                     if ((remote_capabilities & DOES_IANUS) && strstr (mdm_flags, "Hst") == NULL) {
+                        if (record_reqfile(rqname) == FALSE)
+                           goto janus_done;
+                        description (rqname, nfiles);
+                        ++fsent;
+                     }
+                     else {
+                        if(!send_Zmodem (rqname, NULL, ++fsent, DO_WAZOO))
+                           goto janus_done;
+                        description (rqname, nfiles);
+                     }
+
+                     ++nfiles;
                   }
                   else {
-                     if(!send_Zmodem (rqname, NULL, ++fsent, DO_WAZOO))
-                        goto janus_done;
-                     description (rqname, nfiles);
+                     status_line (msgtxt[M_BYTE_LIMIT]);
+                     description (rqname, -1);
                   }
                }
                else {
                   if ((rqname = strchr (req, '\n')) != NULL && junk >= 0) {
                      *rqname = '\0';
-                     description (req, nfiles);
+                     description (req, -2);
                   }
                }
-
-               ++nfiles;
             } while ((junk >= 0));
 
             if (nfiles > max_requests && max_requests)
@@ -559,12 +597,10 @@ janus_done:
 void invent_pkt_name(string)
 char *string;
 {
-   struct tm *tp;
-   time_t ltime;
+   long t;
 
-   time (&ltime);
-   tp = localtime (&ltime);
-   sprintf(string,"%02i%02i%02i%02i.pkt", tp->tm_mday, tp->tm_hour, tp->tm_min, tp->tm_sec);
+   t = time (NULL);
+   sprintf (string, "%08lX.PKT", t);
 }
 
 char *n_frproc(request, recno, updreq)
@@ -624,7 +660,12 @@ int *recno, updreq;
          goto avail;
       }
       else if(!strcmp(request,"ABOUT")) {
-         file[0] = '\0';
+         if(about)
+            strcpy(file,about);
+         else {
+            file[0] = '\0';
+            sptr = msgtxt[M_NO_ABOUT];
+         }
          goto avail;
       }
    }
@@ -916,9 +957,10 @@ int fsent;
    char *hd2 = "Filename        Bytes   Description\r\n--------        -----   -----------\r\n";
    char *hd3 = "              -------\r\n";
    static long totals = 0L;
+   static char passed = 0;
    struct _pkmsg pmsg;
 
-   if (fsent == 0) {
+   if (fsent == 0 || !passed) {
       pmsg.ver = PKTVER;
       pmsg.orig_node = alias[assumed].node;
       pmsg.dest_node = remote_node;
@@ -934,7 +976,7 @@ int fsent;
    if (fp == NULL)
       return;
 
-   if (fsent == 0) {
+   if (fsent == 0 || !passed) {
       fwrite((char *)&pmsg, sizeof(struct _pkmsg), 1, fp);
       data(date);
       fwrite(date, strlen(date)+1, 1, fp);
@@ -967,6 +1009,7 @@ int fsent;
       totals += len;
    }
 
+   passed = 1;
    fclose (fp);
 }
 
@@ -984,13 +1027,14 @@ int fsent;
    strcat (name, ext);
    strupr (name);
 
-   if (!path[0] || findfirst (rqname, &blk, 0)) {
-      mail_report (name, "* Not found *", 0L, fsent);
+   if (!path[0] || findfirst (rqname, &blk, 0) || fsent == -2) {
+      mail_report (name, "* Not found *", 0L, -2);
       return;
    }
 
-   fp = fopen (drive, "rt");
    if (fsent >= 0) {
+      fp = fopen (drive, "rt");
+
       if (fp == NULL)
          mail_report (name, "* No description *", blk.ff_fsize, fsent);
       else {
@@ -999,6 +1043,7 @@ int fsent;
             if (fgets (path, 255, fp) == NULL)
                break;
             if (!strnicmp (path, name, strlen(name))) {
+               path[strlen(path)-1] = 0;
                mail_report (name, &path[13], blk.ff_fsize, fsent);
                break;
             }
@@ -1013,7 +1058,7 @@ int fsent;
 
 void emsi_handshake (caller)
 {
-   int np, wh, stat, orc_net, orc_node, orc_zone, i;
+   int np, wh, stat, i;
    char req[80], oksend[MAX_EMSI_ADDR];
 
    if (caller) {
@@ -1058,10 +1103,6 @@ void emsi_handshake (caller)
       called_net = remote_net;
       called_node = remote_node;
    }
-
-   orc_zone = called_zone;
-   orc_net = called_net;
-   orc_node = called_node;
 
    if (!CARRIER)
       return;
@@ -1121,19 +1162,34 @@ void emsi_handshake (caller)
             break;
          if (!oksend[np])
             continue;
+
          called_zone = remote_zone = addrs[np].zone;
+         if (!called_zone)
+            called_zone = remote_zone = alias[0].zone;
          called_net = remote_net = addrs[np].net;
          called_node = remote_node = addrs[np].node;
          remote_point = addrs[np].point;
+
          for (i = 0; i < MAX_ALIAS; i++) {
             if (alias[i].net == 0)
                break;
-            if (remote_zone == alias[i].zone && remote_net == alias[i].net && remote_node == alias[i].node && remote_point && alias[i].fakenet) {
-               called_net = alias[i].fakenet;
-               called_node = remote_point;
+            if (remote_zone == alias[i].zone && remote_net == alias[i].net && remote_node == alias[i].node && remote_point && alias[i].fakenet)
                break;
+         }
+         if (remote_zone == alias[i].zone && remote_net == alias[i].net && remote_node == alias[i].node && remote_point && alias[i].fakenet) {
+            called_net = alias[assumed].fakenet;
+            called_node = remote_point;
+         }
+         else if (remote_point)
+            called_net = -1;
+
+         if (get_bbs_record (called_zone, called_net, called_node, 0)) {
+            if (nodelist.password[0] && strcmp(strupr(nodelist.password),strupr(remote_password))) {
+               status_line(msgtxt[M_PWD_ERROR],remote_net,remote_node,nodelist.password,remote_password);
+               continue;
             }
          }
+
          send_WaZOO(caller);
       }
       send_Zmodem(NULL,NULL,((emsi_sent)?END_BATCH:NOTHING_TO_DO),DO_WAZOO);
@@ -1156,24 +1212,43 @@ void emsi_handshake (caller)
             break;
          if (!oksend[np])
             continue;
+
          called_zone = remote_zone = addrs[np].zone;
+         if (!called_zone)
+            called_zone = remote_zone = alias[0].zone;
          called_net = remote_net = addrs[np].net;
          called_node = remote_node = addrs[np].node;
          remote_point = addrs[np].point;
+
          for (i = 0; i < MAX_ALIAS; i++) {
             if (alias[i].net == 0)
                break;
-            if (remote_zone == alias[i].zone && remote_net == alias[i].net && remote_node == alias[i].node && remote_point && alias[i].fakenet) {
-               called_net = alias[i].fakenet;
-               called_node = remote_point;
+            if (remote_zone == alias[i].zone && remote_net == alias[i].net && remote_node == alias[i].node && remote_point && alias[i].fakenet)
                break;
+         }
+         if (remote_zone == alias[i].zone && remote_net == alias[i].net && remote_node == alias[i].node && remote_point && alias[i].fakenet) {
+            called_net = alias[i].fakenet;
+            called_node = remote_point;
+         }
+         else if (remote_point)
+            called_net = -1;
+
+         if (get_bbs_record (called_zone, called_net, called_node, 0)) {
+            if (nodelist.password[0] && strcmp(strupr(nodelist.password),strupr(remote_password))) {
+               status_line(msgtxt[M_PWD_ERROR],remote_net,remote_node,nodelist.password,remote_password);
+               continue;
             }
          }
+/*
+         else if (remote_password[0]) {
+            status_line (msgtxt[M_NOTHING_TO_SEND], remote_zone, remote_net, remote_node, remote_point);
+            continue;
+         }
+*/
+
          send_WaZOO(caller);
       }
       emsi_sent = respond_to_file_requests(fsent);
-      if (!emsi_sent)
-         status_line (msgtxt[M_NOTHING_TO_SEND], addrs[0].zone, addrs[0].net, addrs[0].node, addrs[0].point);
       send_Zmodem(NULL,NULL,((emsi_sent)?END_BATCH:NOTHING_TO_DO),DO_WAZOO);
       if (!CARRIER || !made_request)
          goto endwazoo;
@@ -1210,8 +1285,37 @@ endwazoo:
       if (!aftermail_exit)
          aftermail_exit = aftercaller_exit;
 
-      status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
-      get_down (aftermail_exit, 3);
+      if (cur_event > -1 && (e_ptrs[cur_event]->echomail & ECHO_IMPORT)) {
+         if (modem_busy != NULL)
+            mdm_sendcmd (modem_busy);
+
+         i = 1;
+         if ( (e_ptrs[cur_event]->echomail & (ECHO_PROT|ECHO_KNOW|ECHO_NORMAL)) ) {
+            if (prot_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_PROT))
+               import_mail (prot_filepath, &i);
+            if (know_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_KNOW))
+               import_mail (know_filepath, &i);
+            if (norm_filepath != NULL && (e_ptrs[cur_event]->echomail & ECHO_NORMAL))
+               import_mail (norm_filepath, &i);
+         }
+         else {
+            if (prot_filepath != NULL)
+               import_mail (prot_filepath, &i);
+            if (know_filepath != NULL)
+               import_mail (know_filepath, &i);
+            if (norm_filepath != NULL)
+               import_mail (norm_filepath, &i);
+         }                               
+
+         i = 2;
+         import_mail (".\\", &i);
+         if (e_ptrs[cur_event]->echomail & ECHO_EXPORT)
+            export_mail (NETMAIL_RSN|ECHOMAIL_RSN);
+      }
+      else {
+         status_line(msgtxt[M_EXIT_AFTER_MAIL],aftermail_exit);
+         get_down (aftermail_exit, 3);
+      }
    }
 
    get_down(aftercaller_exit, 2);

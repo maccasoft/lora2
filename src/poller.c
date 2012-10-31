@@ -30,7 +30,7 @@ int max_tries, bad, zone, net, node;
         if (CARRIER)
            goto online_out;
 
-        if (!get_bbs_record(zone, net,node))
+        if (!get_bbs_record(zone, net, node, 0))
                 return (0);
 
         if (bad && bad_call(net,node,0))
@@ -42,6 +42,16 @@ int max_tries, bad, zone, net, node;
         if (i == MAX_ALIAS)
                 assumed = 0;
         else
+                assumed = i;
+
+        for (i = 0; i < MAX_ALIAS; i++)
+                if ( alias[i].point &&
+                   alias[i].net == net && alias[i].node == node &&
+                   (!remote_zone || alias[i].zone == zone)
+                   )
+                break;
+
+        if (i < MAX_ALIAS)
                 assumed = i;
 
         for(tries=0;tries < max_tries;tries++) {
@@ -101,12 +111,14 @@ int max_tries, bad, zone, net, node;
                 return(0);
         }
 
-        i = whandle();
-        wclose();
-        wunlink(i);
-        wactiv(mainview);
-
 online_out:
+        i = whandle();
+        if (i != mainview && i != status) {
+           wclose();
+           wunlink(i);
+           wactiv(mainview);
+        }
+
         if (mdm_flags == NULL) {
            status_line(msgtxt[M_READY_CONNECT], rate, "", "");
            sprintf(buffer, "* Outgoing call at %u%s%s baud.\n", rate, "", "");
@@ -152,8 +164,10 @@ online_out:
                                 if (noask.emsi)
                                    break;
                                 get_emsi_id (buffer, 30);
-                                if (!strnicmp (buffer, "*EMSI_REQA77E", 13))
+                                if (!strnicmp (buffer, "*EMSI_REQA77E", 13)) {
+                                        m_print ("**EMSI_INQC816\r");
                                         emsi_handshake (1);
+                                }
                                 break;
                         case ENQ:
                                 if(send_YOOHOO(1)) {
@@ -328,6 +342,7 @@ int bnet, bnode, rwd;
 int mail_session()
 {
    int i, flag, oldsnoop;
+   char buffer[30];
    long t1, t2;
    char *emsi_req = "**EMSI_REQA77E\r";
 //   char *emsi_req = "";
@@ -347,6 +362,7 @@ int mail_session()
    oldsnoop = snooping;
    snooping = 0;
    remote_capabilities = 0;
+   find_event ();
 
    t1 = timerset(3000);
    t2 = timerset(500);
@@ -385,8 +401,21 @@ int mail_session()
       case '*':
          if (noask.emsi)
             break;
-         if ((i = TIMED_READ(10)) == '*')
-            emsi_handshake (0);
+         if (TIMED_READ(10) == '*') {
+            get_emsi_id (buffer, 25);
+
+            if (!strnicmp (buffer, "EMSI_INQC816", 12))
+               emsi_handshake (0);
+            else if (!strnicmp (buffer, "EMSI_CLI", 8)) {
+               if (cur_event >= 0 && !(e_ptrs[cur_event]->behavior & MAT_BBS))
+                  break;
+
+               snooping = oldsnoop;
+               timer(10);
+
+               return(0);
+            }
+         }
          break;
       case ' ':
       case 0x0D:
@@ -411,11 +440,13 @@ int mail_session()
          remote_capabilities = 0;
          if (get_YOOHOO(1)) {
             if (cur_event >= 0 && (e_ptrs[cur_event]->behavior & MAT_RESERV)) {
-               if (remote_net != e_ptrs[cur_event]->res_net &&
-                   remote_node != e_ptrs[cur_event]->res_node &&
-                   remote_zone != e_ptrs[cur_event]->res_zone)
+               if (remote_point != e_ptrs[cur_event]->res_point ||
+                   remote_net != e_ptrs[cur_event]->res_net ||
+                   remote_node != e_ptrs[cur_event]->res_node ||
+                   (remote_zone != e_ptrs[cur_event]->res_zone && remote_zone && e_ptrs[cur_event]->res_zone))
                {
                   status_line("!Node not allowed in this slot");
+                  modem_hangup();
                   return (1);
                }
             }
@@ -513,114 +544,120 @@ int width;
    s[i]='\0';
 }
 
-int poll_galileo (max_tries)
-int max_tries;
+int poll_galileo (max_connect, max_tries)
+int max_connect, max_tries;
 {
-   int tries, i, yy, mm, dy, ss, hh, mi;
+   int tries, i, yy, mm, dy, ss, hh, mi, cnt;
    char buffer[90], stringa[90];
    long t1, tu;
    struct time dt;
    struct date dd;
 
-   for (tries = 0; tries < max_tries; tries++) {
-      if (tries) {
-         modem_hangup ();
-         local_status ("Pausing ...");
+   tries = 0;
 
-         tu = timerset (300);
-         while (!timeup (tu)) {
-            if (local_kbd == 0x1B) {
-               local_kbd = -1;
-               i = 0;
-               modem_hangup ();
-               break;
+   for (cnt = 0; cnt < max_connect; cnt++) {
+      for (; tries < max_tries; tries++) {
+         if (tries) {
+            modem_hangup ();
+            local_status ("Pausing ...");
+
+            tu = timerset (300);
+            while (!timeup (tu)) {
+               if (local_kbd == 0x1B) {
+                  local_kbd = -1;
+                  i = 0;
+                  modem_hangup ();
+                  break;
+               }
+
+               time_release ();
             }
+         }
 
-            time_release ();
+         status_line (msgtxt[M_DIALING_NUMBER], galileo);
+         local_status (&msgtxt[M_DIALING_NUMBER][1], galileo);
+
+         CLEAR_INBOUND();
+         CLEAR_OUTBOUND();
+
+         answer_flag = 1;
+         dial_number (0, galileo);
+
+         if ((i = wait_for_connect(0)) != 0)
+            break;
+
+         if (local_kbd == 0x1B) {
+            local_kbd = -1;
+            modem_hangup ();
+            break;
          }
       }
 
-      status_line (msgtxt[M_DIALING_NUMBER], galileo);
-      local_status (&msgtxt[M_DIALING_NUMBER][1], galileo);
+      if (!i) {
+         status_line(msgtxt[M_CONNECT_ABORTED]);
+         local_status(&msgtxt[M_CONNECT_ABORTED][1]);
 
-      CLEAR_INBOUND();
-      CLEAR_OUTBOUND();
-
-      answer_flag = 1;
-      dial_number (0, galileo);
-
-      if ((i = wait_for_connect(0)) != 0)
-         break;
-
-      if (local_kbd == 0x1B) {
-         local_kbd = -1;
-         modem_hangup ();
-         break;
+         answer_flag = 0;
+         timer (10);
+         return(0);
       }
-   }
 
-   if (!i) {
-      status_line(msgtxt[M_CONNECT_ABORTED]);
-      local_status(&msgtxt[M_CONNECT_ABORTED][1]);
+      i = whandle ();
+      wclose ();
+      wunlink (i);
+      wactiv (mainview);
 
-      answer_flag = 0;
-      timer (10);
-      return(0);
-   }
-
-   i = whandle ();
-   wclose ();
-   wunlink (i);
-   wactiv (mainview);
-
-   if (mdm_flags == NULL) {
-      status_line(msgtxt[M_READY_CONNECT], rate, "", "");
-      sprintf(buffer, "* Outgoing call at %u%s%s baud.\n", rate, "", "");
-   }
-   else {
-      status_line(msgtxt[M_READY_CONNECT], rate, "/", mdm_flags);
-      sprintf(buffer, "* Outgoing call at %u%s%s baud.\n", rate, "/", mdm_flags);
-   }
-   wputs(buffer);
-
-   if (!lock_baud)
-      com_baud(rate);
-
-   t1 = timerset(1500);
-
-   while (!timeup(t1) && CARRIER) {
-      galileo_input (buffer, 80);
-      if (!CARRIER)
-         break;
-      galileo_input (stringa, 80);
-      if (!CARRIER)
-         break;
-
-      if (!strncmp (buffer, stringa, 16)) {
-         sscanf (stringa, "%d-%d-%d %d:%d:%d", &yy, &mm, &dy, &hh, &mi, &ss);
-
-         dt.ti_hour = hh;
-         dt.ti_min = mi;
-         dt.ti_sec = ss;
-         dt.ti_hund = 0;
-
-         dd.da_year = yy;
-         dd.da_mon = mm;
-         dd.da_day = dy;
-
-         status_line ("+Remote clock: %02d-%02d-%02d %02d:%02d", dd.da_day, dd.da_mon, dd.da_year % 100, dt.ti_hour, dt.ti_min);
-
-         setdate (&dd);
-         settime (&dt);
-
-         timer (20);
-         modem_hangup ();
-
-         return (1);
+      if (mdm_flags == NULL) {
+         status_line(msgtxt[M_READY_CONNECT], rate, "", "");
+         sprintf(buffer, "* Outgoing call at %u%s%s baud.\n", rate, "", "");
       }
-   }
+      else {
+         status_line(msgtxt[M_READY_CONNECT], rate, "/", mdm_flags);
+         sprintf(buffer, "* Outgoing call at %u%s%s baud.\n", rate, "/", mdm_flags);
+      }
+      wputs(buffer);
 
-   modem_hangup ();
+      if (!lock_baud)
+         com_baud(rate);
+
+      t1 = timerset(1500);
+
+      while (!timeup(t1) && CARRIER) {
+         galileo_input (buffer, 80);
+         if (!CARRIER)
+            break;
+         galileo_input (stringa, 80);
+         if (!CARRIER)
+            break;
+
+         if (!strncmp (buffer, stringa, 16)) {
+            sscanf (stringa, "%d-%d-%d %d:%d:%d", &yy, &mm, &dy, &hh, &mi, &ss);
+
+            dt.ti_hour = hh;
+            dt.ti_min = mi;
+            dt.ti_sec = ss;
+            dt.ti_hund = 0;
+
+            dd.da_year = yy;
+            dd.da_mon = mm;
+            dd.da_day = dy;
+
+            status_line ("+Remote clock: %02d-%02d-%02d %02d:%02d", dd.da_day, dd.da_mon, dd.da_year % 100, dt.ti_hour, dt.ti_min);
+
+            setdate (&dd);
+            settime (&dt);
+
+            if (CARRIER);
+            timer (20);
+            modem_hangup ();
+            status_line ("+Resync succesful\n");
+
+            return (1);
+         }
+      }
+
+      modem_hangup ();
+   }
 
    return (0);
 }

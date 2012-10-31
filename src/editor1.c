@@ -97,8 +97,9 @@ FILE *sm;
 			}
                         else if (!shead)
                         {
-                                if (flags & INCLUDE_HEADER)
+                                if (flags & INCLUDE_HEADER) {
                                         text_header (&msgt,msg_num,fpq);
+                                }
                                 else if (flags & QWK_TEXTFILE)
                                         qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
                                 shead = 1;
@@ -126,7 +127,7 @@ FILE *sm;
                                 i = 0;
                 }
                 else {
-                        if(i<(usr.width-1))
+                        if(i<(usr.width-2))
                                 continue;
 
                         buff[i]='\0';
@@ -136,17 +137,17 @@ FILE *sm;
                         m=0;
 
                         if(i != 0)
-                                for(z=i+1;z<(usr.width-1);z++) {
+                                for(z=i+1;buff[z];z++)
                                         wrp[m++]=buff[z];
-                                        buff[i]='\0';
-                                }
 
+                        buff[i]='\0';
                         wrp[m]='\0';
 
                         if (!shead)
                         {
-                                if (flags & INCLUDE_HEADER)
+                                if (flags & INCLUDE_HEADER) {
                                         text_header (&msgt,msg_num,fpq);
+                                }
                                 else if (flags & QWK_TEXTFILE)
                                         qwk_header (&msgt,&QWK,msg_num,fpq,&qpos);
                                 shead = 1;
@@ -165,7 +166,7 @@ FILE *sm;
                         else
                                 buff[0] = '\0';
                         strcat(buff,wrp);
-                        i = strlen(wrp);
+                        i = strlen(buff);
                 }
         }
 
@@ -235,11 +236,12 @@ FILE *fp;
 int external_editor (quote)
 int quote;
 {
-   int never;
+   int never, securetmp;
    char filename[20];
    struct stat st1, st2;
 
    strcpy (filename, "MSGTMP");
+   securetmp = lastread;
 
    if (quote) {
       if (sys.quick_board)
@@ -257,7 +259,9 @@ int quote;
    else
       never = 0;
 
-   outside_door(ext_editor);
+   editor_door(ext_editor);
+
+   lastread = securetmp;
 
    if (stat (filename, &st2) || !st2.st_size) {
       unlink (filename);
@@ -285,6 +289,7 @@ int quote;
       save_message (filename);
 
    usr.msgposted++;
+   lastread = securetmp;
 
    unlink (filename);
    return (1);
@@ -295,14 +300,17 @@ struct _msg *msg_ptr;
 int s;
 FILE *fp;
 {
-   char stringa[50];
+   char stringa[80];
 
    adjust_date(msg_ptr);
 
+   memset (stringa, '=', 78);
+   stringa[78] = '\0';
+   fprintf (fp, "%s\n", stringa);
+
    fprintf (fp,"From    : ");
 
-   if(sys.netmail)
-   {
+   if(sys.netmail) {
       if (!msg_fzone)
          msg_fzone = alias[0].zone;
       sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",msg_ptr->from,msg_fzone,msg_ptr->orig_net,msg_ptr->orig,msg_fpoint);
@@ -312,38 +320,37 @@ FILE *fp;
       fprintf (fp,"%-36s   ",msg_ptr->from);
 
    if(msg_ptr->attr & MSGPRIVATE)
-      fprintf (fp,"PRIV. ");
+      fprintf (fp, bbstxt[B_MSGPRIVATE]);
    if(msg_ptr->attr & MSGCRASH)
-      fprintf (fp,"C.M. ");
+      fprintf (fp, bbstxt[B_MSGCRASH]);
    if(msg_ptr->attr & MSGREAD)
-      fprintf (fp,"LETTO ");
+      fprintf (fp, bbstxt[B_MSGREAD]);
    if(msg_ptr->attr & MSGSENT)
-      fprintf (fp,"INV. ");
+      fprintf (fp, bbstxt[B_MSGSENT]);
    if(msg_ptr->attr & MSGFILE)
-      fprintf (fp,"F/ATT. ");
+      fprintf (fp, bbstxt[B_MSGFILE]);
    if(msg_ptr->attr & MSGFWD)
-      fprintf (fp,"TRANS. ");
+      fprintf (fp, bbstxt[B_MSGFWD]);
    if(msg_ptr->attr & MSGORPHAN)
-      fprintf (fp,"ORFANO ");
+      fprintf (fp, bbstxt[B_MSGORPHAN]);
    if(msg_ptr->attr & MSGKILL)
-      fprintf (fp,"CANC. ");
+      fprintf (fp, bbstxt[B_MSGKILL]);
    if(msg_ptr->attr & MSGHOLD)
-      fprintf (fp,"TRATT. ");
+      fprintf (fp, bbstxt[B_MSGHOLD]);
    if(msg_ptr->attr & MSGFRQ)
-      fprintf (fp,"F/REQ. ");
+      fprintf (fp, bbstxt[B_MSGFRQ]);
    if(msg_ptr->attr & MSGRRQ)
-      fprintf (fp,"R/REQ. ");
+      fprintf (fp, bbstxt[B_MSGRRQ]);
    if(msg_ptr->attr & MSGCPT)
-      fprintf (fp,"RICEV. ");
+      fprintf (fp, bbstxt[B_MSGCPT]);
    if(msg_ptr->attr & MSGARQ)
-      fprintf (fp,"AUDIT. ");
+      fprintf (fp, bbstxt[B_MSGARQ]);
    if(msg_ptr->attr & MSGURQ)
-      fprintf (fp,"UPDATE ");
+      fprintf (fp, bbstxt[B_MSGURQ]);
    fprintf (fp,bbstxt[B_ONE_CR]);
 
    fprintf (fp,"To      : ");
-   if(sys.netmail)
-   {
+   if(sys.netmail) {
       if (!msg_tzone)
          msg_tzone = alias[0].zone;
       sprintf(stringa,"%-25.25s (%d:%d/%d.%d)",msg_ptr->to,msg_tzone,msg_ptr->dest_net,msg_ptr->dest,msg_tpoint);
@@ -361,7 +368,11 @@ FILE *fp;
       fprintf (fp,"File(s) : ");
    else
       fprintf (fp,"Subject : ");
-   fprintf (fp,"%s\n\n",msg_ptr->subj);
+
+   memset (stringa, '-', 78);
+   stringa[78] = '\0';
+
+   fprintf (fp,"%s\n%s\n",msg_ptr->subj, stringa);
 }
 
 void qwk_header (msg_ptr, QMsgHead, s, fp, qpos)

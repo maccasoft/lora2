@@ -67,7 +67,7 @@ char *type, *mpath;
     *
     */
 
-    sprintf(fn, "%s.TXT", type);
+    sprintf(fn, "%s%s.TXT", mpath, type);
     error = get_language (fn);
     if (error != 0)
        exit (240);

@@ -26,12 +26,18 @@ struct _stamp {
 };
 
 struct _noask {
-   bit ansilogon :1;
-   bit birthdate :1;
-   bit voicephone:1;
-   bit dataphone :1;
-   bit emsi      :1;
-   bit checkfile :1;
+   bit ansilogon   :2;
+   bit birthdate   :1;
+   bit voicephone  :1;
+   bit dataphone   :1;
+   bit emsi        :1;
+   bit checkfile   :1;
+   bit wazoo       :1;
+   bit msgtrack    :1;
+   bit keeptransit :1;
+   bit hslink      :1;
+   bit puma        :1;
+   bit secure      :1;
 };
 
 struct _votes {
@@ -54,7 +60,7 @@ struct  _node {
    char name[34];
    char phone[40];
    char city[30];
-   char password[8];
+   char password[30];
    int  realcost;
    int  hubnode;
    char rate;
@@ -63,31 +69,13 @@ struct  _node {
    int  reserved;
 };
 
-struct _vers7 {
-   int  Zone;
-   int  Net;
-   int  Node;
-   int  HubNode;          /* If node is a point, this is point number. */
-   word CallCost;         /* phone company's charge */
-   word MsgFee;           /* Amount charged to user for a message */
-   word NodeFlags;        /* set of flags (see below) */
-   byte ModemType;        /* RESERVED for modem type */
-   byte Phone_len;
-   byte Password_len;
-   byte Bname_len;
-   byte Sname_len;
-   byte Cname_len;
-   byte pack_len;
-   byte BaudRate;         /* baud rate divided by 300 */
-};
-
 struct _lastread {
    word area;
    int msg_num;
 };
 
-#define MAXLREAD   30
-#define MAXDLREAD  10
+#define MAXLREAD   50
+#define MAXDLREAD  20
 #define MAXFLAGS   4
 #define MAXCOUNTER 10
 
@@ -177,16 +165,17 @@ struct _usr {
       word start_ratio;
    } ovr_class;
 
-   int   sig;
+   int   msg_sig;
    word  account;
    word  f_account;
    int   votes;
+   int   file_sig;
 
-   char  extradata[28];
+   char  extradata[290];
 };
 
-#define SIZEOF_MSGAREA    224
-#define SIZEOF_FILEAREA   225
+#define SIZEOF_MSGAREA    512
+#define SIZEOF_FILEAREA   256
 #define SIZEOF_DBASEAREA  119
 
 struct _sys_idx {
@@ -208,6 +197,7 @@ struct _sys {
    bit  anon_ok   :1;
    bit  no_matrix :1;
    bit  squish    :1;
+   bit  kill_unlisted :1;
    word msg_sig;
    char echotag[32];
    word pip_board;
@@ -220,6 +210,12 @@ struct _sys {
    int  max_msgs;
    int  max_age;
    int  age_rcvd;
+   char forward1[80];
+   char forward2[80];
+   char forward3[80];
+   bit  msg_restricted :1;
+   bit  passthrough    :1;
+   char filler1[47];
 
    char file_name[70];
    int  file_num;
@@ -233,6 +229,7 @@ struct _sys {
    bit  nonews    :1;
    bit  no_global_search :1;
    bit  no_filedate :1;
+   bit  file_restricted :1;
    word file_sig;
    byte file_priv;
    long file_flags;
@@ -242,6 +239,7 @@ struct _sys {
    long upload_flags;
    byte list_priv;
    long list_flags;
+   char filler2[31];
 };
 
 #define  TWIT        0x10
@@ -523,9 +521,16 @@ struct _lorainfo
    bit  wants_chat  :1;
    bit  mnp_connect :1;
    bit  keylock     :1;
+   bit  logtype     :1;
    char logindate[20];
    char password[40];
    unsigned long total_calls;
+   word start_ratio;
+   char from[36];
+   char to[36];
+   char subj[72];
+   char msgdate[20];
+   word attrib;
 };
 
 typedef struct mnums
@@ -565,4 +570,59 @@ struct QWKmsghd {               /* Messages.dat header */
    char  Msgfiller[3];          /* fill out to 128 bytes */
 };
 
+struct _pkthdr2
+{
+   int orig_node;          /* originating node               */
+   int dest_node;          /* destination node               */
+   int year;               /* 0..99  when packet was created */
+   int month;              /* 0..11  when packet was created */
+   int day;                /* 1..31  when packet was created */
+   int hour;               /* 0..23  when packet was created */
+   int minute;             /* 0..59  when packet was created */
+   int second;             /* 0..59  when packet was created */
+   int rate;               /* destination's baud rate        */
+   int ver;                /* packet version                 */
+   int orig_net;           /* originating network number     */
+   int dest_net;           /* destination network number     */
+   char product;           /* product type                   */
+   char serial;            /* serial number (some systems)   */
+
+   /* ------------------------------ */
+   /* THE FOLLOWING SECTION IS NOT   */
+   /* THE SAME ACROSS SYSTEM LINES:  */
+   /* ------------------------------ */
+
+   byte password[8];       /* session/pickup password        */
+   int  orig_zone;         /* originating zone               */
+   int  dest_zone;         /* Destination zone               */
+   int  auxnet;
+   word cwvalidation;
+   byte producth;
+   byte revision;
+   word capability;
+   int  orig_zone2;        /* originating zone               */
+   int  dest_zone2;        /* Destination zone               */
+   int  orig_point;        /* originating zone               */
+   int  dest_point;        /* Destination zone               */
+   long B_fill3;
+};
+
+struct _fwrd {
+   int zone;
+   int net;
+   int node;
+   int point;
+   bit export: 1;
+   bit reset:  1;
+};
+
+struct _msghdr2 {
+   int ver;
+   int orig_node;
+   int dest_node;
+   int orig_net;
+   int dest_net;
+   int attrib;
+   int cost;
+};
 

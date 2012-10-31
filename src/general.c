@@ -29,8 +29,10 @@ static void compilation_data(void);
 
 void software_version()
 {
-   unsigned char c;
+   unsigned char c, i;
    union REGS inregs, outregs;
+   float t, u;
+   struct dfree df;
 
    cls();
 
@@ -92,10 +94,28 @@ void software_version()
    m_print(bbstxt[B_OS_DOS],outregs.h.al,outregs.h.ah);
    is_4dos();
 
-   fossil_version();
+   fossil_version2();
 
    change_attr(LGREEN|_BLACK);
    m_print(bbstxt[B_HEAP_RAM], coreleft());
+
+   getdfree (3, &df);
+   if ( df.df_sclus != 0xFFFF ) {
+      t = (float)df.df_total * df.df_bsec * df.df_sclus / 1048576L;
+      u = (float)df.df_avail * df.df_bsec * df.df_sclus / 1048576L;
+      m_print (bbstxt[B_GENERAL_FREE1], u, t, (int)(u * 100 / t));
+   }
+
+   for (i = 4; i <= 26; i++) {
+      getdfree (i, &df);
+      if ( df.df_sclus != 0xFFFF ) {
+         t = (float)df.df_total * df.df_bsec * df.df_sclus / 1048576L;
+         u = (float)df.df_avail * df.df_bsec * df.df_sclus / 1048576L;
+         m_print (bbstxt[B_GENERAL_FREE2], i + 64, u, t, (int)(u * 100 / t));
+      }
+   }
+
+   m_print (bbstxt[B_ONE_CR]);
 
    press_enter ();
 }
@@ -162,7 +182,7 @@ fine:
 
 
 void display_area_list(type, flag, sig)   /* flag == 1, Normale due colonne */
-int type, flag;                           /* flag == 2, Normale una colonna */
+int type, flag, sig;                      /* flag == 2, Normale una colonna */
 {                                         /* flag == 3, Anche nomi, una colonna */
    int fd, fdi, i, pari, area, linea, nsys, nm;
    char stringa[13], filename[50], dir[80], first;
@@ -173,6 +193,25 @@ int type, flag;                           /* flag == 2, Normale una colonna */
        return;
 
    first = 1;
+
+   if (sig == -1) {
+      if (type == 1)
+         read_system_file ("MGROUP");
+      else if (type == 2)
+         read_system_file ("FGROUP");
+
+      do {
+         m_print (bbstxt[B_GROUP_LIST]);
+         chars_input (stringa, 4, INPUT_FIELD);
+         if ( (sig = atoi (stringa)) == 0)
+            return;
+      } while (sig < 0);
+
+      if (type == 1)
+         usr.msg_sig = sig;
+      else if (type == 2)
+         usr.file_sig = sig;
+   }
 
    if (type == 1) {
       sprintf(filename,"%sSYSMSG.IDX", sys_path);
@@ -242,8 +281,10 @@ int type, flag;                           /* flag == 2, Normale una colonna */
                   lseek(fd, (long)nm * SIZEOF_MSGAREA, SEEK_SET);
                   read(fd, (char *)&tsys.msg_name, SIZEOF_MSGAREA);
 
-                  if (sig && tsys.msg_sig != sig)
-                     continue;
+                  if (sig) {
+                     if (tsys.msg_sig != sig && !tsys.msg_restricted)
+                        continue;
+                  }
 
                   if (flag == 1) {
                      strcpy(dir, tsys.msg_name);
@@ -277,8 +318,10 @@ int type, flag;                           /* flag == 2, Normale una colonna */
                   lseek(fd, (long)nm * SIZEOF_FILEAREA, SEEK_SET);
                   read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA);
 
-                  if (sig && tsys.file_sig != sig)
-                     continue;
+                  if (sig) {
+                     if (tsys.file_sig != sig && !tsys.file_restricted)
+                        continue;
+                  }
 
                   if (flag == 1) {
                      strcpy(dir, tsys.file_name);
@@ -433,6 +476,206 @@ int type, flag;                           /* flag == 2, Normale una colonna */
    }
 }
 
+void display_new_area_list (sig)
+int sig;
+{
+   int fd, fdi, i, pari, area, linea, nsys, nm, first;
+   char stringa[13], filename[50];
+   struct _sys_idx sysidx[10];
+
+   first = 1;
+
+   sprintf(filename,"%sSYSMSG.IDX", sys_path);
+   area = usr.msg;
+   fdi = shopen (filename, O_RDONLY|O_BINARY);
+   if (fdi == -1)
+      return;
+
+   do {
+      if (!get_command_word (stringa, 12)) {
+         m_print(bbstxt[B_SELECT_AREAS],bbstxt[B_MESSAGE]);
+         input(stringa, 12);
+         if (!CARRIER || time_remain() <= 0) {
+            close (fdi);
+            return;
+         }
+      }
+
+      if (!stringa[0] && first) {
+         first = 0;
+         stringa[0] = area_change_key[2];
+      }
+
+      if (stringa[0] == area_change_key[2] || (!stringa[0] && !area)) {
+         first = 0;
+         sprintf(filename,SYSMSG_PATH, sys_path);
+         fd = shopen(filename, O_RDONLY|O_BINARY);
+         if (fd == -1) {
+            close (fdi);
+            return;
+         }
+
+         cls();
+         m_print(bbstxt[B_AREAS_TITLE], bbstxt[B_MESSAGE]);
+
+         pari = 0;
+         linea = 4;
+         nm = 0;
+         lseek(fdi, 0L, SEEK_SET);
+
+         do {
+            nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+            nsys /= sizeof (struct _sys_idx);
+
+            for (i=0; i < nsys; i++, nm++) {
+               if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+                  continue;
+
+               lseek(fd, (long)nm * SIZEOF_MSGAREA, SEEK_SET);
+               read(fd, (char *)&sys.msg_name, SIZEOF_MSGAREA);
+
+               if (sig) {
+                  if (sys.msg_sig != sig && !sys.msg_restricted)
+                     continue;
+               }
+
+               if (sys.quick_board)
+                  quick_scan_message_base (sys.quick_board, sys.msg_num, 0);
+               else if (sys.pip_board)
+                  pip_scan_message_base (sys.msg_num, 0);
+               else if (sys.squish)
+                  squish_scan_message_base (sys.msg_num, sys.msg_path, 0);
+               else
+                  scan_message_base(sys.msg_num, 0);
+
+               if (last_msg > lastread) {
+                  m_print("ç%3d ...  %s\n",sysidx[i].area,sys.msg_name);
+
+                  if (!(linea = more_question(linea)))
+                     break;
+               }
+            }
+         } while (linea && nsys == 10);
+
+         close(fd);
+
+         if (pari)
+            m_print(bbstxt[B_ONE_CR]);
+         area = -1;
+      }
+      else if (stringa[0] == area_change_key[1]) {
+         lseek(fdi, 0L, SEEK_SET);
+
+         do {
+            nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+            nsys /= sizeof (struct _sys_idx);
+
+            for (i=0; i < nsys; i++)
+               if (sysidx[i].area == area)
+                  break;
+         } while (i == nsys && nsys == 10);
+
+         if (i == nsys)
+            continue;
+
+         do {
+            i++;
+            if (i >= nsys) {
+               i = 0;
+               nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+               if (nsys == 0) {
+                  lseek(fdi, 0L, SEEK_SET);
+                  nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+               }
+               nsys /= sizeof (struct _sys_idx);
+            }
+            if (sysidx[i].area == area)
+               break;
+         } while (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags);
+
+         area = sysidx[i].area;
+      }
+      else if (stringa[0] == area_change_key[0]) {
+         lseek(fdi, 0L, SEEK_SET);
+
+         do {
+            nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+            nsys /= sizeof (struct _sys_idx);
+
+            for (i=0; i < nsys; i++)
+               if (sysidx[i].area == area)
+                  break;
+         } while (i == nsys && nsys == 10);
+
+         if (i == nsys)
+            continue;
+
+         do {
+            i--;
+            if (i < 0) {
+               if (lseek(fdi, tell(fdi) - (10L + (long)nsys) * sizeof (struct _sys_idx), SEEK_SET) == -1L)
+                  lseek(fdi, (long)nsys * sizeof (struct _sys_idx), SEEK_END);
+
+               nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+               nsys /= sizeof (struct _sys_idx);
+               i = nsys - 1;
+               if (i < 0)
+                  break;
+            }
+            if (sysidx[i].area == area)
+               break;
+         } while (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags);
+
+         area = sysidx[i].area;
+      }
+      else if (strlen(stringa) < 1 && read_system (usr.msg, 1)) {
+         close (fdi);
+         return;
+      }
+      else {
+         lseek(fdi, 0L, SEEK_SET);
+         area = atoi(stringa);
+         if (area < 1 || area > MSG_AREAS) {
+            area = -1;
+            do {
+               nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+               nsys /= sizeof (struct _sys_idx);
+
+               for(i=0;i<nsys;i++) {
+                  if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+                     continue;
+                  if (!stricmp(stringa,sysidx[i].key)) {
+                     area = sysidx[i].area;
+                     break;
+                  }
+               }
+            } while (i == nsys && nsys == 10);
+         }
+         else {
+            do {
+               nsys = read(fdi, (char *)&sysidx, sizeof(struct _sys_idx) * 10);
+               nsys /= sizeof (struct _sys_idx);
+
+               for(i=0;i<nsys;i++) {
+                  if (usr.priv < sysidx[i].priv || (usr.flags & sysidx[i].flags) != sysidx[i].flags)
+                     continue;
+                  if (sysidx[i].area == area)
+                     break;
+               }
+            } while (i == nsys && nsys == 10);
+
+            if (i == nsys)
+               area = -1;
+         }
+      }
+   } while (area == -1 || !read_system(area, 1));
+
+   close (fdi);
+
+   status_line(msgtxt[M_BBS_EXIT], area, sys.msg_name);
+   usr.msg = area;
+}
+
 int read_system(s, type)
 int s, type;
 {
@@ -484,12 +727,22 @@ int s, type;
       close(fd);
 
       if (sys.pip_board) {
-         sprintf (filename, "%sMPTR%04x.PIP", pip_msgpath, s);
-         if (!dexists (filename))
+         sprintf(filename, "%sMPTR%04x.PIP", pip_msgpath, sys.pip_board);
+         fd = cshopen(filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+         if (fd == -1)
             return (0);
-         sprintf (filename, "%sMPKT%04x.PIP", pip_msgpath, s);
-         if (!dexists (filename))
-            return (0);
+         close(fd);
+
+         sprintf(filename, "%sMPKT%04x.PIP", pip_msgpath, sys.pip_board);
+         fd = shopen(filename, O_RDONLY|O_BINARY);
+         if (fd == -1) {
+            fd = cshopen(filename, O_RDWR|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+            if (fd == -1)
+               return (0);
+            filename[0] = filename[1] = '\0';
+            write (fd, filename, 2);
+         }
+         close (fd);
       }
       else if (sys.quick_board) {
          sprintf (filename, "%sMSG*.BBS", fido_msgpath);
@@ -605,7 +858,7 @@ char *args;
    line = 3;
    act = 0;
    nn = 0;
-   handle = swap = 0;
+   vote = handle = swap = 0;
 
    cls();
 
@@ -930,7 +1183,8 @@ char *args;
 
    for (;;) {
       if (!get_command_word (stringa, max_input)) {
-         read_file (args);
+         if (!read_file (args))
+            return;
          input (stringa, max_input);
          if (!stringa[0] || !CARRIER || time_remain() <= 0)
             return;
@@ -1021,12 +1275,9 @@ void read_comment ()
    m_print(bbstxt[B_ONE_CR]);
    change_attr(LGREY|_BLACK);
 
-   while (fgets(filename,128,fp) != NULL)
-   {
-      for (p=filename;(*p) && (*p != 0x1B);p++)
-      {
-         if (!CARRIER || RECVD_BREAK())
-         {
+   while (fgets(filename,128,fp) != NULL) {
+      for (p=filename;(*p) && (*p != 0x1B);p++) {
+         if (!CARRIER || RECVD_BREAK()) {
             CLEAR_OUTBOUND();
             fclose(fp);
             return;
@@ -1047,8 +1298,7 @@ void read_comment ()
    UNBUFFER_BYTES ();
    FLUSH_OUTPUT();
 
-   if (line)
-   {
+   if (line) {
       m_print (bbstxt[B_ONE_CR]);
       press_enter ();
    }
@@ -1133,12 +1383,12 @@ void display_usage ()
          else
             m = -1;
          if (m >= y_axis[i] && m > 0)
-            m_print ("** ");
+            m_print ("€€ ");
          else
             m_print ("   ");
       }
 
-      m_print ("\n");
+      m_print (bbstxt[B_ONE_CR]);
    }
 
    m_print (bbstxt[B_PERCX1]);

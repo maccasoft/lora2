@@ -6,7 +6,7 @@
 #include "sched.h"
 #include "msgapi.h"
 
-char *VERSION = "LoraBBS v2.10 *beta*", *NOREG = " (Eval.)";
+char *VERSION = "LoraBBS v2.20", *NOREG = " (Eval.)";
 char *log_name, *user_file, *availist, *about, *text_path, *password;
 char *sys_path, *rookie, *welcome, *newuser2, *sysop, *menu_bbs;
 char *system_name, *hold_area, *filepath, *net_info, *request_list;
@@ -19,7 +19,11 @@ char *norm_request_list, *prot_request_list, *prot_availist, *prot_about;
 char *know_request_list, *know_availist, *know_about, *ext_editor;
 char *lang_name[MAX_LANG], *lang_descr[MAX_LANG], area_change_key[3];
 char *pip_msgpath, lang_keys[MAX_LANG], *lang_txtpath[MAX_LANG];
-char *QWKDir, *BBSid, *galileo, *location, *phone, *flags;
+char *QWKDir, *BBSid, *galileo, *location, *phone, *flags, *glob_text_path;
+char *bad_msgs, *dupes, *netmail_dir, *modem_busy, def_pack, *puma_exe, *hslink_exe;
+char *local_editor, *pre_import, *after_import, *pre_export, *after_export;
+char *pack_zip[MAX_PACKERS], *pack_arj[MAX_PACKERS], *pack_lha[MAX_PACKERS], *pack_lzh[MAX_PACKERS], *pack_arc[MAX_PACKERS], min_calls;
+char *newareas_create, *newareas_link;
 
 char *ONLINE_MSGNAME = "%sLINE%d.BBS";
 char *USERON_NAME    = "%sUSERON.BBS";
@@ -28,20 +32,20 @@ char *SYSMSG_PATH    = "%sSYSMSG.DAT";
 
 char use_tasker, local_mode, user_status, frontdoor;
 
-byte logon_priv, vote_priv, up_priv, down_priv;
+byte logon_priv, vote_priv, up_priv, down_priv, vote_limit;
 
 int local_kbd, assumed, have_dv, target_up, target_down, max_kbytes;
 int write_screen, speed_graphics, com_port, know_max_kbytes, prot_max_kbytes;
 int registered, max_requests, next_call, max_call, norm_max_kbytes;
 int no_logins, status, mainview, line_offset, aftermail_exit;
-int isOriginator, CurrentReqLim, locked = 1;
+int isOriginator, CurrentReqLim, locked = 1, blank_timer;
 int made_request, function_active, aftercaller_exit;
 int norm_max_requests, prot_max_requests, know_max_requests;
 int remote_zone, remote_net, remote_node, remote_point;
 int called_zone, called_net, called_node, max_readpriv;
 
 char far exit300, exit1200, exit2400, exit9600, exit14400, exit19200;
-char far exit16800, exit38400;
+char far exit16800, exit38400, exit4800, exit7200, exit12000;
 
 char have_ml, have_tv, have_ddos;
 
@@ -126,7 +130,7 @@ char ctrlc_ctr;
 	long file_length;
 	word remote_capabilities;
 	int fsent;
-	char remote_password[10];
+        char remote_password[30];
 	struct _node nodelist;
 
         int num_msg;
@@ -154,10 +158,7 @@ char ctrlc_ctr;
         int max_priv_mail;
         int last_mail;
 
-char *mesi[] = { 
-	"Gen", "Feb", "Mar", "Apr", "Mag", "Giu",
-	"Lug", "Ago", "Set", "Ott", "Nov", "Dic"
-};
+char *mesi[12];
 
 
 char *mtext [] = {
@@ -478,7 +479,23 @@ char far *prodcode[] = {
         "XBBS",
         "LoTek Vzrul",
         "Private Point Project",
-        "NoSnail"
+        "NoSnail",
+        "SmlNet",
+        "STIR",
+        "RiscBBS",
+        "Hercules",
+        "AMPRGATE",
+        "BinkEMSI",
+        "EditMsg",
+        "Roof",
+        "QwkPkt",
+        "MARISCAN",
+        "NewsFlash",
+        "Paradise",
+        "DogMatic-ACB",
+        "T-Mail",
+        "JetMail",
+        "MainDoor"
 };
 
 char *msgtxt[] = {
@@ -554,7 +571,7 @@ char *msgtxt[] = {
 /*-_POLL_MODE              */        ":Entering POLL Mode",
 /*-_POLL_COMPLETED         */        ":Poll completed",
 /*-_SHELLING               */        ":Shelling to Command Interpreter",
-/*-_TYPE_EXIT              */        "\nType EXIT to return to Lora BBS\n",
+/*-_TYPE_EXIT              */        "\nLoraBBS DOS Shell - Type EXIT To Return - Free RAM %ld\n",
 /*-_BINKLEY_BACK           */        ":Lora BBS Reactivated",
 /*M_NONE_EVENTS            */        "Scheduler empty",
 /*-_READY_CONNECT          */        "+Connect %u%s%s",
@@ -571,7 +588,7 @@ char *msgtxt[] = {
 /*-_NOT_IN_LIST            */        "+%s isn't in user list",
 /*-_BAD_PASSWORD           */        "!Bad password '%s'",
 /*-_INVALID_PASSWORD       */        "!INVALID PASSWORD",
-/*-_USER_LAST_TIME         */        ":User's last time %s",
+/*-_USER_LAST_TIME         */        ":User's last time: %s",
 /*-_TIMEDL_ZEROED          */        ":Time/DL Zeroed",
 /*M_YES                    */        "Yes",
 /*M_NO                     */        "No",
@@ -652,12 +669,12 @@ char *msgtxt[] = {
 /*M_FINISHED_PART          */        "*Finished partial file %s",
 /*M_SAVING_PART            */        "*Saving partial file %s",
 /*M_REMOTE_CANT_FREQ       */        "*Remote can't handle file requests",
-/*M_ORIGIN_LINE            */        " * Origin: %s (%d:%d/%d)\r\n",
+/*M_ORIGIN_LINE            */        " * Origin: %s (%d:%d/%d.%d)\r\n",
 /*M_TEAR_LINE              */        "--- %s%s\r\n",
 /*M_PID                    */        "\x01PID: %s%s\r\n",
 /*M_INTL                   */        "\x01INTL %d:%d/%d %d:%d/%d\r\n",
 /*M_TOPT                   */        "\x01TOPT %d\r\n",
-/*M_MSGID                  */        "\x01MSGID: %d:%d/%d %lx\r\n",
+/*M_MSGID                  */        "\x01MSGID: %d:%d/%d.%d %lx\r\n",
 /*M_SIGNATURE              */        "... %s\r\n",
 /*-_DRIVER_DEAD_1          */        "\nI'm sorry, there doesn't appear to be a FOSSIL driver loaded.\n",
 /*-_DRIVER_DEAD_2          */        "Lora BBS requires a FOSSIL driver. Please take care of this before\n",
@@ -682,8 +699,8 @@ char *protocols [] = {
         "Xmodem",
         "1k-Xmodem",
         "Zmodem",
-        "",
-        "",
+        "HS/Link",
+        "Puma",
         "Sealink"
 };
 

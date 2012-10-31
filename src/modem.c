@@ -15,6 +15,7 @@
 #include "prototyp.h"
 
 static void empty_delay (void);
+extern int blanked;
 
 int wait_for_connect(to)
 int to;
@@ -146,13 +147,17 @@ int modem_response()
    if (mdm_flags)
       fancy_str (mdm_flags);
 
-   c = stringa[12];
-   stringa[12] = '\0';
-   wscrollbox (4, 0, 6, 14, 1, D_UP);
-   wprints (6, 2, LCYAN|_BLUE, strupr (stringa));
-   stringa[12] = c;
+   if (!blanked || !strnicmp (stringa, "CONNECT", 7) || !strnicmp(stringa,"RING",4)) {
+      resume_blanked_screen ();
 
-   if(!stricmp(stringa,"CONNECT")) {
+      c = stringa[12];
+      stringa[12] = '\0';
+      wscrollbox (4, 0, 6, 14, 1, D_UP);
+      wprints (6, 2, LCYAN|_BLUE, strupr (stringa));
+      stringa[12] = c;
+   }
+
+   if(!strnicmp(stringa,"CONNECT", 7)) {
       if(!stricmp(&stringa[7]," 300"))
          return(1);
       else if(!stricmp(&stringa[7]," 1200"))
@@ -206,7 +211,7 @@ int modem_response()
       return(9);
    }
    else if(!strnicmp(stringa,"RING",4)) {
-      if (!answer_flag) {
+      if (!answer_flag && registered == 1) {
          status_line(":%s", fancy_str(stringa));
 
          local_status("Answering the phone");
@@ -486,12 +491,20 @@ void MNP_Filter ()
 
 void FLUSH_OUTPUT ()
 {
+   if (local_mode)
+      return;
+
    while (CARRIER && !OUT_EMPTY())
       time_release();
 }
 
 static void empty_delay ()
 {
+   if (local_mode)
+      return;
+
    while (!OUT_EMPTY())
       time_release();
 }
+
+

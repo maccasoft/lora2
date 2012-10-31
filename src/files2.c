@@ -9,6 +9,7 @@
 #include <sys\stat.h>
 
 #include <cxl\cxlvid.h>
+#include <cxl\cxlwin.h>
 
 #include "defines.h"
 #include "lora.h"
@@ -16,6 +17,7 @@
 #include "prototyp.h"
 #include "zmodem.h"
 #include "arc.h"
+#include "exec.h"
 
 typedef unsigned int uint;
 
@@ -41,51 +43,72 @@ char *memstr(char *, char *, int, int);
 
 void display_contents()
 {
-  struct _lhhead *lhhead;
+   struct _lhhead *lhhead;
 
-  byte buffer[SEEK_SIZE+10];
-  char filename[14],
-       an[80];
+   byte buffer[SEEK_SIZE+10];
+   char filename[14], an[80];
 
-  int arcfile;
+   int arcfile;
 
-  if (!get_command_word (filename, 12))
-  {
-    m_print (bbstxt[B_WHICH_ARCHIVE]);
-    input (filename,12);
-    if (!filename[0] || !CARRIER)
-       return;
-  }
+   if (!get_command_word (filename, 12)) {
+      m_print (bbstxt[B_WHICH_ARCHIVE]);
+      input (filename,12);
+      if (!filename[0] || !CARRIER)
+         return;
+   }
 
-  strcpy(an,sys.filepath);
-  strcat(an,filename);
+   m_print(bbstxt[B_SEARCH_ARCHIVE],strupr(filename));
 
-  cls ();
-  m_print(bbstxt[B_SEARCH_ARCHIVE],strupr(filename));
+   sprintf (an, "%s%s", sys.filepath, filename);
+   if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
+      sprintf (an, "%s%s.ARJ", sys.filepath, filename);
 
-  if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1)
-    return;
+      if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
+         sprintf (an, "%s%s.ZIP", sys.filepath, filename);
 
-  read(arcfile,buffer,SEEK_SIZE-1);
-  lseek(arcfile,0L,SEEK_SET);
+         if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
+            sprintf (an, "%s%s.LZH", sys.filepath, filename);
 
-  lhhead=(struct _lhhead *)buffer;
+            if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
+               sprintf (an, "%s%s.LHA", sys.filepath, filename);
 
-  if (*buffer=='P' && *(buffer+1)=='K')
-     Read_Zip(arcfile);
-  else if (lhhead->method[0]=='-' && lhhead->method[1]=='l' &&
-          (lhhead->method[2]=='z' || lhhead->method[2]=='h') &&
-           isdigit(lhhead->method[3]) && lhhead->method[4]=='-')
-    Read_LzhArc(ARCHIVE_lzh,arcfile);
-  else if (*buffer=='\x1a')
-    Read_LzhArc(ARCHIVE_arc,arcfile);
-  else if (*buffer==0x60 && *(buffer+1)==0xEA)
-     Read_Arj(arcfile);
-  else
-    m_print (bbstxt[B_ARC_DAMAGED], filename);
+               if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
+                  sprintf (an, "%s%s.PAK", sys.filepath, filename);
 
-  close(arcfile);
-  return;
+                  if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
+                     sprintf (an, "%s%s.ARC", sys.filepath, filename);
+
+                     if ((arcfile=shopen(an,O_RDONLY | O_BINARY))==-1) {
+                        m_print (bbstxt[B_ARC_NOTFOUND]);
+                        return;
+                     }
+                  }
+               }
+            }
+         }
+      }
+   }
+
+   read(arcfile,buffer,SEEK_SIZE-1);
+   lseek(arcfile,0L,SEEK_SET);
+
+   lhhead=(struct _lhhead *)buffer;
+
+   if (*buffer=='P' && *(buffer+1)=='K')
+      Read_Zip(arcfile);
+   else if (lhhead->method[0]=='-' && lhhead->method[1]=='l' &&
+           (lhhead->method[2]=='z' || lhhead->method[2]=='h') &&
+            isdigit(lhhead->method[3]) && lhhead->method[4]=='-')
+      Read_LzhArc(ARCHIVE_lzh,arcfile);
+   else if (*buffer=='\x1a')
+      Read_LzhArc(ARCHIVE_arc,arcfile);
+   else if (*buffer==0x60 && *(buffer+1)==0xEA)
+      Read_Arj(arcfile);
+   else
+      m_print (bbstxt[B_ARC_DAMAGED], filename);
+
+   close(arcfile);
+   return;
 }
 
 
@@ -453,95 +476,401 @@ struct _arj_header {
 
 static void Read_Arj(int lzhfile)
 {
-  struct _arj_basic_header bhead;
-  struct _arj_header arjhead;
+   struct _arj_basic_header bhead;
+   struct _arj_header arjhead;
+   char *fname;
+   int line, num_files, extended;
+   long total_compressed, pos, total_uncompressed;
 
-  char *fname;
+   num_files=0;
+   total_compressed=total_uncompressed=0L;
+   line = 4;
 
-  int line,
-      num_files,
-      extended;
+   m_print(bbstxt[B_LZHARC_HEADER]);
+   m_print(bbstxt[B_LZHARC_UNDERLINE]);
 
-  long total_compressed,
-       pos,
-       total_uncompressed;
+   while (! eof(lzhfile)) {
+      if (!CARRIER)
+         return;
 
-  num_files=0;
-  total_compressed=total_uncompressed=0L;
-  line = 4;
+      pos = tell (lzhfile);
+      read(lzhfile,(char *)&bhead,sizeof(struct _arj_basic_header));
 
-  m_print(bbstxt[B_LZHARC_HEADER]);
-  m_print(bbstxt[B_LZHARC_UNDERLINE]);
+      if (bhead.id != 0xEA60U || !bhead.size)
+         break;
 
-  while (! eof(lzhfile))
-  {
-    if (!CARRIER)
-      return;
+      if (!eof(lzhfile)) {
+         read(lzhfile,(char *)&arjhead,sizeof(struct _arj_header));
+         if ((fname=(char *)malloc(20))==NULL)
+            return;
 
-    pos = tell (lzhfile);
-    read(lzhfile,(char *)&bhead,sizeof(struct _arj_basic_header));
+         if (arjhead.file_type == 0 || arjhead.file_type == 1 || arjhead.file_type == 2) {
+            lseek(lzhfile,pos,SEEK_SET);
+            lseek (lzhfile, (long)arjhead.size + (long)arjhead.entryname + (long)sizeof (struct _arj_basic_header), SEEK_CUR);
+            read(lzhfile,fname,14);
 
-    if (bhead.id != 0xEA60U || !bhead.size)
-      break;
+            if (arjhead.file_type != 2) {
+               if (!arjhead.uncompressed_size)
+                  arjhead.uncompressed_size=1L;
 
-    if (!eof(lzhfile))
-    {
-      read(lzhfile,(char *)&arjhead,sizeof(struct _arj_header));
-      if ((fname=(char *)malloc(20))==NULL)
-        return;
+               m_print (bbstxt[B_LZHARC_FORMAT],
+                   fname,
+                   arjhead.uncompressed_size,
+                   arjhead.compressed_size,
+                   (int)(100-((arjhead.compressed_size*100)/arjhead.uncompressed_size)),
+                   ts_day (arjhead.stamp),
+                   ts_month (arjhead.stamp),
+                   ts_year (arjhead.stamp) % 100,
+                   ts_hour (arjhead.stamp),
+                   ts_min (arjhead.stamp));
 
-      lseek(lzhfile,pos,SEEK_SET);
-      lseek (lzhfile, (long)arjhead.size + (long)arjhead.entryname + (long)sizeof (struct _arj_basic_header), SEEK_CUR);
-      read(lzhfile,fname,14);
+               total_compressed += arjhead.compressed_size;
+               total_uncompressed += arjhead.uncompressed_size;
 
-      if (arjhead.file_type == 0 || arjhead.file_type == 1)
-      {
-        if (!arjhead.uncompressed_size)
-          arjhead.uncompressed_size=1L;
+               num_files++;
+            }
+         }
 
-        m_print (bbstxt[B_LZHARC_FORMAT],
-             fname,
-             arjhead.uncompressed_size,
-             arjhead.compressed_size,
-             (int)(100-((arjhead.compressed_size*100)/arjhead.uncompressed_size)),
-             ts_day (arjhead.stamp),
-             ts_month (arjhead.stamp),
-             ts_year (arjhead.stamp) % 100,
-             ts_hour (arjhead.stamp),
-             ts_min (arjhead.stamp));
+         free(fname);
 
-        total_compressed += arjhead.compressed_size;
-        total_uncompressed += arjhead.uncompressed_size;
-
-        num_files++;
+         lseek(lzhfile,pos,SEEK_SET);
+         lseek(lzhfile,bhead.size + 8,SEEK_CUR);
+         read(lzhfile,(char *)&extended,2);
+         if (extended > 0)
+            lseek(lzhfile,extended + 4,SEEK_CUR);
+         if (arjhead.file_type != 2)
+            lseek(lzhfile,arjhead.compressed_size,SEEK_CUR);
       }
 
-      free(fname);
+      if ((line=more_question(line)) == 0 || !CARRIER)
+         break;
+   }
 
-      lseek(lzhfile,pos,SEEK_SET);
-      lseek(lzhfile,bhead.size + 8,SEEK_CUR);
-      read(lzhfile,(char *)&extended,2);
-      if (extended > 0)
-        lseek(lzhfile,extended + 4,SEEK_CUR);
-      lseek(lzhfile,arjhead.compressed_size,SEEK_CUR);
-    }
+   if (line) {
+      m_print(bbstxt[B_LZHARC_END]);
 
-    if ((line=more_question(line)) == 0 || !CARRIER)
-      break;
-  }
+      if (total_uncompressed)
+          m_print(bbstxt[B_LZHARC_END_FORMAT],
+             total_uncompressed,
+             total_compressed,
+             (int)(100-((total_compressed*100)/total_uncompressed)));
 
-  if (line)
-  {
-    m_print(bbstxt[B_LZHARC_END]);
-
-     if (total_uncompressed)
-        m_print(bbstxt[B_LZHARC_END_FORMAT],
-           total_uncompressed,
-           total_compressed,
-           (int)(100-((total_compressed*100)/total_uncompressed)));
-
-     press_enter ();
-  }
+      press_enter ();
+   }
 }
 
+void hslink_protocol (name, path, global)
+char *name, *path;
+int global;
+{
+   FILE *fp, *fp2;
+   int fd, *varr;
+   char dir[20], filename[150], *p, ext[5], stringa[60];
+   long started, bytes;
+   struct ffblk blk;
+   struct _sys tsys;
+
+   sprintf (filename, "%sHSLINK%d.LST", sys_path, line_offset);
+   fp = fopen (filename, "wt");
+
+   if (name != NULL) {
+      while (get_string (name, dir) != NULL) {
+         sprintf (filename, "%s%s", path, dir);
+
+         if (findfirst(filename,&blk,0)) {
+            sprintf (filename, "%sSYSFILE.DAT", sys_path);
+            fd = shopen (filename, O_RDONLY|O_BINARY);
+
+            if (global) {
+               while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
+                  if (usr.priv < tsys.file_priv || tsys.no_global_search)
+                     continue;
+                  if((usr.flags & tsys.file_flags) != tsys.file_flags)
+                     continue;
+                  if (usr.priv < tsys.download_priv)
+                     continue;
+                  if((usr.flags & tsys.download_flags) != tsys.download_flags)
+                     continue;
+
+                  sprintf (filename, "%s%s", tsys.filepath, dir);
+
+                  if (!findfirst (filename, &blk, 0))
+                     break;
+               }
+            }
+
+            close (fd);
+         }
+
+         fprintf (fp, "%s\n", filename);
+      }
+   }
+
+   fclose (fp);
+   sprintf (filename, "-P%d -U%s -LF%sHSLINK%d.LOG @%sHSLINK%d.LST", com_port + 1, sys.uppath, sys_path, line_offset, sys_path, line_offset);
+
+   varr = ssave ();
+//   MDM_DISABLE ();
+   cclrscrn(LGREY|_BLACK);
+   showcur();
+   fclose (logf);
+
+   do_exec (hslink_exe == NULL ? "HSLINK" : hslink_exe, filename, USE_ALL|HIDE_FILE, 0xFFFF, NULL);
+
+/*
+   com_install (com_port);
+   com_baud (rate);
+*/
+   if (varr != NULL)
+      srestore (varr);
+   logf = fopen(log_name, "at");
+   setbuf(logf, NULL);
+   wactiv (mainview);
+
+   sprintf (filename, "%sHSLINK%d.LST", sys_path, line_offset);
+   unlink (filename);
+
+   sprintf (filename, "%sHSLINK%d.LOG", sys_path, line_offset);
+   fp = fopen (filename, "rt");
+   if (fp == NULL) {
+      m_print(bbstxt[B_TRANSFER_ABORT]);
+      return;
+   }
+
+   while (fgets (filename, 145, fp) != NULL) {
+      while (filename[strlen (filename) -1] == 0x0D || filename[strlen (filename) -1] == 0x0A)
+         filename[strlen (filename) -1] = '\0';
+
+      p = strtok (filename, " ");
+      if (p[0] == 'H') {
+         p = strtok (NULL, " ");
+         bytes = atol (p);
+         usr.upld += (int)(bytes / 1024L) + 1;
+         usr.n_upld++;
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         cps = atoi (p);
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+
+         started = (cps * 1000L) / ((long) rate);
+         status_line ((char *) msgtxt[M_CPS_MESSAGE], cps, bytes, started);
+         status_line ("%s-H %s%s", msgtxt[M_FILE_RECEIVED], (strchr (p, '\\') == NULL) ? sys.uppath : "", strupr (p));
+
+         fnsplit (p, NULL, NULL, dir, ext);
+         strcat (dir, ext);
+
+         do {
+            m_print(bbstxt[B_DESCRIBE],strupr(dir));
+            CLEAR_INBOUND ();
+            input(stringa,54);
+            if (!CARRIER)
+               break;
+         } while (strlen(stringa) < 5);
+
+         sprintf(filename,"%sFILES.BBS",sys.uppath);
+         fp2 = fopen(filename,"at");
+         fprintf(fp2,"%-12s %s\n",dir,stringa);
+         fclose(fp2);
+
+         if (function_active == 3)
+            f3_status ();
+      }
+      else if (p[0] == 'h' || p[0] == 'l' || p[0] == 'e') {
+         p = strtok (NULL, " ");
+         bytes = atol (p);
+         usr.dnld += (int)(bytes / 1024L) + 1;
+         usr.dnldl += (int)(bytes / 1024L) + 1;
+         usr.n_dnld++;
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         cps = atoi (p);
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+
+         started = (cps * 1000L) / ((long) rate);
+         status_line ((char *) msgtxt[M_CPS_MESSAGE], cps, bytes, started);
+         status_line ("+DL-H %s%s", (strchr (p, '\\') == NULL) ? sys.filepath : "", strupr (p));
+
+         if (function_active == 3)
+            f3_status ();
+      }
+   }
+
+   fclose (fp);
+   sprintf (filename, "%sHSLINK%d.LOG", sys_path, line_offset);
+   unlink (filename);
+
+   m_print(bbstxt[B_TRANSFER_OK]);
+}
+
+void puma_protocol (name, path, global, upload)
+char *name, *path;
+int global, upload;
+{
+   FILE *fp, *fp2;
+   int fd, *varr;
+   char dir[20], filename[150], *p, ext[5], stringa[60];
+   long started, bytes;
+   struct ffblk blk;
+   struct _sys tsys;
+
+   if (name != NULL) {
+      sprintf (filename, "%sPUMA%d.LST", sys_path, line_offset);
+      fp = fopen (filename, "wt");
+
+      while (get_string (name, dir) != NULL) {
+         sprintf (filename, "%s%s", path, dir);
+
+         if (findfirst(filename,&blk,0)) {
+            sprintf (filename, "%sSYSFILE.DAT", sys_path);
+            fd = shopen (filename, O_RDONLY|O_BINARY);
+
+            if (global) {
+               while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
+                  if (usr.priv < tsys.file_priv || tsys.no_global_search)
+                     continue;
+                  if((usr.flags & tsys.file_flags) != tsys.file_flags)
+                     continue;
+                  if (usr.priv < tsys.download_priv)
+                     continue;
+                  if((usr.flags & tsys.download_flags) != tsys.download_flags)
+                     continue;
+
+                  sprintf (filename, "%s%s", tsys.filepath, dir);
+
+                  if (!findfirst (filename, &blk, 0))
+                     break;
+               }
+            }
+
+            close (fd);
+         }
+
+         fprintf (fp, "%s\n", filename);
+      }
+
+      fclose (fp);
+   }
+
+   if (upload)
+      sprintf (filename, "P%d L%sPUMA%d.LOG R %s", com_port + 1, sys_path, line_offset, sys.uppath);
+   else
+      sprintf (filename, "P%d L%sPUMA%d.LOG S @%sPUMA%d.LST", com_port + 1, sys_path, line_offset, sys_path, line_offset);
+
+   varr = ssave ();
+//   MDM_DISABLE ();
+   cclrscrn(LGREY|_BLACK);
+   showcur();
+   fclose (logf);
+
+   do_exec (puma_exe == NULL ? "PUMA" : puma_exe, filename, USE_ALL|HIDE_FILE, 0xFFFF, NULL);
+
+/*
+   com_install (com_port);
+   com_baud (rate);
+*/
+   if (varr != NULL)
+      srestore (varr);
+
+   logf = fopen(log_name, "at");
+   setbuf(logf, NULL);
+   wactiv (mainview);
+
+   sprintf (filename, "%sPUMA%d.LST", sys_path, line_offset);
+   unlink (filename);
+
+   sprintf (filename, "%sPUMA%d.LOG", sys_path, line_offset);
+   fp = fopen (filename, "rt");
+   if (fp == NULL) {
+      m_print(bbstxt[B_TRANSFER_ABORT]);
+      return;
+   }
+
+   while (fgets (filename, 145, fp) != NULL) {
+      while (filename[strlen (filename) -1] == 0x0D || filename[strlen (filename) -1] == 0x0A)
+         filename[strlen (filename) -1] = '\0';
+
+      p = strtok (filename, " ");
+      if (p[0] == 'R') {
+         p = strtok (NULL, " ");
+         bytes = atol (p);
+         usr.upld += (int)(bytes / 1024L) + 1;
+         usr.n_upld++;
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         cps = atoi (p);
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+
+         started = (cps * 1000L) / ((long) rate);
+         status_line ((char *) msgtxt[M_CPS_MESSAGE], cps, bytes, started);
+         status_line ("%s-P %s%s", msgtxt[M_FILE_RECEIVED], (strchr (p, '\\') == NULL) ? sys.uppath : "", strupr (p));
+
+         fnsplit (p, NULL, NULL, dir, ext);
+         strcat (dir, ext);
+
+         do {
+            m_print(bbstxt[B_DESCRIBE],strupr(dir));
+            CLEAR_INBOUND ();
+            input(stringa,54);
+            if (!CARRIER)
+               break;
+         } while (strlen(stringa) < 5);
+
+         sprintf(filename,"%sFILES.BBS",sys.uppath);
+         fp2 = fopen(filename,"at");
+         fprintf(fp2,"%-12s %s\n",dir,stringa);
+         fclose(fp2);
+
+         if (function_active == 3)
+            f3_status ();
+      }
+      else if (p[0] == 'S') {
+         p = strtok (NULL, " ");
+         bytes = atol (p);
+         usr.dnld += (int)(bytes / 1024L) + 1;
+         usr.dnldl += (int)(bytes / 1024L) + 1;
+         usr.n_dnld++;
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         cps = atoi (p);
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+         p = strtok (NULL, " ");
+
+         started = (cps * 1000L) / ((long) rate);
+         status_line ((char *) msgtxt[M_CPS_MESSAGE], cps, bytes, started);
+         status_line ("+DL-P %s%s", (strchr (p, '\\') == NULL) ? sys.filepath : "", strupr (p));
+
+         if (function_active == 3)
+            f3_status ();
+      }
+   }
+
+   fclose (fp);
+   sprintf (filename, "%sPUMA%d.LOG", sys_path, line_offset);
+   unlink (filename);
+
+   m_print(bbstxt[B_TRANSFER_OK]);
+}
 

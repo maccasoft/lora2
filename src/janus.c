@@ -749,8 +749,12 @@ rdflo:
             case TRUNC_AFTER:
             case DELETE_AFTER:
             case '^':
-               Do_after = Txfname[0];
-               strcpy(Txfname,Txfname+1);
+               if (dexists (Txfname+1)) {
+                  Do_after = Txfname[0];
+                  strcpy(Txfname,Txfname+1);
+               }
+               else
+                  goto rdflo;
                break;
             default:
                Do_after = NOTHING_AFTER;

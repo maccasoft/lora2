@@ -125,8 +125,9 @@ int which;
 
     for (i = 1; i <= pointer_size; i++)
         {
-        bbstxt[i] = memory + (bbstxt[i] - bbstxt[0]);
+        bbstxt[i] = memory + (int) (bbstxt[i] - bbstxt[0]);
         }
+    bbstxt[0] = memory;
 
     mesi[0] = bbstxt[B_JAN];
     mesi[1] = bbstxt[B_FEB];

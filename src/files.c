@@ -18,6 +18,7 @@
 #include "prototyp.h"
 #include "zmodem.h"
 
+char *translate_ansi (char *);
 
 static FILE *Infile;
 static int fsize2 = 0;
@@ -143,7 +144,7 @@ void file_display()
 
    cls();
 
-   if (prot_read_file(filename) <= 1 && CARRIER)
+   if (prot_read_file(filename) > 1 && CARRIER)
       press_enter();
 }
 
@@ -151,8 +152,7 @@ void override_path()
 {
    char stringa[80];
 
-   if (!get_command_word (stringa, 78))
-   {
+   if (!get_command_word (stringa, 78)) {
       m_print(bbstxt[B_FULL_OVERRIDE]);
       input(stringa, 78);
       if(!strlen(stringa))
@@ -193,17 +193,21 @@ loop:
    while (fgets(linea,128,fp) != NULL) {
       linea[strlen(linea) - 2] = '\0';
 
-      for (p=linea;(*p) && (*p != 0x1B);p++) {
+      for (p=linea;(*p);p++) {
          if (!CARRIER || RECVD_BREAK()) {
             CLEAR_OUTBOUND();
             fclose(fp);
             return (0);
          }
 
-         if (!local_mode)
-            BUFFER_BYTE(*p);
-         if (snooping)
-            wputc(*p);
+         if (*p == 0x1B)
+            p = translate_ansi (p);
+         else {
+            if (!local_mode)
+               BUFFER_BYTE(*p);
+            if (snooping)
+               wputc(*p);
+         }
       }
 
       if (!local_mode) {
@@ -351,7 +355,7 @@ int only_one;
 
    while (read(fd, (char *)&tsys.file_name,SIZEOF_FILEAREA) == SIZEOF_FILEAREA && line) {
       if (only_one)
-         memcpy ((char *)&sys.file_name, (char *)&tsys.file_name, SIZEOF_FILEAREA);
+         memcpy ((char *)&tsys.file_name, (char *)&sys.file_name, SIZEOF_FILEAREA);
       else {
          if (usr.priv < tsys.file_priv || tsys.no_global_search)
             continue;
@@ -444,6 +448,9 @@ int global;
       }
    }
 
+   if (user_status != UPLDNLD)
+      set_useron_record(UPLDNLD, 0, 0);
+
    read_system_file ("PREDNLD");
 
    if (st == NULL)
@@ -482,80 +489,88 @@ int global;
       goto abort_xfer;
    }
 
-   timer (10);
-   m = i = 0;
+   if (protocol == 1 || protocol == 2 || protocol == 3 || protocol == 6) {
+      timer (10);
+      m = i = 0;
 
-   while (get_string (name, dir) != NULL) {
-      sprintf (filename, "%s%s", path, dir);
+      while (get_string (name, dir) != NULL) {
+         sprintf (filename, "%s%s", path, dir);
 
-      if (findfirst(filename,&blk,0)) {
-         sprintf (filename, "%sSYSFILE.DAT", sys_path);
-         fd = shopen (filename, O_RDONLY|O_BINARY);
+         if (findfirst(filename,&blk,0)) {
+            sprintf (filename, "%sSYSFILE.DAT", sys_path);
+            fd = shopen (filename, O_RDONLY|O_BINARY);
 
-         if (global) {
-            while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
-               if (usr.priv < tsys.file_priv || tsys.no_global_search)
-                  continue;
-               if((usr.flags & tsys.file_flags) != tsys.file_flags)
-                  continue;
-               if (usr.priv < tsys.download_priv)
-                  continue;
-               if((usr.flags & tsys.download_flags) != tsys.download_flags)
-                  continue;
+            if (global) {
+               while (read(fd, (char *)&tsys.file_name, SIZEOF_FILEAREA) == SIZEOF_FILEAREA) {
+                  if (usr.priv < tsys.file_priv || tsys.no_global_search)
+                     continue;
+                  if((usr.flags & tsys.file_flags) != tsys.file_flags)
+                     continue;
+                  if (usr.priv < tsys.download_priv)
+                     continue;
+                  if((usr.flags & tsys.download_flags) != tsys.download_flags)
+                     continue;
 
-               sprintf (filename, "%s%s", tsys.filepath, dir);
+                  sprintf (filename, "%s%s", tsys.filepath, dir);
 
-               if (!findfirst (filename, &blk, 0))
-                  break;
+                  if (!findfirst (filename, &blk, 0))
+                     break;
+               }
             }
+
+            close (fd);
          }
 
-         close (fd);
+         switch (protocol) {
+            case 1:
+               m = send (filename, 'X');
+               break;
+            case 2:
+               m = send (filename, 'Y');
+               break;
+            case 3:
+               m = send_Zmodem (filename, dir, i, 0);
+               break;
+            case 6:
+               m = send (filename, 'S');
+               break;
+         }
+
+         if (!m)
+            break;
+
+         i++;
+
+         if (!sys.freearea || st == NULL) {
+            usr.dnld += (int)(blk.ff_fsize / 1024L) + 1;
+            usr.dnldl += (int)(blk.ff_fsize / 1024L) + 1;
+            usr.n_dnld++;
+
+            if (function_active == 3)
+               f3_status ();
+         }
       }
 
-      switch (protocol) {
-         case 1:
-            m = send (filename, 'X');
-            break;
-         case 2:
-            m = send (filename, 'Y');
-            break;
-         case 3:
-            m = send_Zmodem (filename, dir, i, 0);
-            break;
-         case 6:
-            m = send (filename, 'S');
-            break;
-      }
-
-      if (!m)
-         break;
-
-      i++;
-
-      if (!sys.freearea || st == NULL) {
-         usr.dnld += (int)(blk.ff_fsize / 1024L) + 1;
-         usr.dnldl += (int)(blk.ff_fsize / 1024L) + 1;
-         usr.n_dnld++;
-
-         if (function_active == 3)
-            f3_status ();
-      }
-   }
-
-   if (protocol == 3)
-      send_Zmodem (NULL, NULL, ((i) ? END_BATCH : NOTHING_TO_DO), 0);
-   else if (protocol == 6)
-      send (NULL, 'S');
+      if (protocol == 3)
+         send_Zmodem (NULL, NULL, ((i) ? END_BATCH : NOTHING_TO_DO), 0);
+      else if (protocol == 6)
+         send (NULL, 'S');
 
 abort_xfer:
-   wactiv (mainview);
+      wactiv (mainview);
 
-   if (m)
-      m_print(bbstxt[B_TRANSFER_OK]);
+      if (m)
+         m_print(bbstxt[B_TRANSFER_OK]);
+      else {
+         m_print(bbstxt[B_TRANSFER_ABORT]);
+         sysinfo.lost_download++;
+      }
+   }
    else {
-      m_print(bbstxt[B_TRANSFER_ABORT]);
-      sysinfo.lost_download++;
+      if (protocol == 4)
+         hslink_protocol (name, path, global);
+      else if (protocol == 5)
+         puma_protocol (name, path, global, 0);
    }
 
    press_enter();
@@ -739,7 +754,7 @@ char *st, pr;
         else
                 strcpy(path,st);
 
-        if (protocol != 3 && protocol != 6)
+        if (protocol == 1 || protocol == 2)
                 for (;;) {
                         if (!get_command_word (name, 14))
                         {
@@ -770,137 +785,153 @@ char *st, pr;
                 goto abort_xfer;
         }
 
-        timer (50);
+        if (protocol == 1 || protocol == 2 || protocol == 3 || protocol == 6) {
+                timer (50);
 
-        sprintf (filename, "XFER%d", line_offset);
-        xferinfo = fopen(filename,"w+t");
+                sprintf (filename, "XFER%d", line_offset);
+                xferinfo = fopen(filename,"w+t");
 
-        i = 0;
-        file = NULL;
-
-        switch (protocol) {
-        case 1:
-                who_is_he = 0;
-                overwrite = 0;
-                file = receive(path, name, 'X');
-                if (file != NULL)
-                        fprintf(xferinfo, "%s\n", file);
-                break;
-
-        case 2:
-                who_is_he = 0;
-                overwrite = 0;
-                file = receive(path, name, 'Y');
-                if (file != NULL)
-                        fprintf(xferinfo, "%s\n", file);
-                break;
-
-        case 3:
-                i = get_Zmodem(path,xferinfo);
-                break;
-
-        case 6:
                 i = 0;
-                do {
+                file = NULL;
+
+                switch (protocol) {
+                case 1:
                         who_is_he = 0;
                         overwrite = 0;
-                        file = receive(path, NULL, 'S');
+                        file = receive(path, name, 'X');
                         if (file != NULL)
-                        {
                                 fprintf(xferinfo, "%s\n", file);
-                                i++;
-                        }
-                } while (file != NULL);
-                break;
+                        break;
 
-        }
+                case 2:
+                        who_is_he = 0;
+                        overwrite = 0;
+                        file = receive(path, name, 'Y');
+                        if (file != NULL)
+                                fprintf(xferinfo, "%s\n", file);
+                        break;
+
+                case 3:
+                        i = get_Zmodem(path,xferinfo);
+                        break;
+
+                case 6:
+                        i = 0;
+                        do {
+                                who_is_he = 0;
+                                overwrite = 0;
+                                file = receive(path, NULL, 'S');
+                                if (file != NULL)
+                                {
+                                        fprintf(xferinfo, "%s\n", file);
+                                        i++;
+                                }
+                        } while (file != NULL);
+                        break;
+
+                }
 
 abort_xfer:
-        if (!CARRIER) {
+                if (!CARRIER) {
+                        fclose(xferinfo);
+                        sprintf (filename, "XFER%d", line_offset);
+                        unlink (filename);
+                        return;
+                }
+
+                wactiv (mainview);
+
+                allowed += (int)((time(NULL) - start_upload) / 60);
+
+                CLEAR_INBOUND();
+                if (i || file != NULL) {
+                        m_print(bbstxt[B_TRANSFER_OK]);
+                        timer(20);
+                        m_print(bbstxt[B_THANKS],usr.name);
+                }
+                else {
+                        m_print(bbstxt[B_TRANSFER_ABORT]);
+                        fclose(xferinfo);
+                        sprintf (filename, "XFER%d", line_offset);
+                        unlink (filename);
+                        press_enter();
+                        return;
+                }
+
+                rewind (xferinfo);
+                fpos = filelength(fileno (xferinfo));
+
+                while(ftell(xferinfo) < fpos) {
+                        fgets(filename,78,xferinfo);
+                        filename[strlen(filename) - 1] = '\0';
+
+                        fnsplit(filename,NULL,NULL,name,ext);
+                        strcat(name,ext);
+
+                        do {
+                                m_print(bbstxt[B_DESCRIBE],strupr(name));
+                                input(stringa,54);
+                                if (!CARRIER) {
+                                        fclose(xferinfo);
+                                        return;
+                                }
+                        } while (strlen(stringa) < 5);
+
+                        sprintf(filename,"%sFILES.BBS",sys.uppath);
+                        fp = fopen(filename,"at");
+                        fprintf(fp,"%-12s %s\n",name,stringa);
+                        fclose(fp);
+
+                        sprintf(filename,"%s\\%s",path,name);
+                        findfirst(filename,&blk,0);
+
+                        usr.upld+=(int)(blk.ff_fsize/1024L)+1;
+                        usr.n_upld++;
+
+                        if (function_active == 3)
+                                f3_status ();
+                }
+
                 fclose(xferinfo);
                 sprintf (filename, "XFER%d", line_offset);
                 unlink (filename);
-                return;
-        }
 
-        wactiv (mainview);
-
-        allowed += (int)((time(NULL) - start_upload) / 60);
-
-        CLEAR_INBOUND();
-        if (i || file != NULL) {
-                m_print(bbstxt[B_TRANSFER_OK]);
-                timer(20);
-                m_print(bbstxt[B_THANKS],usr.name);
+                press_enter();
         }
         else {
-                m_print(bbstxt[B_TRANSFER_ABORT]);
-                fclose(xferinfo);
-                sprintf (filename, "XFER%d", line_offset);
-                unlink (filename);
-                press_enter();
-                return;
+                if (protocol == 4)
+                        hslink_protocol (NULL, NULL, 0);
+                else if (protocol == 5)
+                        puma_protocol (NULL, NULL, 0, 1);
+                wactiv (mainview);
+                allowed += (int)((time(NULL) - start_upload) / 60);
         }
-
-        rewind (xferinfo);
-        fpos = filelength(fileno (xferinfo));
-
-        while(ftell(xferinfo) < fpos) {
-                fgets(filename,78,xferinfo);
-                filename[strlen(filename) - 1] = '\0';
-
-                fnsplit(filename,NULL,NULL,name,ext);
-                strcat(name,ext);
-
-                do {
-                        m_print(bbstxt[B_DESCRIBE],strupr(name));
-                        input(stringa,54);
-                        if (!CARRIER) {
-                                fclose(xferinfo);
-                                return;
-                        }
-                } while (strlen(stringa) < 5);
-
-                sprintf(filename,"%sFILES.BBS",sys.uppath);
-                fp = fopen(filename,"at");
-                fprintf(fp,"%-12s %s\n",name,stringa);
-                fclose(fp);
-
-                sprintf(filename,"%s\\%s",path,name);
-                findfirst(filename,&blk,0);
-
-                usr.upld+=(int)(blk.ff_fsize/1024L)+1;
-                usr.n_upld++;
-
-                if (function_active == 3)
-                        f3_status ();
-        }
-
-        fclose(xferinfo);
-        sprintf (filename, "XFER%d", line_offset);
-        unlink (filename);
-
-        press_enter();
 }
 
 int selprot()
 {
-   char c, stringa[4], *batch = "[*]";
+   char c, stringa[4];
 
    if ((c=get_command_letter ()) == '\0') {
-      m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[0][0], protocols[0]);
-      m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[1][0], protocols[1]);
-      m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[2][0], protocols[2]);
-      m_print (batch);
-      m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[5][0], protocols[5]);
-      m_print (batch);
-      m_print (bbstxt[B_TWO_CR]);
+      if (!read_system_file ("XFERPROT")) {
+         m_print (bbstxt[B_PROTOCOLS]);
+         m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[0][0], protocols[0]);
+         m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[1][0], protocols[1]);
+         m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[2][0], protocols[2]);
+         m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[5][0], protocols[5]);
+         if (noask.hslink)
+            m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[3][0], protocols[3]);
+         if (noask.puma)
+            m_print (bbstxt[B_PROTOCOL_FORMAT], protocols[4][0], protocols[4]);
+         m_print (bbstxt[B_SELECT_PROT]);
+      }
 
-      m_print (bbstxt[B_BATCH_PROTOCOL]);
-
-      m_print (bbstxt[B_SELECT_PROT]);
-
-      input (stringa, 1);
+      if (usr.hotkey) {
+         cmd_input (stringa, 1);
+         m_print (bbstxt[B_ONE_CR]);
+      }
+      else
+         input (stringa, 1);
       c = stringa[0];
       if (c == '\0' || c == '\r' || !CARRIER)
          return(0);
@@ -913,10 +944,20 @@ int selprot()
          return (2);
       case 'Z':
          return (3);
+      case 'H':
+         if (noask.hslink)
+            return (4);
+         else
+            return (0);
+      case 'P':
+         if (noask.puma)
+            return (5);
+         else
+            return (0);
       case 'S':
          return (6);
       default:
-         return('\0');
+         return(0);
    }
 }
 
@@ -1921,7 +1962,7 @@ int only_one;
 
    while (read(fd, (char *)&tsys.file_name,SIZEOF_FILEAREA) == SIZEOF_FILEAREA && line) {
       if (only_one)
-         memcpy ((char *)&sys.file_name, (char *)&tsys.file_name, SIZEOF_FILEAREA);
+         memcpy ((char *)&tsys.file_name, (char *)&sys.file_name, SIZEOF_FILEAREA);
       else {
          if (usr.priv < tsys.file_priv || tsys.no_global_search)
             continue;
@@ -2132,9 +2173,49 @@ int line, only_one;
          if((usr.flags & sys.download_flags) != sys.download_flags)
             return (line);
          download_file (sys.filepath, only_one ? 0 : 1);
+         if (user_status != BROWSING)
+            set_useron_record(BROWSING, 0, 0);
       }
    }
 
    return (line);
+}
+
+void file_kill ()
+{
+   FILE *fps, *fpd;
+   char filename[80], file[14], buffer[130];
+   struct ffblk blk;
+
+   if (!get_command_word (file, 12)) {
+      m_print ("\nKill what file? ");
+      input (file, 12);
+      if (!file[0])
+         return;
+   }
+
+   sprintf (filename,"%s%s", sys.filepath, file);
+
+   if (!findfirst (filename, &blk, 0))
+      do {
+         sprintf (filename,"%s%s", sys.filepath, blk.ff_name);
+
+         m_print ("Remove %s ", filename);
+         if (yesno_question (DEF_NO) == DEF_YES) {
+            sprintf (filename, "%sFILES.BBS", sys.filepath);
+            sprintf (buffer, "%sFILES.BAK", sys.filepath);
+            unlink (buffer);
+            rename (filename, buffer);
+            fpd = fopen (filename, "wt");
+            fps = fopen (buffer, "rt");
+            while (fgets (buffer, 128, fps) != NULL) {
+               if (!strncmp (buffer, blk.ff_name, strlen(blk.ff_name)))
+                  continue;
+               fputs (buffer, fpd);
+            }
+            fclose (fps);
+            fclose (fpd);
+         }
+      } while (!findnext (&blk));
 }
 

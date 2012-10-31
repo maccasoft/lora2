@@ -2,8 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
+#include <process.h>
 
 #include <cxl\cxlvid.h>
+#include <cxl\cxlwin.h>
 
 #include "defines.h"
 #include "lora.h"
@@ -11,18 +14,21 @@
 #include "prototyp.h"
 #include "zmodem.h"
 
+extern int blank_timer;
+
 static char *config_file = "LORA.CFG";
 static MDM_TRNS *mm_head;
-
+static char **dos_argv;
 
 int far parse_config()
 {
    FILE *fp;
-   char linea[256], opt[13][50], *p;
+   char linea[256], opt[13][50], *p, nzip, narc, narj, nlha, nlzh;
    int line, cur_alias, i, cur_lang, nscan, cur_sync;
    unsigned long crc;
    MDM_TRNS *tmm, *mm;
 
+   nzip = narc = narj = nlha = nlzh = 0;
    mm = NULL;
    _vinfo.dvcheck = 0;
    videoinit();
@@ -64,10 +70,110 @@ int far parse_config()
       for (i=0;opt[0][i];i++)
          crc = Z_32UpdateCRC (((unsigned short) opt[0][i]), crc);
 
-      switch (crc)
-      {
+      switch (crc) {
+      case 0xB308A13EL:   /* CHECK_ECHOMAIL */
+         noask.secure = 1;
+         break;
+      case 0x55D2B4D5L:   /* PUMA_MPT */
+         noask.puma = 1;
+         if (nscan >= 2) {
+            puma_exe = (char *)malloc(strlen(opt[1])+1);
+            strcpy (puma_exe, replace_blank(opt[1]));
+         }
+         break;
+      case 0xF3F8C81FL:   /* HSLINK */
+         noask.hslink = 1;
+         if (nscan >= 2) {
+            hslink_exe = (char *)malloc(strlen(opt[1])+1);
+            strcpy (hslink_exe, replace_blank(opt[1]));
+         }
+         break;
+      case 0xDC146F2CL:   /* BLANK_SCREEN */
+         blank_timer = atoi (opt[1]);
+         break;
+      case 0x724E5D6BL:   /* NEWAREAS_CREATE */
+         newareas_create = (char *)malloc(strlen(opt[1])+1);
+         strcpy(newareas_create, replace_blank(opt[1]));
+         break;
+      case 0x1898A2A0L:   /* NEWAREAS_LINK */
+         newareas_link = (char *)malloc(strlen(opt[1])+1);
+         strcpy(newareas_link, replace_blank(opt[1]));
+         break;
+      case 0x144081C5L:   /* ROOKIE_CALLS */
+         min_calls = atoi (opt[1]);
+         break;
+      case 0x24C6912BL:   /* KEEP_NETMAIL */
+         noask.keeptransit = 1;
+         break;
+      case 0x33FDAD2DL:   /* PACK_ZIP */
+         if (nzip < MAX_PACKERS) {
+            pack_zip[nzip] = (char *)malloc(strlen(opt[1])+1);
+            strcpy(pack_zip[nzip], replace_blank(opt[1]));
+            nzip++;
+         }
+         break;
+      case 0x0E066BF8L:   /* PACK_ARC */
+         if (narc < MAX_PACKERS) {
+            pack_arc[narc] = (char *)malloc(strlen(opt[1])+1);
+            strcpy(pack_arc[narc], replace_blank(opt[1]));
+            narc++;
+         }
+         break;
+      case 0x77DAD35CL:   /* PACK_ARJ */
+         if (narj < MAX_PACKERS) {
+            pack_arj[narj] = (char *)malloc(strlen(opt[1])+1);
+            strcpy(pack_arj[narj], replace_blank(opt[1]));
+            narj++;
+         }
+         break;
+      case 0x59D5AB2BL:   /* PACK_LZH */
+         if (nlzh < MAX_PACKERS) {
+            pack_lzh[nlzh] = (char *)malloc(strlen(opt[1])+1);
+            strcpy(pack_lzh[nlzh], replace_blank(opt[1]));
+            nlzh++;
+         }
+         break;
+      case 0x58FD635CL:   /* PACK_LHA */
+         if (nlha < MAX_PACKERS) {
+            pack_lha[nlha] = (char *)malloc(strlen(opt[1])+1);
+            strcpy(pack_lha[nlha], replace_blank(opt[1]));
+            nlha++;
+         }
+         break;
+      case 0x1C309B04L:   /* MODEM_BUSY */
+         modem_busy = (char *)malloc(strlen(opt[1])+1);
+         strcpy(modem_busy, replace_blank(opt[1]));
+         break;
+      case 0xE0E646E3L:   /* BEFORE_IMPORT */
+         pre_import = (char *)malloc(strlen(opt[1])+1);
+         strcpy(pre_import, replace_blank(opt[1]));
+         break;
+      case 0x2B01B404L:   /* AFTER_IMPORT */
+         after_import = (char *)malloc(strlen(opt[1])+1);
+         strcpy(after_import, replace_blank(opt[1]));
+         break;
+      case 0x3F249E6AL:   /* BEFORE_EXPORT */
+         pre_export = (char *)malloc(strlen(opt[1])+1);
+         strcpy(pre_export, replace_blank(opt[1]));
+         break;
+      case 0xF4C36C8DL:   /* AFTER_EXPORT */
+         after_export = (char *)malloc(strlen(opt[1])+1);
+         strcpy(after_export, replace_blank(opt[1]));
+         break;
+      case 0x6EF35C4CL:   /* LOCAL_EDITOR */
+         local_editor = (char *)malloc(strlen(opt[1])+1);
+         strcpy(local_editor, replace_blank(opt[1]));
+         break;
+      case 0xE719B671L:   /* TEXTFILES_PATH */
+         append_backslash (opt[1]);
+         glob_text_path = (char *)malloc(strlen(opt[1])+1);
+         strcpy(glob_text_path, opt[1]);
+         break;
       case 0x08F6F13CL:   /* MAX_KBYTES */
          norm_max_kbytes = atoi(opt[1]);
+         break;
+      case 0xDD336D5DL:   /* VOTE_LIMIT */
+         vote_limit = atoi(opt[1]);
          break;
       case 0x3A957DA0L:   /* PROT_MAX_KBYTES */
          prot_max_kbytes = atoi(opt[1]);
@@ -79,6 +185,31 @@ int far parse_config()
          keycode = atol (opt[1]);
          break;
       case 0xA2564291L:   /* NETMAIL */
+         append_backslash (opt[1]);
+         netmail_dir = (char *)malloc(strlen(opt[1])+1);
+         strcpy(netmail_dir, opt[1]);
+         break;
+      case 0xE919B64CL:   /* DEFAULT_PACKER */
+         if (!stricmp (opt[1], "ARC"))
+            def_pack = 0;
+         else if (!stricmp (opt[1], "ZIP"))
+            def_pack = 1;
+         else if (!stricmp (opt[1], "ARJ"))
+            def_pack = 2;
+         else if (!stricmp (opt[1], "LZH"))
+            def_pack = 3;
+         else if (!stricmp (opt[1], "LHA"))
+            def_pack = 4;
+         break;
+      case 0x7BAD9C45L:   /* DUPES */
+         append_backslash (opt[1]);
+         dupes = (char *)malloc(strlen(opt[1])+1);
+         strcpy(dupes, opt[1]);
+         break;
+      case 0x774D422EL:   /* BAD_MSGS */
+         append_backslash (opt[1]);
+         bad_msgs = (char *)malloc(strlen(opt[1])+1);
+         strcpy(bad_msgs, opt[1]);
          break;
       case 0x299701B6L:   /* SYSTEM_LOCATION */
          location = (char *)malloc(strlen(opt[1])+1);
@@ -98,8 +229,15 @@ int far parse_config()
       case 0xF1D22F81L:   /* NO_LOGON_CHECKFILES */
          noask.checkfile = 1;
          break;
-      case 0x52675BBCL:   /* NO_ANSILOGON */
-         noask.ansilogon = 1;
+      case 0x1B46DD7FL:   /* ANSILOGON */
+         if (!stricmp (opt[1], "YES"))
+            noask.ansilogon = 3;
+         else if (!stricmp (opt[1], "ASK"))
+            noask.ansilogon = 2;
+         else if (!stricmp (opt[1], "AUTO"))
+            noask.ansilogon = 1;
+         else if (!stricmp (opt[1], "NO"))
+            noask.ansilogon = 0;
          break;
       case 0x60F83BF0L:   /* NO_BIRTHDATE */
          noask.birthdate = 1;
@@ -117,7 +255,14 @@ int far parse_config()
          break;
       case 0xCDF46E64L:   /* ADDRESS */
          sscanf(opt[1],"%d:%d/%d",&alias[cur_alias].zone,&alias[cur_alias].net,&alias[cur_alias].node);
-         alias[cur_alias].fakenet = atoi(opt[2]);
+         if ((p = strchr (opt[1], '.')) != NULL) {
+            p++;
+            alias[cur_alias].point = atoi (p);
+         }
+         else
+            alias[cur_alias].point = 0;
+         if (nscan >= 3)
+            alias[cur_alias].fakenet = atoi(opt[2]);
          cur_alias++;
          break;
       case 0x23BEF7BCL:   /* AFTERCALLER_EXIT */
@@ -167,8 +312,17 @@ int far parse_config()
       case 0x77201C02L:   /* EXIT_2400 */
          exit2400 = atoi (opt[1]);
          break;
+      case 0x5B51BABAL:   /* EXIT_4800 */
+         exit4800 = atoi (opt[1]);
+         break;
+      case 0x44739082L:   /* EXIT_7200 */
+         exit7200 = atoi (opt[1]);
+         break;
       case 0xA3A54F6DL:   /* EXIT_9600 */
          exit9600 = atoi (opt[1]);
+         break;
+      case 0xAA6B5490L:   /* EXIT_12000 */
+         exit12000 = atoi (opt[1]);
          break;
       case 0x8809A390L:   /* EXIT_14400 */
          exit14400 = atoi (opt[1]);
@@ -233,8 +387,8 @@ int far parse_config()
             lang_keys[cur_lang] = toupper(opt[2][0]);
             lang_descr[cur_lang] = (char *)malloc(strlen(opt[3])+1);
             strcpy(lang_descr[cur_lang], replace_blank(opt[3]));
-            if (nscan >= 5)
-            {
+            if (nscan >= 5) {
+               append_backslash (opt[4]);
                lang_txtpath[cur_lang] = (char *)malloc(strlen(opt[4])+1);
                strcpy(lang_txtpath[cur_lang], opt[4]);
             }
@@ -246,17 +400,16 @@ int far parse_config()
          }
          break;
       case 0xB740DCC4L:   /* LOG_NAME */
-         if (log_name == NULL)
-         {
+         if (log_name == NULL) {
             translate_filenames (opt[1], 0, NULL);
             log_name = (char *)malloc(strlen(opt[1])+1);
             strcpy(log_name, opt[1]);
          }
          break;
       case 0xAF52B711L:   /* LOG_STYLE */
-         if (!stricmp (opt[1], "FRONTDOOR"))
+         if (!stricmp (opt[1], "SHORT"))
             frontdoor = 1;
-         else if (!stricmp (opt[1], "BINKLEY"))
+         else if (!stricmp (opt[1], "VERBOSE"))
             frontdoor = 0;
          else
             printf("Configuration error. Line %d. (%s, Code %08lX)\a\n", line, opt[1], crc);
@@ -298,12 +451,12 @@ int far parse_config()
          if (!speed)
             speed = rate = atoi(opt[2]);
 
-         if (com_port == -1)
+         if (com_port == -1) {
             com_port = atoi(&opt[1][3]);
-         com_port--;
+            com_port--;
+         }
 
-         if (!local_mode)
-         {
+         if (!local_mode) {
             if (!com_install(com_port))
                exit (250);
          }
@@ -340,7 +493,7 @@ int far parse_config()
          break;
       case 0x18EA343DL:   /* OUTBOUND */
          append_backslash (opt[1]);
-         hold_area = (char *)malloc(strlen(opt[1])+4);
+         hold_area = (char *)malloc(strlen(opt[1])+8);
          strcpy(hold_area, opt[1]);
          break;
       case 0x527DA204L:   /* PIPBASE_PATH */
@@ -488,18 +641,23 @@ void init_system()
    log_name = user_file = sys_path = NULL;
    menu_bbs = sysop = system_name = net_info = request_list = NULL;
    availist = about = hold_area = filepath = enterbbs = banner = NULL;
-   sched_name = mail_only = password = flag_dir = NULL;
+   glob_text_path = sched_name = mail_only = password = flag_dir = NULL;
    pip_msgpath = timeformat = dateformat = text_path = ipc_path = NULL;
    prot_filepath = know_filepath = answer = ext_mail_cmd = NULL;
    ext_editor = norm_filepath = norm_about = norm_availist = NULL;
    norm_request_list = prot_request_list = prot_availist = prot_about = NULL;
    galileo = know_request_list = know_availist = know_about = NULL;
-   location = phone = flags = NULL;
+   bad_msgs = dupes = netmail_dir = location = phone = flags = NULL;
+   pre_import = pre_export = after_import = after_export = modem_busy = NULL;
+   hslink_exe = puma_exe = newareas_create = local_editor = NULL;
    mm_head = NULL;
+
+   blank_timer = 0;
 
    vote_priv = up_priv = down_priv = 0;
    logon_priv = TWIT;
 
+   def_pack = 0;
    norm_max_kbytes = prot_max_kbytes = know_max_kbytes = max_kbytes = 0;
    CurrentReqLim = max_call = speed_graphics = max_requests = 0;
    registered = line_offset = no_logins = next_call = 0;
@@ -514,6 +672,7 @@ void init_system()
    did_nak = netmail = who_is_he = overwrite = allow_reply = 0;
    frontdoor = local_mode = user_status = caller = 0;
    snooping = 1;
+   min_calls = 8;
 
    exit300 = exit1200 = exit2400 = exit9600 = exit14400 = 0;
    exit19200 = exit38400 = 0;
@@ -523,16 +682,23 @@ void init_system()
    memset((char *)&noask, 0, sizeof(struct _noask));
    memset((char *)&resync[0], 0, sizeof(struct _alias)*MAX_RESYNC);
 
+   max_readpriv = ASSTSYSOP;
    sq_ptr = NULL;
 
    strcpy (area_change_key, "[]?");
 
    for (i=0;i<MAXCLASS;i++)
       class[i].priv = 255;
-   for (i=0;i<MAX_LANG;i++)
-   {
+   for (i=0;i<MAX_LANG;i++) {
       lang_name[i] = NULL;
       lang_descr[i] = NULL;
+   }
+   for (i=0;i<MAX_PACKERS;i++) {
+      pack_zip[i] = NULL;
+      pack_arc[i] = NULL;
+      pack_arj[i] = NULL;
+      pack_lzh[i] = NULL;
+      pack_lha[i] = NULL;
    }
 }
 
@@ -603,24 +769,24 @@ char **argv;
 {
    int i;
 
+   dos_argv = argv;
+
    if (argc < 2)
            return;
 
-   for (i=1;i<argc;i++)
-   {
-      if (argv[i][0] != '-' && argv[i][0] != '/')
-      {
+   for (i=1;i<argc;i++) {
+      if (argv[i][0] != '-' && argv[i][0] != '/') {
          printf(msgtxt[M_UNRECOGNIZED_OPTION], argv[i]);
          continue;
       }
 
-      switch (toupper(argv[i][1]))
-      {
+      switch (toupper(argv[i][1])) {
       case 'B':
          speed = rate = atoi(&argv[i][2]);
          caller = 1;
          if (rate == 0)
             local_mode = 1;
+         dos_argv = NULL;
          break;
 
       case 'C':
@@ -637,6 +803,7 @@ char **argv;
 
       case 'L':
          local_mode = 1;
+         dos_argv = NULL;
          break;
 
       case 'M':
@@ -650,6 +817,7 @@ char **argv;
          break;
 
       case 'O':
+         dos_argv = NULL;
          parse_netnode (&argv[i][2], &remote_zone, &remote_net, &remote_node, &remote_point);
          break;
 
@@ -659,6 +827,7 @@ char **argv;
 
       case 'P':
          com_port = atoi(&argv[i][2]);
+         com_port--;
          break;
 
       case 'R':
@@ -817,5 +986,57 @@ long get_flags (char *p)
       }
 
    return (flag);
+}
+
+void get_down(errlev, flag)
+int errlev, flag;
+{
+   struct tm *tim;
+   long tempo;
+
+   tempo=time(0);
+   tim=localtime(&tempo);
+   write_sysinfo();
+
+   if (!frontdoor) {
+      status_line(":End");
+      fprintf(logf, "\n");
+   }
+
+   fclose(logf);
+
+   wcloseall ();
+
+   if (!local_mode) {
+      if (modem_busy != NULL)
+         mdm_sendcmd (modem_busy);
+      MDM_DISABLE();
+   }
+
+   if (errlev || dos_argv == NULL) {
+      cclrscrn(LGREY|_BLACK);
+
+      if (flag == 1)
+         printf("* Exit at start of event with errorlevel %d\n", (errlev == -1) ? 0 : errlev);
+      else if (flag == 2)
+         printf("* Exit after caller with errorlevel %d\n", (errlev == -1) ? 0 : errlev);
+      else if (flag == 3)
+         printf("* Exit with errorlevel %d\n", (errlev == -1) ? 0 : errlev);
+
+      printf("* LoraBBS down at %d:%02d %d-%s-%02d\n",
+                  tim->tm_hour, tim->tm_min,
+                  tim->tm_mday, mtext[tim->tm_mon], tim->tm_year % 100);
+
+      if (!registered)
+         printf("* Don't forget to register.\n");
+
+      gotoxy_(20,0);
+      printf(msgtxt[M_THANKS], VERSION);
+
+      showcur();
+      exit ((errlev == -1) ? 0 : errlev);
+   }
+   else
+      spawnvp (P_OVERLAY, dos_argv[0], dos_argv);
 }
 

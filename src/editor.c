@@ -156,7 +156,7 @@ char *txt;
 	char filename[80];
 
         m_print(bbstxt[B_SAVE_MESSAGE]);
-        scan_message_base(sys.msg_num);
+        scan_message_base(sys.msg_num, 1);
         dest = last_msg + 1;
         activation_key ();
         m_print(" #%d ...",dest);
@@ -169,6 +169,8 @@ char *txt;
         fwrite((char *)&msg,sizeof(struct _msg),1,fp);
 
         if(sys.netmail) {
+                if (alias[sys.use_alias].point)
+                        fprintf(fp,"\001FMPT %d\r\n", alias[sys.use_alias].point);
                 if (msg_tpoint)
                         fprintf(fp,msgtxt[M_TOPT], msg_tpoint);
                 if (msg_tzone != msg_fzone)
@@ -178,7 +180,7 @@ char *txt;
         if(sys.echomail)
         {
                 fprintf(fp,msgtxt[M_PID], VERSION, registered ? "" : NOREG);
-                fprintf(fp,msgtxt[M_MSGID], alias[sys.use_alias].zone, alias[sys.use_alias].net, alias[sys.use_alias].node, time(NULL));
+                fprintf(fp,msgtxt[M_MSGID], alias[sys.use_alias].zone, alias[sys.use_alias].net, alias[sys.use_alias].node, alias[sys.use_alias].point, time(NULL));
         }
 
         if (txt == NULL) {
@@ -221,21 +223,14 @@ char *txt;
         if(sys.echomail) {
                 fprintf(fp,msgtxt[M_TEAR_LINE],VERSION, registered ? "" : NOREG);
                 if(strlen(sys.origin))
-                        fprintf(fp,msgtxt[M_ORIGIN_LINE],sys.origin,alias[sys.use_alias].zone,alias[sys.use_alias].net,alias[sys.use_alias].node);
+                        fprintf(fp,msgtxt[M_ORIGIN_LINE],random_origins(),alias[sys.use_alias].zone,alias[sys.use_alias].net,alias[sys.use_alias].node, alias[sys.use_alias].point);
 		else
-                        fprintf(fp,msgtxt[M_ORIGIN_LINE],system_name,alias[sys.use_alias].zone,alias[sys.use_alias].net,alias[sys.use_alias].node);
+                        fprintf(fp,msgtxt[M_ORIGIN_LINE],system_name,alias[sys.use_alias].zone,alias[sys.use_alias].net,alias[sys.use_alias].node, alias[sys.use_alias].point);
         }
 
         fputc('\0',fp);
 
 	fclose(fp);
-
-        if(sys.echomail && sys.echotag[0])
-        {
-                fp = fopen ("ECHOTOSS.LOG", "at");
-                fprintf (fp, "%s\n", sys.echotag);
-                fclose (fp);
-        }
 
         m_print(bbstxt[B_ONE_CR]);
         status_line(msgtxt[M_INSUFFICIENT_DATA],dest);
@@ -262,10 +257,8 @@ char *s;
 		strcpy(to,msgt.from);
         }
 
-        while ((p = strchr(s,'/')) != NULL)
-        {
-                if (!strnicmp(p,"/T=\"",4))
-                {
+        while ((p = strchr(s,'/')) != NULL) {
+                if (!strnicmp(p,"/T=\"",4)) {
                         if ((v = strchr (&p[4], '"')) != NULL)
                                 *v = '\0';
                         strncpy(to, (char *)&p[4], 35);
@@ -274,8 +267,7 @@ char *s;
                                 *v = '"';
                 }
 
-                if (!strnicmp(p,"/S=\"",4))
-                {
+                if (!strnicmp(p,"/S=\"",4)) {
                         if ((v = strchr (&p[4], '"')) != NULL)
                                 *v = '\0';
                         strncpy(subj, (char *)&p[4], 71);
@@ -283,8 +275,7 @@ char *s;
                                 *v = '"';
                 }
 
-                if (!strnicmp(p,"/A=",3))
-                {
+                if (!strnicmp(p,"/A=",3)) {
                         i = atoi(&p[3]);
                         read_system(i, 1);
                 }
@@ -314,13 +305,11 @@ char *s;
         msg.dest=alias[sys.use_alias].node;
 
         m_print(bbstxt[B_FROM]);
-        if(sys.anon_ok)
-        {
+        if(sys.anon_ok) {
                 m_print("%s\n", usr.handle);
                 strcpy(msg.from,usr.handle);
         }
-        else
-        {
+        else {
                 m_print("%s\n", usr.name);
                 strcpy(msg.from,usr.name);
         }
@@ -368,7 +357,7 @@ char *s;
                                         break;
 
                                 parse_netnode(stringa, &msg_tzone, &msg.dest_net, &msg.dest, &msg_tpoint);
-                                if (!get_bbs_record (msg_tzone, msg.dest_net, msg.dest))
+                                if (!get_bbs_record (msg_tzone, msg.dest_net, msg.dest, msg_tpoint))
                                         continue;
 
                                 m_print ("%d:%d/%d.%d, %s (%s)\n", msg_tzone, msg.dest_net, msg.dest, msg_tpoint, nodelist.name, nodelist.city);
@@ -389,8 +378,7 @@ char *s;
         else
                 m_print(bbstxt[B_SUBJECT]);
 
-        if (subj[0] == '\0')
-        {
+        if (subj[0] == '\0') {
                 if (reply > 0) {
                         if(strncmp(msgt.subj,"Re: ",4))
                                 m_print("Re: ");
@@ -406,8 +394,7 @@ char *s;
                         read_system(usr.msg, 1);
                         return (0);
                 }
-                else if (!strlen(stringa) && reply > 0)
-                {
+                else if (!strlen(stringa) && reply > 0) {
                         if(strncmp(msgt.subj,"Re: ",4))
                                 sprintf(stringa,"Re: %s",msgt.subj);
                         else
@@ -421,14 +408,12 @@ char *s;
 
                 strcpy(msg.subj,stringa);
         }
-        else
-        {
+        else {
                 m_print("%s\n", subj);
                 strcpy(msg.subj,subj);
         }
 
-        if(!sys.public && !sys.private)
-        {
+        if(!sys.public && !sys.private) {
 		do {
                         m_print(bbstxt[B_ASK_PRIVATE]);
                         c = yesno_question (DEF_NO|QUESTION);
@@ -450,13 +435,15 @@ char *s;
         msg.orig=alias[sys.use_alias].node;
         msg.orig_net=alias[sys.use_alias].net;
 
-        if (!local_mode)
-        {
+        if (!local_mode) {
                 m_print(bbstxt[B_UPLOAD_PREPARED]);
                 if (yesno_question (DEF_NO) == DEF_NO)
                         return (1);
+
+                i = noask.hslink;
                 if ((protocol=selprot()) == 0)
                         return (0);
+                noask.hslink = i;
 
                 sprintf (to, "MSGTMP%d.TMP", line_offset);
 
@@ -544,6 +531,8 @@ char *s;
 
                 fclose(xferinfo);
                 unlink("XFERINFO");
+                sprintf (to, "MSGTMP%d.TMP", line_offset);
+                unlink (to);
 
                 press_enter();
                 return (2);
@@ -688,10 +677,11 @@ void edit_line()
 	if(!stringa[0])
 		return;
 
-	start = atoi(stringa) - 1;
+        start = atoi(stringa);
 	if(start < 1 || start > max_line)
 		return;
 
+        start--;
         m_print("\n%3d: %s\n",start+1,messaggio[start]);
         m_print("%3d: ",start+1);
         input(stringa,73);
@@ -721,13 +711,16 @@ void edit_insert()
 	if(!stringa[0])
 		return;;
 
-	i = atoi(stringa) - 1;
-	if(i < 1 || i > max_line)
+        i = atoi(stringa);
+        if(i < 1 || i > max_line)
 		return;
 
-	for(m = max_line; m >= i; m--)
+        i--;
+        for(m = max_line; m >= i; m--)
                 messaggio[m+1] = messaggio[m];
 
+        i++;
+        messaggio[i] = (char *)malloc (80);
         m_print("%3d: ",i+1);
         input(messaggio[i], 73);
         strcat(messaggio[i],"\r");
