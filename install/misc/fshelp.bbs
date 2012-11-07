@@ -1,0 +1,15 @@
+ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+³                                 ³
+³ ^E      - Move one line up      ³
+³ ^X      - Move one line down    ³
+³ ^D      - Move one line right   ³
+³ ^S      - Move one line left    ³
+³ ^QD     - End of line           ³
+³ ^QS     - Begin of line         ³
+³ BS      - Delete one char. left ³
+³ ^Y      - Delete one line       ³
+³ ^Z, ^KS - Save and exit         ³
+³ ^KQ     - Abort and exit        ³
+³ ^L      - Screen redraw         ³
+³                                 ³
+ÀÄPress [Enter] to continueÄÄÄÄÄÄÄÙ

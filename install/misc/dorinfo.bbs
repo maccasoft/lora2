@@ -1,0 +1,21 @@
+
+Creating DORINFO1.DEF drop file. Please wait ...
+
+DDorinfo1.Def
+ODorinfo1.Def
+W%N
+W%S
+W%s
+ILWCOM0
+IRWCOM%P
+W%b BAUD,N,8,1
+W 0
+W%A
+W%B
+W%c
+W%g
+QSW100
+XSW50
+W%t
+W-1
+Q

@@ -1,0 +1,13 @@
+
+Lora has an external full screen editor which is accessible to
+callers using either ANSI or AVATAR graphics.  The external
+editor, is more of a word processor than a full-screen editor, since
+you can use the cursor keys to move around your message, correct
+mistakes, insert words in the middle of a paragraph, etc.
+
+If you don't (or can't) use the full screen editor, then you must use
+the Lora standard line editor.
+
+  To use the full screen editor, enter. Y
+  To use the line editor, enter. N
+ 

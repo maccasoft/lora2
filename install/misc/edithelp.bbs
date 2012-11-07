@@ -1,0 +1,22 @@
+
+Press S to Stop or P to Pause.
+
+<C>ontinue:   This will  allow you to  continue  adding to  end of  your
+              message.
+
+<E>dit:       This will allow you to  edit a line  in your message.  You
+              can enter  strings to be  replaced  or deleted.  To finish
+              editing a line hit [ENTER] at the "Old String?" prompt.
+
+<I>nsert:     This will allow you to insert a line in your message.
+
+<L>ist:       This will allow you to view your message line by line.
+
+<D>elete:     This will allow you to delete a line in your message.
+
+<S>ave:       This  allows  you to  save  your  message in  the  message
+              database.
+
+<A>bort:      This option will abort your message entirely.
+
+Press [ENTER] to Continue ..

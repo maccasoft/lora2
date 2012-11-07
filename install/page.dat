@@ -1,0 +1,76 @@
+; Page sound data-file for LoraBBS v.2.32
+;
+; Verbs:
+;
+;   TONE [hz] [1/100's sec]   (sounds hz)
+;   WAIT [1/100's sec]        (sounds nothing)
+;
+; Note  Freqs
+; ----  -----
+; C     45  134 268  536 1071 2145
+; C#    71  142 284  568 1136 2273
+; D     75  150 301  602 1204 2408
+; D#    80  159 319  638 1275 2551
+; E     84  169 338  676 1351 2703
+; F     90  179 358  716 1432 2864
+; F#    95  190 379  758 1517 3034
+; G     100 201 402  804 1607 3215
+; G#    106 213 426  851 1703 3406
+; A     113 225 451  902 1804 3608
+; A#    119 239 478  956 1991 3823
+; B     127 253 506 1012 2025 4050
+;
+; Sweet Child 'O Mine, Guns 'n Roses "Appetite for destruction".
+;
+TONE 284  20  C# (1st riff)
+TONE 568  20  C#+
+TONE 426  20  G#
+TONE 379  20  F#
+TONE 758  20  F#+
+TONE 426  20  G#
+TONE 716  20  F+
+TONE 426  20  G#
+TONE 284  20  C#  (repeat)
+TONE 568  20  C#+
+TONE 426  20  G#
+TONE 379  20  F#
+TONE 758  20  F#+
+TONE 426  20  G#
+TONE 716  20  F+
+TONE 426  20  G#
+
+TONE 319  20  D# (2nd riff)
+TONE 568  20  C#+
+TONE 426  20  G#
+TONE 379  20  F#
+TONE 758  20  F#+
+TONE 426  20  G#
+TONE 716  20  F+
+TONE 426  20  G#
+TONE 319  20  D#  (repeat)
+TONE 568  20  C#+
+TONE 426  20  G#
+TONE 379  20  F#
+TONE 758  20  F#+
+TONE 426  20  G#
+TONE 716  20  F+
+TONE 426  20  G#
+
+TONE 379  20  F# (3rd riff)
+TONE 568  20  C#+
+TONE 426  20  G#
+TONE 379  20  F#
+TONE 758  20  F#+
+TONE 426  20  G#
+TONE 716  20  F+
+TONE 426  20  G#
+TONE 379  20  F#  (repeat)
+TONE 568  20  C#+
+TONE 426  20  G#
+TONE 379  20  F#
+TONE 758  20  F#+
+TONE 426  20  G#
+TONE 716  20  F+
+TONE 426  20  G#
+
+; End of configuration file
