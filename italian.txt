@@ -1,0 +1,388 @@
+;
+; ITALIAN; Language File for LoraBBS Version 2.40
+;          Copyright (c) 1991-95 by Marco Maccaferri, All Rights Reserved
+;
+382 1
+;
+\nŠInserisci il tuo Nome e Cognome : 
+\nNumero minimo di chiamate da listare [<Enter> = 10]:_
+\nŠPassword: 
+\nERRATO !\n\n
+\nVuoi continuare come nuovo utente
+\nŠDa dove chiami : 
+\n\nŠSeleziona la password che vuoi usare [minimo 4 caratteri] : 
+\nReinserisci per verificare : 
+\nERRATO! La password era `%s'\n
+Hai scritto `%s'.\n\n
+\nVuoi visualizzare la grafica ANSI
+\nVuoi visualizzare la grafica AVATAR
+\nVuoi ricevere i codici di controllo per i colori
+\nŠVuoi usare l'editor ANSI a tutto schermo
+\nErrato, accesso negato.\n
+\n\n\nPassword:_
+\n\nŠCodici colore attivi.\n\n
+\n\nŠCodici colore disattivi.\n\n
+\n\nŠGrafica ANSI e Colori attivati.\n\n
+\n\nŠGrafica ANSI e Colori disattivati.
+\n\nŠGrafica AVATAR e Colori attivati.\n\n
+\n\nŠGrafica AVATAR e Coloir disattivati.
+\n\nŠL'editor tutto schermo sara' utilizzato per editare messaggi.\n\n
+\n\nŠL'editor tutto schermo non sara' utilizzato.\n\n
+\nL'editor tutto schermo e' gia' stato disattivato.
+\n\nŠLettura messaggi a shermo pieno attiva.\n\n
+\n\nŠLettura messaggi a schermo pieno disattiva.\n\n
+Si_
+No_
+\nRighe visualizzabili dal vostro monitor(10-66, 24 consigliate) : 
+\n\nŠNumero di nulli (0) dopo CR/LF (0-255): 
+\n\nŠScegli l'alias che vuoi usare : 
+\nŠDigita il numero telefonico casa/voce .\n
+\nDigita il numero telefonico lavoro/dati .\n
+\nŒNumero inserito: %s\n
+E' corretto
+Numero : 
+\n\n
+\n
+\nŠDigita la firma personale (Max. 58 car.)\n
+Firma: 
+SETUP PERSONALE
+\n\nnome utente...: Š%s\n
+Alias.........: Š%-26.26s telefono voce..: Š%s\n
+\nŠMostro il contenuto di quale archivio?_
+Citta.........: Š%-26s telefono dati..: Š%s\n\n
+\nLista contenuto archivio: %s\n
+linguaggio....: Š%s\n
+\nŠNomeFile      Original Size     Ratio Date      Time\n
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ\n
+lunghezza.....: Š%-11d    CLS...........:_Š%s          Nulli.......:_Š%d\n
+%-13s %-8ld %-8ld %02d%%   %02d-%02d-%02d %2d:%02d\n
+Ancora ?......: Š%s            Check Mailbox.:_Š%s          TABULAZIONI.:_Š%s\n
+              ÄÄÄÄÄÄÄÄ ÄÄÄÄÄÄÄÄ ÄÄÄÄ-\n
+              %-8ld %-8ld %02d%%\n\n
+ANSI..........: Š%s            Editor TuttoS.:_Š%s          Color.......:_Š%s\n
+\nPrelevi in formato QWK
+Riprova  :_
+AVATAR........: Š%s            Full.Scr.Read.:_Š%s          Hot Key.....:_Š%s\n
+\nControllo la MAILBOX personale ad ogni connessione
+Firma pers. . : Š%s\n\n
+Computer:_
+PCjr
+XT-class
+PC-class
+AT-class
+PS2-30
+PC-Conv.
+PS2-80
+Compaq
+Generic
+      OS: DOS %d.%d
+\nŠMemoria disponibile: %lu byte\n\n
+ - 4DOS %d.%02d
+Nessun'area attiva\n
+Aree Messaggi
+Aree Files
+Salva commento
+\n%s [#, '['=Prec., ']'=Succ., '?'=Lista]:_
+%s : ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ\n\n
+\nDigita la stringa da ricercare o premi [INVIO] per la lista:_
+\nNome                          Localita'                 Ultima    Calls Ratio\n
+\n‰Compilato il %s %s con %s v%d.%d\n\n
+Chiamate di oggi %s
+ŠNome                Linea  BaudRate   LogOn  LogOff   Times  Localita'\n
+Premi [INVIO] per continuare:_
+Ancora
+ŠPremi ^C per fermare, o ^S per Pausa\n
+Ä$\n\n
+\nNome del file da visualizzare?_
+\nŠNome file da cercare [INVIO=tutti] :_
+\n‹Ricerca nuovi files dall'ultima chiamata
+\nListo tutti i files con data piu' recente del DD-MM-YY:_
+Ricerca files in base alla data.\n
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ\n
+\n\n\nPronto ad inviare il file._
+Inviare alcuni CTRL-X per finire.\n
+\nTrasferimento completo.\n\n
+\nTrasferimento interrotto.\n\n
+\nNome del file da inviare : 
+\nNome non valido.\n
+\nNome del file da ricevere ([Enter]=Fine) : 
+\nQuesto file e' gia' presente.\n
+\n\n\nPronto a ricevere il(i) file(s) usando: %s\n
+\nGrazie per l'upload, %s.\n
+\nDescrivi `%s':_
+\n\nFile `%s' non trovato.\n\n
+File : Š%s\n
+Size : %ld bytes\n
+\nAttendi. Importo i messaggi .\n\n
+Tempo: %d minuti e %d secondi (stimati)\n
+Modo : %s\n
+[*] Means batch transfer available\n\n
+\nScelta protocollo:_
+\nLinguaggi disponibili:\n\n
+\nScelta linguaggio:_
+     Inizia a scrivere il messaggio. Le parole vanno a capo automaticamente\n
+         Una riga vuota indica la fine.Massimo 60 linee di 70 caratteri.\n
+\n\nNon inviato.\n
+Salvataggio_
+PRIVATO_
+PUBBLICO_
+area NetMail:\n
+area EchoMail:\n
+Inserimento_
+messaggio, in_
+Area locale:\n
+Da    : 
+Per   : 
+Effettuato "forward" a %s\n
+Scrivi l'indirizzo netmail ([Zone:]Net/Node[.Point])\n
+Indir.: 
+File  : 
+Sogg. : 
+Premi [INVIO] per usare lo stesso soggetto.\n
+Privato_
+\nCancella dalla linea?_
+Alla linea?_
+\n%d Linea(e) cancellata(e).\n
+\nNumero di linea da editare?_
+\nInserire DOPO quale linea?_
+Utenti in linea su %s
+ŠNome                       Lin.  Veloc.  Attivita'       Citta'\n
+‚ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ  ÄÄÄÄ  ÄÄÄÄÄÄ  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄ  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ\n
+Scegli l'utente inserendo il numero di linea desiderato:_
+\nNumero di linea non valido!\n\n
+\nMessaggio a %s, massimo 1 linea\n
+\nAttendere...
+\n\n** MESSAGGIO **\n
+da: %s sulla linea %d\n
+\n"%s"\n\n
+Inviato\n\n
+Utenti On-Line sul Canale %d
+ŠNome                          Linea  BaudRate   Localita'\n
+‚-O\n
+\n\nŒ* * * Tempo scaduto.\n
+Nome digitato: %s\n
+Il tuo nome non e' presente nella lista utenti.\n\n
+\nŠVuoi visualizzare i messaggi a schermo pieno
+\nVuoi una pausa alla fine di ogni pagina
+\nVuoi i codici di controllo per la pulizia schermo
+\n\nVuoi vedere il logo ANSI
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ\n
+%-29.29s Š%-25.25s ‰%-9.9s %5d %d:%d\n
+Apertura chat . Digita `/q' per finire, `/w' per listare gli utenti\n
+su questo canale, e `/h' per aiuto.\n
+\nInserisci la tua data di nascita (%s): 
+%-12s %7ld Š%s  %s\n
+[%c]  %-10s\n
+\n\nNon ci sono altri messaggi da leggere.\n\n
+\nŠControllo la tua Mail-box ..._
+\n\nNon hai nuovi messaggi nella tua Mail-box.\n\n
+\n\nŠC'e' posta per te:\n
+-"\n
+%-36.36s : %d messaggio(i)\n
+\nVuoi leggerli adesso_
+Invio di un messaggio gia' preparato
+\n\nInserisci la stringa di ricerca:_
+\n\nIl SysOp entra in chat:\n\n
+\n\nIl SysOp ha chiuso il chat.\n\n
+\n\nChiamo il Sysop ...
+\nInizio dal messaggio numero:_
+\nNumero minimo di giorni dall'ultima chiamata ([INVIO] = 15):_
+\nNon capisco "%c".\n\n
+Š %5d  ‹%-30.30s______
+        Totale                             %5d       %5d        Š%5d\n\n
+\nPreleva in formato ASCII
+\nScegli il compattatore:_
+\nAttendi per favore...
+Domenica
+Lunedi
+Martedi
+Mercoledi
+Giovedi
+Venerdi
+Sabato
+\nŠHai %d minuti disponibili.\n
+ŠHai %d minuti in banca.\n\n
+ŠPuoi depositare %d minuti.\n
+Quanto vuoi depositare ?_
+Quanto vuoi prelevare ?_
+\nSeleziona e deseleziona le aree digitandone il numero.\n
+\n[Area #, '?'=lista, '-'=le esclude tutte, <INVIO>=Fine]:_
+\nLe AREE marcate con '@' sono selezionate .\n
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ\n
+Nome        : %s\n
+Telefono    : %s\n
+Velocita'   : %u\n
+Orari       : %s\n
+Sofware     : %s\n
+Net address : %s\n
+SysOp       : %s\n
+Altre info  : %s\n
+\nŠNome BBS       : 
+ŠNome SysOp     : 
+ŠTelefono       : 
+ŠVelocita'      : 
+ŠOrari          : 
+ŠBBS Software   : 
+ŠNetwork address: 
+ŠAltre notizie  : 
+BBS name                                 Phone            Baud   Open\n-K\n
+%-39s  Š%-15s ‰%5d   %s\n
+\nŠInserisci il nome del BBS da cercare (<INVIO> = Tutti):\n> 
+\nŠInserisci il nome del BBS da cambiare: 
+\nTrovati %ld files (%ld bytes).\n
+\nCosa sposti ?_
+Area o path di destinazione?_
+Spostamento di %s%s a %s%s...\n
+\nIl file `%s' non e' ZIP/LZH/ARC/PAK, o e' danneggiato.\n
+\nOra Attuale    : %02d:%02d\n
+Data Attuale   : %02d-%s-%02d\n\n
+Questa chiamata: %d min %d sec\n
+Totale di oggi : %d min %d sec\n
+Rimanente      : %d min\n
+Limite chiamata: %d min\n\n
+\n      Orari di utilizzo del sistema per il  %s - %02d-%02d-%02d (Line %02d)\n\n
+Š%02d | 
+   +ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ\n
+Š     00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23\n\n
+Importo i messaggi # %d\n
+Ricevuti %d  messaggi \n
+\n\nDigita il path completo:_
+Nome File      Size        Data\nÄÄÄÄÄÄÄÄÄÄÄÄÄÄ ÄÄÄÄÄÄÄÄÄÄÄ ÄÄÄÄÄÄÄÄÄ\n
+%-13s  Š%-10ld  ‰%2d-%3s-%02d\n
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄ ÄÄÄÄÄÄÄÄÄÄÄ ÄÄÄÄÄÄÄÄÄ\n%-14s %ld bytes\n\n
+%-3d ... %s\r
+\nŠHai %d kbytes disponibili\n
+ŠHai %d kbytes in banca.\n\n
+ŠPuoi depositare %d kbytes.\n
+\nControllo se ci sono nuovi files
+Non puoi cancellare questo messaggio.\n
+Messaggio #%d rimosso.\n
+Gen
+Feb
+Mar
+Apr
+Mag
+Giu
+Lug
+Ago
+Set
+Ott
+Nov
+Dic
+\nInserisci il nome: 
+\nVoti per %s %s.\nSei sicuro
+per
+against
+Voti raccolti.\n
+   %5d       %5d        Š%5d\n
+\n\nArea #  Descrizione                     Msg Totali  Msg per te   Msg Inclusi\n
+ÄÄÄÄÄÄ  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ  ÄÄÄÄÄÄÄÄÄÄ  ÄÄÄÄÄÄÄÄÄÄÄ  ÄÄÄÄÄÄÄÄÄÄÄ\n
+\nAttendere. Aggiorno i puntatori lastread...\n
+\nŠInserisci il nome da eliminare : 
+Sto cercando `%s'.\n\n
+\nTesto da cercare:_
+\nMsg# Da                   A                    Soggetto\n
+ÄÄÄÄ ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ\n
+Area %3d ... %s\n
+\nMessaggio da cancellare : 
+\nMessaggio da esportare  : 
+Nomefile o device dove esportare il messaggio: 
+\nSalvo ...
+ fatto!\n
+PVT_
+CM_
+RD_
+SNT_
+F/A_
+FRWD_
+ORPH_
+K/S_
+HLD_
+F/R_
+RRQ_
+CPT_
+ARQ_
+U/R_
+\nCarattere non valido '%c' (0x%02X) nel numero telefonico.\n
+\n  FOSSIL: %Fs\n
+\nArea Š%d (%s) %s.\n
+escluso
+incluso
+\nProtocolli disponibili:\n\n
+\nRimuovi questo BBS
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ\n
+Nome        : %s\n
+Telefono    : %s\n
+Velocita'   : %u\n
+Orari       : %s\n
+Sofware     : %s\n
+Net address : %s\n
+SysOp       : %s\n
+Altre       : %s\n
+cueaaaaceeeiiiaae%AooouuyOUcL  faiounN--?--//!<>###||||--||--------|-+||----|-+--------++- ##!!#ABGPSTMTfFOdo0En=~><fj-~o..vn2#D
+Car. IBM .....: Š%s\n\n
+\nUsa i caratteri IBM-PC
+File non trovato, o tipo di archivio errato.\n
+\nGruppi da listare? 
+Mass storage: C: %.1f of %.1f Mb free, %d%%\n
+              %c: %.1f of %.1f Mb free, %d%%\n
+\nŠNome Utente: 
+\nNome Utente non trovato!\n
+%s doesn't own a filebox!\n
+\nInvio un'altro file
+\nŠNon ci sono nuovi files nella tua file-box.\n\n
+\n\nŠCi sono i seguenti files per te:\n
+-#\n
+\nVuoi prelevarli adesso
+\n%s da %s
+\nControllo il/i file inviati ...
+\nIl file %s e' gia' presente in area #%d - %s\n
+Cancella dopo il download
+%-12s ŠCompletato %ldcps \"%s\"\n
+%-12s Non inviato\n
+E' stato raggiunto il limite messaggi!\n
+\nVuoi usare gli hotkeys
+ZPK-ZIP 2.04g
+AARJ 2.30
+LLHA 2.15
+NNessuno
+?Aiuto
+\nCompattatori disponibili:\n\n
+\nPremi [ENTER] per iniziare, [A] abbandona, [!] logoff dopo download:_
+Logoff tra %d secondi. Premi [A] per terminare.\r
+Š%s (%d:%02d, %ld)\n
+Š%s File non trovato!\n
+\n>> Ci sono alcuni files marcati per un download successivo.\n>> Vuoi prelevari adesso?
+\nCancello quale file ?_
+Cancellazione di %s\n
+ >‹Mandato da: Š%s\n
+\nUtente inattivo, fine del collegamento ...\n
+\n* Attenzione : Rimangono 20 secondi prima del termine per inattivita' !\n
+      OS: OS/2 %d.%d
+\nNome del file da selezionare?_
+\nSei fermo durante una lista di files ...\n
+Š%s file non trovato o accesso negato.\n
+\nNon ci sono file marcati!\n
+\nNum.   Nome           Dim. (Kb)\n\n
+%-3d    Š%-12s   ‰%5ldKb\n
+\nNumero del file da rimuovere ([Enter] per finire) : 
+%-12s %7s           %s\n
+%-12s %7s  %s\n
+%-12s %7ld  %s\n
+ASSENTE
+                      %s\n
+                              %s\n
+%s\n
+%s\n
+ŠContinuo <S>i, <N>o, <=>Non-Stop, <D>ownload, <T>Marca? 
+To: %s\r\n\r\n
+Internet: 
+%d:%d/%d.%d non trovato nella nodelist!\n
+%d:%d/%d.%d, %s (%s)\n
+\nNon cambiare i dati di questo BBS.\n
+\nNon puoi cancellare il record di questo BBS.\n
+DD-MM-YY
+MM-DD-YY
+YY-MM-DD
+-Future-
+\nŠVuoi il testo del messaggio originale
