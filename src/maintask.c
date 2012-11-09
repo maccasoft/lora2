@@ -747,7 +747,7 @@ int start;
          wrjusts (row, 23, LCYAN|_BLACK, j);
 
          if (next_call == i)
-            wprints (row, 40, YELLOW|_BLACK, "");
+            wprints (row, 40, YELLOW|_BLACK, "\020");
 
          if (cur_event >= 0) {
             if ( !(call_list[i].type & MAIL_WILLGO) ) {
@@ -1183,7 +1183,7 @@ void f9_status()
    wfill(0,0,1,64,' ',BLACK|_LGREY);
 
    wprints(0,1,BLACK|_LGREY,"ALT: [H]angup [J]Shell [L]ockOut [C]hat [S]ecurity [N]erd");
-   wprints(1,1,BLACK|_LGREY,"                       -Inc/-Dec Time [F1]-[F4]=Extra");
+   wprints(1,1,BLACK|_LGREY,"                       \030-Inc/\031-Dec Time [F1]-[F4]=Extra");
 
    wactiv(wh);
    function_active = 9;

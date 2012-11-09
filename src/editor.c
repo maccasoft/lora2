@@ -113,7 +113,7 @@ int sl;
    m_print("\n     [-----------------------------------------------------------------------]\n");
 
    for(i=sl; i < MAX_MSGLINE;i++) {
-      m_print("%3d: ",i+1);
+      m_print("\026\001\002%3d: \026\001\003",i+1);
 
       messaggio[i] = (char *)malloc(80);
       inp_wrap(messaggio[i], wrp, 73);
@@ -784,7 +784,7 @@ void edit_list()
 	line = 5;
 
         while(messaggio[i] != NULL) {
-                m_print("%3d: %s\n",i+1,messaggio[i]);
+                m_print("\026\001\002%3d: \026\001\003%s\n",i+1,messaggio[i]);
                 if(!(++line < (usr.len-1)) && usr.more) {
                         if(!continua())
 				break;
@@ -874,8 +874,8 @@ void edit_line()
 		return;
 
         start--;
-        m_print("\n%3d: %s\n",start+1,messaggio[start]);
-        m_print("%3d: ",start+1);
+        m_print("\n\026\001\007%3d: %s\n",start+1,messaggio[start]);
+        m_print("\026\001\002%3d: \026\001\003",start+1);
         input(stringa,73);
 
 	if (!stringa[0])
@@ -913,7 +913,7 @@ void edit_insert()
 
         i++;
         messaggio[i] = (char *)malloc (80);
-        m_print("%3d: ",i+1);
+        m_print("\026\001\002%3d: \026\001\003",i+1);
         input(messaggio[i], 73);
         strcat(messaggio[i],"\r");
 

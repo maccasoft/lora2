@@ -186,13 +186,13 @@ void Link_Squish_Areas (void)
 		if (ml == NULL){
 			if (!firsttime) {
 				gotoxy (wherex (), wherey () - 1);
-				printf ("   ц\n");
+				printf ("   \303\n");
 			}
 			else
 				firsttime = 0;
 			if(!msgnum){
 				clreol ();
-				printf("   юд %3d - %-25.25s - Empty\n", tsys.msg_num, tsys.msg_name);
+				printf("   \300\304 %3d - %-25.25s - Empty\n", tsys.msg_num, tsys.msg_name);
 			}
 			else
 				printf(" Unable to allocate msgmem: %u area: %s\n",msgnum,tsys.msg_name);
@@ -203,13 +203,13 @@ void Link_Squish_Areas (void)
 
 		if (!firsttime) {
 			gotoxy (wherex (), wherey () - 1);
-			printf ("   ц\n");
+			printf ("   \303\n");
 		}
 		else
 			firsttime = 0;
 
 		clreol ();
-		printf("   юд %3d - %-25.25s %-25.25s ", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "");
+		printf("   \300\304 %3d - %-25.25s %-25.25s ", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "");
 
 		for (i = 1; i <= msgnum; i++) {
 			msgh = MsgOpenMsg (sq_ptr, MOPEN_RW, (dword)i);
@@ -380,13 +380,13 @@ void Purge_Squish_Areas (void)
 
 		if (!firsttime) {
 			gotoxy (wherex (), wherey () - 1);
-			printf ("   ц\n");
+			printf ("   \303\n");
 		}
 		else
 			firsttime = 0;
 
 		clreol ();
-		printf("   юд %3d - %-23.23s %-23.23s ", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "");
+		printf("   \300\304 %3d - %-23.23s %-23.23s ", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "");
 
 		waterid = MsgMsgnToUid (sq_ptr, MsgGetHighWater (sq_ptr));
 		msgnum = (int)MsgGetNumMsg (sq_ptr);
@@ -582,13 +582,13 @@ void Pack_Squish_Areas (void)
 
 			if (!farea) {
 				gotoxy (wherex (), wherey () - 1);
-				printf("   ц\n");
+				printf("   \303\n");
 			}
 			else
 				farea = 0;
 
 			clreol ();
-			printf("   юд %3d - %-25.25s %-25.25s ", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "");
+			printf("   \300\304 %3d - %-25.25s %-25.25s ", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "");
 
 			sq_dest = MsgOpenArea (filename, MSGAREA_CRIFNEC, MSGTYPE_SQUISH);
 			MsgLock (sq_dest);
@@ -943,12 +943,12 @@ void Renum_Fido_Areas (void)
 
       if (!farea) {
          gotoxy (wherex (), wherey () - 1);
-         printf("   ц\n");
+         printf("   \303\n");
       }
       else
          farea = 0;
 
-      printf("   юд %3d - %-25.25s %-25.25s %d Msg.\n", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "", msgnum);
+      printf("   \300\304 %3d - %-25.25s %-25.25s %d Msg.\n", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "", msgnum);
 
       Fido_Renum (tsys.msg_path, first, last, tsys.msg_num);
    }
@@ -1064,13 +1064,13 @@ void Link_Fido_Areas (void)
 
 		if (!firsttime) {
 			gotoxy (wherex (), wherey () - 1);
-			printf ("   ц\n");
+			printf ("   \303\n");
 		}
 		else
 			firsttime = 0;
 
 		clreol ();
-		printf("   юд %3d - %-25.25s %-25.25s %d Msg.", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "", msgnum);
+		printf("   \300\304 %3d - %-25.25s %-25.25s %d Msg.", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "", msgnum);
 
 
 		for (i = first; i <= last; i++) {
@@ -1184,13 +1184,13 @@ void Purge_Fido_Areas (int renum)
 
 		if (!firsttime) {
 			gotoxy (wherex (), wherey () - 1);
-			printf ("   ц\n");
+			printf ("   \303\n");
 		}
 		else
 			firsttime = 0;
 
 		clreol ();
-		printf("   юд %3d - %-25.25s %-25.25s %d Msg.", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "", msgnum);
+		printf("   \300\304 %3d - %-25.25s %-25.25s %d Msg.", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "", msgnum);
 
 		if ( tsys.max_age || tsys.age_rcvd )
 			Kill_by_Age (tsys.max_age, tsys.age_rcvd, first, last);
@@ -1765,7 +1765,7 @@ void Purge_Quick_Areas (int renum)
 
 
 			if ((msgnum % 40) == 0 || flag)
-				printf("   юд Msg.: %u, Deleted: %u\r", msgnum, deleted);
+				printf("   \300\304 Msg.: %u, Deleted: %u\r", msgnum, deleted);
 
 			msgnum++;
 		}
@@ -2358,7 +2358,7 @@ void Purge_Gold_Areas (int renum)
 
 			pos = tell (fd);
 			if ((msgnum % 40) == 0 || flag)
-				printf("   юд Msg.: %lu, Deleted: %u\r", msgnum, deleted);
+				printf("   \300\304 Msg.: %lu, Deleted: %u\r", msgnum, deleted);
 
 			msgnum++;
 		}
@@ -2693,12 +2693,12 @@ void Create_Pip_Index (void)
 
       if (!farea) {
          gotoxy (wherex (), wherey () - 1);
-         printf("   ц\n");
+         printf("   \303\n");
       }
 		else
          farea = 0;
 
-      printf("   юд %3d - %-25.25s %-25.25s %d Msg.\n", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "", msgnum);
+      printf("   \300\304 %3d - %-25.25s %-25.25s %d Msg.\n", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "", msgnum);
 
       rewind (f2);
       rewind (f1);
@@ -2802,12 +2802,12 @@ void Purge_Pip_Areas (void)
 
 		if (!farea) {
          gotoxy (wherex (), wherey () - 1);
-         printf("   ц\n");
+         printf("   \303\n");
       }
       else
          farea = 0;
 
-      printf("   юд %3d - %-25.25s %-25.25s %d Msg.\n", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "", msgnum);
+      printf("   \300\304 %3d - %-25.25s %-25.25s %d Msg.\n", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "", msgnum);
 
       if ( (tsys.max_msgs && tsys.max_msgs < msgnum) || tsys.max_age || tsys.age_rcvd ) {
          kill = msgnum - tsys.max_msgs;
@@ -2933,12 +2933,12 @@ void Pack_Pip_Areas (void)
 
       if (!farea) {
          gotoxy (wherex (), wherey () - 1);
-         printf("   ц\n");
+         printf("   \303\n");
       }
       else
          farea = 0;
 
-      printf("   юд %3d - %-25.25s %-25.25s %d Msg.\n", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "", msgnum);
+      printf("   \300\304 %3d - %-25.25s %-25.25s %d Msg.\n", tsys.msg_num, tsys.msg_name, tsys.echomail ? tsys.echotag : "", msgnum);
       nmsg = 0;
       lrpos = 1;
 

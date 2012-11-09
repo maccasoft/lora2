@@ -249,9 +249,9 @@ void import_mail (void)
    wactiv (wh);
 	wtitle ("PROCESS ECHOMAIL", TLEFT, LCYAN|_BLACK);
    wprints (0, 0, YELLOW|_BLACK, " Num.  Area tag                         Base          Imp.");
-   printc (12, 0, LGREY|_BLACK, 'Ã');
-   printc (12, 52, LGREY|_BLACK, 'Á');
-   printc (12, 79, LGREY|_BLACK, '´');
+   printc (12, 0, LGREY|_BLACK, '\303');
+   printc (12, 52, LGREY|_BLACK, '\301');
+   printc (12, 79, LGREY|_BLACK, '\264');
    wr = wfindrec (wh);
    wr->srow++;
 
@@ -2743,9 +2743,9 @@ char *dir;
       hidecur ();
       wclose ();
 
-      printc (12, 0, LGREY|_BLACK, 'Ã');
-      printc (12, 52, LGREY|_BLACK, 'Å');
-      printc (12, 79, LGREY|_BLACK, '´');
+      printc (12, 0, LGREY|_BLACK, '\303');
+      printc (12, 52, LGREY|_BLACK, '\305');
+      printc (12, 79, LGREY|_BLACK, '\264');
    }
 }
 

@@ -333,7 +333,7 @@ void chars_input (char *s, int width, int flag)
 
    if (!stricmp (s, "rz")) {
       get_emsi_id (autozm, 8);
-      if (!strncmp (autozm, "**B0000", 8)) {
+      if (!strncmp (autozm, "**\030B0000", 8)) {
          if (!sys.filepath[0])
             send_can ();
          else

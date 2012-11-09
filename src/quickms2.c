@@ -389,11 +389,11 @@ int quick_read_message (int msg_num, int flag, int fakenum)
          }
 
          if (buff[0] == 0x01) {
-            m_print ("%s\n", &buff[1]);
+            m_print ("\026\001\013%s\n", &buff[1]);
             change_attr (CYAN|BLACK);
          }
          else if (!strncmp (buff, "SEEN-BY", 7)) {
-            m_print ("%s\n", buff);
+            m_print ("\026\001\013%s\n", buff);
             change_attr (LGREY|BLACK);
          }
          else {
@@ -413,7 +413,7 @@ int quick_read_message (int msg_num, int flag, int fakenum)
             }
 
             if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
-               m_print("%s\n",buff);
+               m_print("\026\001\002%s\026\001\007\n",buff);
             else
                m_print("%s\n",buff);
 
@@ -480,7 +480,7 @@ int quick_read_message (int msg_num, int flag, int fakenum)
          }
 
          if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],10))
-            m_print("%s\n",buff);
+            m_print("\026\001\002%s\026\001\007\n",buff);
          else
             m_print("%s\n",buff);
 
@@ -629,11 +629,11 @@ int fakenum;
          }
 
          if (buff[0] == 0x01) {
-            m_print ("%s\n", &buff[1]);
+            m_print ("\026\001\013%s\n", &buff[1]);
             change_attr (CYAN|BLACK);
          }
          else if (!strncmp (buff, "SEEN-BY", 7)) {
-            m_print ("%s\n", buff);
+            m_print ("\026\001\013%s\n", buff);
             change_attr (LGREY|BLACK);
          }
          else {
@@ -653,7 +653,7 @@ int fakenum;
             }
 
             if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
-               m_print("%s\n",buff);
+               m_print("\026\001\002%s\026\001\007\n",buff);
             else
                m_print("%s\n",buff);
 
@@ -724,7 +724,7 @@ int fakenum;
          }
 
          if (!strncmp (buff, msgtxt[M_TEAR_LINE], 4) || !strncmp (buff, msgtxt[M_ORIGIN_LINE], 10))
-            m_print ("%s\n", buff);
+            m_print ("\026\001\002%s\026\001\007\n", buff);
          else
             m_print ("%s\n", buff);
 

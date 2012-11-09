@@ -1203,7 +1203,7 @@ void press_enter()
 {
    char stringa[2];
 
-	m_print("ç%s", bbstxt[B_PRESS_ENTER]);
+	m_print("\026\001\020\215%s", bbstxt[B_PRESS_ENTER]);
    chars_input(stringa,0,INPUT_NOLF);
 
    m_print("\r");

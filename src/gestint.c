@@ -30,9 +30,9 @@ char *title;
    vwh = wopen (13, 0, 24, 79, 5, LGREY|_BLACK, LCYAN|_BLACK);
    wactiv (vwh);
    wtitle (title, TLEFT, LCYAN|_BLACK);
-   printc (12, 0, LGREY|_BLACK, 'À');
-   printc (12, 52, LGREY|_BLACK, 'Á');
-   printc (12, 79, LGREY|_BLACK, 'Ù');
+   printc (12, 0, LGREY|_BLACK, '\300');
+   printc (12, 52, LGREY|_BLACK, '\301');
+   printc (12, 79, LGREY|_BLACK, '\331');
 
    gotoxy_ (13, 0);
    showcur ();

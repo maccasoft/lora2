@@ -162,7 +162,7 @@ int login_user (void)
 new_login:
    stringa[0] = 0;
 
-   m_print ("\n%s%s login.\n", VERSION, registered ? "" : NOREG);
+   m_print ("\n\026\001\016%s%s login.\n", VERSION, registered ? "" : NOREG);
    CLEAR_INBOUND ();
 
    if (!usr.name[0])

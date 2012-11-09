@@ -584,11 +584,11 @@ int msg_num, flag, fakenum;
          }
 
          if (buff[0] == 0x01) {
-            m_print ("%s\n", &buff[1]);
+            m_print ("\026\001\013%s\n", &buff[1]);
             change_attr (LGREY|BLACK);
          }
          else if (!strncmp (buff, "SEEN-BY", 7)) {
-            m_print ("%s\n", buff);
+            m_print ("\026\001\013%s\n", buff);
             change_attr (LGREY|BLACK);
          }
          else {
@@ -608,7 +608,7 @@ int msg_num, flag, fakenum;
             }
 
             if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff," * Origin: ",11))
-               m_print("%s\n",buff);
+               m_print("\026\001\002%s\026\001\007\n",buff);
             else
                m_print("%s\n",buff);
 
@@ -671,7 +671,7 @@ int msg_num, flag, fakenum;
          }
 
          if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
-            m_print("%s\n",buff);
+            m_print("\026\001\002%s\026\001\007\n",buff);
          else
             m_print("%s\n",buff);
 
@@ -840,11 +840,11 @@ int msg_num, fakenum;
                         }
 
                         if (buff[0] == 0x01) {
-                                m_print("%s\n",&buff[1]);
+                                m_print("\026\001\013%s\n",&buff[1]);
                                 change_attr(CYAN|BLACK);
                         }
                         else if (!strncmp (buff, "SEEN-BY", 7)) {
-                                m_print ("%s\n", buff);
+                                m_print ("\026\001\013%s\n", buff);
                                 change_attr (LGREY|BLACK);
                         }
                         else {
@@ -864,7 +864,7 @@ int msg_num, fakenum;
                                 }
 
                                 if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
-                                        m_print("%s\n",buff);
+                                        m_print("\026\001\002%s\026\001\007\n",buff);
                                 else
                                         m_print("%s\n",buff);
 
@@ -931,7 +931,7 @@ int msg_num, fakenum;
                         }
 
                         if (!strncmp(buff,msgtxt[M_TEAR_LINE],4) || !strncmp(buff,msgtxt[M_ORIGIN_LINE],11))
-                                m_print("%s\n",buff);
+                                m_print("\026\001\002%s\026\001\007\n",buff);
                         else
                                 m_print("%s\n",buff);
 
@@ -1287,11 +1287,11 @@ void list_headers (verbose)
          m_print(bbstxt[B_ONE_CR]);
       }
       else
-         m_print ("%-4d %c%-20.20s %c%-20.20s %-32.32s\n",
+         m_print ("\026\001\003%-4d \026\001\020%c%-20.20s \026\001\020%c%-20.20s \026\001\013%-32.32s\n",
                  i,
-                 stricmp (msgt.from, usr.name) ? 'Š' : 'Ž',
+                 stricmp (msgt.from, usr.name) ? '\212' : '\216',
                  msgt.from,
-                 stricmp (msgt.to, usr.name) ? 'Š' : 'Œ',
+                 stricmp (msgt.to, usr.name) ? '\212' : '\214',
                  msgt.to,
                  msgt.subj);
 
@@ -1458,7 +1458,7 @@ int select_area_list (int flag, int sig)
    struct _sys tsys;
    struct _sys_idx sysidx[10];
 
-   m_print ("\nPlease enter the area number to forward the message to.\n");
+   m_print ("\n\026\001\017Please enter the area number to forward the message to.\n");
    memset (&tsys, 0, sizeof (struct _sys));
 
    first = 1;
@@ -1492,7 +1492,7 @@ int select_area_list (int flag, int sig)
 
    do {
       if (!get_command_word (stringa, 12)) {
-         m_print ("\nForward area: [Area #, '?'=list, <enter>=Quit]: ");
+         m_print ("\n\026\001\017Forward area: [Area #, '?'=list, <enter>=Quit]: ");
          input (stringa, 12);
          if (!CARRIER || time_remain() <= 0) {
             close (fdi);
@@ -1550,7 +1550,7 @@ int select_area_list (int flag, int sig)
                   strcpy (dir, tsys.msg_name);
                   dir[31] = '\0';
 
-                  sprintf (stringa, "%3d ... %-31s ", sysidx[i].area, dir);
+                  sprintf (stringa, "\026\001\020\215%3d ... \026\001\003%-31s ", sysidx[i].area, dir);
 
                   if (pari) {
                      m_print ("%s\n", strtrim (stringa));
@@ -1564,19 +1564,19 @@ int select_area_list (int flag, int sig)
                   }
                }
                else if (flag == 2) {
-                  m_print("%3d ... %s\n", sysidx[i].area, tsys.msg_name);
+                  m_print("\026\001\020\215%3d ... \026\001\003%s\n", sysidx[i].area, tsys.msg_name);
                   if (!(linea = more_question(linea)))
                      break;
                }
                else if (flag == 3) {
-                  m_print("%3d ... %-12s %s\n", sysidx[i].area, sysidx[i].key, tsys.msg_name);
+                  m_print("\026\001\020\215%3d ... \026\001\013%-12s \026\001\003%s\n", sysidx[i].area, sysidx[i].key, tsys.msg_name);
                   if (!(linea = more_question(linea)))
                      break;
                }
                else if (flag == 4) {
                   if (!sysidx[i].key[0])
                      sprintf (sysidx[i].key, "%d", sysidx[i].area);
-                  m_print("%-12s ... %s\n", sysidx[i].key, tsys.msg_name);
+                  m_print("\026\001\020\215%-12s ... \026\001\003%s\n", sysidx[i].key, tsys.msg_name);
                   if (!(linea = more_question(linea)))
                      break;
                }
@@ -1651,7 +1651,7 @@ void forward_message_area (int sig, int flag)
    struct _sys tsys, bsys;
 
    sprintf (filename, "%d", lastread);
-   m_print ("\nMessage number to forward: ");
+   m_print ("\n\026\001\017Message number to forward: \026\001\036");
    chars_input (filename, 5, INPUT_FIELD|INPUT_UPDATE);
    if (!strlen (filename) || !CARRIER)
       return;

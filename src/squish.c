@@ -239,11 +239,11 @@ int msg_num, flag, fakenum;
             }
 
             if (!strncmp (buff, msgtxt[M_TEAR_LINE], 4) || !strncmp (buff, msgtxt[M_ORIGIN_LINE], 11))
-               m_print ("%s\n", buff);
+               m_print ("\026\001\002%s\026\001\007\n", buff);
             else if (buff[0] == 0x01)
-               m_print ("%s\n", &buff[1]);
+               m_print ("\026\001\013%s\n", &buff[1]);
             else if (!strncmp (buff, "SEEN-BY", 7)) {
-               m_print ("%s\n", buff);
+               m_print ("\026\001\013%s\n", buff);
                change_attr (LGREY|BLACK);
             }
             else
@@ -297,7 +297,7 @@ int msg_num, flag, fakenum;
             }
 
             if (!strncmp (buff, msgtxt[M_TEAR_LINE],4) || !strncmp (buff, msgtxt[M_ORIGIN_LINE], 11))
-               m_print ("%s\n", buff);
+               m_print ("\026\001\002%s\026\001\007\n", buff);
             else
                m_print ("%s\n", buff);
 
@@ -437,11 +437,11 @@ int msg_num, fakenum;
             }
 
             if (!strncmp (buff, msgtxt[M_TEAR_LINE], 4) || !strncmp (buff, msgtxt[M_ORIGIN_LINE], 11))
-               m_print ("%s\n", buff);
+               m_print ("\026\001\002%s\026\001\007\n", buff);
             else if (buff[0] == 0x01)
-               m_print ("%s\n", &buff[1]);
+               m_print ("\026\001\013%s\n", &buff[1]);
             else if (!strncmp (buff, "SEEN-BY", 7)) {
-               m_print ("%s\n", buff);
+               m_print ("\026\001\013%s\n", buff);
                change_attr (LGREY|BLACK);
             }
             else
@@ -496,7 +496,7 @@ int msg_num, fakenum;
             }
 
             if (!strncmp (buff, msgtxt[M_TEAR_LINE],4) || !strncmp (buff, msgtxt[M_ORIGIN_LINE], 11))
-               m_print ("%s\n", buff);
+               m_print ("\026\001\002%s\026\001\007\n", buff);
             else
                m_print ("%s\n", buff);
 
@@ -956,11 +956,11 @@ int m, verbose;
          m_print (bbstxt[B_ONE_CR]);
       }
       else
-         m_print ("%-4d %c%-20.20s %c%-20.20s %-32.32s\n",
+         m_print ("\026\001\003%-4d \026\001\020%c%-20.20s \026\001\020%c%-20.20s \026\001\013%-32.32s\n",
                    i,
-                   stricmp (msgt.from, usr.name) ? 'Š' : 'Ž',
+                   stricmp (msgt.from, usr.name) ? '\212' : '\216',
                    msgt.from,
-                   stricmp (msgt.to, usr.name) ? 'Š' : 'Œ',
+                   stricmp (msgt.to, usr.name) ? '\212' : '\214',
                    msgt.to,
                    msgt.subj);
 

@@ -961,9 +961,9 @@ online_out:
    wh = wopen (12, 0, 24, 79, 0, LGREY|_BLACK, WHITE|_BLACK);
    wactiv (wh);
    wtitle ("REMOTE CLOCK ADJUSTMENT", TLEFT, LCYAN|_BLACK);
-   printc (12, 0, LGREY|_BLACK, 'Ã');
-	printc (12, 52, LGREY|_BLACK, 'Á');
-   printc (12, 79, LGREY|_BLACK, '´');
+   printc (12, 0, LGREY|_BLACK, '\303');
+	printc (12, 52, LGREY|_BLACK, '\301');
+   printc (12, 79, LGREY|_BLACK, '\264');
 
    wcenters (0, LGREY|_BLACK, "Ist. Galileo Ferraris");
    sprintf (buffer, "Connected at %u baud", rate);

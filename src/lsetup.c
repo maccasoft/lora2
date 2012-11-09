@@ -233,7 +233,7 @@ char *argv[];
 	wopen (0, 0, 24, 79, 5, LGREY|_BLACK, LGREY|_BLACK);
 	whline ( 1, 0, 80, 1, BLUE|_BLACK);
 	whline (23, 0, 80, 1, BLUE|_BLACK);
-	wfill (2, 0, 22, 79, '±', LGREY|_BLACK);
+	wfill (2, 0, 22, 79, '\261', LGREY|_BLACK);
 #ifdef __OS2__
 	sprintf (string, " Lora E-Mail System Setup OS/2 %s ", LSETUP_VERSION);
 #else
@@ -431,7 +431,7 @@ static void global_general ()
       wmenuitem ( 2,  1, " Monochrome           ", 0,  2, 0, NULL, 0, 0);
       wmenuitem ( 3,  1, " Direct screen writes ", 0,  3, 0, NULL, 0, 0);
       wmenuitem ( 4,  1, " Screenblanker time   ", 0,  4, 0, NULL, 0, 0);
-      wmenuitem ( 5,  1, " À Blanker type       ", 0,  8, 0, NULL, 0, 0);
+      wmenuitem ( 5,  1, " \300 Blanker type       ", 0,  8, 0, NULL, 0, 0);
       wmenuitem ( 6,  1, " Line number          ", 0,  5, 0, NULL, 0, 0);
       wmenuitem ( 7,  1, " Multiline system     ", 0,  6, 0, NULL, 0, 0);
       wmenuitem ( 8,  1, " ALT-X errorlevel     ", 0,  7, 0, NULL, 0, 0);
@@ -1518,12 +1518,12 @@ int num;
       wmenuitem (3,  1," Minimum Logon Baud    ", 'L', 83, 0, NULL, 0, 0);
       wmenuitem (4,  1," Minimum Download Baud ", 'B', 84, 0, NULL, 0, 0);
       wmenuitem (5,  1," Download Limit (KB)   ", 'D', 85, 0, NULL, 0, 0);
-      wmenuitem (6,  1," Ã Limit at 300 baud   ", 'D', 86, 0, NULL, 0, 0);
-      wmenuitem (7,  1," Ã Limit at 1200 baud  ", 'D', 87, 0, NULL, 0, 0);
-      wmenuitem (8,  1," Ã Limit at 2400 baud  ", 'D', 88, 0, NULL, 0, 0);
-      wmenuitem (9,  1," À Limit at 9600 baud  ", 'D', 89, 0, NULL, 0, 0);
+      wmenuitem (6,  1," \303 Limit at 300 baud   ", 'D', 86, 0, NULL, 0, 0);
+      wmenuitem (7,  1," \303 Limit at 1200 baud  ", 'D', 87, 0, NULL, 0, 0);
+      wmenuitem (8,  1," \303 Limit at 2400 baud  ", 'D', 88, 0, NULL, 0, 0);
+      wmenuitem (9,  1," \300 Limit at 9600 baud  ", 'D', 89, 0, NULL, 0, 0);
       wmenuitem (10,  1," Download/Upload Ratio ", 'R', 90, 0, NULL, 0, 0);
-      wmenuitem (11,  1," À Ratio Start         ", 'S', 91, 0, NULL, 0, 0);
+      wmenuitem (11,  1," \300 Ratio Start         ", 'S', 91, 0, NULL, 0, 0);
       wmenuend (i, M_VERT, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
       sprintf (stringa, "%d", config.class[num].max_call);

@@ -329,7 +329,7 @@ int read_editor_help (void)
          linea[strlen (linea) -1] = '\0';
 
       cpos (i++, (usr.width ? (usr.width - 1) : 79) - strlen (linea));
-      m_print ("%s", linea);
+      m_print ("\026\001\007%s", linea);
    }
 
    fclose (fp);
@@ -542,7 +542,7 @@ void edit_file (char *name, int len, int width)
          // Caratteri speciali (^K)
          case CTRLK:
             cpos (5, 2);
-            m_print2 ("œ^K");
+            m_print2 ("\026\001\020\234^K");
 
             while ((i = readkey ()) == -1) {
                if (!CARRIER)
@@ -582,7 +582,7 @@ void edit_file (char *name, int len, int width)
             }
 
             cpos (5, 2);
-            m_print2 ("œ    ");
+            m_print2 ("\026\001\020\234    \026\001\003");
 
             display_screen (startrow, width, len);
             break;
@@ -600,7 +600,7 @@ void edit_file (char *name, int len, int width)
             change_attr (RED|_BLUE);
             del_line ();
             cpos (5, (usr.width ? usr.width : 80) - 18);
-            m_print ("œ^Z=Save  ^K?=Help");
+            m_print ("\026\001\020\234^Z=Save  ^K?=Help");
 
             change_attr (CYAN|_BLACK);
             m_print (bbstxt[B_ONE_CR]);
@@ -613,7 +613,7 @@ void edit_file (char *name, int len, int width)
          // Caratteri speciali (^Q)
          case CTRLQ:
             cpos (5, 2);
-            m_print2 ("œ^Q");
+            m_print2 ("\026\001\020\234^Q");
 
             while ((i = readkey ()) == -1) {
                if (!CARRIER)
@@ -645,7 +645,7 @@ void edit_file (char *name, int len, int width)
             }
 
             cpos (5, 2);
-            m_print2 ("œ    ");
+            m_print2 ("\026\001\020\234    \026\001\003");
 
             display_screen (startrow, width, len);
             break;
@@ -712,7 +712,7 @@ void edit_file (char *name, int len, int width)
 
 void fullscreen_editor (void)
 {
-   char *p = "œ^X=Down  ^E=Up  ^S=Left  ^D=Right  ^Z=Save  ^K?=Help";
+   char *p = "\026\001\020\234^X=Down  ^E=Up  ^S=Left  ^D=Right  ^Z=Save  ^K?=Help";
 
    cls();
 

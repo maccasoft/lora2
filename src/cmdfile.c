@@ -1508,7 +1508,7 @@ char far macro_bitmap[95][5]=
 static void big_char (ch)
 char ch;
 {
-  char chars_bitmap[]=" мпл";
+  char chars_bitmap[]=" \334\337\333";
   char bitbuf[3][5];
   char far *q;
 

@@ -217,27 +217,27 @@ void terminal_iemsi ()
       wmenubegc ();
       wmenuitem ( 1,  1, " IEMSI On       ", 0,  1, 0, NULL, 0, 0);
       wmenuiba (iemsi_linehelp_window, clear_window);
-      wmenuitem ( 2,  1, " Ã Info time    ", 0,  2, 0, NULL, 0, 0);
+      wmenuitem ( 2,  1, " \303 Info time    ", 0,  2, 0, NULL, 0, 0);
       wmenuiba (iemsi_linehelp_window, clear_window);
-      wmenuitem ( 3,  1, " Ã Password     ", 0,  3, 0, NULL, 0, 0);
+      wmenuitem ( 3,  1, " \303 Password     ", 0,  3, 0, NULL, 0, 0);
       wmenuiba (iemsi_linehelp_window, clear_window);
-      wmenuitem ( 4,  1, " Ã Handle       ", 0,  4, 0, NULL, 0, 0);
+      wmenuitem ( 4,  1, " \303 Handle       ", 0,  4, 0, NULL, 0, 0);
       wmenuiba (iemsi_linehelp_window, clear_window);
-      wmenuitem ( 5,  1, " Ã Hot keys     ", 0,  5, 0, NULL, 0, 0);
+      wmenuitem ( 5,  1, " \303 Hot keys     ", 0,  5, 0, NULL, 0, 0);
       wmenuiba (iemsi_linehelp_window, clear_window);
-      wmenuitem ( 6,  1, " Ã Quiet        ", 0,  6, 0, NULL, 0, 0);
+      wmenuitem ( 6,  1, " \303 Quiet        ", 0,  6, 0, NULL, 0, 0);
       wmenuiba (iemsi_linehelp_window, clear_window);
-      wmenuitem ( 7,  1, " Ã Pausing      ", 0,  7, 0, NULL, 0, 0);
+      wmenuitem ( 7,  1, " \303 Pausing      ", 0,  7, 0, NULL, 0, 0);
       wmenuiba (iemsi_linehelp_window, clear_window);
-      wmenuitem ( 8,  1, " Ã Editor       ", 0,  8, 0, NULL, 0, 0);
+      wmenuitem ( 8,  1, " \303 Editor       ", 0,  8, 0, NULL, 0, 0);
       wmenuiba (iemsi_linehelp_window, clear_window);
-      wmenuitem ( 9,  1, " Ã News         ", 0,  9, 0, NULL, 0, 0);
+      wmenuitem ( 9,  1, " \303 News         ", 0,  9, 0, NULL, 0, 0);
       wmenuiba (iemsi_linehelp_window, clear_window);
-      wmenuitem (10,  1, " Ã New mail     ", 0, 10, 0, NULL, 0, 0);
+      wmenuitem (10,  1, " \303 New mail     ", 0, 10, 0, NULL, 0, 0);
       wmenuiba (iemsi_linehelp_window, clear_window);
-      wmenuitem (11,  1, " Ã New files    ", 0, 11, 0, NULL, 0, 0);
+      wmenuitem (11,  1, " \303 New files    ", 0, 11, 0, NULL, 0, 0);
       wmenuiba (iemsi_linehelp_window, clear_window);
-      wmenuitem (12,  1, " À Screen clear ", 0, 12, 0, NULL, 0, 0);
+      wmenuitem (12,  1, " \300 Screen clear ", 0, 12, 0, NULL, 0, 0);
       wmenuiba (iemsi_linehelp_window, clear_window);
       wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
@@ -374,11 +374,11 @@ void manager_scheduler ()
       wprints ( 7, 1, LGREY|_BLACK, " Errorlevel       ");
       wprints ( 8, 1, LGREY|_BLACK, " Clock adjustment ");
       wprints ( 9, 1, LGREY|_BLACK, " Receive only     ");
-      wprints (10, 1, LGREY|_BLACK, " Ã Max try        ");
-      wprints (11, 1, LGREY|_BLACK, " Ã Max failed     ");
-      wprints (12, 1, LGREY|_BLACK, " À Retry delay    ");
+      wprints (10, 1, LGREY|_BLACK, " \303 Max try        ");
+      wprints (11, 1, LGREY|_BLACK, " \303 Max failed     ");
+      wprints (12, 1, LGREY|_BLACK, " \300 Retry delay    ");
       wprints (13, 1, LGREY|_BLACK, " Forced poll      ");
-      wprints (14, 1, LGREY|_BLACK, " À Reserved node  ");
+      wprints (14, 1, LGREY|_BLACK, " \300 Reserved node  ");
       wprints (15, 1, LGREY|_BLACK, " Mail behavior    ");
 
       if (readed) {
@@ -900,8 +900,8 @@ EVENT *nevt;
 
    gotoxy_ (24, 1);
    clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "-Move bar  ENTER-Select");
-   prints (24, 1, YELLOW|_BLACK, "");
+   prints (24, 1, LGREY|_BLACK, "\030\031-Move bar  ENTER-Select");
+   prints (24, 1, YELLOW|_BLACK, "\030\031");
    prints (24, 14, YELLOW|_BLACK, "ENTER");
 
    i = 0;
@@ -992,11 +992,11 @@ continue_editing:
       wmenuitem ( 7,  1, " Errorlevel       ", 0,  7, 0, NULL, 0, 0);
       wmenuitem ( 8,  1, " Clock adjustment ", 0,  8, 0, NULL, 0, 0);
       wmenuitem ( 9,  1, " Receive only     ", 0,  9, 0, NULL, 0, 0);
-      wmenuitem (10,  1, " Ã Max try        ", 0, 10, 0, NULL, 0, 0);
-      wmenuitem (11,  1, " Ã Max failed     ", 0, 11, 0, NULL, 0, 0);
-      wmenuitem (12,  1, " À Retry delay    ", 0, 12, 0, NULL, 0, 0);
+      wmenuitem (10,  1, " \303 Max try        ", 0, 10, 0, NULL, 0, 0);
+      wmenuitem (11,  1, " \303 Max failed     ", 0, 11, 0, NULL, 0, 0);
+      wmenuitem (12,  1, " \300 Retry delay    ", 0, 12, 0, NULL, 0, 0);
       wmenuitem (13,  1, " Forced poll      ", 0, 14, 0, NULL, 0, 0);
-      wmenuitem (14,  1, " À Reserved node  ", 0, 15, 0, NULL, 0, 0);
+      wmenuitem (14,  1, " \300 Reserved node  ", 0, 15, 0, NULL, 0, 0);
       wmenuitem (15,  1, " Mail behavior    ", 0, 13, 0, NULL, 0, 0);
 
       wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
@@ -1507,13 +1507,13 @@ void mail_processing ()
       wmenuiba (mailproc_linehelp, clear_window);
       wmenuitem ( 2,  1, " Save Sysop mail    ", 0,  2, 0, NULL, 0, 0);
       wmenuiba (mailproc_linehelp, clear_window);
-      wmenuitem ( 3,  1, " ÃÄ Sysop Mail Path ", 0,  3, 0, NULL, 0, 0);
+      wmenuitem ( 3,  1, " \303\304 Sysop Mail Path ", 0,  3, 0, NULL, 0, 0);
       wmenuiba (mailproc_linehelp, clear_window);
-      wmenuitem ( 4,  1, " ÀÄ Flashing flag   ", 0,  5, 0, NULL, 0, 0);
+      wmenuitem ( 4,  1, " \300\304 Flashing flag   ", 0,  5, 0, NULL, 0, 0);
       wmenuiba (mailproc_linehelp, clear_window);
       wmenuitem ( 5,  1, " Replace tear line  ", 0,  4, 0, NULL, 0, 0);
       wmenuiba (mailproc_linehelp, clear_window);
-      wmenuitem ( 6,  1, " ÀÄ Tear line       ", 0,  7, 0, NULL, 0, 0);
+      wmenuitem ( 6,  1, " \300\304 Tear line       ", 0,  7, 0, NULL, 0, 0);
       wmenuiba (mailproc_linehelp, clear_window);
       wmenuitem ( 7,  1, " Import empty msgs. ", 0,  6, 0, NULL, 0, 0);
       wmenuiba (mailproc_linehelp, clear_window);

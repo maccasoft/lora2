@@ -257,7 +257,7 @@ void bbs_general ()
       wmenuitem (10, 30," Time format        ", 0, 12, 0, NULL, 0, 0);
       wmenuitem (11, 1," Download counter   ", 0, 13, 0, NULL, 0, 0);
       wmenuitem (11, 30," Uploader name      ", 0, 14, 0, NULL, 0, 0);
-      wmenuitem (12, 1," À Counter limits   ", 0, 15, 0, NULL, 0, 0);
+      wmenuitem (12, 1," \300 Counter limits   ", 0, 15, 0, NULL, 0, 0);
       wmenuitem (12, 30," Login check city   ", 0, 16, 0, NULL, 0, 0);
       wmenuitem (13, 1, " Inactivity timeout ", 0, 17, 0, NULL, 0, 0);
       wmenuitem (13, 30, " IEMSI logins       ", 0, 18, 0, NULL, 0, 0);
@@ -478,7 +478,7 @@ void bbs_general ()
 
          case 24:
             strcpy (string, config.quote_string);
-            if (winputs (16, 51, string, "?????", 1, '±', BLUE|_GREEN, BLUE|_GREEN) != W_ESCPRESS)
+            if (winputs (16, 51, string, "?????", 1, '\261', BLUE|_GREEN, BLUE|_GREEN) != W_ESCPRESS)
                strcpy (config.quote_string, string);
             break;
 
@@ -1572,8 +1572,8 @@ struct _sys *osys;
 
    gotoxy_ (24, 1);
    clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "-Move bar  ENTER-Select");
-   prints (24, 1, YELLOW|_BLACK, "");
+   prints (24, 1, LGREY|_BLACK, "\030\031-Move bar  ENTER-Select");
+   prints (24, 1, YELLOW|_BLACK, "\030\031");
    prints (24, 14, YELLOW|_BLACK, "ENTER");
 
    i = (int)(filelength (fd) / SIZEOF_MSGAREA);

@@ -1465,9 +1465,9 @@ int item;
       switch (*p) {
       case '^':
          if (first)
-            sprintf(buffer,"%c", cmd[item].first_color);
+            sprintf(buffer,"\026\001%c", cmd[item].first_color);
          else
-            sprintf(buffer,"%c", cmd[item].color);
+            sprintf(buffer,"\026\001%c", cmd[item].color);
          strcat(ext, buffer);
          m += strlen(buffer);
          first = first ? 0 : 1;

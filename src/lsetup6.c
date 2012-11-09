@@ -606,13 +606,13 @@ int select_color (int color)
 
    for (y = 0; y < 8; y++) {
       for (x = 0; x < 16; x++)
-         wprints (y, x, x | (y << 4), "");
+         wprints (y, x, x | (y << 4), "\007");
    }
 
    x = color & 0x0F;
    y = (color & 0xF0) >> 4;
 
-   wprints (y, x, LGREY|_BLACK, "");
+   wprints (y, x, LGREY|_BLACK, "\010");
 
    for (;;) {
       i = getxch ();
@@ -622,33 +622,33 @@ int select_color (int color)
       switch (i) {
          case 0x4800:
             if (y > 0) {
-               wprints (y, x, x | (y << 4), "");
+               wprints (y, x, x | (y << 4), "\007");
                y--;
-               wprints (y, x, LGREY|_BLACK, "");
+               wprints (y, x, LGREY|_BLACK, "\010");
             }
             break;
 
          case 0x5000:
             if (y < 7) {
-               wprints (y, x, x | (y << 4), "");
+               wprints (y, x, x | (y << 4), "\007");
                y++;
-               wprints (y, x, LGREY|_BLACK, "");
+               wprints (y, x, LGREY|_BLACK, "\010");
             }
             break;
 
          case 0x4B00:
             if (x > 0) {
-               wprints (y, x, x | (y << 4), "");
+               wprints (y, x, x | (y << 4), "\007");
                x--;
-               wprints (y, x, LGREY|_BLACK, "");
+               wprints (y, x, LGREY|_BLACK, "\010");
             }
             break;
 
          case 0x4D00:
             if (x < 15) {
-               wprints (y, x, x | (y << 4), "");
+               wprints (y, x, x | (y << 4), "\007");
                x++;
-               wprints (y, x, LGREY|_BLACK, "");
+               wprints (y, x, LGREY|_BLACK, "\010");
             }
             break;
       }
@@ -736,7 +736,7 @@ continue_editing:
       switch (i) {
          case 1:
             strcpy (string, mi.name);
-            if (winputs (1, 16, string, "?????????????????????????????????????????????????????????", 1, '±', BLUE|_GREEN, BLUE|_GREEN) != W_ESCPRESS)
+            if (winputs (1, 16, string, "?????????????????????????????????????????????????????????", 1, '\261', BLUE|_GREEN, BLUE|_GREEN) != W_ESCPRESS)
                strcpy (mi.name, string);
 //            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
 //            winpdef (1, 16, string, "?????????????????????????????????????????????????", 0, 1, NULL, 0);
@@ -1479,12 +1479,12 @@ int list_menu_items (int beg, int n_elem)
 
    gotoxy_ (24, 1);
    clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "-Move bar  ENTER-Select");
-   prints (24, 1, YELLOW|_BLACK, "");
+   prints (24, 1, LGREY|_BLACK, "\030\031-Move bar  ENTER-Select");
+   prints (24, 1, YELLOW|_BLACK, "\030\031");
    prints (24, 14, YELLOW|_BLACK, "ENTER");
 
    for (i = 0; i < n_elem; i++) {
-      sprintf (string, " %-22.22s ³'%c'³%-19.19s ³ %-20.20s ", cmd[i].name, cmd[i].hotkey ? cmd[i].hotkey : ' ', menu_types[cmd[i].flag_type], cmd[i].argument);
+      sprintf (string, " %-22.22s \263'%c'\263%-19.19s \263 %-20.20s ", cmd[i].name, cmd[i].hotkey ? cmd[i].hotkey : ' ', menu_types[cmd[i].flag_type], cmd[i].argument);
       array[i] = (char *)malloc (strlen (string) + 1);
       if (array[i] == NULL)
          break;

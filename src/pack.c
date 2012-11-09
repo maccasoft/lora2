@@ -1080,9 +1080,9 @@ void pack_outbound (int flags)
    clear_temp_file ();
    wclose ();
 
-   printc (12, 0, LGREY|_BLACK, 'Ã');
-   printc (12, 52, LGREY|_BLACK, 'Å');
-   printc (12, 79, LGREY|_BLACK, '´');
+   printc (12, 0, LGREY|_BLACK, '\303');
+   printc (12, 52, LGREY|_BLACK, '\305');
+   printc (12, 79, LGREY|_BLACK, '\264');
 }
 
 static void call_packer (attach, arcmail, packet, zone, net, node, point)

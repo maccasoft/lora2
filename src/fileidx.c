@@ -94,11 +94,11 @@ void build_fileidx_range (char *dest, int start, int stop)
       if (!quiet) {
          if (sys.file_num != start) {
             gotoxy (wherex (), wherey () - 1);
-            printf("   ц\n");
+            printf("   \303\n");
          }
 
          clreol ();
-         printf("   юд %3d - %-50.50s ", sys.file_num, sys.file_name);
+         printf("   \300\304 %3d - %-50.50s ", sys.file_num, sys.file_name);
       }
       nfiles = 0;
 

@@ -796,7 +796,7 @@ int global;
 
 #if defined (__OCC__) || defined (__TCPIP__)
 	if (tcpip && usr.priv < SYSOP) {
-		m_print ("\nSorry, file transfer not available on TCP/IP\n");
+		m_print ("\n\026\001\014Sorry, file transfer not available on TCP/IP\n");
 		press_enter ();
 		return;
 	}
@@ -1415,7 +1415,7 @@ void upload_file (char *st, char pr)
 
 #if defined (__OCC__) || defined (__TCPIP__)
    if (tcpip && usr.priv < SYSOP) {
-      m_print ("\nSorry, file transfer not available on TCP/IP\n");
+      m_print ("\n\026\001\014Sorry, file transfer not available on TCP/IP\n");
       press_enter ();
       return;
    }

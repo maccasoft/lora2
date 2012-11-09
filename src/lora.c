@@ -1666,9 +1666,9 @@ static void snake_screen_blanker (int init)
       elemy[1][0] = y[1] = 12;
       elemx[2][0] = x[2] = 60;
       elemy[2][0] = y[2] = 12;
-      prints (y[0] - 1, x[0] - 1, LGREEN|_BLACK, "€€");
-		prints (y[1] - 1, x[1] - 1, LRED|_BLACK, "€€");
-      prints (y[2] - 1, x[2] - 1, BLUE|_BLACK, "€€");
+      prints (y[0] - 1, x[0] - 1, LGREEN|_BLACK, "\333\333");
+		prints (y[1] - 1, x[1] - 1, LRED|_BLACK, "\333\333");
+      prints (y[2] - 1, x[2] - 1, BLUE|_BLACK, "\333\333");
    }
    // Eliminazione dello screen blanker
    else if (init == 2) {
@@ -1717,35 +1717,35 @@ static void snake_screen_blanker (int init)
 
             if (i == 0) {
                if (m == 0)
-                  prints (elemy[m][i] - 1, elemx[m][i] - 1, LGREEN|_BLACK, "€€");
+                  prints (elemy[m][i] - 1, elemx[m][i] - 1, LGREEN|_BLACK, "\333\333");
                else if (m == 1)
-						prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "€€");
+						prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "\333\333");
                else
-                  prints (elemy[m][i] - 1, elemx[m][i] - 1, BLUE|_BLACK, "€€");
+                  prints (elemy[m][i] - 1, elemx[m][i] - 1, BLUE|_BLACK, "\333\333");
             }
             else if (i < MAX_ELEMENTS / 3) {
                if (m == 0)
-                  prints (elemy[m][i] - 1, elemx[m][i] - 1, LGREEN|_BLACK, "≤≤");
+                  prints (elemy[m][i] - 1, elemx[m][i] - 1, LGREEN|_BLACK, "\262\262");
                else if (m == 1)
-						prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "≤≤");
+						prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "\262\262");
                else
-                  prints (elemy[m][i] - 1, elemx[m][i] - 1, BLUE|_BLACK, "≤≤");
+                  prints (elemy[m][i] - 1, elemx[m][i] - 1, BLUE|_BLACK, "\262\262");
             }
             else if (i < (MAX_ELEMENTS / 3) * 2) {
                if (m == 0)
-                  prints (elemy[m][i] - 1, elemx[m][i] - 1, LGREEN|_BLACK, "±±");
+                  prints (elemy[m][i] - 1, elemx[m][i] - 1, LGREEN|_BLACK, "\261\261");
                else if (m == 1)
-						prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "±±");
+						prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "\261\261");
                else
-                  prints (elemy[m][i] - 1, elemx[m][i] - 1, BLUE|_BLACK, "±±");
+                  prints (elemy[m][i] - 1, elemx[m][i] - 1, BLUE|_BLACK, "\261\261");
             }
             else {
                if (m == 0)
-                  prints (elemy[m][i] - 1, elemx[m][i] - 1, LGREEN|_BLACK, "∞∞");
+                  prints (elemy[m][i] - 1, elemx[m][i] - 1, LGREEN|_BLACK, "\260\260");
                else if (m == 1)
-						prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "∞∞");
+						prints (elemy[m][i] - 1, elemx[m][i] - 1, LRED|_BLACK, "\260\260");
                else
-                  prints (elemy[m][i] - 1, elemx[m][i] - 1, BLUE|_BLACK, "∞∞");
+                  prints (elemy[m][i] - 1, elemx[m][i] - 1, BLUE|_BLACK, "\260\260");
             }
          }
 

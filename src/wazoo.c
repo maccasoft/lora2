@@ -99,9 +99,9 @@ int originator;
       wtitle ("OUTBOUND CALL STATUS", TLEFT, LCYAN|_BLACK);
    else
       wtitle ("INBOUND CALL STATUS", TLEFT, LCYAN|_BLACK);
-   printc (12, 0, LGREY|_BLACK, 'ֳ');
-   printc (12, 52, LGREY|_BLACK, 'ֱ');
-   printc (12, 79, LGREY|_BLACK, '´');
+   printc (12, 0, LGREY|_BLACK, '\303');
+   printc (12, 52, LGREY|_BLACK, '\301');
+   printc (12, 79, LGREY|_BLACK, '\264');
    whline (8, 0, 80, 0, LGREY|_BLACK);
 
    set_mailon (remote_zone, remote_net, remote_node, remote_point, remote_location);
@@ -117,10 +117,10 @@ int originator;
    wprints (5, 2, LCYAN|_BLACK, "Files");
    wprints (6, 2, LCYAN|_BLACK, "Bytes");
 
-   wprints (4, 9, LCYAN|_BLACK, " ÚִִִִMailPKTִִִִִִִDataִִִִִ¿");
-   wprints (5, 9, LCYAN|_BLACK, "תתתתתתתתתתתתתתתתתתתתתתתתתתתתתתת");
-   wprints (6, 9, LCYAN|_BLACK, "תתתתתתתתתתתתתתתתתתתתתתתתתתתתתתת");
-   wprints (7, 9, LCYAN|_BLACK, " ְִִִִִִINBOUND TRAFFICִִִִִִÙ");
+   wprints (4, 9, LCYAN|_BLACK, " \332\304\304\304\304MailPKT\304\304\304\304\304\304\304Data\304\304\304\304\304\277");
+   wprints (5, 9, LCYAN|_BLACK, "\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372");
+   wprints (6, 9, LCYAN|_BLACK, "\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372");
+   wprints (7, 9, LCYAN|_BLACK, " \300\304\304\304\304\304\304INBOUND TRAFFIC\304\304\304\304\304\304\331");
 
    if (got_maildata) {
       sprintf (req, "%d", n_mail);
@@ -139,10 +139,10 @@ int originator;
       wrjusts (6, 31, YELLOW|_BLACK, "N/A");
    }
 
-   wprints (4, 44, LCYAN|_BLACK, " ÚִִִִMailPKTִִִִִִִDataִִִִִ¿");
-   wprints (5, 44, LCYAN|_BLACK, "תתתתתתתתתתתתתתתתתתתתתתתתתתתתתתת");
-   wprints (6, 44, LCYAN|_BLACK, "תתתתתתתתתתתתתתתתתתתתתתתתתתתתתתת");
-   wprints (7, 44, LCYAN|_BLACK, " ְִִִִִOUTBOUND TRAFFICִִִִִִÙ");
+   wprints (4, 44, LCYAN|_BLACK, " \332\304\304\304\304MailPKT\304\304\304\304\304\304\304Data\304\304\304\304\304\277");
+   wprints (5, 44, LCYAN|_BLACK, "\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372");
+   wprints (6, 44, LCYAN|_BLACK, "\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372");
+   wprints (7, 44, LCYAN|_BLACK, " \300\304\304\304\304\304OUTBOUND TRAFFIC\304\304\304\304\304\304\331");
 
    if (originator) {
       sprintf (req, "%d", call_list[next_call].n_mail);
@@ -1340,9 +1340,9 @@ void emsi_handshake (originator)
       wtitle ("OUTBOUND CALL STATUS", TLEFT, LCYAN|_BLACK);
    else
       wtitle ("INBOUND CALL STATUS", TLEFT, LCYAN|_BLACK);
-   printc (12, 0, LGREY|_BLACK, 'ֳ');
-   printc (12, 52, LGREY|_BLACK, 'ֱ');
-   printc (12, 79, LGREY|_BLACK, '´');
+   printc (12, 0, LGREY|_BLACK, '\303');
+   printc (12, 52, LGREY|_BLACK, '\301');
+   printc (12, 79, LGREY|_BLACK, '\264');
    whline (8, 0, 80, 0, LGREY|_BLACK);
 
    set_mailon (remote_zone, remote_net, remote_node, remote_point, remote_location);
@@ -1389,10 +1389,10 @@ void emsi_handshake (originator)
    wprints (5, 2, LCYAN|_BLACK, "Files");
    wprints (6, 2, LCYAN|_BLACK, "Bytes");
 
-   wprints (4, 9, LCYAN|_BLACK, " ÚִִִִMailPKTִִִִִִִDataִִִִִ¿");
-   wprints (5, 9, LCYAN|_BLACK, "תתתתתתתתתתתתתתתתתתתתתתתתתתתתתתת");
-   wprints (6, 9, LCYAN|_BLACK, "תתתתתתתתתתתתתתתתתתתתתתתתתתתתתתת");
-   wprints (7, 9, LCYAN|_BLACK, " ְִִִִִִINBOUND TRAFFICִִִִִִÙ");
+   wprints (4, 9, LCYAN|_BLACK, " \332\304\304\304\304MailPKT\304\304\304\304\304\304\304Data\304\304\304\304\304\277");
+   wprints (5, 9, LCYAN|_BLACK, "\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372");
+   wprints (6, 9, LCYAN|_BLACK, "\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372");
+   wprints (7, 9, LCYAN|_BLACK, " \300\304\304\304\304\304\304INBOUND TRAFFIC\304\304\304\304\304\304\331");
 
    if (got_maildata) {
       sprintf (req, "%d", n_mail);
@@ -1411,10 +1411,10 @@ void emsi_handshake (originator)
       wrjusts (6, 31, YELLOW|_BLACK, "N/A");
    }
 
-   wprints (4, 44, LCYAN|_BLACK, " ÚִִִִMailPKTִִִִִִִDataִִִִִ¿");
-   wprints (5, 44, LCYAN|_BLACK, "תתתתתתתתתתתתתתתתתתתתתתתתתתתתתתת");
-   wprints (6, 44, LCYAN|_BLACK, "תתתתתתתתתתתתתתתתתתתתתתתתתתתתתתת");
-   wprints (7, 44, LCYAN|_BLACK, " ְִִִִִOUTBOUND TRAFFICִִִִִִÙ");
+   wprints (4, 44, LCYAN|_BLACK, " \332\304\304\304\304MailPKT\304\304\304\304\304\304\304Data\304\304\304\304\304\277");
+   wprints (5, 44, LCYAN|_BLACK, "\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372");
+   wprints (6, 44, LCYAN|_BLACK, "\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372\372");
+   wprints (7, 44, LCYAN|_BLACK, " \300\304\304\304\304\304OUTBOUND TRAFFIC\304\304\304\304\304\304\331");
 
    if (originator) {
       sprintf (req, "%d", call_list[next_call].n_mail);

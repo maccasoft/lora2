@@ -80,9 +80,9 @@ void online_users(int flag, int use_alias)
       useron.city[21] = '\0';
 
       if (use_alias)
-         sprintf (linea, "%-25.25s  %4d  %6lu  %-14.14s  %s\n", useron.alias, useron.line, useron.baud, useron.status, useron.city);
+         sprintf (linea, "\026\001\013%-25.25s  \026\001\017%4d  %6lu  \026\001\016%-14.14s  %s\n", useron.alias, useron.line, useron.baud, useron.status, useron.city);
       else
-         sprintf (linea, "%-25.25s  %4d  %6lu  %-14.14s  %s\n", useron.name, useron.line, useron.baud, useron.status, useron.city);
+         sprintf (linea, "\026\001\013%-25.25s  \026\001\017%4d  %6lu  \026\001\016%-14.14s  %s\n", useron.name, useron.line, useron.baud, useron.status, useron.city);
       m_print (linea);
 
       if (!(line = more_question (line)) || !CARRIER)
@@ -423,7 +423,7 @@ void cb_chat (void)
    m_print (bbstxt[B_CB_CHAT_HELP1]);
    m_print (bbstxt[B_CB_CHAT_HELP2]);
 
-   sprintf (filename, "\n\n%s joins the conversation.\n\n", usr.name);
+   sprintf (filename, "\n\n\026\001\016%s \026\001\014joins the conversation.\n\n", usr.name);
    cb_send_message (filename, cb_num);
 
    change_attr (LGREEN|_BLACK);
@@ -450,7 +450,7 @@ void cb_chat (void)
          inp_wrap(linea, wrp, 60);
 
          if (linea[0] && linea[0] != '/') {
-            sprintf(filename, "Š[%-15.15s]: %c%s\n", usr.name, color_chat (line_offset), linea);
+            sprintf(filename, "\026\001\020\212[%-15.15s]: \026\001%c%s\n", usr.name, color_chat (line_offset), linea);
             cb_send_message (filename, cb_num);
             cb_time = timerset(50);
          }
@@ -460,9 +460,9 @@ void cb_chat (void)
                   ul = atoi(&linea[2]);
                   if (ul >= 1 && ul <= 40) {
                      if (cb_num != ul) {
-                        sprintf(filename, "\n\n%s leaves the conversation.\n\n", usr.name);
+                        sprintf(filename, "\n\n\026\001\016%s \026\001\014leaves the conversation.\n\n", usr.name);
                         cb_send_message (filename, cb_num);
-                        sprintf(filename, "\n\n%s joins the conversation.\n\n", usr.name);
+                        sprintf(filename, "\n\n\026\001\016%s \026\001\014joins the conversation.\n\n", usr.name);
                         cb_send_message (filename, ul);
                      }
                      cb_num = ul;
@@ -476,7 +476,7 @@ void cb_chat (void)
                   break;
                case 'Q':
                   endrun = 1;
-                  sprintf(filename, "\n\n%s leaves the conversation.\n\n", usr.name);
+                  sprintf(filename, "\n\n\026\001\016%s \026\001\014leaves the conversation.\n\n", usr.name);
                   cb_send_message (filename, cb_num);
                   break;
                case 'W':
@@ -622,7 +622,7 @@ void yelling_at_sysop (char *arguments)
 
    wh = wopen (10, 23, 15, 55, 1, LCYAN|_BLUE, LCYAN|_BLUE);
    wactiv (wh);
-   wtitle ("µ Sysop Page Æ", TCENTER, LCYAN|_BLUE);
+   wtitle ("\265 Sysop Page \306", TCENTER, LCYAN|_BLUE);
 
    wcenters (1, LCYAN|_BLUE, "[C] To break in for a chat");
    wcenters (2, LCYAN|_BLUE, "[A] To terminate the page ");
@@ -807,7 +807,7 @@ int width;
    strcpy (s, wrp);
    z = strlen (wrp);
 
-   m_print ("%c%s", color, wrp);
+   m_print ("\026\001%c%s", color, wrp);
 
    while (z < width) {
 #ifdef __OS2__

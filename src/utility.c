@@ -1624,7 +1624,7 @@ rescan:
       memcpy (&string[23 - strlen (j)], j, strlen (j));
 
       if (next_call == i)
-         string[38] = '';
+         string[38] = '\020';
 
       if (cur_event >= 0) {
          if ( !(call_list[i].type & MAIL_WILLGO) ) {

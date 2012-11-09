@@ -254,15 +254,15 @@ void main (void)
                    sprintf(linea, "LINE%d.BBS", useron.line);
                    fp = fopen(linea, "at");
 
-                   fprintf(fp, "\n\n** MESSAGE **\n");
-                   fprintf(fp, "From: System Manager\n");
-                   fprintf(fp, "\n\"%s", msgs[0]);
+                   fprintf(fp, "\n\n\026\001\014** MESSAGE **\n");
+                   fprintf(fp, "\026\001\016From: \026\001\013System Manager\n");
+                   fprintf(fp, "\026\001\003\n\"%s", msgs[0]);
                    if (msgs[1][0])
                       fprintf (fp, "\n%s", msgs[1]);
                    if (msgs[2][0])
                       fprintf (fp, "\n%s", msgs[2]);
                    fprintf (fp, "\".\n\n", msgs[0], msgs[1], msgs[2]);
-                   fprintf(fp, "ç\001");
+                   fprintf(fp, "\026\001\020\215\001");
 
                    fclose(fp);
                }
@@ -297,15 +297,15 @@ void main (void)
                 sprintf(linea, "LINE%d.BBS", task[nd]);
                 fp = fopen(linea, "at");
 
-                fprintf(fp, "\n\n** MESSAGE **\n");
-                fprintf(fp, "From: System Manager\n");
-                fprintf(fp, "\n\"%s", msgs[0]);
+                fprintf(fp, "\n\n\026\001\014** MESSAGE **\n");
+                fprintf(fp, "\026\001\016From: \026\001\013System Manager\n");
+                fprintf(fp, "\026\001\003\n\"%s", msgs[0]);
                 if (msgs[1][0])
                    fprintf (fp, "\n%s", msgs[1]);
                 if (msgs[2][0])
                    fprintf (fp, "\n%s", msgs[2]);
                 fprintf (fp, "\".\n\n", msgs[0], msgs[1], msgs[2]);
-                fprintf(fp, "ç\001");
+                fprintf(fp, "\026\001\020\215\001");
 
                 fclose(fp);
             }

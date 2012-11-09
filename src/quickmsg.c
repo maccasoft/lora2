@@ -165,14 +165,14 @@ char goldbase;
       }
 		else {
          if (goldbase) {
-            m_print ("%-4d %c%-20.20s ", i, (stricmp (pascal_string(gmsgt.whofrom), usr.name) && stricmp (pascal_string(gmsgt.whofrom), usr.handle)) ? 'Š' : 'Ž', pascal_string (gmsgt.whofrom));
-            m_print ("%c%-20.20s ", (stricmp(pascal_string(gmsgt.whoto), usr.name)&&stricmp(pascal_string (gmsgt.whoto),usr.handle)) ? 'Š' : 'Œ', pascal_string (gmsgt.whoto));
-            m_print ("%-32.32s\n", pascal_string (gmsgt.subject));
+            m_print ("\026\001\003%-4d \026\001\020%c%-20.20s ", i, (stricmp (pascal_string(gmsgt.whofrom), usr.name) && stricmp (pascal_string(gmsgt.whofrom), usr.handle)) ? '\212' : '\216', pascal_string (gmsgt.whofrom));
+            m_print ("\026\001\020%c%-20.20s ", (stricmp(pascal_string(gmsgt.whoto), usr.name)&&stricmp(pascal_string (gmsgt.whoto),usr.handle)) ? '\212' : '\214', pascal_string (gmsgt.whoto));
+            m_print ("\026\001\013%-32.32s\n", pascal_string (gmsgt.subject));
          }
          else {
-            m_print ("%-4d %c%-20.20s ", i, (stricmp (pascal_string(msgt.whofrom), usr.name)&&stricmp (pascal_string(msgt.whofrom), usr.handle)) ? 'Š' : 'Ž', pascal_string (msgt.whofrom));
-            m_print ("%c%-20.20s ", (stricmp (pascal_string(msgt.whoto), usr.name)&&stricmp (pascal_string (msgt.whoto),usr.handle)) ? 'Š' : 'Œ', pascal_string (msgt.whoto));
-            m_print ("%-32.32s\n", pascal_string (msgt.subject));
+            m_print ("\026\001\003%-4d \026\001\020%c%-20.20s ", i, (stricmp (pascal_string(msgt.whofrom), usr.name)&&stricmp (pascal_string(msgt.whofrom), usr.handle)) ? '\212' : '\216', pascal_string (msgt.whofrom));
+            m_print ("\026\001\020%c%-20.20s ", (stricmp (pascal_string(msgt.whoto), usr.name)&&stricmp (pascal_string (msgt.whoto),usr.handle)) ? '\212' : '\214', pascal_string (msgt.whoto));
+            m_print ("\026\001\013%-32.32s\n", pascal_string (msgt.subject));
          }
       }
 

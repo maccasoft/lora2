@@ -106,7 +106,7 @@ void update_statusline (void)
       return;
 
    wactiv (status);
-   sprintf (string, "COM%d ³ %6lu %s", com_port + 1, rate, "N81");
+   sprintf (string, "COM%d \263 %6lu %s", com_port + 1, rate, "N81");
    wprints (0, 23, LGREY|_BLUE, string);
    wactiv (mainview);
 }
@@ -281,7 +281,7 @@ void terminal_emulator ()
 
    status = wopen (24, 0, 24, 79, 5, LGREY|_BLUE, LGREY|_BLUE);
    wactiv (status);
-   sprintf (string, " ALT-Z for Menu      ³ COM%d ³ %6lu %s ³    ³          ³       ³            ", com_port + 1, rate, "N81");
+   sprintf (string, " ALT-Z for Menu      \263 COM%d \263 %6lu %s \263    \263          \263       \263            ", com_port + 1, rate, "N81");
    wprints (0, 0, LGREY|_BLUE, string);
    wprints (0, 48, LGREY|_BLUE, config->avatar ? "Ansi/Avt" : "Ansi");
 
@@ -408,7 +408,7 @@ void terminal_emulator ()
                if (c == 0x0D) {
                   if (config->autozmodem && strstr (string, "rz\r") != NULL) {
                      get_emsi_id (string, 6);
-                     if (strstr (string, "**") != NULL) {
+                     if (strstr (string, "**\030") != NULL) {
                         if (dir.download[0])
                            get_Zmodem (dir.download, NULL);
                         else
@@ -1371,7 +1371,7 @@ static void translate_avatar (void)
 static void close_capture (FILE *fp_cap)
 {
    if (fp_cap != NULL) {
-      fprintf (fp_cap, "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ\n\n");
+      fprintf (fp_cap, "\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\n\n");
       fprintf (fp_cap, "\n");
       fclose (fp_cap);
       prints (24, 43, LGREY|_BLUE, " ");
@@ -1426,7 +1426,7 @@ static FILE *open_capture (char *predefined)
       tim = localtime (&t);
 
       fprintf (fp, "                    Capture file opened %02d-%s-%d %2d:%02d\n", tim->tm_mday, mtext[tim->tm_mon], tim->tm_year, tim->tm_hour, tim->tm_min);
-      fprintf (fp, "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ\n");
+      fprintf (fp, "\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\304\n");
 
       if (fp != NULL)
          prints (24, 43, LGREY|_BLUE, "C");
@@ -1699,7 +1699,7 @@ void edit_single_entry (DIALREC *dr, char *title)
       wmenuitem ( 4,  1, " Password       ", 0,  4, 0, NULL, 0, 0);
       wmenuitem ( 5,  1, " Download path  ", 0,  5, 0, NULL, 0, 0);
       wmenuitem ( 6,  1, " Auto capture   ", 0,  6, 0, NULL, 0, 0);
-      wmenuitem ( 7,  1, " ÀÄ Capture     ", 0,  7, 0, NULL, 0, 0);
+      wmenuitem ( 7,  1, " \300\304 Capture     ", 0,  7, 0, NULL, 0, 0);
       wmenuitem ( 8,  1, " IEMSI          ", 0,  8, 0, NULL, 0, 0);
       wmenuitem ( 9,  1, " Local echo     ", 0,  9, 0, NULL, 0, 0);
       wmenuitem (10,  1, " Strip high bit ", 0, 10, 0, NULL, 0, 0);

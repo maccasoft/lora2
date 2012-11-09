@@ -153,9 +153,9 @@ void import_tic_files ()
    wactiv (wh);
    wtitle ("PROCESS TIC FILES", TLEFT, LCYAN|_BLACK);
    wprints (0, 0, YELLOW|_BLACK, " File          Size     Area name            From");
-   printc (12, 0, LGREY|_BLACK, 'Ã');
-   printc (12, 52, LGREY|_BLACK, 'Á');
-   printc (12, 79, LGREY|_BLACK, '´');
+   printc (12, 0, LGREY|_BLACK, '\303');
+   printc (12, 52, LGREY|_BLACK, '\301');
+   printc (12, 79, LGREY|_BLACK, '\264');
    wr = wfindrec (wh);
    wr->srow++;
 	wr->row++;
@@ -881,9 +881,9 @@ void rescan_areas (void)
    wactiv (wh);
 	wtitle ("RESCAN ECHOMAIL", TLEFT, LCYAN|_BLACK);
    wprints (0, 0, YELLOW|_BLACK, " Num.  Area tag               Base         Forward to");
-   printc (12, 0, LGREY|_BLACK, 'Ã');
-   printc (12, 52, LGREY|_BLACK, 'Á');
-   printc (12, 79, LGREY|_BLACK, '´');
+   printc (12, 0, LGREY|_BLACK, '\303');
+   printc (12, 52, LGREY|_BLACK, '\301');
+   printc (12, 79, LGREY|_BLACK, '\264');
    wr = wfindrec (wh);
    wr->srow++;
    wr->row++;

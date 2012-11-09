@@ -76,7 +76,7 @@ void software_version (char *arguments)
 
    activation_key ();
    if (registered)
-      m_print ("Registered to: %s\n               %s\n\n", config->sysop, config->system_name);
+      m_print ("\026\001\003Registered to: %s\n               %s\n\n", config->sysop, config->system_name);
 
 #ifndef __OS2__
    c = peekb (0xFFFF, 0x000E);
@@ -298,7 +298,7 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
                      strcpy (dir, tsys.msg_name);
                      dir[31] = '\0';
 
-                     sprintf (stringa, "ç%3d ... %-31s ", sysidx[i].area, dir);
+                     sprintf (stringa, "\026\001\020\215%3d ... \026\001\003%-31s ", sysidx[i].area, dir);
 
                      if (pari) {
                         m_print ("%s\n", strtrim (stringa));
@@ -312,19 +312,19 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
                      }
                   }
                   else if (flag == 2) {
-                     m_print("ç%3d ... %s\n", sysidx[i].area, tsys.msg_name);
+                     m_print("\026\001\020\215%3d ... \026\001\003%s\n", sysidx[i].area, tsys.msg_name);
                      if (!(linea = more_question(linea)))
                         break;
                   }
                   else if (flag == 3) {
-                     m_print("ç%3d ... %-12s %s\n", sysidx[i].area, sysidx[i].key, tsys.msg_name);
+                     m_print("\026\001\020\215%3d ... \026\001\013%-12s \026\001\003%s\n", sysidx[i].area, sysidx[i].key, tsys.msg_name);
                      if (!(linea = more_question(linea)))
                         break;
                   }
                   else if (flag == 4) {
                      if (!sysidx[i].key[0])
                         sprintf (sysidx[i].key, "%d", sysidx[i].area);
-                     m_print("ç%-12s ... %s\n", sysidx[i].key, tsys.msg_name);
+                     m_print("\026\001\020\215%-12s ... \026\001\003%s\n", sysidx[i].key, tsys.msg_name);
                      if (!(linea = more_question(linea)))
                         break;
                   }
@@ -345,7 +345,7 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
                      strcpy (dir, tsys.file_name);
                      dir[31] = '\0';
 
-                     sprintf (stringa, "ç%3d ... %-31s ", sysidx[i].area, dir);
+                     sprintf (stringa, "\026\001\020\215%3d ... \026\001\003%-31s ", sysidx[i].area, dir);
 
                      if (pari) {
                         m_print ("%s\n", strtrim (stringa));
@@ -359,19 +359,19 @@ int type, flag, sig;                      /* flag == 2, Normale una colonna */
                      }
                   }
                   else if (flag == 2) {
-                     m_print("ç%3d ... %s\n", sysidx[i].area, tsys.file_name);
+                     m_print("\026\001\020\215%3d ... \026\001\003%s\n", sysidx[i].area, tsys.file_name);
                      if (!(linea = more_question(linea)))
                         break;
                   }
                   else if (flag == 3) {
-                     m_print("ç%3d ... %-12s %s\n", sysidx[i].area, sysidx[i].key, tsys.file_name);
+                     m_print("\026\001\020\215%3d ... \026\001\013%-12s \026\001\003%s\n", sysidx[i].area, sysidx[i].key, tsys.file_name);
                      if (!(linea = more_question(linea)))
                         break;
                   }
                   else if (flag == 4) {
                      if (!sysidx[i].key[0])
                         sprintf (sysidx[i].key, "%d", sysidx[i].area);
-                     m_print("ç%-12s ... %s\n", sysidx[i].key, tsys.file_name);
+                     m_print("\026\001\020\215%-12s ... \026\001\003%s\n", sysidx[i].key, tsys.file_name);
                      if (!(linea = more_question(linea)))
                         break;
                   }
@@ -602,7 +602,7 @@ int sig;
                   scan_message_base(sys.msg_num, 0);
 
                if (last_msg > lastread) {
-                  m_print("ç%3d ...  %s\n",sysidx[i].area,sys.msg_name);
+                  m_print("\026\001\020\215%3d ... \026\001\003 %s\n",sysidx[i].area,sys.msg_name);
 
                   if (!(linea = more_question(linea)))
                      break;
@@ -1382,7 +1382,7 @@ void read_comment ()
    while (fgets(filename,128,fp) != NULL) {
       while (strlen (filename) > 0 && (filename[strlen (filename) - 1] == 0x0D || filename[strlen (filename) - 1] == 0x0A))
          filename[strlen (filename) -1] = '\0';
-      m_print ("%s\n", filename);
+      m_print ("\026\001\002%s\026\001\007\n", filename);
       if (!(line=more_question(line)) || !CARRIER)
          break;
    }
@@ -1477,7 +1477,7 @@ void display_usage ()
          else
             m = -1;
          if (m >= y_axis[i] && m > 0)
-            m_print ("€€ ");
+            m_print ("\333\333 ");
          else
             m_print ("   ");
       }

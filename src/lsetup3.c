@@ -65,7 +65,7 @@ void modem_hardware ()
 		wmenuitem ( 3,  1, " Lock port         ", 0,  3, 0, NULL, 0, 0);
 		wmenuitem ( 4,  1, " Terminal          ", 0,  4, 0, NULL, 0, 0);
 		wmenuitem ( 5,  1, " FAX Message       ", 0,  5, 0, NULL, 0, 0);
-		wmenuitem ( 6,  1, " À FAX Errorlevel  ", 0,  6, 0, NULL, 0, 0);
+		wmenuitem ( 6,  1, " \300 FAX Errorlevel  ", 0,  6, 0, NULL, 0, 0);
 		wmenuitem ( 7,  1, " Strip dashes      ", 0,  7, 0, NULL, 0, 0);
 		wmenuitem ( 8,  1, " Dialing timeout   ", 0,  8, 0, NULL, 0, 0);
 		wmenuitem ( 9,  1, " Carrier mask      ", 0,  9, 0, NULL, 0, 0);
@@ -226,8 +226,8 @@ void modem_answer_control ()
       wmenuitem ( 1,  1, " Manual answer   ", 0, 1, 0, NULL, 0, 0);
       wmenuitem ( 2,  1, " Answer command  ", 0, 2, 0, NULL, 0, 0);
       wmenuitem ( 3,  1, " Limited hours   ", 0, 3, 0, NULL, 0, 0);
-      wmenuitem ( 4,  1, " Ã Starting time ", 0, 4, 0, NULL, 0, 0);
-      wmenuitem ( 5,  1, " À Ending time   ", 0, 5, 0, NULL, 0, 0);
+      wmenuitem ( 4,  1, " \303 Starting time ", 0, 4, 0, NULL, 0, 0);
+      wmenuitem ( 5,  1, " \300 Ending time   ", 0, 5, 0, NULL, 0, 0);
       wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
       wprints (1, 19, CYAN|_BLACK, config.manual_answer ? "Yes" : "No");
@@ -420,8 +420,8 @@ void modem_dialing_strings ()
       wclear ();
 
       wmenubegc ();
-      wprints (2, 11, LGREY|BLACK, "ÚÄPrefixÄÄÄÄÄÄÄÄÄÄÄÄ¿");
-      wprints (2, 33, LGREY|BLACK, "ÚÄSuffixÄÄÄÄÄÄÄÄÄÄÄÄ¿");
+      wprints (2, 11, LGREY|BLACK, "\332\304Prefix\304\304\304\304\304\304\304\304\304\304\304\304\277");
+      wprints (2, 33, LGREY|BLACK, "\332\304Suffix\304\304\304\304\304\304\304\304\304\304\304\304\277");
       wmenuitem ( 3,  1, " Dial 1  ", 0,  6, 0, NULL, 0, 0);
       wmenuitem ( 4,  1, " Dial 2  ", 0,  7, 0, NULL, 0, 0);
       wmenuitem ( 5,  1, " Dial 3  ", 0,  8, 0, NULL, 0, 0);
@@ -509,8 +509,8 @@ void modem_flag_strings ()
       wclear ();
 
       wmenubegc ();
-      wprints (1, 11, LGREY|BLACK, "ÚÄFlagÄ¿");
-      wprints (1, 19, LGREY|BLACK, "ÚÄPrefixÄÄÄÄÄÄÄÄÄÄÄÄ¿");
+      wprints (1, 11, LGREY|BLACK, "\332\304Flag\304\277");
+      wprints (1, 19, LGREY|BLACK, "\332\304Prefix\304\304\304\304\304\304\304\304\304\304\304\304\277");
       wmenuitem ( 2,  1, " Dial 1  ", 0,  1, 0, NULL, 0, 0);
       wmenuitem ( 3,  1, " Dial 2  ", 0,  2, 0, NULL, 0, 0);
       wmenuitem ( 4,  1, " Dial 3  ", 0,  3, 0, NULL, 0, 0);
@@ -601,7 +601,7 @@ void general_time ()
       wmenuitem ( 2,  1, " Dial prefix ", 0,  2, 0, NULL, 0, 0);
       wmenuitem ( 3,  1, " Dial suffix ", 0,  3, 0, NULL, 0, 0);
       wmenuitem ( 4,  1, " Number      ", 0,  4, 0, NULL, 0, 0);
-      wmenuitem ( 5,  1, " ÀÄ Use DST  ", 0,  6, 0, NULL, 0, 0);
+      wmenuitem ( 5,  1, " \300\304 Use DST  ", 0,  6, 0, NULL, 0, 0);
       wmenuitem ( 6,  1, " Nodes       ", 0,  5, 0, NULL, 0, 0);
       wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
@@ -1097,7 +1097,7 @@ void mailer_areafix ()
       wmenuiba (areafix_linehelp, clear_window);
       wmenuitem (13,  1, " New areas base    ", 0, 13, 0, NULL, 0, 0);
       wmenuiba (areafix_linehelp, clear_window);
-      wmenuitem (14,  1, " ÀÄ New areas path ", 0, 14, 0, NULL, 0, 0);
+      wmenuitem (14,  1, " \300\304 New areas path ", 0, 14, 0, NULL, 0, 0);
       wmenuiba (areafix_linehelp, clear_window);
       wmenuitem (15,  1, " Names to check    ", 0, 15, 0, NULL, 0, 0);
       wmenuiba (areafix_linehelp, clear_window);
@@ -1485,7 +1485,7 @@ void bbs_language ()
       stop_update ();
       wclear ();
 
-      wprints (1, 12, LGREY|BLACK, "ÚFilename¿ÚÄÄÄÄÄÄDescriptionÄÄÄÄÄÄ¿ÚÄÄÄÄÄTextfiles pathÄÄÄÄÄÄ¿");
+      wprints (1, 12, LGREY|BLACK, "\332Filename\277\332\304\304\304\304\304\304Description\304\304\304\304\304\304\277\332\304\304\304\304\304Textfiles path\304\304\304\304\304\304\277");
 
       wmenubegc ();
       wmenuitem ( 2, 1," Lang. 1  ", 'L', 80, 0, NULL, 0, 0);
@@ -1527,7 +1527,7 @@ void bbs_language ()
 //            winpbeg (BLUE|_GREEN, BLUE|_GREEN);
 //            winpdef (i + 2, 23, string, "???????????????????????", 0, 2, NULL, 0);
 //            if (winpread () != W_ESCPRESS) {
-            if (winputs (i + 2, 23, string, "???????????????????????", 1, '±', BLUE|_GREEN, BLUE|_GREEN) != W_ESCPRESS) {
+            if (winputs (i + 2, 23, string, "???????????????????????", 1, '\261', BLUE|_GREEN, BLUE|_GREEN) != W_ESCPRESS) {
                strcpy (config.language[i].descr, string);
                wprints (i + 2, 23, CYAN|_BLACK, "                       ");
                wprints (i + 2, 23, CYAN|_BLACK, config.language[i].descr);
@@ -2435,8 +2435,8 @@ struct _sys *osys;
 
    gotoxy_ (24, 1);
    clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "-Move bar  ENTER-Select");
-   prints (24, 1, YELLOW|_BLACK, "");
+   prints (24, 1, LGREY|_BLACK, "\030\031-Move bar  ENTER-Select");
+   prints (24, 1, YELLOW|_BLACK, "\030\031");
    prints (24, 14, YELLOW|_BLACK, "ENTER");
 
    i = (int)(filelength (fd) / SIZEOF_FILEAREA);

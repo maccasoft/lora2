@@ -125,8 +125,8 @@ static void user_select_list (int fd, int fdidx, struct _usr *ousr)
 
    gotoxy_ (24, 1);
    clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "-Move bar  ENTER-Select");
-   prints (24, 1, YELLOW|_BLACK, "");
+   prints (24, 1, LGREY|_BLACK, "\030\031-Move bar  ENTER-Select");
+   prints (24, 1, YELLOW|_BLACK, "\030\031");
    prints (24, 14, YELLOW|_BLACK, "ENTER");
 
    i = (int)(filelength (fd) / sizeof (struct _usr));
@@ -318,7 +318,7 @@ continue_editing:
          wmenuitem (10,  1, " Video      ", 0, 12, 0, NULL, 0, 0);
          wmenuitem (10, 26, " Reader FS  ", 0, 24, 0, NULL, 0, 0);
          wmenuitem (10, 43, " Voice pho. ", 0, 34, 0, NULL, 0, 0);
-         wmenuitem (11,  1, " юд Colors  ", 0, 13, 0, NULL, 0, 0);
+         wmenuitem (11,  1, " \300\304 Colors  ", 0, 13, 0, NULL, 0, 0);
          wmenuitem (11, 26, " IBM chars. ", 0, 25, 0, NULL, 0, 0);
          wmenuitem (11, 43, " Data phone ", 0, 35, 0, NULL, 0, 0);
          wmenuitem (12,  1, " Calls #    ", 0, 14, 0, NULL, 0, 0);
@@ -1059,7 +1059,7 @@ void manager_users (void)
          wprints (10,  1, LGREY|_BLACK, " Video      ");
          wprints (10, 26, LGREY|_BLACK, " Reader FS  ");
          wprints (10, 43, LGREY|_BLACK, " Voice pho. ");
-         wprints (11,  1, LGREY|_BLACK, " юд Colors  ");
+         wprints (11,  1, LGREY|_BLACK, " \300\304 Colors  ");
          wprints (11, 26, LGREY|_BLACK, " IBM chars. ");
          wprints (11, 43, LGREY|_BLACK, " Data phone ");
          wprints (12,  1, LGREY|_BLACK, " Calls #    ");

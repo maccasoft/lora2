@@ -167,26 +167,26 @@ int flag, sig;                       /* flag == 2, Normale una colonna */
                if (sig && tsys.msg_sig != sig)
                   continue;
 
-               m_print("%c%3d ... ",is_tagged(sysidx[i].area) ? '@' : ' ',sysidx[i].area);
+               m_print("\026\001\016%c\026\001\020\215%3d ... ",is_tagged(sysidx[i].area) ? '@' : ' ',sysidx[i].area);
 
                if (flag == 1) {
                   strcpy(dir, tsys.msg_name);
                   dir[31] = '\0';
                   if (pari) {
-                     m_print("%s\n",dir);
+                     m_print("\026\001\003%s\n",dir);
                      pari = 0;
                      if (!(linea = more_question(linea)))
                         break;
                   }
                   else {
-                     m_print("%-31s ",dir);
+                     m_print("\026\001\003%-31s ",dir);
                      pari = 1;
                   }
                }
                else if (flag == 2 || flag == 3) {
                   if (flag == 3)
-                     m_print("%-12s ",sysidx[i].key);
-                  m_print(" %s\n",tsys.msg_name);
+                     m_print("\026\001\013%-12s ",sysidx[i].key);
+                  m_print("\026\001\003 %s\n",tsys.msg_name);
 
                   if (!(linea = more_question(linea)))
                      break;
@@ -243,7 +243,7 @@ int flag, sig;                       /* flag == 2, Normale una colonna */
                if (tag (area))
                   m_print (bbstxt[B_QWK_AREATAG], area, tsys.msg_name, bbstxt[B_QWK_TAGGED]);
                else
-                  m_print ("\nToo much areas tagged (max. 50 areas)\n");
+                  m_print ("\n\026\001\014Too much areas tagged (max. 50 areas)\n");
             }
          }
       }
@@ -926,7 +926,7 @@ void getrep(void)
                   scan_message_base(usr.msg, 1);
 					prev_area = x;
 
-               m_print2 ("ŠArea #%d, %s\n", sys.msg_num, sys.msg_name);
+               m_print2 ("\026\001\020\212Area #%d, %s\n", sys.msg_num, sys.msg_name);
             }
 
             upmsgs++;
@@ -969,7 +969,7 @@ void getrep(void)
             fancy_str (msg.from);
             strcpy (msg.subj, namefixup (MsgHead->Msgsubj));
 
-            m_print2 ("To: %s, Subject: %s\n", msg.to, msg.subj);
+            m_print2 ("\026\001\014To: %s, \026\001\016Subject: %s\n", msg.to, msg.subj);
 
             sprintf(temp1,"%s%d.TXT", config->QWKDir, line_offset);
 				msgfile = cshopen (temp1, O_TRUNC|O_CREAT|O_BINARY|O_RDWR, S_IREAD|S_IWRITE);
@@ -1048,7 +1048,7 @@ void getrep(void)
                   save_message (temp1);
             }
             else
-               m_print ("Level too low / incorrect flags to write a message here.\n");
+               m_print ("\026\001\014Level too low / incorrect flags to write a message here.\n");
 
             unlink (temp1);
 
@@ -1767,7 +1767,7 @@ static int bluewave_process_reply (void)
             scan_message_base (usr.msg, 1);
 
          prev_area = tsys.msg_num;
-         m_print2 ("ŠArea #%d, %s\n", sys.msg_num, sys.msg_name);
+         m_print2 ("\026\001\020\212Area #%d, %s\n", sys.msg_num, sys.msg_name);
       }
 
       msg_fzone = config->alias[sys.use_alias].zone;
@@ -1778,7 +1778,7 @@ static int bluewave_process_reply (void)
       if (usr.priv >= sys.write_priv && sys.write_priv != HIDDEN && (usr.flags & sys.write_flags) == sys.write_flags) {
          sprintf (string, "%sTASK%02X\\%s", config->QWKDir, line_offset, uplr.filename);
 
-         m_print2 ("To: %s, Subject: %s\n", msg.to, msg.subj);
+         m_print2 ("\026\001\014To: %s, \026\001\016Subject: %s\n", msg.to, msg.subj);
 
          if (sys.quick_board || sys.gold_board)
             quick_save_message (string);

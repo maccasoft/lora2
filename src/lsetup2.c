@@ -316,8 +316,8 @@ void manager_nodelist ()
       stop_update ();
       wclear ();
 
-//      wprints (1, 11, LGREY|BLACK, "ÚÄÄNodelistÄÄ¿ÚÄÄNodediffÄÄ¿ÚÄÄÄPackedÄÄÄ¿");
-      wprints (1, 11, LGREY|BLACK, "ÚÄÄNodelistÄÄ¿ÚÄÄNodediffÄÄ¿");
+//      wprints (1, 11, LGREY|BLACK, "\332\304\304Nodelist\304\304\277\332\304\304Nodediff\304\304\277\332\304\304\304Packed\304\304\304\277");
+      wprints (1, 11, LGREY|BLACK, "\332\304\304Nodelist\304\304\277\332\304\304Nodediff\304\304\277");
 
       wmenubegc ();
       wmenuitem ( 2, 1," List 1  ", 'L', 80, 0, NULL, 0, 0);
@@ -407,7 +407,7 @@ void manager_edit_packer (int o)
       wmenuitem ( 3, 1," Pack command   ", 'P', 3, 0, NULL, 0, 0);
       wmenuitem ( 4, 1," Unpack command ", 'U', 4, 0, NULL, 0, 0);
       wmenuitem ( 5, 1," Offset         ", 'O', 5, 0, NULL, 0, 0);
-      wmenuitem ( 6, 1," ÀÄ ID bytes    ", 'b', 6, 0, NULL, 0, 0);
+      wmenuitem ( 6, 1," \300\304 ID bytes    ", 'b', 6, 0, NULL, 0, 0);
       wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
       wprints (1, 18, CYAN|_BLACK, config.packers[o].id);
@@ -567,16 +567,16 @@ void manager_nodes ()
 		wprints (10, 33, LGREY|_BLACK," Min. baud rate  ");
 		wprints (12,  1, LGREY|_BLACK," Echomail aka    ");
 		wprints (13,  1, LGREY|_BLACK," Areafix Level   ");
-		wprints (14,  1, LGREY|_BLACK," ÃÄ A Flag       ");
-		wprints (15,  1, LGREY|_BLACK," ÃÄ B Flag       ");
-		wprints (16,  1, LGREY|_BLACK," ÃÄ C Flag       ");
-		wprints (17,  1, LGREY|_BLACK," ÀÄ D Flag       ");
+		wprints (14,  1, LGREY|_BLACK," \303\304 A Flag       ");
+		wprints (15,  1, LGREY|_BLACK," \303\304 B Flag       ");
+		wprints (16,  1, LGREY|_BLACK," \303\304 C Flag       ");
+		wprints (17,  1, LGREY|_BLACK," \300\304 D Flag       ");
 		wprints (12, 33, LGREY|_BLACK," TIC aka         ");
 		wprints (13, 33, LGREY|_BLACK," TIC Level       ");
-		wprints (14, 33, LGREY|_BLACK," ÃÄ A Flag       ");
-		wprints (15, 33, LGREY|_BLACK," ÃÄ B Flag       ");
-		wprints (16, 33, LGREY|_BLACK," ÃÄ C Flag       ");
-		wprints (17, 33, LGREY|_BLACK," ÀÄ D Flag       ");
+		wprints (14, 33, LGREY|_BLACK," \303\304 A Flag       ");
+		wprints (15, 33, LGREY|_BLACK," \303\304 B Flag       ");
+		wprints (16, 33, LGREY|_BLACK," \303\304 C Flag       ");
+		wprints (17, 33, LGREY|_BLACK," \300\304 D Flag       ");
 
 		if (readed) {
 			sprintf (string, "%u:%u/%u.%u", ni.zone, ni.net, ni.node, ni.point);
@@ -873,16 +873,16 @@ continue_editing:
 		wmenuitem (10, 33, " Min. baud rate  ", 0, 27, 0, NULL, 0, 0);
 		wmenuitem (12,  1, " Echomail aka    ", 0, 13, 0, NULL, 0, 0);
 		wmenuitem (13,  1, " Areafix Level   ", 0,  2, 0, NULL, 0, 0);
-		wmenuitem (14,  1, " ÃÄ A Flag       ", 0, 15, 0, NULL, 0, 0);
-		wmenuitem (15,  1, " ÃÄ B Flag       ", 0, 16, 0, NULL, 0, 0);
-		wmenuitem (16,  1, " ÃÄ C Flag       ", 0, 17, 0, NULL, 0, 0);
-		wmenuitem (17,  1, " ÀÄ D Flag       ", 0, 18, 0, NULL, 0, 0);
+		wmenuitem (14,  1, " \303\304 A Flag       ", 0, 15, 0, NULL, 0, 0);
+		wmenuitem (15,  1, " \303\304 B Flag       ", 0, 16, 0, NULL, 0, 0);
+		wmenuitem (16,  1, " \303\304 C Flag       ", 0, 17, 0, NULL, 0, 0);
+		wmenuitem (17,  1, " \300\304 D Flag       ", 0, 18, 0, NULL, 0, 0);
 		wmenuitem (12, 33, " TIC aka         ", 0, 19, 0, NULL, 0, 0);
 		wmenuitem (13, 33, " TIC Level       ", 0, 20, 0, NULL, 0, 0);
-		wmenuitem (14, 33, " ÃÄ A Flag       ", 0, 21, 0, NULL, 0, 0);
-		wmenuitem (15, 33, " ÃÄ B Flag       ", 0, 22, 0, NULL, 0, 0);
-		wmenuitem (16, 33, " ÃÄ C Flag       ", 0, 23, 0, NULL, 0, 0);
-		wmenuitem (17, 33, " ÀÄ D Flag       ", 0, 24, 0, NULL, 0, 0);
+		wmenuitem (14, 33, " \303\304 A Flag       ", 0, 21, 0, NULL, 0, 0);
+		wmenuitem (15, 33, " \303\304 B Flag       ", 0, 22, 0, NULL, 0, 0);
+		wmenuitem (16, 33, " \303\304 C Flag       ", 0, 23, 0, NULL, 0, 0);
+		wmenuitem (17, 33, " \300\304 D Flag       ", 0, 24, 0, NULL, 0, 0);
 		wmenuend (i, M_OMNI|M_SAVE, 0, 0, LGREY|_BLACK, LGREY|_BLACK, LGREY|_BLACK, BLUE|_LGREY);
 
 		sprintf (string, "%u:%u/%u.%u", ni.zone, ni.net, ni.node, ni.point);
@@ -1306,8 +1306,8 @@ NODEINFO *oni;
 
    gotoxy_ (24, 1);
    clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "-Move bar  ENTER-Select");
-   prints (24, 1, YELLOW|_BLACK, "");
+   prints (24, 1, LGREY|_BLACK, "\030\031-Move bar  ENTER-Select");
+   prints (24, 1, YELLOW|_BLACK, "\030\031");
    prints (24, 14, YELLOW|_BLACK, "ENTER");
 
    x = wpickstr (10, 7, 19, 62, 5, LGREY|_BLACK, CYAN|_BLACK, BLUE|_LGREY, array, x, NULL);
@@ -1377,7 +1377,7 @@ void manager_translation ()
       wprints ( 2, 10, LGREY|_BLACK," Prefix       ");
       wprints ( 3, 10, LGREY|_BLACK," Translate to ");
 
-      wprints ( 6, 2, LGREY|_BLACK,"³ S M T W T F S ³Start³ End ³ Cost / Seconds ³ Cost / Seconds ³");
+      wprints ( 6, 2, LGREY|_BLACK,"\263 S M T W T F S \263Start\263 End \263 Cost / Seconds \263 Cost / Seconds \263");
 
       if (readed) {
          wprints (1, 25, CYAN|_BLACK, ai.location);
@@ -1387,7 +1387,7 @@ void manager_translation ()
             if (!ai.cost[i].start && !ai.cost[i].stop)
                continue;
 
-            sprintf (string, "³               ³%2d:%02d³%2d:%02d³ %4d / %3d.%d   ³ %4d / %3d.%d   ³",
+            sprintf (string, "\263               \263%2d:%02d\263%2d:%02d\263 %4d / %3d.%d   \263 %4d / %3d.%d   \263",
                      ai.cost[i].start / 60, ai.cost[i].start % 60,
                      ai.cost[i].stop / 60, ai.cost[i].stop % 60,
                      ai.cost[i].cost_first, ai.cost[i].time_first / 10, ai.cost[i].time_first % 10,
@@ -1748,7 +1748,7 @@ continue_editing:
       wprints ( 1, 10, LGREY|_BLACK," Location     ");
       wprints ( 2, 10, LGREY|_BLACK," Prefix       ");
       wprints ( 3, 10, LGREY|_BLACK," Translate to ");
-      wprints ( 6, 2, LGREY|_BLACK,"³ S M T W T F S ³Start³ End ³ Cost / Seconds ³ Cost / Seconds ³");
+      wprints ( 6, 2, LGREY|_BLACK,"\263 S M T W T F S \263Start\263 End \263 Cost / Seconds \263 Cost / Seconds \263");
 
       wmenubegc ();
       wmenuitem ( 1, 10, " Location     ", 0, 1, 0, NULL, 0, 0);
@@ -1761,9 +1761,9 @@ continue_editing:
 
       for (x = 0; x < 9; x++) {
          if (!ai.cost[x].days)
-            strcpy (packs[x],  "               ³     ³     ³                ³                ");
+            strcpy (packs[x],  "               \263     \263     \263                \263                ");
          else {
-            sprintf (packs[x], "               ³%2d:%02d³%2d:%02d³ %4d / %3d.%d   ³ %4d / %3d.%d   ",
+            sprintf (packs[x], "               \263%2d:%02d\263%2d:%02d\263 %4d / %3d.%d   \263 %4d / %3d.%d   ",
                      ai.cost[x].start / 60, ai.cost[x].start % 60,
                      ai.cost[x].stop / 60, ai.cost[x].stop % 60,
                      ai.cost[x].cost_first, ai.cost[x].time_first / 10, ai.cost[x].time_first % 10,
@@ -1838,9 +1838,9 @@ continue_editing:
          case 11:
          case 12:
             if (!ai.cost[i-4].days)
-               strcpy (packs[i-4],  "               ³     ³     ³                ³                ");
+               strcpy (packs[i-4],  "               \263     \263     \263                \263                ");
              else {
-               sprintf (packs[i-4], "               ³%2d:%02d³%2d:%02d³ %4d / %3d.%d   ³ %4d / %3d.%d   ",
+               sprintf (packs[i-4], "               \263%2d:%02d\263%2d:%02d\263 %4d / %3d.%d   \263 %4d / %3d.%d   ",
                         ai.cost[i-4].start / 60, ai.cost[i-4].start % 60,
                         ai.cost[i-4].stop / 60, ai.cost[i-4].stop % 60,
                         ai.cost[i-4].cost_first, ai.cost[i-4].time_first / 10, ai.cost[i-4].time_first % 10,
@@ -2001,8 +2001,8 @@ ACCOUNT *ai;
 
    gotoxy_ (24, 1);
    clreol_ ();
-   prints (24, 1, LGREY|_BLACK, "-Move bar  ENTER-Select");
-   prints (24, 1, YELLOW|_BLACK, "");
+   prints (24, 1, LGREY|_BLACK, "\030\031-Move bar  ENTER-Select");
+   prints (24, 1, YELLOW|_BLACK, "\030\031");
    prints (24, 14, YELLOW|_BLACK, "ENTER");
 
    i = (int)(filelength (fd) / sizeof (ACCOUNT));
