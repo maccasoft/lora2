@@ -1,4 +1,3 @@
-
 // LoraBBS Version 2.41 Free Edition
 // Copyright (C) 1987-98 Marco Maccaferri
 //
@@ -38,18 +37,18 @@
 extern int freceived;
 extern long tot_rcv;
 
-int is_mailpkt (char *p, int n);
+int is_mailpkt(char * p, int n);
 
 /*--------------------------------------------------------------------------*/
 /* Local routines                                                           */
-static int RZ_ReceiveData (byte *, int);
-static int RZ_32ReceiveData (byte *, int);
-static int RZ_InitReceiver (void);
-static int RZ_ReceiveBatch (FILE *);
-static int RZ_ReceiveFile (FILE *);
-static int RZ_GetHeader (void);
-static int RZ_SaveToDisk (long *);
-static void RZ_AckBibi (void);
+static int RZ_ReceiveData(byte *, int);
+static int RZ_32ReceiveData(byte *, int);
+static int RZ_InitReceiver(void);
+static int RZ_ReceiveBatch(FILE *);
+static int RZ_ReceiveFile(FILE *);
+static int RZ_GetHeader(void);
+static int RZ_SaveToDisk(long *);
+static void RZ_AckBibi(void);
 
 /*--------------------------------------------------------------------------*/
 /* Private declarations                                                     */
@@ -68,7 +67,7 @@ static int zreceive_handle = -1;
 
 static char Attn[ZATTNLEN + 1];                  /* String rx sends to tx on
                                                   * err            */
-static FILE *Outfile;                            /* Handle of file being
+static FILE * Outfile;                            /* Handle of file being
                                                   * received           */
 static int   Tryzhdrtype;                        /* Hdr type to send for Last
                                                   * rx close      */
@@ -84,7 +83,7 @@ static byte Upload_path[PATHLEN];                /* Dest. path of file being
                                                   * received   */
 static long Filestart;                           /* File offset we started
                                                   * this xfer from   */
-extern long filelength ();                       /* returns length of file
+extern long filelength();                       /* returns length of file
                                                   * ref'd in stream  */
 
 /*--------------------------------------------------------------------------*/
@@ -93,84 +92,88 @@ extern long filelength ();                       /* returns length of file
 /* returns TRUE (1) for good xfer, FALSE (0) for bad                        */
 /* can be called from f_upload or to get mail from a WaZOO Opus             */
 /*--------------------------------------------------------------------------*/
-int get_Zmodem (rcvpath, xferinfo)
-char *rcvpath;
-FILE *xferinfo;
+int get_Zmodem(rcvpath, xferinfo)
+char * rcvpath;
+FILE * xferinfo;
 {
-   byte namebuf[PATHLEN];
-   int i;
-   byte *p;
-   char *HoldName;
-   long t, timerset ();
+    byte namebuf[PATHLEN];
+    int i;
+    byte * p;
+    char * HoldName;
+    long t, timerset();
 
 #ifdef DEBUG
-   show_debug_name ("get_Zmodem");
+    show_debug_name("get_Zmodem");
 #endif
 
-   filetime = 0;
-   zreceive_handle = -1;
+    filetime = 0;
+    zreceive_handle = -1;
 
-   _BRK_DISABLE ();
-   IN_XON_ENABLE ();
+    _BRK_DISABLE();
+    IN_XON_ENABLE();
 
-/*   Secbuf = NULL;*/
-   Outfile = NULL;
-   z_size = 0;
+    /*   Secbuf = NULL;*/
+    Outfile = NULL;
+    z_size = 0;
 
 
-   Rxtimeout = 100;
-   Tryzhdrtype = ZRINIT;
+    Rxtimeout = 100;
+    Tryzhdrtype = ZRINIT;
 
-   strcpy (namebuf, rcvpath);
-   Filename = namebuf;
+    strcpy(namebuf, rcvpath);
+    Filename = namebuf;
 
-   strcpy (Upload_path, rcvpath);
-   p = Upload_path + strlen (Upload_path) - 1;
-   while (p >= Upload_path && *p != '\\')
-      --p;
-   *(++p) = '\0';
+    strcpy(Upload_path, rcvpath);
+    p = Upload_path + strlen(Upload_path) - 1;
+    while (p >= Upload_path && *p != '\\') {
+        --p;
+    }
+    *(++p) = '\0';
 
-   HoldName = HoldAreaNameMunge (config->alias[0].zone);
-   sprintf (Abortlog_name, "%sRECOVERY.Z\0", HoldName);
+    HoldName = HoldAreaNameMunge(config->alias[0].zone);
+    sprintf(Abortlog_name, "%sRECOVERY.Z\0", HoldName);
 
-   DiskAvail = zfree (Upload_path);
+    DiskAvail = zfree(Upload_path);
 
-   if (((i = RZ_InitReceiver ()) == ZCOMPL) ||
-       ((i == ZFILE) && ((RZ_ReceiveBatch (xferinfo)) == OK)))
-      {
-      XON_DISABLE ();
-      XON_ENABLE ();                             /* Make sure xmitter is
+    if (((i = RZ_InitReceiver()) == ZCOMPL) ||
+            ((i == ZFILE) && ((RZ_ReceiveBatch(xferinfo)) == OK)))
+    {
+        XON_DISABLE();
+        XON_ENABLE();                             /* Make sure xmitter is
                                                   * unstuck */
-      return 1;
-      }
+        return 1;
+    }
 
-   CLEAR_OUTBOUND ();
-   XON_DISABLE ();                               /* Make sure xmitter is
+    CLEAR_OUTBOUND();
+    XON_DISABLE();                               /* Make sure xmitter is
                                                   * unstuck */
-   send_can ();                                  /* transmit at least 10 cans    */
-   t = timerset (200);                           /* wait no more than 2
+    send_can();                                   /* transmit at least 10 cans    */
+    t = timerset(200);                           /* wait no more than 2
                                                   * seconds  */
-   while (!timeup (t) && !OUT_EMPTY () && CARRIER)
-      time_release ();
-                                                  /* waiting  */
-   XON_ENABLE ();                                /* Turn XON/XOFF back on...     */
-/*
-   if (Secbuf)
-      free (Secbuf);
-*/
-   if (Outfile)
-      fclose (Outfile);
+    while (!timeup(t) && !OUT_EMPTY() && CARRIER) {
+        time_release();
+    }
+    /* waiting  */
+    XON_ENABLE();                                 /* Turn XON/XOFF back on...     */
+    /*
+       if (Secbuf)
+          free (Secbuf);
+    */
+    if (Outfile) {
+        fclose(Outfile);
+    }
 
-   if ((caller || emulator) && zreceive_handle != -1) {
-      wactiv (zreceive_handle);
-      wclose ();
-      zreceive_handle = -1;
-   }
-   else if (!caller)
-      wfill (9, 0, 10, 77, ' ', WHITE|_BLACK);
+    if ((caller || emulator) && zreceive_handle != -1) {
+        wactiv(zreceive_handle);
+        wclose();
+        zreceive_handle = -1;
+    }
+    else if (!caller) {
+        wfill(9, 0, 10, 77, ' ', WHITE | _BLACK);
+    }
 
 
-   return 0;
+    return 0;
 }                                                /* get_Zmodem */
 
 /*--------------------------------------------------------------------------*/
@@ -178,100 +181,103 @@ FILE *xferinfo;
 /* Receive array buf of max length with ending ZDLE sequence                */
 /* and CRC.  Returns the ending character or error code.                    */
 /*--------------------------------------------------------------------------*/
-static int RZ_ReceiveData (buf, length)
-register byte *buf;
+static int RZ_ReceiveData(buf, length)
+register byte * buf;
 register int length;
 {
-   register short c;
-   register word crc;
-   char *endpos;
-   int d;
+    register short c;
+    register word crc;
+    char * endpos;
+    int d;
 
 
 #ifdef DEBUG
-   show_debug_name ("RZ_ReceiveData");
+    show_debug_name("RZ_ReceiveData");
 #endif
 
-   if (Rxframeind == ZBIN32)
-      return RZ_32ReceiveData (buf, length);
+    if (Rxframeind == ZBIN32) {
+        return RZ_32ReceiveData(buf, length);
+    }
 
-   crc = RxCount = 0;
-   buf[0] = buf[1] = 0;
-   endpos = buf + length;
+    crc = RxCount = 0;
+    buf[0] = buf[1] = 0;
+    endpos = buf + length;
 
-   while (buf <= endpos)
-      {
-      if ((c = Z_GetZDL ()) & ~0xFF)
-         {
-   CRCfoo:
-         switch (c)
+    while (buf <= endpos)
+    {
+        if ((c = Z_GetZDL()) & ~0xFF)
+        {
+CRCfoo:
+            switch (c)
             {
-            case GOTCRCE:
-            case GOTCRCG:
-            case GOTCRCQ:
-            case GOTCRCW:
-               /*-----------------------------------*/
-               /* C R C s                           */
-               /*-----------------------------------*/
-               crc = Z_UpdateCRC (((d = c) & 0xFF), crc);
-               if ((c = Z_GetZDL ()) & ~0xFF)
-                  goto CRCfoo;
+                case GOTCRCE:
+                case GOTCRCG:
+                case GOTCRCQ:
+                case GOTCRCW:
+                    /*-----------------------------------*/
+                    /* C R C s                           */
+                    /*-----------------------------------*/
+                    crc = Z_UpdateCRC(((d = c) & 0xFF), crc);
+                    if ((c = Z_GetZDL()) & ~0xFF) {
+                        goto CRCfoo;
+                    }
 
-               crc = Z_UpdateCRC (c, crc);
-               if ((c = Z_GetZDL ()) & ~0xFF)
-                  goto CRCfoo;
+                    crc = Z_UpdateCRC(c, crc);
+                    if ((c = Z_GetZDL()) & ~0xFF) {
+                        goto CRCfoo;
+                    }
 
-               crc = Z_UpdateCRC (c, crc);
-               if (crc & 0xFFFF)
-                  {
-                  z_message (msgtxt[M_CRC_MSG]);
-                  return ERROR;
-                  }
+                    crc = Z_UpdateCRC(c, crc);
+                    if (crc & 0xFFFF)
+                    {
+                        z_message(msgtxt[M_CRC_MSG]);
+                        return ERROR;
+                    }
 
-               RxCount = length - (int) (endpos - buf);
-               return d;
+                    RxCount = length - (int)(endpos - buf);
+                    return d;
 
-            case GOTCAN:
-               /*-----------------------------------*/
-               /* Cancel                            */
-               /*-----------------------------------*/
-               status_line (msgtxt[M_CAN_MSG]);
-               return ZCAN;
+                case GOTCAN:
+                    /*-----------------------------------*/
+                    /* Cancel                            */
+                    /*-----------------------------------*/
+                    status_line(msgtxt[M_CAN_MSG]);
+                    return ZCAN;
 
-            case TIMEOUT:
-               /*-----------------------------------*/
-               /* Timeout                           */
-               /*-----------------------------------*/
-               z_message (msgtxt[M_TIMEOUT]);
-               return c;
+                case TIMEOUT:
+                    /*-----------------------------------*/
+                    /* Timeout                           */
+                    /*-----------------------------------*/
+                    z_message(msgtxt[M_TIMEOUT]);
+                    return c;
 
-            case RCDO:
-               /*-----------------------------------*/
-               /* No carrier                        */
-               /*-----------------------------------*/
-               status_line (msgtxt[M_NO_CARRIER]);
-               CLEAR_INBOUND ();
-               something_wrong=1;
-               return c;
+                case RCDO:
+                    /*-----------------------------------*/
+                    /* No carrier                        */
+                    /*-----------------------------------*/
+                    status_line(msgtxt[M_NO_CARRIER]);
+                    CLEAR_INBOUND();
+                    something_wrong = 1;
+                    return c;
 
-            default:
-               /*-----------------------------------*/
-               /* Something bizarre                 */
-               /*-----------------------------------*/
-               z_message (msgtxt[M_DEBRIS]);
-               something_wrong=1;
-               CLEAR_INBOUND ();
-               return c;
+                default:
+                    /*-----------------------------------*/
+                    /* Something bizarre                 */
+                    /*-----------------------------------*/
+                    z_message(msgtxt[M_DEBRIS]);
+                    something_wrong = 1;
+                    CLEAR_INBOUND();
+                    return c;
             }                                    /* switch */
-         }                                       /* if */
+        }                                       /* if */
 
-      *buf++ = (unsigned char) c;
-      crc = Z_UpdateCRC (c, crc);
-      }                                          /* while(1) */
+        *buf++ = (unsigned char) c;
+        crc = Z_UpdateCRC(c, crc);
+    }                                          /* while(1) */
 
-   z_message (msgtxt[M_LONG_PACKET]);
-   something_wrong=1;
-   return ERROR;
+    z_message(msgtxt[M_LONG_PACKET]);
+    something_wrong = 1;
+    return ERROR;
 }                                                /* RZ_ReceiveData */
 
 /*--------------------------------------------------------------------------*/
@@ -279,109 +285,113 @@ register int length;
 /* Receive array buf of max length with ending ZDLE sequence                */
 /* and CRC.  Returns the ending character or error code.                    */
 /*--------------------------------------------------------------------------*/
-static int RZ_32ReceiveData (buf, length)
-register byte *buf;
+static int RZ_32ReceiveData(buf, length)
+register byte * buf;
 register int length;
 {
-   register short c;
-   unsigned long crc;
-   char *endpos;
-   int d;
+    register short c;
+    unsigned long crc;
+    char * endpos;
+    int d;
 
 
 #ifdef DEBUG
-   show_debug_name ("RZ_32ReceiveData");
+    show_debug_name("RZ_32ReceiveData");
 #endif
 
-   crc = 0xFFFFFFFFL;
-   RxCount = 0;
-   buf[0] = buf[1] = 0;
-   endpos = buf + length;
+    crc = 0xFFFFFFFFL;
+    RxCount = 0;
+    buf[0] = buf[1] = 0;
+    endpos = buf + length;
 
-   while (buf <= endpos)
-      {
-      if ((c = Z_GetZDL ()) & ~0xFF)
-         {
-   CRCfoo:
-         switch (c)
+    while (buf <= endpos)
+    {
+        if ((c = Z_GetZDL()) & ~0xFF)
+        {
+CRCfoo:
+            switch (c)
             {
-            case GOTCRCE:
-            case GOTCRCG:
-            case GOTCRCQ:
-            case GOTCRCW:
-               /*-----------------------------------*/
-               /* C R C s                           */
-               /*-----------------------------------*/
-               d = c;
-               c &= 0377;
-               crc = Z_32UpdateCRC (c, crc);
-               if ((c = Z_GetZDL ()) & ~0xFF)
-                  goto CRCfoo;
+                case GOTCRCE:
+                case GOTCRCG:
+                case GOTCRCQ:
+                case GOTCRCW:
+                    /*-----------------------------------*/
+                    /* C R C s                           */
+                    /*-----------------------------------*/
+                    d = c;
+                    c &= 0377;
+                    crc = Z_32UpdateCRC(c, crc);
+                    if ((c = Z_GetZDL()) & ~0xFF) {
+                        goto CRCfoo;
+                    }
 
-               crc = Z_32UpdateCRC (c, crc);
-               if ((c = Z_GetZDL ()) & ~0xFF)
-                  goto CRCfoo;
+                    crc = Z_32UpdateCRC(c, crc);
+                    if ((c = Z_GetZDL()) & ~0xFF) {
+                        goto CRCfoo;
+                    }
 
-               crc = Z_32UpdateCRC (c, crc);
-               if ((c = Z_GetZDL ()) & ~0xFF)
-                  goto CRCfoo;
+                    crc = Z_32UpdateCRC(c, crc);
+                    if ((c = Z_GetZDL()) & ~0xFF) {
+                        goto CRCfoo;
+                    }
 
-               crc = Z_32UpdateCRC (c, crc);
-               if ((c = Z_GetZDL ()) & ~0xFF)
-                  goto CRCfoo;
+                    crc = Z_32UpdateCRC(c, crc);
+                    if ((c = Z_GetZDL()) & ~0xFF) {
+                        goto CRCfoo;
+                    }
 
-               crc = Z_32UpdateCRC (c, crc);
-               if (crc != 0xDEBB20E3L)
-                  {
-                  z_message (msgtxt[M_CRC_MSG]);
-                  return ERROR;
-                  }
+                    crc = Z_32UpdateCRC(c, crc);
+                    if (crc != 0xDEBB20E3L)
+                    {
+                        z_message(msgtxt[M_CRC_MSG]);
+                        return ERROR;
+                    }
 
-               RxCount = length - (int) (endpos - buf);
-               return d;
+                    RxCount = length - (int)(endpos - buf);
+                    return d;
 
-            case GOTCAN:
-               /*-----------------------------------*/
-               /* Cancel                            */
-               /*-----------------------------------*/
-               status_line (msgtxt[M_CAN_MSG]);
-               return ZCAN;
+                case GOTCAN:
+                    /*-----------------------------------*/
+                    /* Cancel                            */
+                    /*-----------------------------------*/
+                    status_line(msgtxt[M_CAN_MSG]);
+                    return ZCAN;
 
-            case TIMEOUT:
-               /*-----------------------------------*/
-               /* Timeout                           */
-               /*-----------------------------------*/
-               z_message (msgtxt[M_TIMEOUT]);
-               something_wrong=1;
-               return c;
+                case TIMEOUT:
+                    /*-----------------------------------*/
+                    /* Timeout                           */
+                    /*-----------------------------------*/
+                    z_message(msgtxt[M_TIMEOUT]);
+                    something_wrong = 1;
+                    return c;
 
-            case RCDO:
-               /*-----------------------------------*/
-               /* No carrier                        */
-               /*-----------------------------------*/
-               status_line (msgtxt[M_NO_CARRIER]);
-               something_wrong=1;
-               CLEAR_INBOUND ();
-               return c;
+                case RCDO:
+                    /*-----------------------------------*/
+                    /* No carrier                        */
+                    /*-----------------------------------*/
+                    status_line(msgtxt[M_NO_CARRIER]);
+                    something_wrong = 1;
+                    CLEAR_INBOUND();
+                    return c;
 
-            default:
-               /*-----------------------------------*/
-               /* Something bizarre                 */
-               /*-----------------------------------*/
-               z_message (msgtxt[M_DEBRIS]);
-               something_wrong=1;
-               CLEAR_INBOUND ();
-               return c;
+                default:
+                    /*-----------------------------------*/
+                    /* Something bizarre                 */
+                    /*-----------------------------------*/
+                    z_message(msgtxt[M_DEBRIS]);
+                    something_wrong = 1;
+                    CLEAR_INBOUND();
+                    return c;
             }                                    /* switch */
-         }                                       /* if */
+        }                                       /* if */
 
-      *buf++ = (unsigned char) c;
-      crc = Z_32UpdateCRC (c, crc);
-      }                                          /* while(1) */
+        *buf++ = (unsigned char) c;
+        crc = Z_32UpdateCRC(c, crc);
+    }                                          /* while(1) */
 
-   z_message (msgtxt[M_LONG_PACKET]);
-   something_wrong=1;
-   return ERROR;
+    z_message(msgtxt[M_LONG_PACKET]);
+    something_wrong = 1;
+    return ERROR;
 }                                                /* RZ_ReceiveData */
 
 /*--------------------------------------------------------------------------*/
@@ -394,619 +404,641 @@ register int length;
 /*    ZCOMPL ... transaction finished                                       */
 /*    ERROR .... any other condition                                        */
 /*--------------------------------------------------------------------------*/
-static int RZ_InitReceiver ()
+static int RZ_InitReceiver()
 {
-   register int n;
-   int errors = 0;
-   char *sptr = NULL;
+    register int n;
+    int errors = 0;
+    char * sptr = NULL;
 
 
 #ifdef DEBUG
-   show_debug_name ("RZ_InitReceiver");
+    show_debug_name("RZ_InitReceiver");
 #endif
 
-   for (n = 12; --n >= 0;)
-      {
-      /*--------------------------------------------------------------*/
-      /* Set buffer length (0=unlimited, don't wait).                 */
-      /* Also set capability flags                                    */
-      /*--------------------------------------------------------------*/
-      Z_PutLongIntoHeader (0L);
-      Txhdr[ZF0] = CANFC32 | CANFDX | CANOVIO;
-      Z_SendHexHeader (Tryzhdrtype, Txhdr);
-      if (Tryzhdrtype == ZSKIP)
-         Tryzhdrtype = ZRINIT;
+    for (n = 12; --n >= 0;)
+    {
+        /*--------------------------------------------------------------*/
+        /* Set buffer length (0=unlimited, don't wait).                 */
+        /* Also set capability flags                                    */
+        /*--------------------------------------------------------------*/
+        Z_PutLongIntoHeader(0L);
+        Txhdr[ZF0] = CANFC32 | CANFDX | CANOVIO;
+        Z_SendHexHeader(Tryzhdrtype, Txhdr);
+        if (Tryzhdrtype == ZSKIP) {
+            Tryzhdrtype = ZRINIT;
+        }
 
 AGAIN:
 
-      switch (Z_GetHeader (Rxhdr))
-         {
-         case ZFILE:
-            Zconv = Rxhdr[ZF0];
-            Tryzhdrtype = ZRINIT;
-            if (RZ_ReceiveData (Secbuf, WAZOOMAX) == GOTCRCW)
-               return ZFILE;
-            Z_SendHexHeader (ZNAK, Txhdr);
-            if (--n < 0)
-               {
-               sptr = "ZFILE";
-               goto Err;
-               }
-            goto AGAIN;
+        switch (Z_GetHeader(Rxhdr))
+        {
+            case ZFILE:
+                Zconv = Rxhdr[ZF0];
+                Tryzhdrtype = ZRINIT;
+                if (RZ_ReceiveData(Secbuf, WAZOOMAX) == GOTCRCW) {
+                    return ZFILE;
+                }
+                Z_SendHexHeader(ZNAK, Txhdr);
+                if (--n < 0)
+                {
+                    sptr = "ZFILE";
+                    goto Err;
+                }
+                goto AGAIN;
 
-         case ZSINIT:
-            if (RZ_ReceiveData (Attn, ZATTNLEN) == GOTCRCW)
-               {
-               Z_PutLongIntoHeader (1L);
-               Z_SendHexHeader (ZACK, Txhdr);
-               }
-            else Z_SendHexHeader (ZNAK, Txhdr);
-            if (--n < 0)
-               {
-               sptr = "ZSINIT";
-               goto Err;
-               }
-            goto AGAIN;
+            case ZSINIT:
+                if (RZ_ReceiveData(Attn, ZATTNLEN) == GOTCRCW)
+                {
+                    Z_PutLongIntoHeader(1L);
+                    Z_SendHexHeader(ZACK, Txhdr);
+                }
+                else {
+                    Z_SendHexHeader(ZNAK, Txhdr);
+                }
+                if (--n < 0)
+                {
+                    sptr = "ZSINIT";
+                    goto Err;
+                }
+                goto AGAIN;
 
-         case ZFREECNT:
-            Z_PutLongIntoHeader (DiskAvail);
-            Z_SendHexHeader (ZACK, Txhdr);
-            goto AGAIN;
+            case ZFREECNT:
+                Z_PutLongIntoHeader(DiskAvail);
+                Z_SendHexHeader(ZACK, Txhdr);
+                goto AGAIN;
 
-         case ZCOMMAND:
-            /*-----------------------------------------*/
-            /* Paranoia is good for you...             */
-            /* Ignore command from remote, but lie and */
-            /* say we did the command ok.              */
-            /*-----------------------------------------*/
-            if (RZ_ReceiveData (Secbuf, WAZOOMAX) == GOTCRCW)
-               {
-               status_line (msgtxt[M_Z_IGNORING], Secbuf);
-               Z_PutLongIntoHeader (0L);
-               do
-                  {
-                  Z_SendHexHeader (ZCOMPL, Txhdr);
-                  }
-               while (++errors < 10 && Z_GetHeader (Rxhdr) != ZFIN);
-               RZ_AckBibi ();
-               return ZCOMPL;
-               }
-            else Z_SendHexHeader (ZNAK, Txhdr);
-            if (--n < 0)
-               {
-               sptr = "CMD";
-               goto Err;
-               }
-            goto AGAIN;
+            case ZCOMMAND:
+                /*-----------------------------------------*/
+                /* Paranoia is good for you...             */
+                /* Ignore command from remote, but lie and */
+                /* say we did the command ok.              */
+                /*-----------------------------------------*/
+                if (RZ_ReceiveData(Secbuf, WAZOOMAX) == GOTCRCW)
+                {
+                    status_line(msgtxt[M_Z_IGNORING], Secbuf);
+                    Z_PutLongIntoHeader(0L);
+                    do
+                    {
+                        Z_SendHexHeader(ZCOMPL, Txhdr);
+                    } while (++errors < 10 && Z_GetHeader(Rxhdr) != ZFIN);
+                    RZ_AckBibi();
+                    return ZCOMPL;
+                }
+                else {
+                    Z_SendHexHeader(ZNAK, Txhdr);
+                }
+                if (--n < 0)
+                {
+                    sptr = "CMD";
+                    goto Err;
+                }
+                goto AGAIN;
 
-         case ZCOMPL:
-            if (--n < 0)
-               {
-               sptr = "COMPL";
-               goto Err;
-               }
-            goto AGAIN;
+            case ZCOMPL:
+                if (--n < 0)
+                {
+                    sptr = "COMPL";
+                    goto Err;
+                }
+                goto AGAIN;
 
-         case ZFIN:
-            RZ_AckBibi ();
-            return ZCOMPL;
+            case ZFIN:
+                RZ_AckBibi();
+                return ZCOMPL;
 
-         case ZCAN:
-            sptr = msgtxt[M_CAN_MSG];
-            goto Err;
+            case ZCAN:
+                sptr = msgtxt[M_CAN_MSG];
+                goto Err;
 
-         case RCDO:
-            sptr = &msgtxt[M_NO_CARRIER][1];
-            something_wrong=1;
-            CLEAR_INBOUND ();
-            goto Err;
-         }                                       /* switch */
-      }                                          /* for */
+            case RCDO:
+                sptr = &msgtxt[M_NO_CARRIER][1];
+                something_wrong = 1;
+                CLEAR_INBOUND();
+                goto Err;
+        }                                       /* switch */
+    }                                          /* for */
 
-   sptr = msgtxt[M_TIMEOUT];
+    sptr = msgtxt[M_TIMEOUT];
 
 Err:
-   something_wrong=1;
-   if (sptr != NULL)
-      sprintf (e_input, msgtxt[M_Z_INITRECV], sptr);
-   status_line (e_input);
+    something_wrong = 1;
+    if (sptr != NULL) {
+        sprintf(e_input, msgtxt[M_Z_INITRECV], sptr);
+    }
+    status_line(e_input);
 
-   return ERROR;
+    return ERROR;
 }                                                /* RZ_InitReceiver */
 
 /*--------------------------------------------------------------------------*/
 /* RZFILES                                                                  */
 /* Receive a batch of files using ZMODEM protocol                           */
 /*--------------------------------------------------------------------------*/
-static int RZ_ReceiveBatch (xferinfo)
-FILE *xferinfo;
+static int RZ_ReceiveBatch(xferinfo)
+FILE * xferinfo;
 {
-   register int c;
-   byte namebuf[PATHLEN];
+    register int c;
+    byte namebuf[PATHLEN];
 
 
 #ifdef DEBUG
-   show_debug_name ("RZ_ReceiveBatch");
+    show_debug_name("RZ_ReceiveBatch");
 #endif
 
-   while (1)
-      {
-      switch (c = RZ_ReceiveFile (xferinfo))
-         {
-         case ZEOF:
-            if (Resume_WaZOO)
-               {
-               remove_abort (Abortlog_name, Resume_name);
-               strcpy (namebuf, Upload_path);
-               strcat (namebuf, Resume_name);
-               unique_name (namebuf);
-               rename (Filename, namebuf);
-               }
+    while (1)
+    {
+        switch (c = RZ_ReceiveFile(xferinfo))
+        {
+            case ZEOF:
+                if (Resume_WaZOO)
+                {
+                    remove_abort(Abortlog_name, Resume_name);
+                    strcpy(namebuf, Upload_path);
+                    strcat(namebuf, Resume_name);
+                    unique_name(namebuf);
+                    rename(Filename, namebuf);
+                }
             /* fallthrough */
-         case ZSKIP:
-            switch (RZ_InitReceiver ())
-               {
-               case ZCOMPL:
-                  return OK;
-               default:
-                  something_wrong=1;
-                  return ERROR;
-               case ZFILE:
-                  break;
-               }                                 /* switch */
-            break;
+            case ZSKIP:
+                switch (RZ_InitReceiver())
+                {
+                    case ZCOMPL:
+                        return OK;
+                    default:
+                        something_wrong = 1;
+                        return ERROR;
+                    case ZFILE:
+                        break;
+                }                                 /* switch */
+                break;
 
-         default:
-            if (Outfile != NULL)
-               fclose (Outfile);
-            Outfile = NULL;
-            if (remote_capabilities) {
-               if (!Resume_WaZOO)
-                  add_abort (Abortlog_name, Resume_name, Filename, Upload_path, Resume_info);
-            }
-            else
-               unlink (Filename);
-            return c;
-         }                                       /* switch */
-      }                                          /* while */
+            default:
+                if (Outfile != NULL) {
+                    fclose(Outfile);
+                }
+                Outfile = NULL;
+                if (remote_capabilities) {
+                    if (!Resume_WaZOO) {
+                        add_abort(Abortlog_name, Resume_name, Filename, Upload_path, Resume_info);
+                    }
+                }
+                else {
+                    unlink(Filename);
+                }
+                return c;
+        }                                       /* switch */
+    }                                          /* while */
 }                                                /* RZ_ReceiveBatch */
 
 /*--------------------------------------------------------------------------*/
 /* RZ RECEIVE FILE                                                          */
 /* Receive one file; assumes file name frame is preloaded in Secbuf         */
 /*--------------------------------------------------------------------------*/
-static int RZ_ReceiveFile (xferinfo)
-FILE *xferinfo;
+static int RZ_ReceiveFile(xferinfo)
+FILE * xferinfo;
 {
-   register int c;
-   int n;
-   long rxbytes;
-   char *sptr = NULL;
-   struct utimbuf utimes;
-   char j[50];
+    register int c;
+    int n;
+    long rxbytes;
+    char * sptr = NULL;
+    struct utimbuf utimes;
+    char j[50];
 
 
 #ifdef DEBUG
-   show_debug_name ("RZ_ReceiveFile");
+    show_debug_name("RZ_ReceiveFile");
 #endif
 
-   EOFseen = FALSE;
-   c = RZ_GetHeader ();
-   if (c == ERROR || c == ZSKIP) {
-      if ((caller || emulator) && zreceive_handle != -1) {
-         wactiv (zreceive_handle);
-         wclose ();
-         zreceive_handle = -1;
-      }
-      else if (!caller)
-         wfill (9, 0, 10, 77, ' ', WHITE|_BLACK);
+    EOFseen = FALSE;
+    c = RZ_GetHeader();
+    if (c == ERROR || c == ZSKIP) {
+        if ((caller || emulator) && zreceive_handle != -1) {
+            wactiv(zreceive_handle);
+            wclose();
+            zreceive_handle = -1;
+        }
+        else if (!caller) {
+            wfill(9, 0, 10, 77, ' ', WHITE | _BLACK);
+        }
 
-      return (Tryzhdrtype = ZSKIP);
-   }
+        return (Tryzhdrtype = ZSKIP);
+    }
 
-   n = 10;
-   rxbytes = Filestart;
+    n = 10;
+    rxbytes = Filestart;
 
-   while (1)
-      {
-      Z_PutLongIntoHeader (rxbytes);
-      Z_SendHexHeader (ZRPOS, Txhdr);
+    while (1)
+    {
+        Z_PutLongIntoHeader(rxbytes);
+        Z_SendHexHeader(ZRPOS, Txhdr);
 NxtHdr:
-      switch (c = Z_GetHeader (Rxhdr))
-         {
-         case ZDATA:
-            /*-----------------------------------------*/
-            /* Data Packet                             */
-            /*-----------------------------------------*/
-            if (Rxpos != rxbytes)
-               {
-               if (--n < 0)
-                  {
-                  sptr = msgtxt[M_FUBAR_MSG];
-                  goto Err;
-                  }
-               sprintf (j, "%s; %ld/%ld", msgtxt[M_BAD_POS], rxbytes, Rxpos);
-               z_message (j);
-               Z_PutString (Attn);
-               continue;
-               }
-      MoreData:
-            switch (c = RZ_ReceiveData (Secbuf, WAZOOMAX))
-               {
-               case ZCAN:
-                  sptr = msgtxt[M_CAN_MSG];
-                  goto Err;
+        switch (c = Z_GetHeader(Rxhdr))
+        {
+            case ZDATA:
+                /*-----------------------------------------*/
+                /* Data Packet                             */
+                /*-----------------------------------------*/
+                if (Rxpos != rxbytes)
+                {
+                    if (--n < 0)
+                    {
+                        sptr = msgtxt[M_FUBAR_MSG];
+                        goto Err;
+                    }
+                    sprintf(j, "%s; %ld/%ld", msgtxt[M_BAD_POS], rxbytes, Rxpos);
+                    z_message(j);
+                    Z_PutString(Attn);
+                    continue;
+                }
+MoreData:
+                switch (c = RZ_ReceiveData(Secbuf, WAZOOMAX))
+                {
+                    case ZCAN:
+                        sptr = msgtxt[M_CAN_MSG];
+                        goto Err;
 
-               case RCDO:
-                  sptr = &msgtxt[M_NO_CARRIER][1];
-                  something_wrong=1;
-                  CLEAR_INBOUND ();
-                  goto Err;
+                    case RCDO:
+                        sptr = &msgtxt[M_NO_CARRIER][1];
+                        something_wrong = 1;
+                        CLEAR_INBOUND();
+                        goto Err;
 
-               case ERROR:
-                  /*-----------------------*/
-                  /* CRC error             */
-                  /*-----------------------*/
-                  if (--n < 0)
-                     {
-                     sptr = msgtxt[M_FUBAR_MSG];
-                     goto Err;
-                     }
-                  show_loc (rxbytes, n);
-                  Z_PutString (Attn);
-                  continue;
+                    case ERROR:
+                        /*-----------------------*/
+                        /* CRC error             */
+                        /*-----------------------*/
+                        if (--n < 0)
+                        {
+                            sptr = msgtxt[M_FUBAR_MSG];
+                            goto Err;
+                        }
+                        show_loc(rxbytes, n);
+                        Z_PutString(Attn);
+                        continue;
 
-               case TIMEOUT:
-                  if (--n < 0)
-                     {
-                     sptr = msgtxt[M_TIMEOUT];
-                     goto Err;
-                     }
-                  show_loc (rxbytes, n);
-                  continue;
+                    case TIMEOUT:
+                        if (--n < 0)
+                        {
+                            sptr = msgtxt[M_TIMEOUT];
+                            goto Err;
+                        }
+                        show_loc(rxbytes, n);
+                        continue;
 
-               case GOTCRCW:
-                  /*---------------------*/
-                  /* End of frame          */
-                  /*-----------------------*/
-                  n = 10;
-                  if (RZ_SaveToDisk (&rxbytes) == ERROR){
-                     something_wrong=1;
-                     return ERROR;
-                  }
-                  Z_PutLongIntoHeader (rxbytes);
-                  Z_SendHexHeader (ZACK, Txhdr);
-                  goto NxtHdr;
+                    case GOTCRCW:
+                        /*---------------------*/
+                        /* End of frame          */
+                        /*-----------------------*/
+                        n = 10;
+                        if (RZ_SaveToDisk(&rxbytes) == ERROR) {
+                            something_wrong = 1;
+                            return ERROR;
+                        }
+                        Z_PutLongIntoHeader(rxbytes);
+                        Z_SendHexHeader(ZACK, Txhdr);
+                        goto NxtHdr;
 
-               case GOTCRCQ:
-                  /*---------------------*/
-                  /* Zack expected         */
-                  /*-----------------------*/
-                  n = 10;
-                  if (RZ_SaveToDisk (&rxbytes) == ERROR){
-                     something_wrong=1;
-                     return ERROR;
-                  }
-                  Z_PutLongIntoHeader (rxbytes);
-                  Z_SendHexHeader (ZACK, Txhdr);
-                  goto MoreData;
+                    case GOTCRCQ:
+                        /*---------------------*/
+                        /* Zack expected         */
+                        /*-----------------------*/
+                        n = 10;
+                        if (RZ_SaveToDisk(&rxbytes) == ERROR) {
+                            something_wrong = 1;
+                            return ERROR;
+                        }
+                        Z_PutLongIntoHeader(rxbytes);
+                        Z_SendHexHeader(ZACK, Txhdr);
+                        goto MoreData;
 
-               case GOTCRCG:
-                  /*---------------------*/
-                  /* Non-stop              */
-                  /*-----------------------*/
-                  n = 10;
-                  if (RZ_SaveToDisk (&rxbytes) == ERROR){
-                     something_wrong=1;
-                     return ERROR;
-                  }
-                  goto MoreData;
+                    case GOTCRCG:
+                        /*---------------------*/
+                        /* Non-stop              */
+                        /*-----------------------*/
+                        n = 10;
+                        if (RZ_SaveToDisk(&rxbytes) == ERROR) {
+                            something_wrong = 1;
+                            return ERROR;
+                        }
+                        goto MoreData;
 
-               case GOTCRCE:
-                  /*---------------------*/
-                  /* Header to follow      */
-                  /*-----------------------*/
-                  n = 10;
-                  if (RZ_SaveToDisk (&rxbytes) == ERROR){
-                     something_wrong=1;
-                     return ERROR;
-                  }
-                  goto NxtHdr;
-               }                                 /* switch */
+                    case GOTCRCE:
+                        /*---------------------*/
+                        /* Header to follow      */
+                        /*-----------------------*/
+                        n = 10;
+                        if (RZ_SaveToDisk(&rxbytes) == ERROR) {
+                            something_wrong = 1;
+                            return ERROR;
+                        }
+                        goto NxtHdr;
+                }                                 /* switch */
 
-         case ZNAK:
-         case TIMEOUT:
-            /*-----------------------------------------*/
-            /* Packet was probably garbled             */
-            /*-----------------------------------------*/
-            if (--n < 0)
-               {
-               sptr = msgtxt[M_JUNK_BLOCK];
-               goto Err;
-               }
-            show_loc (rxbytes, n);
-            continue;
+            case ZNAK:
+            case TIMEOUT:
+                /*-----------------------------------------*/
+                /* Packet was probably garbled             */
+                /*-----------------------------------------*/
+                if (--n < 0)
+                {
+                    sptr = msgtxt[M_JUNK_BLOCK];
+                    goto Err;
+                }
+                show_loc(rxbytes, n);
+                continue;
 
-         case ZFILE:
-            /*-----------------------------------------*/
-            /* Sender didn't see our ZRPOS yet         */
-            /*-----------------------------------------*/
-            RZ_ReceiveData (Secbuf, WAZOOMAX);
-            continue;
+            case ZFILE:
+                /*-----------------------------------------*/
+                /* Sender didn't see our ZRPOS yet         */
+                /*-----------------------------------------*/
+                RZ_ReceiveData(Secbuf, WAZOOMAX);
+                continue;
 
-         case ZEOF:
-            /*-----------------------------------------*/
-            /* End of the file                         */
-            /* Ignore EOF if it's at wrong place; force */
-            /* a timeout because the eof might have    */
-            /* gone out before we sent our ZRPOS       */
-            /*-----------------------------------------*/
-            if (Rxpos != rxbytes)
-               goto NxtHdr;
+            case ZEOF:
+                /*-----------------------------------------*/
+                /* End of the file                         */
+                /* Ignore EOF if it's at wrong place; force */
+                /* a timeout because the eof might have    */
+                /* gone out before we sent our ZRPOS       */
+                /*-----------------------------------------*/
+                if (Rxpos != rxbytes) {
+                    goto NxtHdr;
+                }
 
-            throughput (2, rxbytes - Filestart);
-            tot_rcv += rxbytes - Filestart;
+                throughput(2, rxbytes - Filestart);
+                tot_rcv += rxbytes - Filestart;
 
-            fclose (Outfile);
+                fclose(Outfile);
 
-            if (!caller) {
-               sysinfo.today.bytereceived += rxbytes - Filestart;
-               sysinfo.week.bytereceived += rxbytes - Filestart;
-               sysinfo.month.bytereceived += rxbytes - Filestart;
-               sysinfo.year.bytereceived += rxbytes - Filestart;
-               sysinfo.today.filereceived++;
-               sysinfo.week.filereceived++;
-               sysinfo.month.filereceived++;
-               sysinfo.year.filereceived++;
-            }
+                if (!caller) {
+                    sysinfo.today.bytereceived += rxbytes - Filestart;
+                    sysinfo.week.bytereceived += rxbytes - Filestart;
+                    sysinfo.month.bytereceived += rxbytes - Filestart;
+                    sysinfo.year.bytereceived += rxbytes - Filestart;
+                    sysinfo.today.filereceived++;
+                    sysinfo.week.filereceived++;
+                    sysinfo.month.filereceived++;
+                    sysinfo.year.filereceived++;
+                }
 
-            status_line ("%s-Z%s %s", msgtxt[M_FILE_RECEIVED], Crc32 ? "/32" : "", realname);
-            update_filesio (fsent, ++freceived);
+                status_line("%s-Z%s %s", msgtxt[M_FILE_RECEIVED], Crc32 ? "/32" : "", realname);
+                update_filesio(fsent, ++freceived);
 
-            if (filetime && !caller)
-               {
-               utimes.actime = filetime;
-               utimes.modtime = filetime;
-               utime (realname, &utimes);
-               }
+                if (filetime && !caller)
+                {
+                    utimes.actime = filetime;
+                    utimes.modtime = filetime;
+                    utime(realname, &utimes);
+                }
 
-            Outfile = NULL;
-            if (xferinfo != NULL)
-               {
-               fprintf (xferinfo, "%s\n", realname);
-               }
+                Outfile = NULL;
+                if (xferinfo != NULL)
+                {
+                    fprintf(xferinfo, "%s\n", realname);
+                }
 
-            if ((caller || emulator) && zreceive_handle != -1)
-               {
-               wactiv(zreceive_handle);
-               wclose();
-               zreceive_handle = -1;
-               }
-            else if (!caller)
-               wfill (9, 0, 10, 77, ' ', WHITE|_BLACK);
+                if ((caller || emulator) && zreceive_handle != -1)
+                {
+                    wactiv(zreceive_handle);
+                    wclose();
+                    zreceive_handle = -1;
+                }
+                else if (!caller) {
+                    wfill(9, 0, 10, 77, ' ', WHITE | _BLACK);
+                }
 
-            return c;
+                return c;
 
-         case ERROR:
-            something_wrong=1;
-            /*-----------------------------------------*/
-            /* Too much garbage in header search error */
-            /*-----------------------------------------*/
-            if (--n < 0)
-               {
-               sptr = msgtxt[M_JUNK_BLOCK];
-               goto Err;
-               }
-            show_loc (rxbytes, n);
-            Z_PutString (Attn);
-            continue;
+            case ERROR:
+                something_wrong = 1;
+                /*-----------------------------------------*/
+                /* Too much garbage in header search error */
+                /*-----------------------------------------*/
+                if (--n < 0)
+                {
+                    sptr = msgtxt[M_JUNK_BLOCK];
+                    goto Err;
+                }
+                show_loc(rxbytes, n);
+                Z_PutString(Attn);
+                continue;
 
-         case ZSKIP:
-            return c;
+            case ZSKIP:
+                return c;
 
-         default:
-            sptr = "???";
-            CLEAR_INBOUND ();
-            goto Err;
-         }                                       /* switch */
-      }                                          /* while */
+            default:
+                sptr = "???";
+                CLEAR_INBOUND();
+                goto Err;
+        }                                       /* switch */
+    }                                          /* while */
 
 Err:
-   if (sptr != NULL)
-   {
-      sprintf (e_input, msgtxt[M_Z_RZ], sptr);
-      status_line (e_input);
-   }
-   something_wrong=1;
-   return ERROR;
+    if (sptr != NULL)
+    {
+        sprintf(e_input, msgtxt[M_Z_RZ], sptr);
+        status_line(e_input);
+    }
+    something_wrong = 1;
+    return ERROR;
 }                                                /* RZ_ReceiveFile */
 
 /*--------------------------------------------------------------------------*/
 /* RZ GET HEADER                                                            */
 /* Process incoming file information header                                 */
 /*--------------------------------------------------------------------------*/
-static int RZ_GetHeader ()
+static int RZ_GetHeader()
 {
-   register byte *p;
-   struct stat f;
-   int i;
-   byte *ourname;
-   byte *theirname;
-   unsigned long filesize;
-   byte *fileinfo;
-   char j[80];
+    register byte * p;
+    struct stat f;
+    int i;
+    byte * ourname;
+    byte * theirname;
+    unsigned long filesize;
+    byte * fileinfo;
+    char j[80];
 
 
 #ifdef DEBUG
-   show_debug_name ("RZ_GetHeader");
+    show_debug_name("RZ_GetHeader");
 #endif
 
-   /*--------------------------------------------------------------------*/
-   /* Setup the transfer mode                                            */
-   /*--------------------------------------------------------------------*/
-   isBinary = (char) ((!RXBINARY && Zconv == ZCNL) ? 0 : 1);
-   Resume_WaZOO = 0;
+    /*--------------------------------------------------------------------*/
+    /* Setup the transfer mode                                            */
+    /*--------------------------------------------------------------------*/
+    isBinary = (char)((!RXBINARY && Zconv == ZCNL) ? 0 : 1);
+    Resume_WaZOO = 0;
 
-   /*--------------------------------------------------------------------*/
-   /* Extract and verify filesize, if given.                             */
-   /* Reject file if not at least 10K free                               */
-   /*--------------------------------------------------------------------*/
-   filesize = 0L;
-   filetime = 0L;
-   fileinfo = Secbuf + 1 + strlen (Secbuf);
-   if (*fileinfo)
-      sscanf (fileinfo, "%ld %lo", &filesize, &filetime);
-   if (filesize + 10240 > DiskAvail)
-      {
-      status_line (msgtxt[M_OUT_OF_DISK_SPACE]);
-      something_wrong=1;
-      return ERROR;
-      }
+    /*--------------------------------------------------------------------*/
+    /* Extract and verify filesize, if given.                             */
+    /* Reject file if not at least 10K free                               */
+    /*--------------------------------------------------------------------*/
+    filesize = 0L;
+    filetime = 0L;
+    fileinfo = Secbuf + 1 + strlen(Secbuf);
+    if (*fileinfo) {
+        sscanf(fileinfo, "%ld %lo", &filesize, &filetime);
+    }
+    if (filesize + 10240 > DiskAvail)
+    {
+        status_line(msgtxt[M_OUT_OF_DISK_SPACE]);
+        something_wrong = 1;
+        return ERROR;
+    }
 
-   /*--------------------------------------------------------------------*/
-   /* Get and/or fix filename for uploaded file                          */
-   /*--------------------------------------------------------------------*/
-   p = Filename + strlen (Filename) - 1;         /* Find end of upload path */
-   while (p >= Filename && *p != '\\')
-      p--;
-   ourname = ++p;
+    /*--------------------------------------------------------------------*/
+    /* Get and/or fix filename for uploaded file                          */
+    /*--------------------------------------------------------------------*/
+    p = Filename + strlen(Filename) - 1;          /* Find end of upload path */
+    while (p >= Filename && *p != '\\') {
+        p--;
+    }
+    ourname = ++p;
 
-   p = Secbuf + strlen (Secbuf) - 1;             /* Find transmitted simple
+    p = Secbuf + strlen(Secbuf) - 1;             /* Find transmitted simple
                                                   * filename */
-   while (p >= Secbuf && *p != '\\' && *p != '/' && *p != ':')
-      p--;
-   theirname = ++p;
+    while (p >= Secbuf && *p != '\\' && *p != '/' && *p != ':') {
+        p--;
+    }
+    theirname = ++p;
 
-   strcpy (ourname, theirname);                  /* Start w/ our path & their
+    strcpy(ourname, theirname);                  /* Start w/ our path & their
                                                   * name */
-   strcpy (realname, Filename);
+    strcpy(realname, Filename);
 
-   /*--------------------------------------------------------------------*/
-   /* Save info on WaZOO transfer in case of abort                       */
-   /*--------------------------------------------------------------------*/
-   if (remote_capabilities)
-      {
-      strcpy (Resume_name, theirname);
-      sprintf (Resume_info, "%ld %lo", filesize, filetime);
-      }
+    /*--------------------------------------------------------------------*/
+    /* Save info on WaZOO transfer in case of abort                       */
+    /*--------------------------------------------------------------------*/
+    if (remote_capabilities)
+    {
+        strcpy(Resume_name, theirname);
+        sprintf(Resume_info, "%ld %lo", filesize, filetime);
+    }
 
-   /*--------------------------------------------------------------------*/
-   /* Check if this is a failed WaZOO transfer which should be resumed   */
-   /*--------------------------------------------------------------------*/
-   if (remote_capabilities && dexists (Abortlog_name))
-      {
-                Resume_WaZOO = (byte) check_failed (Abortlog_name, theirname, Resume_info, ourname);
-      }
+    /*--------------------------------------------------------------------*/
+    /* Check if this is a failed WaZOO transfer which should be resumed   */
+    /*--------------------------------------------------------------------*/
+    if (remote_capabilities && dexists(Abortlog_name))
+    {
+        Resume_WaZOO = (byte) check_failed(Abortlog_name, theirname, Resume_info, ourname);
+    }
 
-   /*--------------------------------------------------------------------*/
-   /* Open either the old or a new file, as appropriate                  */
-   /*--------------------------------------------------------------------*/
-   if (Resume_WaZOO)
-      {
-      if (dexists (Filename))
-         p = "r+b";
-      else p = "wb";
-      }
-   else
-      {
-      strcpy (ourname, theirname);
-      /*--------------------------------------------------------------------*/
-      /* If the file already exists:                                        */
-      /* 1) And the new file has the same time and size, return ZSKIP    */
-      /* 2) And OVERWRITE is turned on, delete the old copy              */
-      /* 3) Else create a unique file name in which to store new data    */
-      /*--------------------------------------------------------------------*/
-      if (dexists (Filename))
-         {                                       /* If file already exists...      */
-         if ((Outfile = fopen (Filename, "rb")) == NULL)
+    /*--------------------------------------------------------------------*/
+    /* Open either the old or a new file, as appropriate                  */
+    /*--------------------------------------------------------------------*/
+    if (Resume_WaZOO)
+    {
+        if (dexists(Filename)) {
+            p = "r+b";
+        }
+        else {
+            p = "wb";
+        }
+    }
+    else
+    {
+        strcpy(ourname, theirname);
+        /*--------------------------------------------------------------------*/
+        /* If the file already exists:                                        */
+        /* 1) And the new file has the same time and size, return ZSKIP    */
+        /* 2) And OVERWRITE is turned on, delete the old copy              */
+        /* 3) Else create a unique file name in which to store new data    */
+        /*--------------------------------------------------------------------*/
+        if (dexists(Filename))
+        {   /* If file already exists...      */
+            if ((Outfile = fopen(Filename, "rb")) == NULL)
             {
-            something_wrong=1;
-            return ERROR;
+                something_wrong = 1;
+                return ERROR;
             }
-         fstat (fileno (Outfile), &f);
-         fclose (Outfile);
-         if (caller || (filesize == f.st_size && filetime == f.st_mtime))
+            fstat(fileno(Outfile), &f);
+            fclose(Outfile);
+            if (caller || (filesize == f.st_size && filetime == f.st_mtime))
             {
-            status_line (msgtxt[M_ALREADY_HAVE], Filename);
-            something_wrong=1;
-            return ZSKIP;
+                status_line(msgtxt[M_ALREADY_HAVE], Filename);
+                something_wrong = 1;
+                return ZSKIP;
             }
-         i = strlen (Filename) - 1;
-         if ((!overwrite) || (is_arcmail (Filename, i)))
+            i = strlen(Filename) - 1;
+            if ((!overwrite) || (is_arcmail(Filename, i)))
             {
-            unique_name (Filename);
+                unique_name(Filename);
             }
-         else
+            else
             {
-            unlink (Filename);
+                unlink(Filename);
             }
-         }                                       /* if exist */
+        }                                       /* if exist */
 
-      if (strcmp (ourname, theirname))
-         {
-         status_line (msgtxt[M_RENAME_MSG], ourname);
-         }
-      p = "wb";
-      }
-   if ((Outfile = sh_fopen (Filename, p, SH_DENYRW)) == NULL)
-      {
-      something_wrong=1;
-      return ERROR;
-      }
-   if (isatty (fileno (Outfile)))
-      {
-      fclose (Outfile);
-      something_wrong=1;
-      return (ERROR);
-      }
+        if (strcmp(ourname, theirname))
+        {
+            status_line(msgtxt[M_RENAME_MSG], ourname);
+        }
+        p = "wb";
+    }
+    if ((Outfile = sh_fopen(Filename, p, SH_DENYRW)) == NULL)
+    {
+        something_wrong = 1;
+        return ERROR;
+    }
+    if (isatty(fileno(Outfile)))
+    {
+        fclose(Outfile);
+        something_wrong = 1;
+        return (ERROR);
+    }
 
-   Filestart = (Resume_WaZOO) ? filelength (fileno (Outfile)) : 0L;
-   if (Resume_WaZOO)
-      status_line (msgtxt[M_SYNCHRONIZING_OFFSET], Filestart);
-   fseek (Outfile, Filestart, SEEK_SET);
+    Filestart = (Resume_WaZOO) ? filelength(fileno(Outfile)) : 0L;
+    if (Resume_WaZOO) {
+        status_line(msgtxt[M_SYNCHRONIZING_OFFSET], Filestart);
+    }
+    fseek(Outfile, Filestart, SEEK_SET);
 
-   if (remote_capabilities && is_mailpkt (theirname, strlen(theirname) - 1) )
-      p = "MailPKT";
-   else if (remote_capabilities && is_arcmail (theirname, strlen(theirname) - 1) )
-      p = "ARCMail";
-   else
-      p = NULL;
+    if (remote_capabilities && is_mailpkt(theirname, strlen(theirname) - 1)) {
+        p = "MailPKT";
+    }
+    else if (remote_capabilities && is_arcmail(theirname, strlen(theirname) - 1)) {
+        p = "ARCMail";
+    }
+    else {
+        p = NULL;
+    }
 
-   sprintf (j, "%s %s; %s%ldb, %d min.",
+    sprintf(j, "%s %s; %s%ldb, %d min.",
             (p) ? p : msgtxt[M_RECEIVING],
             realname,
             (isBinary) ? "" : "ASCII ",
             filesize,
-            (int) ((filesize - Filestart) * 10 / rate + 53) / 54);
+            (int)((filesize - Filestart) * 10 / rate + 53) / 54);
 
-   file_length = filesize;
-   i = (int) ((filesize - Filestart) * 10 / rate + 53) / 54;
+    file_length = filesize;
+    i = (int)((filesize - Filestart) * 10 / rate + 53) / 54;
 
-   if (caller || emulator) {
-      zreceive_handle = wopen(16,0,19,79,1,WHITE|_RED,WHITE|_RED);
-      wtitle(" ZModem Transfer Status ", TLEFT, WHITE|_RED);
+    if (caller || emulator) {
+        zreceive_handle = wopen(16, 0, 19, 79, 1, WHITE | _RED, WHITE | _RED);
+        wtitle(" ZModem Transfer Status ", TLEFT, WHITE | _RED);
 
-      wgotoxy (0, 2);
-      wputs (j);
+        wgotoxy(0, 2);
+        wputs(j);
 
-      status_line(" %s", j);
+        status_line(" %s", j);
 
-      wgotoxy (1, 69);
-      sprintf(j, "%3d min", i);
-      wputs (j);
-   }
-   else {
-      wprints (9, 2, WHITE|_BLACK, j);
+        wgotoxy(1, 69);
+        sprintf(j, "%3d min", i);
+        wputs(j);
+    }
+    else {
+        wprints(9, 2, WHITE | _BLACK, j);
 
-      status_line(" %s", j);
+        status_line(" %s", j);
 
-      sprintf(j, "%3d min", i);
-      wprints (10, 69, WHITE|_BLACK, j);
-   }
+        sprintf(j, "%3d min", i);
+        wprints(10, 69, WHITE | _BLACK, j);
+    }
 
-   throughput (0, 0L);
+    throughput(0, 0L);
 
-   return OK;
+    return OK;
 }                                                /* RZ_GetHeader */
 
 /*--------------------------------------------------------------------------*/
@@ -1015,199 +1047,212 @@ static int RZ_GetHeader ()
 /* If in ASCII mode, stops writing at first ^Z, and converts all            */
 /*   solo CR's or LF's to CR/LF pairs.                                      */
 /*--------------------------------------------------------------------------*/
-static int RZ_SaveToDisk (rxbytes)
-long *rxbytes;
+static int RZ_SaveToDisk(rxbytes)
+long * rxbytes;
 {
-   static byte lastsent;
+    static byte lastsent;
 
-   register byte *p;
-   register int count;
-   int i;
-   char j[100];
+    register byte * p;
+    register int count;
+    int i;
+    char j[100];
 
 #ifdef DEBUG
-   show_debug_name ("RZ_SaveToDisk");
+    show_debug_name("RZ_SaveToDisk");
 #endif
 
-   count = RxCount;
+    count = RxCount;
 
-   if (local_kbd == 0x1B)
-      {
-      local_kbd = -1;
-      send_can ();
-      while ((i = Z_GetByte (20)) != TIMEOUT && i != RCDO)
-         CLEAR_INBOUND ();
-      send_can ();
-      status_line (msgtxt[M_KBD_MSG]);
-      something_wrong=1;
-      return ERROR;
-      }
+    if (local_kbd == 0x1B)
+    {
+        local_kbd = -1;
+        send_can();
+        while ((i = Z_GetByte(20)) != TIMEOUT && i != RCDO) {
+            CLEAR_INBOUND();
+        }
+        send_can();
+        status_line(msgtxt[M_KBD_MSG]);
+        something_wrong = 1;
+        return ERROR;
+    }
 
-   if (count != z_size)
-      {
-      z_size = count;
-      if (caller || emulator)
-         wgotoxy (1, 12);
-      else
-         wgotoxy (10, 12);
-      wputs (ultoa (((unsigned long) (z_size = count)), e_input, 10));
-      wputs ("    ");
-      }
+    if (count != z_size)
+    {
+        z_size = count;
+        if (caller || emulator) {
+            wgotoxy(1, 12);
+        }
+        else {
+            wgotoxy(10, 12);
+        }
+        wputs(ultoa(((unsigned long)(z_size = count)), e_input, 10));
+        wputs("    ");
+    }
 
-   if (isBinary)
-      {
-      if (fwrite (Secbuf, 1, count, Outfile) != count)
-         goto oops;
-      }
-   else
-      {
-      if (EOFseen)
-         return OK;
-      for (p = Secbuf; --count >= 0; ++p)
-         {
-         if (*p == CPMEOF)
-            {
-            EOFseen = TRUE;
-            return OK;
-            }
-         if (*p == '\n')
-            {
-            if (lastsent != '\r' && putc ('\r', Outfile) == EOF)
-               goto oops;
-            }
-         else
-            {
-            if (lastsent == '\r' && putc ('\n', Outfile) == EOF)
-               goto oops;
-            }
-         if (putc ((lastsent = *p), Outfile) == EOF)
+    if (isBinary)
+    {
+        if (fwrite(Secbuf, 1, count, Outfile) != count) {
             goto oops;
-         }
-      }
+        }
+    }
+    else
+    {
+        if (EOFseen) {
+            return OK;
+        }
+        for (p = Secbuf; --count >= 0; ++p)
+        {
+            if (*p == CPMEOF)
+            {
+                EOFseen = TRUE;
+                return OK;
+            }
+            if (*p == '\n')
+            {
+                if (lastsent != '\r' && putc('\r', Outfile) == EOF) {
+                    goto oops;
+                }
+            }
+            else
+            {
+                if (lastsent == '\r' && putc('\n', Outfile) == EOF) {
+                    goto oops;
+                }
+            }
+            if (putc((lastsent = *p), Outfile) == EOF) {
+                goto oops;
+            }
+        }
+    }
 
-   *rxbytes += RxCount;
-   if (caller || emulator)
-      {
-      i = (int) ((file_length - *rxbytes)* 10 / rate + 53) / 54;
-      sprintf (j, "%3d min", i);
+    *rxbytes += RxCount;
+    if (caller || emulator)
+    {
+        i = (int)((file_length - *rxbytes) * 10 / rate + 53) / 54;
+        sprintf(j, "%3d min", i);
 
-      wgotoxy (1, 2);
-      wputs (ultoa (((unsigned long) (*rxbytes)), e_input, 10));
-      wgotoxy (1, 69);
-      sprintf (j, "%3d min", i);
-      wputs (j);
-      }
-   else
-      {
-      i = (int) ((file_length - *rxbytes)* 10 / rate + 53) / 54;
-      sprintf (j, "%3d min", i);
+        wgotoxy(1, 2);
+        wputs(ultoa(((unsigned long)(*rxbytes)), e_input, 10));
+        wgotoxy(1, 69);
+        sprintf(j, "%3d min", i);
+        wputs(j);
+    }
+    else
+    {
+        i = (int)((file_length - *rxbytes) * 10 / rate + 53) / 54;
+        sprintf(j, "%3d min", i);
 
-      sprintf (j, "%lu  ", (unsigned long) (*rxbytes));
-      wprints (10, 2, WHITE|_BLACK, j);
-      sprintf (j, "%3d min", i);
-      wprints (10, 69, WHITE|_BLACK, j);
-      }
+        sprintf(j, "%lu  ", (unsigned long)(*rxbytes));
+        wprints(10, 2, WHITE | _BLACK, j);
+        sprintf(j, "%3d min", i);
+        wprints(10, 69, WHITE | _BLACK, j);
+    }
 
-   time_release ();
-   return OK;
+    time_release();
+    return OK;
 
 oops:
-   something_wrong=1;
-   return ERROR;
+    something_wrong = 1;
+    return ERROR;
 }
 
 /*--------------------------------------------------------------------------*/
 /* RZ ACK BIBI                                                              */
 /* Ack a ZFIN packet, let byegones be byegones                              */
 /*--------------------------------------------------------------------------*/
-static void RZ_AckBibi ()
+static void RZ_AckBibi()
 {
-   register int n;
+    register int n;
 
 
 #ifdef DEBUG
-   show_debug_name ("RZ_AckBiBi");
+    show_debug_name("RZ_AckBiBi");
 #endif
 
-   Z_PutLongIntoHeader (0L);
-   for (n = 4; --n;)
-      {
-      Z_SendHexHeader (ZFIN, Txhdr);
-      switch (Z_GetByte (100))
-         {
-         case 'O':
-            Z_GetByte (1);                       /* Discard 2nd 'O' */
+    Z_PutLongIntoHeader(0L);
+    for (n = 4; --n;)
+    {
+        Z_SendHexHeader(ZFIN, Txhdr);
+        switch (Z_GetByte(100))
+        {
+            case 'O':
+                Z_GetByte(1);                        /* Discard 2nd 'O' */
 
-         case TIMEOUT:
-         case RCDO:
-            something_wrong=1;
-            return;
-         }                                       /* switch */
-      }                                          /* for */
+            case TIMEOUT:
+            case RCDO:
+                something_wrong = 1;
+                return;
+        }                                       /* switch */
+    }                                          /* for */
 }                                                /* RZ_AckBibi */
 
 
 
-char *suffixes[8] = {
-	"SU", "MO", "TU", "WE", "TH", "FR", "SA", NULL
+char * suffixes[8] = {
+    "SU", "MO", "TU", "WE", "TH", "FR", "SA", NULL
 };
 
-int is_arcmail (p, n)
-char *p;
+int is_arcmail(p, n)
+char * p;
 int n;
 {
-   int i;
-   char c[128];
+    int i;
+    char c[128];
 
-   (void) strcpy (c, p);
-   (void) strupr (c);
+    (void) strcpy(c, p);
+    (void) strupr(c);
 
-   if ((c[n] == 'C') && (c[n-1] == 'I') && (c[n-2] == 'T') && (c[n-3] == '.')) {
-      got_arcmail = 1;
-      return (0);
-   }
+    if ((c[n] == 'C') && (c[n - 1] == 'I') && (c[n - 2] == 'T') && (c[n - 3] == '.')) {
+        got_arcmail = 1;
+        return (0);
+    }
 
-   for (i = n - 11; i < n - 3; i++) {
-      if ((!isdigit (c[i])) && ((c[i] > 'F') || (c[i] < 'A')))
-         return (0);
-   }
+    for (i = n - 11; i < n - 3; i++) {
+        if ((!isdigit(c[i])) && ((c[i] > 'F') || (c[i] < 'A'))) {
+            return (0);
+        }
+    }
 
-   if ((c[n] == 'Q') && (c[n-1] == 'E') && (c[n-2] == 'R') && (c[n-3] == '.')) {
-      made_request = 1;
-      return (0);
-   }
+    if ((c[n] == 'Q') && (c[n - 1] == 'E') && (c[n - 2] == 'R') && (c[n - 3] == '.')) {
+        made_request = 1;
+        return (0);
+    }
 
-   for (i = 0; i < 7; i++) {
-      if (strnicmp (&c[n - 2], suffixes[i], 2) == 0)
-         break;
-   }
+    for (i = 0; i < 7; i++) {
+        if (strnicmp(&c[n - 2], suffixes[i], 2) == 0) {
+            break;
+        }
+    }
 
-   if (i >= 7) {
-      if ((c[n] != 'T') || (c[n-1] != 'K') || (c[n-2] != 'P') || (c[n-3] != '.'))
-         return (0);
-   }
+    if (i >= 7) {
+        if ((c[n] != 'T') || (c[n - 1] != 'K') || (c[n - 2] != 'P') || (c[n - 3] != '.')) {
+            return (0);
+        }
+    }
 
-   got_arcmail = 1;
-   return (1);
+    got_arcmail = 1;
+    return (1);
 }
 
-int is_mailpkt (char *p, int n)
+int is_mailpkt(char * p, int n)
 {
-   int i;
-   char c[128];
+    int i;
+    char c[128];
 
-   (void) strcpy (c, p);
-   (void) strupr (c);
+    (void) strcpy(c, p);
+    (void) strupr(c);
 
-   for (i = n - 11; i < n - 3; i++) {
-      if ((!isdigit (c[i])) && ((c[i] > 'F') || (c[i] < 'A')))
-         return (0);
-   }
+    for (i = n - 11; i < n - 3; i++) {
+        if ((!isdigit(c[i])) && ((c[i] > 'F') || (c[i] < 'A'))) {
+            return (0);
+        }
+    }
 
-   if ((c[n] != 'T') || (c[n-1] != 'K') || (c[n-2] != 'P') || (c[n-3] != '.'))
-      return (0);
+    if ((c[n] != 'T') || (c[n - 1] != 'K') || (c[n - 2] != 'P') || (c[n - 3] != '.')) {
+        return (0);
+    }
 
-   got_arcmail = 1;
-   return (1);
+    got_arcmail = 1;
+    return (1);
 }
 

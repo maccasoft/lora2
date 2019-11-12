@@ -1,4 +1,3 @@
-
 // LoraBBS Version 2.41 Free Edition
 // Copyright (C) 1987-98 Marco Maccaferri
 //
@@ -16,8 +15,8 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-/* PipBase.H: this file contains all data structure definition and 
-notes on how to manage them. All PipBase-compatible programs have to 
+/* PipBase.H: this file contains all data structure definition and
+notes on how to manage them. All PipBase-compatible programs have to
 refer to these informations */
 
 /* data alignment is on bytes */
@@ -69,7 +68,7 @@ FRIENDND.PIP: a file of FRIENDND type records, each of whom has an entry in
               record: a point does not need a large FRIENDND!
 
 ROUTE.PIP:    a file of ROUTE records, containing informations on how to
-              route netmail 
+              route netmail
 
 Only files marked with an (*) are the pipbase standard. Other files are used
 by PipBase.Exe and PipSetup, but you may change them (and, if possible, inform
@@ -82,9 +81,9 @@ typedef unsigned short uint;
 
 
 typedef struct /* structure of the message headers in MPKTxxxx.PIP files */
-               { uint pktype; /* 2= not compressed; 10=compressed with PIP */
-                 uint fromnode,tonode,fromnet,tonet; /* for netmail */
-                 uint attribute; /* bit 0=private as for SeaDog,
+{   uint pktype; /* 2= not compressed; 10=compressed with PIP */
+    uint fromnode, tonode, fromnet, tonet; /* for netmail */
+    uint attribute; /* bit 0=private as for SeaDog,
                                         1=crash as for SeaDog,
                                         2=received as for SeaDog,
                                         3=sent as for SeaDog,
@@ -97,10 +96,10 @@ typedef struct /* structure of the message headers in MPKTxxxx.PIP files */
                                         10=locked,
                                         11=filerequest as for SeaDog,
                                         15=fileupdaterequest as for SeaDog */
-                                /* when echomail, bit 3=1 means "processed"; */
-                                /* bits 10,12,13,14 are unused, and they will be..... */
-                 uint point; /* FMPT for inbound messages, TOPT for outbound messages */
-               } MSGPKTHDR;
+    /* when echomail, bit 3=1 means "processed"; */
+    /* bits 10,12,13,14 are unused, and they will be..... */
+    uint point; /* FMPT for inbound messages, TOPT for outbound messages */
+} MSGPKTHDR;
 
 #define SET_PKT_PRIV 1
 #define SET_PKT_CRASH 2
@@ -133,11 +132,11 @@ typedef struct /* structure of the message headers in MPKTxxxx.PIP files */
 
 
 typedef struct /* structure of each record in MPTRxxxx.PIP files */
-               { long pos;       /* pointer to MPKTxxxx.PIP */
-                 uint prev,next;  /* pointers to other records in MPTRxxxx */
-                 uint status;     /* bit 0=deleted 1=received 2=sent */
-                                  /* 3=fromus(1)/tous(0) 4=Locked (Undeletable) */
-               } MSGPTR;
+{   long pos;       /* pointer to MPKTxxxx.PIP */
+    uint prev, next; /* pointers to other records in MPTRxxxx */
+    uint status;     /* bit 0=deleted 1=received 2=sent */
+    /* 3=fromus(1)/tous(0) 4=Locked (Undeletable) */
+} MSGPTR;
 
 #define SET_MPTR_DEL 1
 #define SET_MPTR_RCVD 2
@@ -152,10 +151,10 @@ typedef struct /* structure of each record in MPTRxxxx.PIP files */
 
 
 typedef struct /* structure of each record in DESTPTR.PIP */
-               { char to[36]; /* addressee name */
-                 uint area,msg; /* pointers to MPTRarea.PIP records */
-                 long next; /* to speed up search (in future) */
-               } DESTPTR;
+{   char to[36]; /* addressee name */
+    uint area, msg; /* pointers to MPTRarea.PIP records */
+    long next; /* to speed up search (in future) */
+} DESTPTR;
 
 
 #define FRI_SET_PIPMAIL 1
@@ -169,60 +168,60 @@ typedef struct /* structure of each record in DESTPTR.PIP */
 
 
 typedef struct {
-                 unsigned short
-                      orig_node,               /* originating node */
-                      dest_node,               /* destination node */
-                      year,                    /* 1990 - nnnn */
-                      month,                   /* month -1 */
-                      day,                     
-                      hour,
-                      minute,
-                      second,
-                      rate,                    /* unused */
-                      ver,                     /* 2 */
-                      orig_net,                /* originating net */
-                      dest_net;                /* destination net */
-                 unsigned char
-                      product,                 /* product code */
-                      rev_lev,                 /* revision level */
-                      password[8];
-                 unsigned short
-                      qm_orig_zone,            /* QMail orig.zone */
-                      qm_dest_zone,            /* QMail dest.zone */
-                      wm_orig_point,           /* Wmail orig.point */
-                      wm_dest_point;           /* Wmail dest.point */
-                 unsigned char
-                      TRASH[4];                /* junk[4] */
-                 unsigned short
-                      orig_zone,               /* originating zone */
-                      dest_zone,               /* destination zone */
-                      orig_point,              /* originating point */
-                      dest_point;              /* destination point */
-                 unsigned long
-                      pr_data;
-                 } MAILPKT;
+    unsigned short
+    orig_node,               /* originating node */
+    dest_node,               /* destination node */
+    year,                    /* 1990 - nnnn */
+    month,                   /* month -1 */
+    day,
+    hour,
+    minute,
+    second,
+    rate,                    /* unused */
+    ver,                     /* 2 */
+    orig_net,                /* originating net */
+    dest_net;                /* destination net */
+    unsigned char
+    product,                 /* product code */
+    rev_lev,                 /* revision level */
+    password[8];
+    unsigned short
+    qm_orig_zone,            /* QMail orig.zone */
+    qm_dest_zone,            /* QMail dest.zone */
+    wm_orig_point,           /* Wmail orig.point */
+    wm_dest_point;           /* Wmail dest.point */
+    unsigned char
+    TRASH[4];                /* junk[4] */
+    unsigned short
+    orig_zone,               /* originating zone */
+    dest_zone,               /* destination zone */
+    orig_point,              /* originating point */
+    dest_point;              /* destination point */
+    unsigned long
+    pr_data;
+} MAILPKT;
 
 
 typedef struct {
-                 char fromwho[36],towho[36],subj[72],date[20];
-                 uint times,
-                      destnode,orignode,
-                      cost,
-                      orignet,destnet,
-                      destzone,origzone,
-                      destpoint,origpoint,
-                      reply,attr,nextreply;
-               } FIDOMSG;
+    char fromwho[36], towho[36], subj[72], date[20];
+    uint times,
+         destnode, orignode,
+         cost,
+         orignet, destnet,
+         destzone, origzone,
+         destpoint, origpoint,
+         reply, attr, nextreply;
+} FIDOMSG;
 
 
 // static char *mname[12]={"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
 
 typedef struct /* structure of each record in ROUTE.PIP */
-               {
-                 unsigned char mode; /* see table below */
-                 uint zone,net,node,point;
-                 unsigned short via; /* pointer to a friend node */
-               } ROUTE;
+{
+    unsigned char mode; /* see table below */
+    uint zone, net, node, point;
+    unsigned short via; /* pointer to a friend node */
+} ROUTE;
 /* mode can be one of following values:
 0: route all exported matrix via the specified friend
    (zone,net,node and point fields are ignored)

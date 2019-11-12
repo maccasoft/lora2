@@ -48,7 +48,7 @@
    This module implements the utime() and _dos_read() functions for Turbo C,
    along with replacements for Turbo's IBM-specific cprintf(), cputs(), and
    putch() functions.
- 
+
 */
 
 #include <stdio.h>
@@ -64,59 +64,60 @@
 #include "defines.h"
 
 /* always uses modification time */
-int cdecl utime(char *name, struct utimbuf *times)
+int cdecl utime(char * name, struct utimbuf * times)
 {
-   int handle;
-   struct date d;
-   struct time t;
-   struct ftime ft;
+    int handle;
+    struct date d;
+    struct time t;
+    struct ftime ft;
 
-   unixtodos(times->modtime, &d, &t);
-   ft.ft_tsec = t.ti_sec / 2;
-   ft.ft_min = t.ti_min;
-   ft.ft_hour = t.ti_hour;
-   ft.ft_day = d.da_day;
-   ft.ft_month = d.da_mon;
-   ft.ft_year = d.da_year - 1980;
-   if ((handle = shopen(name, O_RDONLY)) == -1)
-      return -1;
+    unixtodos(times->modtime, &d, &t);
+    ft.ft_tsec = t.ti_sec / 2;
+    ft.ft_min = t.ti_min;
+    ft.ft_hour = t.ti_hour;
+    ft.ft_day = d.da_day;
+    ft.ft_month = d.da_mon;
+    ft.ft_year = d.da_year - 1980;
+    if ((handle = shopen(name, O_RDONLY)) == -1) {
+        return -1;
+    }
 
-   setftime(handle, &ft);
-   close(handle);
-   return 0;
-}
- 
-int _dos_read(int fd, void far *buf, int nbytes, int *bytes_read)
-{
-	union REGS regs;
-	struct SREGS sregs;
-
-	regs.h.ah = 0x3f;	/* read file */
-	regs.x.bx = fd;
-	regs.x.cx = nbytes;
-	regs.x.dx = FP_OFF(buf);
-	sregs.ds = FP_SEG(buf);
-	*bytes_read = intdosx(&regs, &regs, &sregs);
-	return regs.x.cflag ? -1 : 0;
+    setftime(handle, &ft);
+    close(handle);
+    return 0;
 }
 
-int _Cdecl cprintf(const char *format, ...)
+int _dos_read(int fd, void far * buf, int nbytes, int * bytes_read)
 {
-	va_list arg_ptr;
+    union REGS regs;
+    struct SREGS sregs;
 
-	va_start(arg_ptr, format);
-	return vprintf(format, arg_ptr);
+    regs.h.ah = 0x3f;	/* read file */
+    regs.x.bx = fd;
+    regs.x.cx = nbytes;
+    regs.x.dx = FP_OFF(buf);
+    sregs.ds = FP_SEG(buf);
+    *bytes_read = intdosx(&regs, &regs, &sregs);
+    return regs.x.cflag ? -1 : 0;
+}
+
+int _Cdecl cprintf(const char * format, ...)
+{
+    va_list arg_ptr;
+
+    va_start(arg_ptr, format);
+    return vprintf(format, arg_ptr);
 }
 
 /* dunno why Turbo's <conio.h> declares this as
    int when the manual says it returns nothing */
-int _Cdecl cputs (const char *str)
+int _Cdecl cputs(const char * str)
 {
-	printf("%s", str);
-	return 0;
+    printf("%s", str);
+    return 0;
 }
 
 int _Cdecl putch(int ch)
 {
-	return putchar(ch);
+    return putchar(ch);
 }

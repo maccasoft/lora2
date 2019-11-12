@@ -1,4 +1,3 @@
-
 // LoraBBS Version 2.41 Free Edition
 // Copyright (C) 1987-98 Marco Maccaferri
 //
@@ -31,31 +30,33 @@
 
 void update_last_caller()
 {
-   int fd, fdb;
-   char filename[80], backup[80];
-   long stamp;
-   struct _lastcall lc;
+    int fd, fdb;
+    char filename[80], backup[80];
+    long stamp;
+    struct _lastcall lc;
 
-   stamp = time (NULL);
-   memset ((char *)&lastcall, 0, sizeof (struct _lastcall));
+    stamp = time(NULL);
+    memset((char *)&lastcall, 0, sizeof(struct _lastcall));
 
-   sprintf (backup, "%sLASTCALL.BAK", config.sys_path);
-   sprintf (filename, "%sLASTCALL.BBS", config.sys_path);
-   unlink (backup);
-   rename (filename, backup);
+    sprintf(backup, "%sLASTCALL.BAK", config.sys_path);
+    sprintf(filename, "%sLASTCALL.BBS", config.sys_path);
+    unlink(backup);
+    rename(filename, backup);
 
-   fdb = shopen (backup, O_RDONLY|O_BINARY);
-   if (fdb == -1)
-      return;
+    fdb = shopen(backup, O_RDONLY | O_BINARY);
+    if (fdb == -1) {
+        return;
+    }
 
-   fd = cshopen (filename, O_RDONLY|O_BINARY|O_CREAT, S_IREAD|S_IWRITE);
+    fd = cshopen(filename, O_RDONLY | O_BINARY | O_CREAT, S_IREAD | S_IWRITE);
 
-   while (read(fdo, (char *)&lc, sizeof(struct _lastcall)) == sizeof(struct _lastcall)) {
-      if (stamp - lc.timestamp < 86400L)
-         write (fd, (char *)&lc, sizeof (struct _lastcall));
-   }
+    while (read(fdo, (char *)&lc, sizeof(struct _lastcall)) == sizeof(struct _lastcall)) {
+        if (stamp - lc.timestamp < 86400L) {
+            write(fd, (char *)&lc, sizeof(struct _lastcall));
+        }
+    }
 
-   close (fd);
-   close (fdo);
+    close(fd);
+    close(fdo);
 }
 

@@ -1,4 +1,3 @@
-
 // LoraBBS Version 2.41 Free Edition
 // Copyright (C) 1987-98 Marco Maccaferri
 //
@@ -72,37 +71,37 @@
 *********************************************************************/
 typedef struct _event
 {
-   short days;                                     /* Bit field for which days
+    short days;                                     /* Bit field for which days
                                                   * to execute */
-   short minute;                                   /* Minutes after midnight to
+    short minute;                                   /* Minutes after midnight to
                                                   * start event */
-   short length;                                   /* Number of minutes event
+    short length;                                   /* Number of minutes event
                                                   * runs */
-   short errlevel[9];                              /* Errorlevel exits */
-   short last_ran;                                 /* Day of month last ran */
-   short behavior;                                 /* Behavior mask */
-   short echomail;                                 /* Echomail behavior mask */
-   short wait_time;                                /* Average number of seconds
+    short errlevel[9];                              /* Errorlevel exits */
+    short last_ran;                                 /* Day of month last ran */
+    short behavior;                                 /* Behavior mask */
+    short echomail;                                 /* Echomail behavior mask */
+    short wait_time;                                /* Average number of seconds
                                                   * to wait between dials */
-   short with_connect;                             /* Number of calls to make
+    short with_connect;                             /* Number of calls to make
                                                   * with carrier */
-   short no_connect;                               /* Number of calls to make
+    short no_connect;                               /* Number of calls to make
                                                   * without carrier */
-   short node_cost;                                /* Maximum cost node to call
+    short node_cost;                                /* Maximum cost node to call
                                                   * during this event */
-   char cmd[32];                                 /* Chars to append to
+    char cmd[32];                                 /* Chars to append to
                                                   * packer, aftermail and
                                                   * cleanup */
-   char month;                                   /* Month when to do it   */
-   char day;                                     /* Day of month to do it */
-   char err_extent[6][4];                        /* 3 byte extensions for errorlevels 4-9 */
-   short extra[1];                                 /* Extra space for later */
+    char month;                                   /* Month when to do it   */
+    char day;                                     /* Day of month to do it */
+    char err_extent[6][4];                        /* 3 byte extensions for errorlevels 4-9 */
+    short extra[1];                                 /* Extra space for later */
 
-   short res_zone;
-   short res_net;
-   short res_node;
-   short res_point;
+    short res_zone;
+    short res_net;
+    short res_node;
+    short res_point;
 
-   char route_tag[16];
+    char route_tag[16];
 } EVENT;
 

@@ -1,4 +1,3 @@
-
 // LoraBBS Version 2.41 Free Edition
 // Copyright (C) 1987-98 Marco Maccaferri
 //
@@ -23,14 +22,14 @@
 
 struct _lhhead
 {
-  byte  bytetotal;
-  byte  ckecksum;
-  byte  method[5];
-  dword compressed_size;
-  dword uncompressed_size;
-  unsigned long stamp;
-  word  attr;
-  byte  namelen;
+    byte  bytetotal;
+    byte  ckecksum;
+    byte  method[5];
+    dword compressed_size;
+    dword uncompressed_size;
+    unsigned long stamp;
+    word  attr;
+    byte  namelen;
 };
 
 /****************************************************************************/
@@ -39,13 +38,13 @@ struct _lhhead
 
 struct _archead
 {
-  byte  sigbyte;            /* eof signature byte                */
-  byte  method;             /* method of storage                 */
-  byte  name[13];           /* name of file                      */
-  dword compressed_size;    /* size compressed                   */
-  unsigned long stamp;
-  word  crc;                /* crc check for data integrity      */
-  dword uncompressed_size;  /* length of original file           */
+    byte  sigbyte;            /* eof signature byte                */
+    byte  method;             /* method of storage                 */
+    byte  name[13];           /* name of file                      */
+    dword compressed_size;    /* size compressed                   */
+    unsigned long stamp;
+    word  crc;                /* crc check for data integrity      */
+    dword uncompressed_size;  /* length of original file           */
 };
 
 
@@ -63,65 +62,65 @@ struct _archead
 
 struct _zip_header
 {
-  struct
-  {
-    word ver_to_extract;
-    word bits;
-    word comp_method;
-    unsigned long last_mod;
-    dword crc;
-    dword compressed_size;
-    dword uncompressed_size;
-    word filename_length;
-    word xtra_field_length;
-  } info;
+    struct
+    {
+        word ver_to_extract;
+        word bits;
+        word comp_method;
+        unsigned long last_mod;
+        dword crc;
+        dword compressed_size;
+        dword uncompressed_size;
+        word filename_length;
+        word xtra_field_length;
+    } info;
 
-  char *filename;
-  char *xtra_field;
+    char * filename;
+    char * xtra_field;
 };
 
 
 struct _dir_header
 {
-  struct
-  {
-    word ver_made_by;
-    word ver_to_extract;
-    word bits;
-    word comp_method;
-    unsigned long last_mod;
-    dword crc;
-    dword compressed_size;
-    dword uncompressed_size;
-    word filename_length;
-    word xtra_field_length;
-    word file_comment_length;
-    word disk_number;
-    word file_attr_int;
-    dword file_attr_ext;
-    dword local_header_offset;
-  } info;
+    struct
+    {
+        word ver_made_by;
+        word ver_to_extract;
+        word bits;
+        word comp_method;
+        unsigned long last_mod;
+        dword crc;
+        dword compressed_size;
+        dword uncompressed_size;
+        word filename_length;
+        word xtra_field_length;
+        word file_comment_length;
+        word disk_number;
+        word file_attr_int;
+        dword file_attr_ext;
+        dword local_header_offset;
+    } info;
 
-  char *filename;
-  char *xtra_field;
-  char *comment;
+    char * filename;
+    char * xtra_field;
+    char * comment;
 };
 
 
 struct _dir_end
 {
-  struct
-  {
-    word this_disk;
-    word start_directory_disk;
-    word total_entries_this_disk;
-    word total_entries_this_dir;
-    dword size_of_dir;
-    dword offset_start_dir;
-    word zipfile_comment_length;
-  } info;
+    struct
+    {
+        word this_disk;
+        word start_directory_disk;
+        word total_entries_this_disk;
+        word total_entries_this_dir;
+        dword size_of_dir;
+        dword offset_start_dir;
+        word zipfile_comment_length;
+    } info;
 
-  char *file_comment;
+    char * file_comment;
 };
 
 

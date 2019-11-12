@@ -1,4 +1,3 @@
-
 // LoraBBS Version 2.41 Free Edition
 // Copyright (C) 1987-98 Marco Maccaferri
 //
@@ -19,21 +18,21 @@
 #ifndef isLORA
 
 #ifdef __OS2__
-char *VERSION = "LoraBBS-OS/2 v2.41";
+char * VERSION = "LoraBBS-OS/2 v2.41";
 #else
-char *VERSION = "LoraBBS-DOS v2.41";
+char * VERSION = "LoraBBS-DOS v2.41";
 #endif
 
-char *NOREG = " (Eval.)", *VNUM = "2.41";
+char * NOREG = " (Eval.)", *VNUM = "2.41";
 
-char *LMSG_VERSION     = "2.41";
-char *LSETUP_VERSION   = "2.41";
-char *LUSER_VERSION    = "2.41";
-char *LTOP_VERSION     = "2.41";
-char *LNETMGR_VERSION  = "2.41";
-char *LANGCOMP_VERSION = "2.41";
-char *FILEIDX_VERSION  = "2.41";
-char *INSTALL_VERSION  = "2.41";
+char * LMSG_VERSION     = "2.41";
+char * LSETUP_VERSION   = "2.41";
+char * LUSER_VERSION    = "2.41";
+char * LTOP_VERSION     = "2.41";
+char * LNETMGR_VERSION  = "2.41";
+char * LANGCOMP_VERSION = "2.41";
+char * FILEIDX_VERSION  = "2.41";
+char * INSTALL_VERSION  = "2.41";
 #endif     /* isLORA */
 
 #define MAJVERSION 2

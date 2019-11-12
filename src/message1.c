@@ -1,4 +1,3 @@
-
 // LoraBBS Version 2.41 Free Edition
 // Copyright (C) 1987-98 Marco Maccaferri
 //
@@ -33,36 +32,39 @@
 #include "externs.h"
 #include "prototyp.h"
 
-char *firstchar(char *, char *, int);
+char * firstchar(char *, char *, int);
 
-void gather_origin_netnode (s)
-char *s;
+void gather_origin_netnode(s)
+char * s;
 {
-   int zone, net, node, point;
-   char *p;
+    int zone, net, node, point;
+    char * p;
 
-   p = strchr(s, '\0');
+    p = strchr(s, '\0');
 
-   while (p != s && !isdigit (*p))
-      p--;
+    while (p != s && !isdigit(*p)) {
+        p--;
+    }
 
-   while (p > s)
-   {
-      if (!isdigit(*p) && *p != '.' && *p != ':' && *p != '/')
-         break;
-      p--;
-   }
+    while (p > s)
+    {
+        if (!isdigit(*p) && *p != '.' && *p != ':' && *p != '/') {
+            break;
+        }
+        p--;
+    }
 
-   if (p == s)
-      return;
+    if (p == s) {
+        return;
+    }
 
-   p++;
-   parse_netnode (p, &zone, &net, &node, &point);
+    p++;
+    parse_netnode(p, &zone, &net, &node, &point);
 
-   msg_fzone = zone;
-   msg.orig_net = net;
-   msg.orig = node;
-   msg_fpoint = point;
+    msg_fzone = zone;
+    msg.orig_net = net;
+    msg.orig = node;
+    msg_fpoint = point;
 }
 
 

@@ -1,4 +1,3 @@
-
 // LoraBBS Version 2.41 Free Edition
 // Copyright (C) 1987-98 Marco Maccaferri
 //
@@ -22,149 +21,155 @@
 
 #include "language.h"
 
-int get_language (char *name_of_file)
+int get_language(char * name_of_file)
 {
-   int len, count_from_file, file_version, escape_on, internal_count, total_size, error;
-   char *p, *q, c, *storage, **load_pointers, linebuf[512];
-   FILE *fpt;
+    int len, count_from_file, file_version, escape_on, internal_count, total_size, error;
+    char * p, *q, c, *storage, **load_pointers, linebuf[512];
+    FILE * fpt;
 
-   internal_count = 0;                     /* zero out internal counter */
-   count_from_file = 0;                    /* zero out internal counter */
-   total_size = 0;                         /* Initialize storage size   */
-   error = 0;                              /* Initialize error value    */
+    internal_count = 0;                     /* zero out internal counter */
+    count_from_file = 0;                    /* zero out internal counter */
+    total_size = 0;                         /* Initialize storage size   */
+    error = 0;                              /* Initialize error value    */
 
-   load_pointers = pointers;               /* Start at the beginning    */
-   storage = memory;                       /* A very good place to start*/
+    load_pointers = pointers;               /* Start at the beginning    */
+    storage = memory;                       /* A very good place to start*/
 
-   if ((fpt = fopen (name_of_file, "r")) == NULL) {
-      fprintf (stderr, "Can not open input file %s\n", name_of_file);
-      return (-1);
-   }
+    if ((fpt = fopen(name_of_file, "r")) == NULL) {
+        fprintf(stderr, "Can not open input file %s\n", name_of_file);
+        return (-1);
+    }
 
-   while (fgets (linebuf, 500, fpt) != NULL) {
-      escape_on = 0;
-      p = q = linebuf;
+    while (fgets(linebuf, 500, fpt) != NULL) {
+        escape_on = 0;
+        p = q = linebuf;
 
-/*
-      if (count_from_file) {
-         while (*p != 0 && *p != '"')
-            p++;
-         if (*p == '"')
-            strcpy (linebuf, ++p);
-         else
-            strcpy (linebuf, p);
-         p = q = linebuf;
-      }
-*/
+        /*
+              if (count_from_file) {
+                 while (*p != 0 && *p != '"')
+                    p++;
+                 if (*p == '"')
+                    strcpy (linebuf, ++p);
+                 else
+                    strcpy (linebuf, p);
+                 p = q = linebuf;
+              }
+        */
 
-      while ((c = *p++) != 0) {
-         switch (c) {
-/*
-            case '"':
-               c = '\n';
-               *q = *p = '\0';
-               break;
-*/
+        while ((c = *p++) != 0) {
+            switch (c) {
+                /*
+                            case '"':
+                               c = '\n';
+                               *q = *p = '\0';
+                               break;
+                */
 
-            case ';':
-               if (escape_on) {
-                  *q++ = ';';
-                  --escape_on;
-                  break;
-               }
+                case ';':
+                    if (escape_on) {
+                        *q++ = ';';
+                        --escape_on;
+                        break;
+                    }
 
-            case '\n':
-               *q = *p = '\0';
-               break;
+                case '\n':
+                    *q = *p = '\0';
+                    break;
 
-            case '\\':
-               if (escape_on) {
-                  *q++ = '\\';
-                  --escape_on;
-               }
-               else
-                  ++escape_on;
-               break;
+                case '\\':
+                    if (escape_on) {
+                        *q++ = '\\';
+                        --escape_on;
+                    }
+                    else {
+                        ++escape_on;
+                    }
+                    break;
 
-            case 'n':
-               if (escape_on) {
-                  *q++ = '\n';
-                  --escape_on;
-               }
-               else
-                  *q++ = c;
-               break;
+                case 'n':
+                    if (escape_on) {
+                        *q++ = '\n';
+                        --escape_on;
+                    }
+                    else {
+                        *q++ = c;
+                    }
+                    break;
 
-            case 'r':
-               if (escape_on) {
-                  *q++ = '\r';
-                  --escape_on;
-               }
-               else
-                  *q++ = c;
-               break;
+                case 'r':
+                    if (escape_on) {
+                        *q++ = '\r';
+                        --escape_on;
+                    }
+                    else {
+                        *q++ = c;
+                    }
+                    break;
 
-            case '_':
-               if (escape_on) {
-                  *q++ = '_';
-                  --escape_on;
-               }
-               else
-                  *q++ = ' ';
-               break;
+                case '_':
+                    if (escape_on) {
+                        *q++ = '_';
+                        --escape_on;
+                    }
+                    else {
+                        *q++ = ' ';
+                    }
+                    break;
 
-            default:
-               *q++ = c;
-               escape_on = 0;
-               break;
-         }
-      }
+                default:
+                    *q++ = c;
+                    escape_on = 0;
+                    break;
+            }
+        }
 
-      if (!(len = (int)(q - linebuf)))
-         continue;
-
-      if (!count_from_file) {
-         sscanf (linebuf,"%d %d",&count_from_file, &file_version);
-         if (count_from_file <= pointer_size)
+        if (!(len = (int)(q - linebuf))) {
             continue;
+        }
 
-         fprintf (stderr, "Messages in file = %d, Pointer array size = %d\n", count_from_file, pointer_size);
-         error = -2;
-         break;
-      }
+        if (!count_from_file) {
+            sscanf(linebuf, "%d %d", &count_from_file, &file_version);
+            if (count_from_file <= pointer_size) {
+                continue;
+            }
 
-      ++len;
-      if (((total_size += len) < memory_size) &&  (internal_count < pointer_size)) {
-         memcpy (storage, linebuf, len);     /* Copy it now (with term)   */
-         *load_pointers++ = storage;         /* Point to start of string  */
-         storage += len;                     /* Move pointer into memory  */
-      }
+            fprintf(stderr, "Messages in file = %d, Pointer array size = %d\n", count_from_file, pointer_size);
+            error = -2;
+            break;
+        }
 
-      ++internal_count;                       /* bump count */
-   }
+        ++len;
+        if (((total_size += len) < memory_size) && (internal_count < pointer_size)) {
+            memcpy(storage, linebuf, len);      /* Copy it now (with term)   */
+            *load_pointers++ = storage;         /* Point to start of string  */
+            storage += len;                     /* Move pointer into memory  */
+        }
 
-   fclose (fpt);
+        ++internal_count;                       /* bump count */
+    }
 
-   if (internal_count > pointer_size) {
-      fprintf (stderr, "%d messages read exceeds pointer array size of %d\n", internal_count, pointer_size);
-      error = -3;
-   }
+    fclose(fpt);
 
-   if (total_size > memory_size) {
-      fprintf (stderr, "Required memory of %d bytes exceeds %d bytes available\n", total_size, memory_size);
-      error = -4;
-   }
+    if (internal_count > pointer_size) {
+        fprintf(stderr, "%d messages read exceeds pointer array size of %d\n", internal_count, pointer_size);
+        error = -3;
+    }
 
-   if (count_from_file != internal_count) {
-      fprintf (stderr, "Count of %d lines does not match %d lines actually read\n", count_from_file, internal_count);
-      error = -5;
-   }
+    if (total_size > memory_size) {
+        fprintf(stderr, "Required memory of %d bytes exceeds %d bytes available\n", total_size, memory_size);
+        error = -4;
+    }
 
-   if (!error) {
-      pointer_size = internal_count;          /* Store final usage counts  */
-      memory_size = total_size;
-      *load_pointers = NULL;                  /* Terminate pointer table   */
-   }
+    if (count_from_file != internal_count) {
+        fprintf(stderr, "Count of %d lines does not match %d lines actually read\n", count_from_file, internal_count);
+        error = -5;
+    }
 
-   return (error);
+    if (!error) {
+        pointer_size = internal_count;          /* Store final usage counts  */
+        memory_size = total_size;
+        *load_pointers = NULL;                  /* Terminate pointer table   */
+    }
+
+    return (error);
 }

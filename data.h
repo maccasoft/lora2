@@ -1,4 +1,3 @@
-
 // LoraBBS Version 2.41 Free Edition
 // Copyright (C) 1987-98 Marco Maccaferri
 //
@@ -16,27 +15,27 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-static char *wtext [] = {
-   "Sun",
-   "Mon",
-   "Tue",
-   "Wed",
-   "Thu",
-   "Fri",
-   "Sat"
+static char * wtext [] = {
+    "Sun",
+    "Mon",
+    "Tue",
+    "Wed",
+    "Thu",
+    "Fri",
+    "Sat"
 };
 
-char *mday[] = {
-   "January",
-   "February",
-   "March",
-   "April",
-   "May",
-   "June",
-   "July",
-   "August",
-   "September",
-   "October",
-   "November",
-   "December"
+char * mday[] = {
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December"
 };

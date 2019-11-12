@@ -71,13 +71,13 @@
 
 typedef struct _search
 {
-  struct _search *next;
+    struct _search * next;
 
-  long attr;
-  int  flag;
+    long attr;
+    int  flag;
 
-  char *txt;
-  char where;
+    char * txt;
+    char where;
 
 } SEARCH;
 
@@ -87,28 +87,28 @@ typedef struct _browse BROWSE;
 
 struct _browse
 {
-  char *path;
-  word type;
+    char * path;
+    word type;
 
-  word bflag;
-  dword bdata;
-  SEARCH *first;
-  char *nonstop;
-  
-  dword msgn;
-  
-  MSG *sq;
-  MSGH *m;
-  XMSG msg;
-  word matched;
-  
-  int (*Begin_Ptr)(BROWSE *b);
-  int (*Status_Ptr)(BROWSE *b,char *aname,int colour);
-  int (*Idle_Ptr)(BROWSE *b);
-  int (*Display_Ptr)(BROWSE *b);
-  int (*After_Ptr)(BROWSE *b);
-  int (*End_Ptr)(BROWSE *b);
-  int (*Match_Ptr)(BROWSE *b);
+    word bflag;
+    dword bdata;
+    SEARCH * first;
+    char * nonstop;
+
+    dword msgn;
+
+    MSG * sq;
+    MSGH * m;
+    XMSG msg;
+    word matched;
+
+    int (*Begin_Ptr)(BROWSE * b);
+    int (*Status_Ptr)(BROWSE * b, char * aname, int colour);
+    int (*Idle_Ptr)(BROWSE * b);
+    int (*Display_Ptr)(BROWSE * b);
+    int (*After_Ptr)(BROWSE * b);
+    int (*End_Ptr)(BROWSE * b);
+    int (*Match_Ptr)(BROWSE * b);
 };
 
 

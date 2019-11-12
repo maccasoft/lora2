@@ -17,19 +17,19 @@ extern "C" int
 #else
 extern int _cdecl
 #endif
-checkpath (char *string,     /* Input file name string */
-           char *drive,      /* Drive letter and colon */
-           char *dir,        /* \directory\ */
-           char *fname,      /* file name */
-           char *ext,        /* .extension */
-           char *fullpath);  /* combined path */
+checkpath(char * string,     /* Input file name string */
+          char * drive,     /* Drive letter and colon */
+          char * dir,       /* \directory\ */
+          char * fname,     /* file name */
+          char * ext,       /* .extension */
+          char * fullpath); /* combined path */
 
 /*
    This routine accepts a file name and path, checks and resolves the
    path, and splits the name into its components.
 
    A relative path, or no path at all, is resolved to a full path
-   specification. An invalid disk drive will not cause the routine 
+   specification. An invalid disk drive will not cause the routine
    to fail.
 */
 

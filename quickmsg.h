@@ -1,4 +1,3 @@
-
 // LoraBBS Version 2.41 Free Edition
 // Copyright (C) 1987-98 Marco Maccaferri
 //
@@ -31,78 +30,78 @@
 #define Q_CPT   64
 
 struct _msginfo {
-   word lowmsg;
-   word highmsg;
-   word totalmsgs;
-   word totalonboard[200];
+    word lowmsg;
+    word highmsg;
+    word totalmsgs;
+    word totalonboard[200];
 };
 
 struct _msgidx {
-   short msgnum;
-   byte board;
+    short msgnum;
+    byte board;
 };
 
 struct _msgtoidx {
-   char string[36];
+    char string[36];
 };
 
 struct _msghdr {
-   short msgnum;
-   word prevreply;
-   word nextreply;
-   word timesread;
-   word startblock;
-   word numblocks;
-   word destnet;
-   word destnode;
-   word orignet;
-   word orignode;
-   byte destzone;
-   byte origzone;
-   word cost;
-   byte msgattr;
-   byte netattr;
-   byte board;
-   char time[6];
-   char date[9];
-   char whoto[36];
-   char whofrom[36];
-   char subject[73];
+    short msgnum;
+    word prevreply;
+    word nextreply;
+    word timesread;
+    word startblock;
+    word numblocks;
+    word destnet;
+    word destnode;
+    word orignet;
+    word orignode;
+    byte destzone;
+    byte origzone;
+    word cost;
+    byte msgattr;
+    byte netattr;
+    byte board;
+    char time[6];
+    char date[9];
+    char whoto[36];
+    char whofrom[36];
+    char subject[73];
 };
 
 struct _gold_msginfo {
-   long lowmsg;
-   long highmsg;
-   long totalmsgs;
-   word totalonboard[500];
+    long lowmsg;
+    long highmsg;
+    long totalmsgs;
+    word totalonboard[500];
 };
 
 struct _gold_msgidx {
-   long msgnum;
-   word board;
+    long msgnum;
+    word board;
 };
 
 struct _gold_msghdr {
-   long msgnum;
-   long prevreply;
-   long nextreply;
-   word timesread;
-   long startblock;
-   word numblocks;
-   word destnet;
-   word destnode;
-   word orignet;
-   word orignode;
-	byte destzone;
-	byte origzone;
-	word cost;
-	word msgattr;
-	word netattr;
-	word board;
-	char time[6];
-	char date[9];
-	char whoto[36];
-	char whofrom[36];
-	char subject[73];
+    long msgnum;
+    long prevreply;
+    long nextreply;
+    word timesread;
+    long startblock;
+    word numblocks;
+    word destnet;
+    word destnode;
+    word orignet;
+    word orignode;
+    byte destzone;
+    byte origzone;
+    word cost;
+    word msgattr;
+    word netattr;
+    word board;
+    char time[6];
+    char date[9];
+    char whoto[36];
+    char whofrom[36];
+    char subject[73];
 };
 

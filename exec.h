@@ -13,8 +13,8 @@
 */
 
 
-extern int do_exec (char *xfn, char *pars, int spawn, unsigned needed,
-						  char **envp);
+extern int do_exec(char * xfn, char * pars, int spawn, unsigned needed,
+                   char ** envp);
 
 /*
    The EXEC function.
@@ -28,22 +28,22 @@ extern int do_exec (char *xfn, char *pars, int spawn, unsigned needed,
                   If the filename does not include a path, the
                   current PATH is searched after the default.
                   If the filename does not include an extension,
-                  the path is scanned for a COM, EXE, or BAT file 
+                  the path is scanned for a COM, EXE, or BAT file
                   in that order.
 
          pars     The program parameters.
 
-         spawn    If 0, the function will terminate after the 
+         spawn    If 0, the function will terminate after the
                   EXECed program returns, the function will not return.
 
-                  NOTE: If the program file is not found, the function 
-                        will always return with the appropriate error 
+                  NOTE: If the program file is not found, the function
+                        will always return with the appropriate error
                         code, even if 'spawn' is 0.
 
                   If non-0, the function will return after executing the
                   program. If necessary (see the "needed" parameter),
                   memory will be swapped out before executing the program.
-                  For swapping, spawn must contain a combination of the 
+                  For swapping, spawn must contain a combination of the
                   following flags:
 
                      USE_EMS  (0x01)  - allow EMS swap
@@ -72,13 +72,13 @@ extern int do_exec (char *xfn, char *pars, int spawn, unsigned needed,
                   a file. You can either set NO_PREALLOC to avoid allocation
                   in any case, or let the prep_swap routine decide whether
                   to do preallocation or not depending on the file being
-                  on a network drive (this will only work with DOS 3.1 or 
+                  on a network drive (this will only work with DOS 3.1 or
                   later).
 
          needed   The memory needed for the program in paragraphs (16 Bytes).
-                  If not enough memory is free, the program will 
-                  be swapped out. 
-                  Use 0 to never swap, 0xffff to always swap. 
+                  If not enough memory is free, the program will
+                  be swapped out.
+                  Use 0 to never swap, 0xffff to always swap.
                   If 'spawn' is 0, this parameter is irrelevant.
 
          envp     The environment to be passed to the spawned
@@ -110,7 +110,7 @@ extern int do_exec (char *xfn, char *pars, int spawn, unsigned needed,
 
          0x0400:       Error allocating environment buffer
 
-         0x0500:       Swapping requested, but prep_swap has not 
+         0x0500:       Swapping requested, but prep_swap has not
                        been called or returned an error.
          0x0501:       MCBs don't match expected setup
          0x0502:       Error while swapping out
@@ -144,7 +144,7 @@ extern int do_exec (char *xfn, char *pars, int spawn, unsigned needed,
 
 
 /*
-   The function pointed to by "spawn_check" will be called immediately 
+   The function pointed to by "spawn_check" will be called immediately
    before doing the actual swap/exec, provided that
 
       - the preparation code did not detect an error, and
@@ -174,15 +174,15 @@ extern int do_exec (char *xfn, char *pars, int spawn, unsigned needed,
    usual "enter EXIT to return" message when loading COMMAND.COM)
    and to do clean-up and additional checking.
 
-   CAUTION: If swapping is > 0, the routine may not modify the 
+   CAUTION: If swapping is > 0, the routine may not modify the
    memory layout, i.e. it may not call any memory allocation or
    deallocation routines.
 
    "spawn_check" is initialized to NULL.
 */
 
-typedef int (spawn_check_proc)(int cmdbat, int swapping, char *execfn, char *progpars);
-extern spawn_check_proc *spawn_check;
+typedef int (spawn_check_proc)(int cmdbat, int swapping, char * execfn, char * progpars);
+extern spawn_check_proc * spawn_check;
 
 /*
    The 'swap_prep' variable can be accessed from the spawn_check
@@ -191,7 +191,7 @@ extern spawn_check_proc *spawn_check;
    information if the 'swapping' parameter to spawn_check is > 0.
    The contents of this variable may not be changed.
 
-   The 'swapmethod' field will contain one of the flags USE_FILE, 
+   The 'swapmethod' field will contain one of the flags USE_FILE,
    USE_XMS, or USE_EMS.
 
    Caution: The module using this data structure must be compiled
@@ -200,17 +200,17 @@ extern spawn_check_proc *spawn_check;
 */
 
 typedef struct {
-               long xmm;            /* XMM entry address */
-               int first_mcb;       /* Segment of first MCB */
-               int psp_mcb;         /* Segment of MCB of our PSP */
-               int env_mcb;         /* MCB of Environment segment */
-               int noswap_mcb;      /* MCB that may not be swapped */
-               int ems_pageframe;   /* EMS page frame address */
-               int handle;          /* EMS/XMS/File handle */
-               int total_mcbs;      /* Total number of MCBs */
-               char swapmethod;     /* Method for swapping */
-               char swapfilename[81]; /* Swap file name if swapping to file */
-               } prep_block;
+    long xmm;            /* XMM entry address */
+    int first_mcb;       /* Segment of first MCB */
+    int psp_mcb;         /* Segment of MCB of our PSP */
+    int env_mcb;         /* MCB of Environment segment */
+    int noswap_mcb;      /* MCB that may not be swapped */
+    int ems_pageframe;   /* EMS page frame address */
+    int handle;          /* EMS/XMS/File handle */
+    int total_mcbs;      /* Total number of MCBs */
+    char swapmethod;     /* Method for swapping */
+    char swapfilename[81]; /* Swap file name if swapping to file */
+} prep_block;
 
 extern prep_block swap_prep;
 

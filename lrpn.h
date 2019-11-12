@@ -1,4 +1,3 @@
-
 // LoraBBS Version 2.41 Free Edition
 // Copyright (C) 1987-98 Marco Maccaferri
 //
@@ -90,8 +89,8 @@
 ** Variabile booleana
 */
 typedef enum {
-	FALSE = 0,
-	TRUE = 1
+    FALSE = 0,
+    TRUE = 1
 } bool;
 
 /* Fine del file LRPN.H */

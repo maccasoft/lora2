@@ -40,10 +40,10 @@
 /*                                                                          */
 /*--------------------------------------------------------------------------*/
 
-extern char **pointers;                 /* Array of pointers into memory */
+extern char ** pointers;                /* Array of pointers into memory */
 extern int    pointer_size;             /* Number of pointers            */
-extern char  *memory;                   /* Memory                        */
+extern char * memory;                   /* Memory                        */
 extern int    memory_size;              /* Size of memory                */
 
-extern int    get_language (char *);
-extern int    put_language (char *);
+extern int    get_language(char *);
+extern int    put_language(char *);

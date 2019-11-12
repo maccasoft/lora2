@@ -41,16 +41,16 @@
 #define MSGAPI
 
 #ifdef __OS2__
-  #ifndef EXPENTRY
-    #define EXPENTRY pascal far _loadds
-  #endif
-    
-  #define OS2LOADDS _loadds
+#ifndef EXPENTRY
+#define EXPENTRY pascal far _loadds
+#endif
+
+#define OS2LOADDS _loadds
 #else
-  #ifndef EXPENTRY
-    #define EXPENTRY pascal
-  #endif
-  #define OS2LOADDS
+#ifndef EXPENTRY
+#define EXPENTRY pascal
+#endif
+#define OS2LOADDS
 #endif
 
 
@@ -88,9 +88,9 @@ typedef struct _netaddr NETADDR;
 
 struct _minf
 {
-  word req_version;
-  word def_zone;
-  word haveshare;  /* filled in by msgapi routines - no need to set this */
+    word req_version;
+    word def_zone;
+    word haveshare;  /* filled in by msgapi routines - no need to set this */
 };
 
 
@@ -103,10 +103,10 @@ struct _minf
 
 struct _netaddr
 {
-  word zone;
-  word net;
-  word node;
-  word point;
+    word zone;
+    word net;
+    word node;
+    word point;
 };
 
 
@@ -116,51 +116,51 @@ struct _netaddr
 
 typedef struct
 {
-  dword attr;
+    dword attr;
 
-  /* Bitmasks for 'attr' */
+    /* Bitmasks for 'attr' */
 
-  #define MSGPRIVATE 0x0001
-  #define MSGCRASH   0x0002
-  #define MSGREAD    0x0004
-  #define MSGSENT    0x0008
-  #define MSGFILE    0x0010
-  #define MSGFWD     0x0020
-  #define MSGORPHAN  0x0040
-  #define MSGKILL    0x0080
-  #define MSGLOCAL   0x0100
-  #define MSGHOLD    0x0200
-  #define MSGXX2     0x0400
-  #define MSGFRQ     0x0800
-  #define MSGRRQ     0x1000
-  #define MSGCPT     0x2000
-  #define MSGARQ     0x4000
-  #define MSGURQ     0x8000
-  #define MSGSCANNED 0x00010000L
+#define MSGPRIVATE 0x0001
+#define MSGCRASH   0x0002
+#define MSGREAD    0x0004
+#define MSGSENT    0x0008
+#define MSGFILE    0x0010
+#define MSGFWD     0x0020
+#define MSGORPHAN  0x0040
+#define MSGKILL    0x0080
+#define MSGLOCAL   0x0100
+#define MSGHOLD    0x0200
+#define MSGXX2     0x0400
+#define MSGFRQ     0x0800
+#define MSGRRQ     0x1000
+#define MSGCPT     0x2000
+#define MSGARQ     0x4000
+#define MSGURQ     0x8000
+#define MSGSCANNED 0x00010000L
 
 
-  #define XMSG_FROM_SIZE  36
-  #define XMSG_TO_SIZE    36
-  #define XMSG_SUBJ_SIZE  72
+#define XMSG_FROM_SIZE  36
+#define XMSG_TO_SIZE    36
+#define XMSG_SUBJ_SIZE  72
 
-  byte from[XMSG_FROM_SIZE];
-  byte to[XMSG_TO_SIZE];
-  byte subj[XMSG_SUBJ_SIZE];
+    byte from[XMSG_FROM_SIZE];
+    byte to[XMSG_TO_SIZE];
+    byte subj[XMSG_SUBJ_SIZE];
 
-  NETADDR orig;        /* Origination and destination addresses             */
-  NETADDR dest;
+    NETADDR orig;        /* Origination and destination addresses             */
+    NETADDR dest;
 
-  struct _stamp2 date_written;   /* When user wrote the msg (UTC)            */
-  struct _stamp2 date_arrived;   /* When msg arrived on-line (UTC)           */
-  sword utc_ofs;                /* Offset from UTC of message writer, in    *
+    struct _stamp2 date_written;   /* When user wrote the msg (UTC)            */
+    struct _stamp2 date_arrived;   /* When msg arrived on-line (UTC)           */
+    sword utc_ofs;                /* Offset from UTC of message writer, in    *
                                  * minutes.                                 */
 
-  #define MAX_REPLY 10          /* Max number of stored replies to one msg  */
+#define MAX_REPLY 10          /* Max number of stored replies to one msg  */
 
-  UMSGID replyto;
-  UMSGID replies[MAX_REPLY];
+    UMSGID replyto;
+    UMSGID replies[MAX_REPLY];
 
-  byte ftsc_date[20];  /* Obsolete date information.  If it weren't for the *
+    byte ftsc_date[20];  /* Obsolete date information.  If it weren't for the *
                         * fact that FTSC standards say that one cannot      *
                         * modify an in-transit message, I'd be VERY         *
                         * tempted to axe this field entirely, and recreate  *
@@ -183,53 +183,53 @@ typedef struct
 
 struct _msgapi
 {
-  #define MSGAPI_ID   0x0201414dL
-    
-  dword id;                       /* Must always equal MSGAPI_ID */
+#define MSGAPI_ID   0x0201414dL
 
-  word len;                       /* LENGTH OF THIS STRUCTURE! */
-  word type;
+    dword id;                       /* Must always equal MSGAPI_ID */
 
-  dword num_msg;
-  dword cur_msg;
-  dword high_msg;
-  dword high_water;
+    word len;                       /* LENGTH OF THIS STRUCTURE! */
+    word type;
 
-  word sz_xmsg;
+    dword num_msg;
+    dword cur_msg;
+    dword high_msg;
+    dword high_water;
 
-  byte locked;                    /* Base is locked from use by other tasks */
-  byte isecho;                    /* Is this an EchoMail area?              */
+    word sz_xmsg;
 
-  /* Function pointers for manipulating messages within this area.          */
-  struct _apifuncs
-  {
-    sword  (EXPENTRY * CloseArea)(MSG *mh);
-    MSGH * (EXPENTRY * OpenMsg)  (MSG *mh,word mode,dword n);
-    sword  (EXPENTRY * CloseMsg) (MSGH *msgh);
-    dword  (EXPENTRY * ReadMsg)  (MSGH *msgh, XMSG *msg, dword ofs,
-                                dword bytes, byte *text, dword cbyt,
-                                byte *ctxt);
-    sword  (EXPENTRY * WriteMsg) (MSGH *msgh,word append,XMSG *msg,
-                                byte *text, dword textlen, dword totlen,
-                                dword clen, byte *ctxt);
-    sword  (EXPENTRY * KillMsg)  (MSG *mh, dword msgnum);
-    sword  (EXPENTRY * Lock)     (MSG *mh);
-    sword  (EXPENTRY * Unlock)   (MSG *mh);
-    sword  (EXPENTRY * SetCurPos)(MSGH *msgh, dword pos);
-    dword  (EXPENTRY * GetCurPos)(MSGH *msgh);
-    UMSGID (EXPENTRY * MsgnToUid)(MSG *mh, dword msgnum);
-    dword  (EXPENTRY * UidToMsgn)(MSG *mh,UMSGID umsgid,word type);
-    dword  (EXPENTRY * GetHighWater)(MSG *mh);
-    sword  (EXPENTRY * SetHighWater)(MSG *mh, dword hwm);
-    dword  (EXPENTRY * GetTextLen)(MSGH *msgh);
-    dword  (EXPENTRY * GetCtrlLen)(MSGH *msgh);
-  } *api;
+    byte locked;                    /* Base is locked from use by other tasks */
+    byte isecho;                    /* Is this an EchoMail area?              */
 
-  /* Pointer to application-specific data.  API_SQ.C and API_SDM.C use      *
-   * this for different things, so again, no applications should muck       *
-   * with anything in here.                                                 */
+    /* Function pointers for manipulating messages within this area.          */
+    struct _apifuncs
+    {
+        sword(EXPENTRY * CloseArea)(MSG * mh);
+        MSGH * (EXPENTRY * OpenMsg)(MSG * mh, word mode, dword n);
+        sword(EXPENTRY * CloseMsg)(MSGH * msgh);
+        dword(EXPENTRY * ReadMsg)(MSGH * msgh, XMSG * msg, dword ofs,
+                                  dword bytes, byte * text, dword cbyt,
+                                  byte * ctxt);
+        sword(EXPENTRY * WriteMsg)(MSGH * msgh, word append, XMSG * msg,
+                                   byte * text, dword textlen, dword totlen,
+                                   dword clen, byte * ctxt);
+        sword(EXPENTRY * KillMsg)(MSG * mh, dword msgnum);
+        sword(EXPENTRY * Lock)(MSG * mh);
+        sword(EXPENTRY * Unlock)(MSG * mh);
+        sword(EXPENTRY * SetCurPos)(MSGH * msgh, dword pos);
+        dword(EXPENTRY * GetCurPos)(MSGH * msgh);
+        UMSGID(EXPENTRY * MsgnToUid)(MSG * mh, dword msgnum);
+        dword(EXPENTRY * UidToMsgn)(MSG * mh, UMSGID umsgid, word type);
+        dword(EXPENTRY * GetHighWater)(MSG * mh);
+        sword(EXPENTRY * SetHighWater)(MSG * mh, dword hwm);
+        dword(EXPENTRY * GetTextLen)(MSGH * msgh);
+        dword(EXPENTRY * GetCtrlLen)(MSGH * msgh);
+    } * api;
 
-  void /*far*/ *apidata;
+    /* Pointer to application-specific data.  API_SQ.C and API_SDM.C use      *
+     * this for different things, so again, no applications should muck       *
+     * with anything in here.                                                 */
+
+    void /*far*/ *apidata;
 };
 
 
@@ -245,11 +245,11 @@ struct _msgapi
 #if !defined(MSGAPI_HANDLERS) && !defined(NO_MSGH_DEF)
 struct _msgh
 {
-  MSG *sq;
-  dword id;
+    MSG * sq;
+    dword id;
 
-  dword bytes_written;
-  dword cur_pos;
+    dword bytes_written;
+    dword cur_pos;
 };
 #endif
 
@@ -269,23 +269,23 @@ extern word _stdc msgapierr;
 extern struct _minf _stdc mi;
 
 #ifdef TSR
-  #define IMS_ID    0x4453u
-  #define IMS_INTR  0x32
+#define IMS_ID    0x4453u
+#define IMS_INTR  0x32
 #endif
 
 #if defined(TSR) && defined(MSGAPI_PROC)
-  extern void * (_stdc *memalloc)(word len);
-  extern void (_stdc *memfree)(void *block);
+extern void * (_stdc * memalloc)(word len);
+extern void (_stdc * memfree)(void * block);
 
-  #define palloc(s)     (*memalloc)(s)
-  #define pfree(s)      (*memfree)(s)
-  #define farpalloc(s)  palloc(s)
-  #define farpfree(s)   pfree(s)
+#define palloc(s)     (*memalloc)(s)
+#define pfree(s)      (*memfree)(s)
+#define farpalloc(s)  palloc(s)
+#define farpfree(s)   pfree(s)
 #else
-  #define palloc(s)     malloc(s)
-  #define pfree(s)      free(s)
-  #define farpalloc(s)  farmalloc(s)
-  #define farpfree(s)   farfree(s)
+#define palloc(s)     malloc(s)
+#define pfree(s)      free(s)
+#define farpalloc(s)  farmalloc(s)
+#define farpfree(s)   farfree(s)
 #endif
 
 
@@ -342,45 +342,45 @@ extern struct _minf _stdc mi;
 #define MsgGetNumMsg(mh)      ((mh)->num_msg)
 #define MsgGetHighMsg(mh)     ((mh)->high_msg)
 
-sword EXPENTRY MsgOpenApi(struct _minf *minf);
+sword EXPENTRY MsgOpenApi(struct _minf * minf);
 sword EXPENTRY MsgCloseApi(void);
 
-MSG * EXPENTRY MsgOpenArea(byte *name,word mode,word type);
-sword EXPENTRY MsgValidate(word type,byte *name);
-sword EXPENTRY MsgBrowseArea(BROWSE *b);
+MSG * EXPENTRY MsgOpenArea(byte * name, word mode, word type);
+sword EXPENTRY MsgValidate(word type, byte * name);
+sword EXPENTRY MsgBrowseArea(BROWSE * b);
 
-sword MSGAPI InvalidMsgh(MSGH *msgh);
-sword MSGAPI InvalidMh(MSG *mh);
+sword MSGAPI InvalidMsgh(MSGH * msgh);
+sword MSGAPI InvalidMh(MSG * mh);
 
-void EXPENTRY SquishSetMaxMsg(MSG *sq, dword max_msgs, dword skip_msgs, dword age);
-dword EXPENTRY SquishHash(byte *f);
-
-
-
-MSG * MSGAPI SdmOpenArea(byte *name,word mode,word type);
-sword MSGAPI SdmValidate(byte *name);
-
-MSG * MSGAPI SquishOpenArea(byte *name,word mode,word type);
-sword MSGAPI SquishValidate(byte *name);
+void EXPENTRY SquishSetMaxMsg(MSG * sq, dword max_msgs, dword skip_msgs, dword age);
+dword EXPENTRY SquishHash(byte * f);
 
 
-byte * EXPENTRY CvtCtrlToKludge(byte *ctrl);
-byte * EXPENTRY GetCtrlToken(byte *where,byte *what);
-byte * EXPENTRY CopyToControlBuf(byte *txt, byte **newtext, unsigned *length);
-void EXPENTRY ConvertControlInfo(byte *ctrl,NETADDR *orig,NETADDR *dest);
-word EXPENTRY NumKludges(char *txt);
-void EXPENTRY RemoveFromCtrl(byte *ctrl,byte *what);
+
+MSG * MSGAPI SdmOpenArea(byte * name, word mode, word type);
+sword MSGAPI SdmValidate(byte * name);
+
+MSG * MSGAPI SquishOpenArea(byte * name, word mode, word type);
+sword MSGAPI SquishValidate(byte * name);
 
 
-sword far pascal farread(sword handle,byte far *buf,word len);
-sword far pascal farwrite(sword handle,byte far *buf,word len);
-byte * _fast Address(NETADDR *a);
-byte * StripNasties(byte *str);
+byte * EXPENTRY CvtCtrlToKludge(byte * ctrl);
+byte * EXPENTRY GetCtrlToken(byte * where, byte * what);
+byte * EXPENTRY CopyToControlBuf(byte * txt, byte ** newtext, unsigned * length);
+void EXPENTRY ConvertControlInfo(byte * ctrl, NETADDR * orig, NETADDR * dest);
+word EXPENTRY NumKludges(char * txt);
+void EXPENTRY RemoveFromCtrl(byte * ctrl, byte * what);
+
+
+sword far pascal farread(sword handle, byte far * buf, word len);
+sword far pascal farwrite(sword handle, byte far * buf, word len);
+byte * _fast Address(NETADDR * a);
+byte * StripNasties(byte * str);
 
 #ifdef __MSDOS__
-  sword far pascal shareloaded(void);
+sword far pascal shareloaded(void);
 #else
-  #define shareloaded() TRUE
+#define shareloaded() TRUE
 #endif
 
 #endif

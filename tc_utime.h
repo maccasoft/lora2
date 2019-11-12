@@ -45,8 +45,8 @@
 /*--------------------------------------------------------------------------*/
 
 struct utimbuf {
-	time_t actime;  /* access time */
-	time_t modtime; /* modification time */
+    time_t actime;  /* access time */
+    time_t modtime; /* modification time */
 };
 
 int cdecl utime(char *, struct utimbuf *);

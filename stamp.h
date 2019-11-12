@@ -36,35 +36,35 @@
 
 struct _stamp2   /* DOS-style datestamp */
 {
-  struct
-  {
-    unsigned int da : 5;
-    unsigned int mo : 4;
-    unsigned int yr : 7;
-  } date;
+    struct
+    {
+        unsigned int da : 5;
+        unsigned int mo : 4;
+        unsigned int yr : 7;
+    } date;
 
-  struct
-  {
-    unsigned int ss : 5;
-    unsigned int mm : 6;
-    unsigned int hh : 5;
-  } time;
+    struct
+    {
+        unsigned int ss : 5;
+        unsigned int mm : 6;
+        unsigned int hh : 5;
+    } time;
 };
 
 
 struct _dos_st
 {
-  word date;
-  word time;
+    word date;
+    word time;
 };
 
 /* Union so we can access stamp as "int" or by individual components */
 
-union stamp_combo   
+union stamp_combo
 {
-  dword ldate;
-  struct _stamp2 msg_st;
-  struct _dos_st dos_st;
+    dword ldate;
+    struct _stamp2 msg_st;
+    struct _dos_st dos_st;
 };
 
 typedef union stamp_combo SCOMBO;

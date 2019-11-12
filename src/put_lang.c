@@ -1,4 +1,3 @@
-
 // LoraBBS Version 2.41 Free Edition
 // Copyright (C) 1987-98 Marco Maccaferri
 //
@@ -32,66 +31,66 @@
  *
  */
 
-int put_language (name_of_file)
-char *name_of_file;
+int put_language(name_of_file)
+char * name_of_file;
 {
-    FILE           *fpt;                        /* stream pointer            */
+    FILE      *     fpt;                        /* stream pointer            */
     int             error;                      /* Internal error value      */
     int             wanna_write;                /* How many we wanna write   */
     int             written;                    /* How many we really write  */
 
-   /*
-    * Open the file for output now.
-    *
-    */
+    /*
+     * Open the file for output now.
+     *
+     */
 
 
-    fpt = fopen (name_of_file, "wb");           /* Open the file             */
+    fpt = fopen(name_of_file, "wb");            /* Open the file             */
     if (fpt == NULL)                            /* Were we successful?       */
-        {
-        fprintf (stderr, "Can not open output file %s\n", name_of_file);
+    {
+        fprintf(stderr, "Can not open output file %s\n", name_of_file);
         return (-1);                            /* Return failure to caller  */
-        }
+    }
 
-   /*
-    * OK. Looking good so far. Write out the pointer array.
-    * Don't forget that last NULL pointer to terminate it!
-    *
-    */
+    /*
+     * OK. Looking good so far. Write out the pointer array.
+     * Don't forget that last NULL pointer to terminate it!
+     *
+     */
 
     wanna_write = 1 + pointer_size;             /* Number of things to write */
-    written = fwrite ((char *)pointers, sizeof (char *), wanna_write, fpt);
+    written = fwrite((char *)pointers, sizeof(char *), wanna_write, fpt);
     if (written != wanna_write)
-        {
-        fprintf (stderr, "Unable to write fixup array to output file\n");
-        fclose (fpt);
+    {
+        fprintf(stderr, "Unable to write fixup array to output file\n");
+        fclose(fpt);
         return (-2);
-        }
+    }
 
-   /*
-    * Pointer array is there. Now write out the characters.
-    *
-    */
+    /*
+     * Pointer array is there. Now write out the characters.
+     *
+     */
 
     wanna_write = memory_size;                  /* Number of chars to write  */
-    written = fwrite (memory, sizeof (char), wanna_write, fpt);
+    written = fwrite(memory, sizeof(char), wanna_write, fpt);
     if (written != wanna_write)
-        {
-        fprintf (stderr, "Unable to write characters to output file\n");
-        fclose (fpt);
+    {
+        fprintf(stderr, "Unable to write characters to output file\n");
+        fclose(fpt);
         return (-3);
-        }
+    }
 
-   /*
-    * Everything's there now. Close the file.
-    */
+    /*
+     * Everything's there now. Close the file.
+     */
 
-    error = fclose (fpt);
+    error = fclose(fpt);
     if (error != 0)
-        {
-        fprintf (stderr, "Unable to properly close output file %s\n",name_of_file);
+    {
+        fprintf(stderr, "Unable to properly close output file %s\n", name_of_file);
         return (-4);
-        }
+    }
 
     return (0);
 }

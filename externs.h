@@ -1,4 +1,3 @@
-
 // LoraBBS Version 2.41 Free Edition
 // Copyright (C) 1987-98 Marco Maccaferri
 //
@@ -28,46 +27,46 @@ extern int norm_max_requests, prot_max_requests, know_max_requests;
 extern int remote_zone, remote_net, remote_node, remote_point;
 extern int called_zone, called_net, called_node, totalmsg, have_os2;
 
-extern char far *prodcode[];
+extern char far * prodcode[];
 
-extern char *VERSION, *NOREG, *log_name, *user_file, *mtext[];
-extern char *mesi[], *menu_bbs, *sysop, *system_name, hex[], *hold_area;
-extern char *availist, *about, *request_list, *puma_exe, *hslink_exe;
-extern char *text_path, *filepath;
-extern char *sched_name, *dateformat, *timeformat, *password;
-extern char *ext_flags, *ipc_path, *fido_msgpath, cmd_string[];
-extern char *request_template, **bbstxt, *flag_dir, *protocols[];
+extern char * VERSION, *NOREG, *log_name, *user_file, *mtext[];
+extern char * mesi[], *menu_bbs, *sysop, *system_name, hex[], *hold_area;
+extern char * availist, *about, *request_list, *puma_exe, *hslink_exe;
+extern char * text_path, *filepath;
+extern char * sched_name, *dateformat, *timeformat, *password;
+extern char * ext_flags, *ipc_path, *fido_msgpath, cmd_string[];
+extern char * request_template, * * bbstxt, *flag_dir, *protocols[];
 extern char e_input[128], *glob_text_path;
-extern char *norm_about, *norm_availist, *answer;
-extern char *norm_request_list, *prot_request_list, *prot_availist, *prot_about;
-extern char *know_request_list, *know_availist, *know_about, *mdm_flags;
-extern char *lang_name[MAX_LANG], *lang_descr[MAX_LANG], area_change_key[3];
-extern char *ext_mail_cmd, *ext_editor, *pip_msgpath, lang_keys[MAX_LANG];
-extern char *lang_txtpath[MAX_LANG], frontdoor;
-extern char *galileo, *location, *phone, *flags, *modem_busy;
-extern char *bad_msgs, *dupes, *netmail_dir;
-extern char *local_editor;
+extern char * norm_about, *norm_availist, *answer;
+extern char * norm_request_list, *prot_request_list, *prot_availist, *prot_about;
+extern char * know_request_list, *know_availist, *know_about, *mdm_flags;
+extern char * lang_name[MAX_LANG], *lang_descr[MAX_LANG], area_change_key[3];
+extern char * ext_mail_cmd, *ext_editor, *pip_msgpath, lang_keys[MAX_LANG];
+extern char * lang_txtpath[MAX_LANG], frontdoor;
+extern char * galileo, *location, *phone, *flags, *modem_busy;
+extern char * bad_msgs, *dupes, *netmail_dir;
+extern char * local_editor;
 
 extern long cps, keycode, totaltime;
 
-extern char *msgtxt[];
+extern char * msgtxt[];
 
-extern char *ONLINE_MSGNAME;
-extern char *USERON_NAME;
-extern char *CBSIM_NAME;
-extern char *SYSMSG_PATH;
+extern char * ONLINE_MSGNAME;
+extern char * USERON_NAME;
+extern char * CBSIM_NAME;
+extern char * SYSMSG_PATH;
 
 extern char use_tasker, local_mode, user_status;
 extern char have_ml, have_tv, have_ddos;
 
-extern struct _configuration *config;
+extern struct _configuration * config;
 extern struct _sysinfo sysinfo;
 extern struct _linestat linestat;
 extern struct _call_list far call_list[MAX_OUT];
 extern struct _lastcall lastcall;
 extern struct _lorainfo lorainfo;
 
-extern MSG *sq_ptr;
+extern MSG * sq_ptr;
 
 extern struct parse_list menu_code[];
 extern struct parse_list levels[];
@@ -83,14 +82,14 @@ extern unsigned int handshake_mask;
 
 extern char fossil_buffer[128];
 extern char out_buffer[128];
-extern char *fossil_fetch_pointer;
-extern char *out_send_pointer;
+extern char * fossil_fetch_pointer;
+extern char * out_send_pointer;
 extern int fossil_count;
 extern int out_count;
 extern int old_fossil;
 extern char ctrlc_ctr;
 
-extern EVENT *e_ptrs[64];
+extern EVENT * e_ptrs[64];
 extern int requests_ok;
 extern int num_events;
 extern int cur_event;
@@ -123,11 +122,11 @@ extern  byte overwrite;
 extern  byte allow_reply;
 extern  byte snooping;
 extern  long rate, speed;
-extern  char *init;
-extern  char *dial;
+extern  char * init;
+extern  char * dial;
 extern  struct _usr usr;
 extern  struct _sys sys;
-extern  FILE *logf;
+extern  FILE * logf;
 extern  long start_time;
 extern  int  allowed;
 extern  byte usr_class;
@@ -141,15 +140,15 @@ extern  int Crc32;
 extern  int Znulls;
 extern  int Rxtimeout;
 extern  int Rxframeind;
-extern  byte *Filename;
+extern  byte * Filename;
 extern  word z_size;
 extern  byte Resume_WaZOO;
 extern  byte Resume_name[13];
 extern  byte Resume_info[48];
 extern  byte Abortlog_name[PATHLEN];
 extern  byte lastsent;
-extern  byte *Secbuf;
-extern  byte *Txbuf;
+extern  byte * Secbuf;
+extern  byte * Txbuf;
 extern  long file_length;
 extern  word remote_capabilities;
 extern  int fsent;
@@ -165,7 +164,7 @@ extern  int msg_tzone;
 extern  int msg_tpoint;
 extern  int msg_fzone;
 extern  int msg_fpoint;
-extern  char *messaggio[MAX_MSGLINE];
+extern  char * messaggio[MAX_MSGLINE];
 extern  int errs;
 extern  int real_errs;
 extern  word block_number;
@@ -175,16 +174,16 @@ extern  int fsize1;
 extern  int fsize2;
 extern  int first_block;
 extern  char final_name[50];
-extern  char *_fpath;
+extern  char * _fpath;
 
-extern  struct _msg_list *msg_list;
+extern  struct _msg_list * msg_list;
 extern  int max_priv_mail;
 extern  int last_mail;
 
 extern  int something_wrong;
-extern  int sw_node,sw_net;
+extern  int sw_node, sw_net;
 extern  int offline_reader;  // gestione dl offline reader
-extern  int tagged_kb,tagged_dnl;
+extern  int tagged_kb, tagged_dnl;
 
 
 extern unsigned long string_crc(char *, unsigned long);
