@@ -48,8 +48,7 @@
 
 extern long timeout, b_mail, b_data, elapsed;
 extern int to_row, n_mail, n_data, got_maildata;
-extern word serial_no;
-extern char * VNUM, serial_id[3];
+extern char * VNUM;
 
 char remote_system[60];
 char remote_sysop[36];
@@ -69,7 +68,6 @@ int get_emsi_field2(char *);
 void m_print2(char * format, ...);
 int get_bbs_local_record(int zone, int net, int node, int point);
 int esc_pressed(void);
-void check_duplicate_key(word);
 
 static int n_password2(char *, char *);
 unsigned short get_emsi_data(char *);
@@ -93,8 +91,6 @@ int Sender;
 
     strncpy(Hello.my_name, system_name, 57);
     Hello.my_name[58]    = '\0';
-
-    Hello.serial_no = serial_no;
 
     strncpy(Hello.sysop, sysop, 19);
     Hello.sysop[19]      = '\0';
@@ -476,11 +472,6 @@ process_hello:
     }
     else if (Hello.product <= isMAX_PRODUCT) {
         sprintf(remote_program, "%Fs Version %d.%02d", prodcode[Hello.product], Hello.product_maj, Hello.product_min);
-
-        if (Hello.product == isLORA) {
-            sprintf(string, "/%05u", Hello.serial_no);
-            strcat(remote_program, string);
-        }
     }
     else {
         sprintf(remote_program, "Program '%02x' Version %d.%02d", Hello.product, Hello.product_maj, Hello.product_min);
@@ -515,10 +506,6 @@ process_hello:
         }
         else {
             status_line(":No transaction number presented");
-        }
-
-        if (!plan_to_send_too) {
-            check_duplicate_key(Hello.serial_no);
         }
 
         n_mail = Hello.n_mail;
@@ -934,18 +921,7 @@ int originator;
     strcat(string, ",ARC,XMA,FNC}{4E}{LoraBBS-DOS}{");
 #endif
     strcat(string, VNUM);
-    strcat(string, "}{");
-
-    activation_key();
-    if (registered) {
-        sprintf(addr, "%s%05u", serial_id[0] ? serial_id : "", serial_no);
-        strcat(string, addr);
-    }
-    else {
-        strcat(string, "Demo");
-    }
-
-    strcat(string, "}{IDENT}{[");
+    strcat(string, "}{}{IDENT}{[");
     strcat(string, system_name);
     strcat(string, "][");
     if (location != NULL) {
@@ -1390,9 +1366,6 @@ resend:
     if (string[0] && (strlen(remote_program) + strlen(string) < 58)) {
         strcat(remote_program, "/");
         strcat(remote_program, string);
-        if (!strnicmp(remote_program, "LoraBBS", 7) && originator) {
-            check_duplicate_key(atoi(string));
-        }
     }
 
     tranx = 0L;

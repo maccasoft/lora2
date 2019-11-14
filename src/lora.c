@@ -121,6 +121,7 @@ char ** argv;
 #endif
 
     directvideo = 1;
+    registered = 1;
     tzset();
 
     exectime = time(NULL);
@@ -153,12 +154,6 @@ char ** argv;
 
     old_event = -1;
     open_logfile();
-
-    activation_key();
-    if (!registered && !local_mode && line_offset > 2) {
-        local_mode = 1;
-        dos_argv = NULL;
-    }
 
     events = time(NULL);
     while (events == time(NULL))

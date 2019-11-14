@@ -73,11 +73,6 @@ void software_version(char * arguments)
 
     compilation_data();
 
-    activation_key();
-    if (registered) {
-        m_print("\026\001\003Registered to: %s\n               %s\n\n", config->sysop, config->system_name);
-    }
-
 #ifndef __OS2__
     c = peekb(0xFFFF, 0x000E);
 

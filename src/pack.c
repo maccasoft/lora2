@@ -1263,8 +1263,6 @@ int zone, net, node, point;
         fclose(fp);
     }
 
-    activation_key();
-
     if (arctype == -1) {
         arctype = 0;
     }

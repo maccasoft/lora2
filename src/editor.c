@@ -251,7 +251,6 @@ char * txt;
     m_print(bbstxt[B_SAVE_MESSAGE]);
     scan_message_base(sys.msg_num, 1);
     dest = last_msg + 1;
-    activation_key();
     m_print2(" #%d ...", dest);
 
     sprintf(filename, "%s%d.MSG", sys.msg_path, dest);

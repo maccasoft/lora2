@@ -848,7 +848,6 @@ static void unpack_repfile(char * dir, char * rep)
 //			status_line (":%s\\%s deleted", dir, blk.ff_name);
         }
         else {
-            activation_key();
             status_line("#Un%sing %s\\%s", config->packers[id].id, dir, blk.ff_name);
 
             time_release();

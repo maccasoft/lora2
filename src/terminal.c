@@ -64,8 +64,7 @@ typedef struct {
 
 #define BITS_7          0x02
 
-extern word serial_no;
-extern char * VNUM, serial_id[3];
+extern char * VNUM;
 
 #ifdef __OS2__
 void VioUpdate(void);
@@ -1608,15 +1607,7 @@ static void terminal_iemsi_handshake(char * password)
     strcat(string, "}{LoraBBS-DOS,");
 #endif
     strcat(string, VNUM);
-    activation_key();
-    if (registered) {
-        sprintf(addr, ",%s%05u}{", serial_id[0] ? serial_id : "", serial_no);
-        strcat(string, addr);
-    }
-    else {
-        strcat(string, ",Demo}{");
-    }
-    strcat(string, "}");
+    strcat(string, "}{}");
 
     sprintf(addr, "EMSI_ICI%04X", strlen(string));
     crc = 0xFFFFFFFFL;

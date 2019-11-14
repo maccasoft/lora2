@@ -83,13 +83,6 @@ long fmem;
 
     show_statistics(fmem);
 
-    activation_key();
-    if (!registered) {
-        status_line("!WARNING: No license key found.");
-        status_line("!The software WILL NOT function");
-        status_line("!completely without a license key!");
-    }
-
     read_sysinfo();
     if (local_mode != 2) {
         if (locked && password != NULL && registered) {
@@ -369,7 +362,6 @@ void shell_to_config()
         return;
     }
 
-    activation_key();
     getcwd(cpath, 79);
     fclose(logf);
     if (modem_busy != NULL) {
@@ -482,7 +474,6 @@ void shell_to_dos()
         stop_blanking();
     }
 
-    activation_key();
 #ifdef __OS2__
     freeram = 0L;
 #else

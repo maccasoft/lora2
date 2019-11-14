@@ -1516,7 +1516,6 @@ char * txt;
     m_print(bbstxt[B_SAVE_MESSAGE]);
     pip_scan_message_base(sys.pip_board, 0);
     dest = last_msg + 1;
-    activation_key();
     m_print(" #%d ...", dest);
 
     sprintf(fn, "%sMPTR%04x.PIP", pip_msgpath, sys.pip_board);

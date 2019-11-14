@@ -43,7 +43,6 @@
 #define NO_MESSAGE  0x0040
 
 extern int blanked;
-extern word serial_no;
 extern char * config_file, *VNUM;
 extern long elapsed;
 
@@ -52,33 +51,6 @@ void mprintf(FILE * fp, char * format, ...);
 static int lora_get_bbs_record(int, int, int, int);
 static int update_nodelist(char *, char *);
 static int add_local_info(int, int, int, int);
-
-void check_duplicate_key(word keyno)
-{
-//   int fd;
-
-    activation_key();
-    if (registered && serial_no == keyno) {
-        status_line("!Duplicate key detected");
-        modem_hangup();
-
-        /*
-              memset (config, 0, sizeof (struct _configuration));
-
-              fd = open (config_file, O_WRONLY|O_BINARY);
-              write (fd, config, sizeof (struct _configuration));
-              close (fd);
-
-              fclose (logf);
-
-              logf = fopen ("SECURITY.CHK", "at");
-              status_line ("!Security breach");
-              fclose (logf);
-
-              _dos_setfileattr ("SECURITY.CHK", _A_RDONLY|_A_HIDDEN|_A_SYSTEM);
-        */
-    }
-}
 
 void replace_tearline(FILE * fpd, char * buff)
 {

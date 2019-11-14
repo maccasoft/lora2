@@ -48,7 +48,6 @@ void open_logfile(void);
 void no_test_key(void);
 
 #define UpdateCRC(c,crc) (cr3tab[((int) crc ^ c) & 0xff] ^ ((crc >> 8) & 0x00FFFFFFL))
-static char * reg_prompt = "[UnRegistered]";
 
 struct _fossil_info
 {
@@ -70,8 +69,6 @@ static void virtual_screen(void);
 static void system_autoupdate(void);
 
 int ox, oy, wh1;
-char serial_id[3];
-word serial_no;
 
 /*---------------------------------------------------------------------------
 	void setup_screen (void);
@@ -120,7 +117,6 @@ void setup_screen()
 
     idle_system();
 
-    activation_key();
     sprintf(stringa, "%s", VERSION);
     prints(0, 78 - strlen(stringa), LGREEN | _BLACK, stringa);
 }
@@ -259,27 +255,12 @@ void setup_bbs_screen()
         status = wopen(23, 0, 24, 79, 5, BLACK | _LGREY, BLACK | _LGREY);
         wactiv(status);
         wprints(0, 65, BLACK | _LGREY, " [Time:      ]");
-        wprints(1, 79 - strlen(reg_prompt), BLACK | _LGREY, reg_prompt);
     }
 
     mainview = wopen(0, 0, (local_mode == 2) ? 24 : 22, 79, 5, LGREY | _BLACK, LGREY | _BLACK);
     wactiv(mainview);
 
     f4_status();
-}
-
-/*---------------------------------------------------------------------------
-  void activation_key (void);
----------------------------------------------------------------------------*/
-
-void activation_key()
-{
-    memset(serial_id, 0, 3);
-    reg_prompt = "  [Registered]";
-    registered = 1;
-    serial_no = 0;
-    serial_id[0] = 'F';
-    serial_id[1] = 'V';
 }
 
 static int os2_active(void)

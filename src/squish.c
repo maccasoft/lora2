@@ -601,7 +601,6 @@ char * txt;
 
     m_print(bbstxt[B_SAVE_MESSAGE]);
     dest = (int)MsgGetNumMsg(sq_ptr) + 1;
-    activation_key();
     m_print(" #%d ...", dest);
 
     sq_msgh = MsgOpenMsg(sq_ptr, MOPEN_CREATE, (dword)0);

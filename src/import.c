@@ -2972,7 +2972,6 @@ char * dir;
         else {
             status_line("#Un%sing %s", config->packers[id].id, extr);
 
-            activation_key();
             prints(8, 65, YELLOW | _BLACK, config->packers[id].id);
 
             time_release();

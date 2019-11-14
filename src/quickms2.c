@@ -1553,7 +1553,6 @@ void quick_save_message(char * txt)
     //	gdest = gmsginfo.highmsg + 1;
     //else
     //	dest = msginfo.highmsg + 1;
-    activation_key();
     m_print(" #%d ...", last_msg + 1);
 
     if (sys.gold_board) {

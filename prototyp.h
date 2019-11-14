@@ -51,7 +51,6 @@ void menu_dispatcher(char *);
 char * get_string(char *, char *);
 char * get_fancy_string(char *, char *);
 char * get_number(char *, char *);
-void activation_key(void);
 char * replace_blank(char *);
 int real_flush(int);
 int terminal_response(void);
