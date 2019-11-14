@@ -548,12 +548,33 @@ int bnet, bnode, rwd, flags;
     return (0);
 }
 
+#define T_SE      240 // 0xf0
+#define T_NOP     241 // 0xf1
+#define T_BREAK   243 // 0xf3
+#define T_GOAHEAD 249 // 0xf9
+#define T_SB      250 // 0xfa
+#define T_WILL    251 // 0xfb
+#define T_WONT    252 // 0xfc
+#define T_DO      253 // 0xfd
+#define T_DONT    254 // 0xfe
+#define T_IAC     255 // 0xff
+
+#define TO_SEND_BINARY        0
+#define TO_ECHO               1
+#define TO_SUPPRESS_GO_AHEAD  3
+#define TO_TERMINAL_TYPE      24
+
 int mail_session()
 {
     int i, flag, oldsnoop;
     char buffer[30], *pwpos;
     long t1, t2;
     char * emsi_req = "**EMSI_REQA77E\r", *iemsi_req = "**EMSI_IRQ8E08\r";
+    unsigned char telnet_opt[] = {
+        T_IAC, T_WILL, TO_ECHO,
+        T_IAC, T_WILL, TO_SUPPRESS_GO_AHEAD,
+        T_IAC, T_WILL, TO_SEND_BINARY
+    };
 
     if (cur_event >= 0 && (e_ptrs[cur_event]->behavior & MAT_NOMAIL24)) {
         return (0);
@@ -595,6 +616,13 @@ int mail_session()
     if (config->override_pwd[0]) {
         pwpos = config->override_pwd;
     }
+
+    for (i = 0; i < sizeof(telnet_opt); i++) {
+        BUFFER_BYTE(telnet_opt[i]);
+    }
+    BUFFER_BYTE(13);
+    FLUSH_OUTPUT();
+
     if (config->emsi) {
         m_print2(emsi_req);
     }
